@@ -21,8 +21,10 @@
     <nav class="nav">
       <a href="#tournaments">Tournaments</a>
       <a href="#about">About</a>
-      <a href="https://app.fishedge.live/dashboard/login.html" class="nav-secondary">Login</a>
-      <a href="https://app.fishedge.live/dashboard/register.html" class="nav-cta">Join the Pilot</a>
+      <a href="https://app.fishedge.live/dashboard/login.html" class="nav-secondary" data-when-auth="hide" id="nav-login">Login</a>
+      <a href="https://app.fishedge.live/dashboard/" class="nav-secondary" data-when-no-auth="hide" id="nav-dashboard" style="display:none;">Dashboard</a>
+      <a href="https://app.fishedge.live/dashboard/register.html" class="nav-cta" data-when-auth="hide" id="nav-join">Join the Pilot</a>
+      <a href="https://app.fishedge.live/dashboard/" class="nav-cta" data-when-no-auth="hide" id="nav-go" style="display:none;">Open Dashboard</a>
     </nav>
   </header>
 
@@ -35,15 +37,15 @@
           Get free access this season and help us build the next-generation fishing intelligence platforms.
         </p>
         <div class="ctas">
-          <a class="cta-primary" href="https://app.fishedge.live/dashboard/register.html">Join the FishEdge Captain Pilot</a>
+          <a class="cta-primary" href="https://app.fishedge.live/dashboard/register.html" data-when-auth="hide">Join the FishEdge Captain Pilot</a>
           <div class="cta-secondary-wrap">
-            <a class="cta-secondary" href="https://app.fishedge.live/dashboard/">Explore the Live Dashboard</a>
+            <a class="cta-secondary" href="https://app.fishedge.live/dashboard/" data-when-auth="hide">Explore the Live Dashboard</a>
             <p class="cta-secondary-helper">See the edges captains look for.</p>
           </div>
         </div>
         <p class="trustline">Built for tournament captains. Shaped by your feedback.</p>
       </div>
-      <div class="hero-image">
+      <div class="hero-image" id="hero-image" role="button" tabindex="0" aria-label="Enlarge hero image">
         <img src="hero.png" alt="Live marine intelligence map preview — real Mid-Atlantic thermal front analysis from 2026-07-14, Ocean City MD focal point" />
       </div>
     </section>
@@ -97,5 +99,100 @@
   </footer>
 
   <script src="tournaments.js"></script>
+
+  <!-- Hero image lightbox (click-to-enlarge) — markup injected here so the
+       opening animation has a guaranteed target to fade in. Hidden until JS
+       adds .is-open. -->
+  <div class="hero-lightbox" id="hero-lightbox" role="dialog" aria-modal="true" aria-label="Hero image enlarged">
+    <button class="hero-lightbox-close" id="hero-lightbox-close" aria-label="Close">CLOSE</button>
+    <img src="hero.png" alt="Live marine intelligence map preview — real Mid-Atlantic thermal front analysis from 2026-07-14, Ocean City MD focal point (enlarged)" />
+  </div>
+
+  <!-- FishEdge marketing interactions (auth-aware nav + hero lightbox).
+       Loaded from CDN because both scripts are public Supabase libraries and
+       we want them cached. -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js?v=20260726"></script>
+  <script>
+  /* ===== FishEdge marketing page logic =====
+     1) Auth-aware nav: if a Supabase session exists (telltale: localStorage
+        key 'ocean-mvp-auth' holds a JSON blob with access_token), swap
+        "Login" + "Join the Pilot" CTAs to "Dashboard" + "Open Dashboard".
+        Cross-origin caveat: dashboard sessions live in app.fishedge.live
+        localStorage, so visitors who only ever hit fishedge.live without an
+        app.fishedge.live auth won't trigger this — that's expected.
+     2) Hero image click-to-enlarge lightbox.
+     3) Esc / click-outside to close.
+     No telemetry; no cookies set. */
+  (function () {
+    'use strict';
+
+    // ---- 1) Auth-aware nav ----
+    try {
+      var raw = localStorage.getItem('ocean-mvp-auth');
+      if (raw) {
+        var blob = JSON.parse(raw);
+        if (blob && (blob.access_token || blob.session)) {
+          document.body.classList.add('is-authenticated');
+
+          // Swap Login → Dashboard, Join → Open Dashboard
+          ['nav-login', 'nav-join'].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el) el.style.display = 'none';
+          });
+          ['nav-dashboard', 'nav-go'].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el) el.style.display = '';
+          });
+
+          // Hero CTAs: hide the marketing CTAs entirely (the secondary
+          // nav CTA "Dashboard" replaces them for returning users).
+          ['nav-dashboard'].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el) el.style.display = '';
+          });
+        }
+      }
+    } catch (_) { /* not logged in — keep defaults */ }
+
+    // ---- 2) Hero image lightbox ----
+    var heroBox  = document.getElementById('hero-image');
+    var lightbox = document.getElementById('hero-lightbox');
+    var closeBtn = document.getElementById('hero-lightbox-close');
+
+    if (heroBox && lightbox) {
+      var openLightbox = function () {
+        lightbox.classList.add('is-open');
+        document.body.style.overflow = 'hidden';
+        if (closeBtn) closeBtn.focus();
+      };
+      var closeLightbox = function () {
+        lightbox.classList.remove('is-open');
+        document.body.style.overflow = '';
+      };
+
+      heroBox.addEventListener('click', function (e) {
+        e.preventDefault();
+        openLightbox();
+      });
+      heroBox.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          openLightbox();
+        }
+      });
+      if (closeBtn) closeBtn.addEventListener('click', closeLightbox);
+      // Click backdrop (but not the image) to close
+      lightbox.addEventListener('click', function (e) {
+        if (e.target === lightbox) closeLightbox();
+      });
+      // Esc to close
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && lightbox.classList.contains('is-open')) {
+          closeLightbox();
+        }
+      });
+    }
+  })();
+  </script>
 </body>
 </html>

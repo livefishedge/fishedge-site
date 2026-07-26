@@ -146,44 +146,32 @@
       white-space: nowrap;
     }
 
-    /* Home link — lifted out of #toolbar (which gets display:none in
-       body.combined-mode).  Standalone fixed element so the captain can
-       always get back to fishedge.live.  Sits to the LEFT of the
-       hamburger menu (top-right corner) so it never collides with
-       #captain-tools (top-left). */
-    #home-link{
-      position:fixed;
-      top:6px;
-      right:58px;
-      z-index:1100;
-      display:inline-flex;
-      align-items:center;
-      gap:4px;
-      padding:0 12px;
-      min-height:32px;
-      background:#0c1723;
+    /* Home link — sits inside the hamburger menu, paired with MY ACCOUNT.
+       Visible whenever the hamburger menu is open (any view that shows the
+       toolbar OR when user explicitly opens the hamburger button). */
+    #menu-panel .home-link{
+      display:block;
+      text-align:center;
+      margin-top:14px;
+      padding:8px 0;
       color:var(--fg);
-      border:1px solid #273649;
-      border-radius:6px;
       font-size:12px;
       font-weight:800;
-      letter-spacing:0.04em;
+      letter-spacing:0.05em;
       text-decoration:none;
-      box-shadow:0 2px 8px rgba(0,0,0,.45);
-      transition: background 0.15s ease, border-color 0.15s ease;
+      border:1px solid var(--border);
+      border-radius:6px;
+      background:rgba(12,23,35,0.6);
+      transition: border-color 0.15s ease, background 0.15s ease;
     }
-    #home-link:hover{
-      background:#1a7f7a;
+    #menu-panel .home-link:hover{
       border-color:#2dd4bf;
+      background:rgba(26,127,122,0.25);
       color:#fff;
       text-decoration:none;
     }
-    #home-link:focus-visible{
-      outline:2px solid #fde047;
-      outline-offset:2px;
-    }
-    @media (max-width:720px){
-      #home-link{ top:6px; right:54px; padding:0 8px; font-size:11px; }
+    #menu-panel .home-link + #account-link-wrap{
+      margin-top:8px;
     }
     #temp-unit-toggle{
       display:none;
@@ -992,11 +980,6 @@ body.combined-mode #combined-menu-btn{
   </style>
 </head>
 <body>
-  <!-- Home link: standalone fixed element. Always visible (not hidden in combined-mode
-       like #toolbar). Sits top-right, just left of the hamburger menu, far from
-       #captain-tools on the top-left. -->
-  <a id="home-link" href="https://fishedge.live/" target="_top" rel="noopener" title="Back to FishEdge home" aria-label="Back to FishEdge home">&#8592; Home</a>
-
   <!-- Global error overlay: catches 'The string did not match the expected
        pattern' and any other uncaught errors on iOS Safari. Shows the
        actual error message + stack in a fixed div at the top of the page
@@ -1433,7 +1416,8 @@ body.combined-mode #combined-menu-btn{
         </div>
       </div>
       <div id="hamburger-cbar"></div>
-      <div style="text-align:center;margin-top:14px;" id="account-link-wrap" hidden>
+      <a class="home-link" href="https://fishedge.live/" target="_top" rel="noopener" title="Back to FishEdge home">&#8592; Home</a>
+      <div style="text-align:center;" id="account-link-wrap" hidden>
         <a href="account.html" style="color:var(--accent2);font-size:12px;font-weight:700;text-decoration:none;letter-spacing:0.05em;">MY ACCOUNT</a>
       </div>
     </div>
