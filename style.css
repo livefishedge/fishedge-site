@@ -130,14 +130,27 @@ h1 {
 
 .cta-secondary-wrap { display: flex; flex-direction: column; gap: 6px; }
 .cta-secondary {
-  color: var(--fg);
-  font-size: 16px;
-  font-weight: 700;
-  border-bottom: 2px solid var(--accent);
+  /* Outlined button — same metrics as cta-primary, less visual weight */
+  display: inline-block;
   align-self: flex-start;
-  padding-bottom: 2px;
+  padding: 16px 28px;
+  background: transparent;
+  color: var(--accent);
+  border: 2px solid var(--accent);
+  border-radius: 8px;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  text-align: center;
+  text-decoration: none;
+  transition: background 0.15s ease, color 0.15s ease;
 }
-.cta-secondary:hover { text-decoration: none; opacity: 0.85; }
+.cta-secondary:hover,
+.cta-secondary:focus-visible {
+  background: var(--accent);
+  color: var(--bg);
+  text-decoration: none;
+}
 .cta-secondary-helper {
   font-size: 14px;
   color: var(--fg-muted);
