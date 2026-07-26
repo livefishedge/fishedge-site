@@ -1,0 +1,286 @@
+:root {
+  --bg: #06121c;
+  --bg-elev: #0e1f2d;
+  --fg: #e6eef5;
+  --fg-muted: #8aa0b3;
+  --accent: #3dd4d4;
+  --accent-warm: #f5b945;
+  --border: #1a2d3e;
+  --max-width: 1180px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 16px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ===== Top bar ===== */
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 28px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(6, 18, 28, 0.85);
+  backdrop-filter: blur(8px);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.brand { display: flex; align-items: baseline; gap: 6px; }
+.logo {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--fg);
+}
+.tagline {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.nav { display: flex; align-items: center; gap: 22px; }
+.nav a {
+  color: var(--fg);
+  font-size: 14px;
+  font-weight: 600;
+}
+.nav a:hover { color: var(--accent); text-decoration: none; }
+.nav-secondary { color: var(--fg-muted) !important; }
+.nav-cta {
+  background: var(--accent);
+  color: var(--bg) !important;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 700 !important;
+}
+.nav-cta:hover { background: #4be0e0; }
+
+/* ===== Hero ===== */
+.hero {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 80px 28px 60px;
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: 60px;
+  align-items: center;
+}
+
+.eyebrow {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 0 0 18px;
+}
+
+h1 {
+  font-size: 48px;
+  line-height: 1.08;
+  letter-spacing: -0.025em;
+  margin: 0 0 22px;
+  font-weight: 800;
+}
+
+.supporting {
+  font-size: 19px;
+  color: var(--fg-muted);
+  margin: 0 0 32px;
+  max-width: 540px;
+}
+
+.ctas {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  margin-bottom: 28px;
+}
+
+.cta-primary {
+  display: inline-block;
+  background: var(--accent);
+  color: var(--bg);
+  padding: 16px 28px;
+  border-radius: 8px;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  text-align: center;
+  align-self: flex-start;
+  transition: background 0.15s ease;
+}
+.cta-primary:hover { background: #4be0e0; text-decoration: none; }
+
+.cta-secondary-wrap { display: flex; flex-direction: column; gap: 6px; }
+.cta-secondary {
+  color: var(--fg);
+  font-size: 16px;
+  font-weight: 700;
+  border-bottom: 2px solid var(--accent);
+  align-self: flex-start;
+  padding-bottom: 2px;
+}
+.cta-secondary:hover { text-decoration: none; opacity: 0.85; }
+.cta-secondary-helper {
+  font-size: 14px;
+  color: var(--fg-muted);
+  margin: 0;
+}
+
+.trustline {
+  font-size: 14px;
+  color: var(--fg-muted);
+  font-style: italic;
+  margin: 8px 0 0;
+}
+
+/* Hero image */
+.hero-image {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--bg-elev);
+  aspect-ratio: 4/3;
+}
+.hero-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.freshness {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  margin: 0;
+  padding: 6px 12px;
+  background: rgba(6, 18, 28, 0.85);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  border-radius: 4px;
+  border: 1px solid var(--accent);
+}
+
+/* ===== Features ===== */
+.features {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 60px 28px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 28px;
+  border-top: 1px solid var(--border);
+}
+.feature h3 {
+  font-size: 17px;
+  font-weight: 800;
+  margin: 0 0 8px;
+  color: var(--fg);
+}
+.feature p {
+  font-size: 14px;
+  color: var(--fg-muted);
+  margin: 0;
+}
+
+/* ===== Tournaments ===== */
+.tournaments {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 60px 28px;
+  border-top: 1px solid var(--border);
+}
+.tournaments h2 {
+  font-size: 32px;
+  font-weight: 800;
+  margin: 0 0 8px;
+}
+.section-intro {
+  color: var(--fg-muted);
+  margin: 0 0 28px;
+}
+.tournament-list {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 18px;
+}
+.tournament {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px;
+  background: var(--bg-elev);
+}
+.tournament h3 { margin: 0 0 4px; font-size: 18px; font-weight: 800; }
+.tournament .meta { color: var(--fg-muted); font-size: 14px; margin: 0 0 8px; }
+.tournament .featured {
+  display: inline-block;
+  background: var(--accent-warm);
+  color: var(--bg);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  padding: 3px 8px;
+  border-radius: 4px;
+  margin-top: 4px;
+}
+
+/* ===== About ===== */
+.about, .contact {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 60px 28px;
+  border-top: 1px solid var(--border);
+}
+.about h2, .contact h2 {
+  font-size: 32px;
+  font-weight: 800;
+  margin: 0 0 16px;
+}
+.about p { color: var(--fg-muted); margin: 0 0 14px; max-width: 720px; }
+
+/* ===== Footer ===== */
+footer {
+  border-top: 1px solid var(--border);
+  padding: 24px 28px;
+  text-align: center;
+  color: var(--fg-muted);
+  font-size: 13px;
+}
+
+/* ===== Mobile ===== */
+@media (max-width: 880px) {
+  .hero { grid-template-columns: 1fr; padding: 48px 20px 40px; gap: 32px; }
+  h1 { font-size: 36px; }
+  .supporting { font-size: 17px; }
+  .features { grid-template-columns: 1fr 1fr; padding: 40px 20px; }
+  .tournament-list { grid-template-columns: 1fr; }
+  .tournaments, .about, .contact { padding: 40px 20px; }
+  .topbar { padding: 12px 16px; }
+  .nav { gap: 12px; }
+  .nav a { font-size: 13px; }
+  .nav-cta { padding: 6px 12px; }
+}
+@media (max-width: 480px) {
+  .features { grid-template-columns: 1fr; }
+  h1 { font-size: 30px; }
+}

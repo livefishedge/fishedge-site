@@ -1,1 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>FishEdge — Live marine intelligence for tournament captains</title>
+  <meta name="description" content="Live marine intelligence for tournament captains. Free access this season — join the Captain Pilot." />
+  <meta property="og:title" content="FishEdge — Live marine intelligence for tournament captains" />
+  <meta property="og:description" content="Shape the future of tournament fishing. Join the FishEdge Captain Pilot." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://fishedge.live" />
+  <link rel="icon" href="data:," />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">FishEdge</span>
+      <span class="tagline">live</span>
+    </div>
+    <nav class="nav">
+      <a href="#tournaments">Tournaments</a>
+      <a href="#about">About</a>
+      <a href="/login" class="nav-secondary">Login</a>
+      <a href="/register" class="nav-cta">Join the Pilot</a>
+    </nav>
+  </header>
 
+  <main>
+    <section class="hero">
+      <div class="hero-text">
+        <p class="eyebrow">Live marine intelligence for tournament captains</p>
+        <h1>Shape the future of tournament fishing.</h1>
+        <p class="supporting">
+          Join the FishEdge Captain Pilot. Get free access this season and help us build fishing intelligence tools you’ll actually use.
+        </p>
+        <div class="ctas">
+          <a class="cta-primary" href="/register">Join the FishEdge Captain Pilot</a>
+          <div class="cta-secondary-wrap">
+            <a class="cta-secondary" href="https://fishedge.live/dashboard">Explore the Live Dashboard</a>
+            <p class="cta-secondary-helper">See the edges captains look for.</p>
+          </div>
+        </div>
+        <p class="trustline">Built for tournament captains. Shaped by your feedback.</p>
+      </div>
+      <div class="hero-image">
+        <img src="hero.svg" alt="Live marine intelligence map preview" />
+        <p class="freshness" id="freshness">Live data freshness · refreshing…</p>
+      </div>
+    </section>
+
+    <section class="features">
+      <div class="feature">
+        <h3>Live ocean edges</h3>
+        <p>Chlorophyll, temperature, thermal fronts, currents — the productive boundaries captains actually watch.</p>
+      </div>
+      <div class="feature">
+        <h3>Captain’s Daily Briefing</h3>
+        <p>GO / WATCH / NO-GO verdict for your saved spots, refreshed every morning before first light.</p>
+      </div>
+      <div class="feature">
+        <h3>Save your spots</h3>
+        <p>Pin the places that matter. FishEdge watches them so you don’t have to.</p>
+      </div>
+      <div class="feature">
+        <h3>Built with captains</h3>
+        <p>The pilot is open to tournament captains across the East Coast. Tell us what works.</p>
+      </div>
+    </section>
+
+    <section id="tournaments" class="tournaments">
+      <h2>Upcoming tournaments</h2>
+      <p class="section-intro">East Coast tournament fishing context. Updated as the calendar changes.</p>
+      <div class="tournament-list" id="tournament-list">
+        <!-- Populated by tournaments.js -->
+      </div>
+    </section>
+
+    <section id="about" class="about">
+      <h2>About FishEdge</h2>
+      <p>
+        FishEdge is the customer-facing product of DataNinjaAI. We build live marine intelligence tools that turn public satellite data into operational decisions for tournament captains.
+      </p>
+      <p>
+        “FishEdge” means two things. The productive edges in the water where fish congregate — temperature breaks, chlorophyll fronts, current boundaries. And the competitive edge captains need to make the right call before first light.
+      </p>
+      <p>
+        The Captain Pilot is open through the 2026 season. Free for tournament captains. We’d rather learn from ten serious captains than ship a product nobody uses.
+      </p>
+    </section>
+
+    <section class="contact">
+      <h2>Get in touch</h2>
+      <p>
+        Email <a href="mailto:captains@fishedge.live">captains@fishedge.live</a> for pilot access, partnership, or feedback.
+      </p>
+    </section>
+  </main>
+
+  <footer>
+    <p>© 2026 DataNinjaAI · FishEdge is a product of DataNinjaAI · <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a></p>
+  </footer>
+
+  <script src="tournaments.js"></script>
+  <script>
+    // Tiny freshness indicator. Real timestamps come from a manifest in production.
+    document.getElementById('freshness').textContent =
+      'Live data · updated continuously · ' + new Date().toISOString().slice(0, 10);
+  </script>
+</body>
+</html>
