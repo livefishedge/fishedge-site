@@ -96,49 +96,95 @@
       gap:6px;
     }
     #feedback-toggle{
+      /* Labeled pill button — bigger and impossible to miss on a busy map.
+         Old 48x48 pure-icon circle was getting lost on the dashboard. */
       background:#2d7d46;
       color:#fff;
-      border:none;
-      border-radius:50%;
-      width:48px;
-      height:48px;
-      aspect-ratio:1 / 1;
-      padding:0;
-      font-size:0;
+      border:0;
+      border-radius:24px;
+      padding:10px 16px 10px 12px;
+      height:auto;
+      min-height:48px;
+      font-size:13px;
+      font-weight:800;
+      letter-spacing:0.02em;
       line-height:1;
       cursor:pointer;
-      box-shadow:0 2px 12px rgba(0,0,0,.5);
-      display:flex;
+      box-shadow:0 4px 16px rgba(45,125,70,.55), 0 1px 3px rgba(0,0,0,.4);
+      display:inline-flex;
       align-items:center;
-      justify-content:center;
+      gap:8px;
       flex:0 0 auto;
-      box-sizing:border-box;
-      overflow:hidden;
-      position:relative;
+      transition: background 0.15s ease, transform 0.1s ease;
     }
-    #feedback-toggle::before{
-      content:"";
+    #feedback-toggle:hover{ background:#3a9d5c; transform: translateY(-1px); }
+    #feedback-toggle:active{ transform: translateY(0); }
+    #feedback-toggle:focus-visible{ outline:2px solid #fde047; outline-offset:2px; }
+    #feedback-toggle .fb-icon{
       width:18px;
       height:14px;
       border:2px solid currentColor;
       border-radius:4px;
       box-sizing:border-box;
       display:block;
+      position:relative;
     }
-    #feedback-toggle::after{
+    #feedback-toggle .fb-icon::after{
       content:"";
       position:absolute;
+      right:-2px;
+      bottom:-3px;
       width:7px;
       height:7px;
       border-right:2px solid currentColor;
       border-bottom:2px solid currentColor;
       transform:rotate(45deg);
-      margin-top:13px;
-      margin-left:-8px;
-      background:#2d7d46;
     }
-    #feedback-toggle:hover{ background:#3a9d5c; }
-    #feedback-toggle:hover::after{ background:#3a9d5c; }
+    #feedback-toggle .fb-label{
+      font: inherit;
+      color: inherit;
+      white-space: nowrap;
+    }
+
+    /* Home link — lifted out of #toolbar (which gets display:none in
+       body.combined-mode).  Standalone fixed element so the captain can
+       always get back to fishedge.live.  Sits to the LEFT of the
+       hamburger menu (top-right corner) so it never collides with
+       #captain-tools (top-left). */
+    #home-link{
+      position:fixed;
+      top:6px;
+      right:58px;
+      z-index:945;
+      display:inline-flex;
+      align-items:center;
+      gap:4px;
+      padding:0 12px;
+      min-height:32px;
+      background:#0c1723;
+      color:var(--fg);
+      border:1px solid #273649;
+      border-radius:6px;
+      font-size:12px;
+      font-weight:800;
+      letter-spacing:0.04em;
+      text-decoration:none;
+      box-shadow:0 2px 8px rgba(0,0,0,.45);
+      transition: background 0.15s ease, border-color 0.15s ease;
+    }
+    #home-link:hover{
+      background:#1a7f7a;
+      border-color:#2dd4bf;
+      color:#fff;
+      text-decoration:none;
+    }
+    #home-link:focus-visible{
+      outline:2px solid #fde047;
+      outline-offset:2px;
+    }
+    @media (max-width:720px){
+      #home-link{ top:6px; right:54px; padding:0 8px; font-size:11px; }
+    }
     #temp-unit-toggle{
       display:none;
       min-width:44px;
@@ -946,6 +992,11 @@ body.combined-mode #combined-menu-btn{
   </style>
 </head>
 <body>
+  <!-- Home link: standalone fixed element. Always visible (not hidden in combined-mode
+       like #toolbar). Sits top-right, just left of the hamburger menu, far from
+       #captain-tools on the top-left. -->
+  <a id="home-link" href="https://fishedge.live/" target="_top" rel="noopener" title="Back to FishEdge home" aria-label="Back to FishEdge home">&#8592; Home</a>
+
   <!-- Global error overlay: catches 'The string did not match the expected
        pattern' and any other uncaught errors on iOS Safari. Shows the
        actual error message + stack in a fixed div at the top of the page
@@ -1135,7 +1186,6 @@ body.combined-mode #combined-menu-btn{
   </script>
 
   <div id="toolbar">
-    <a id="home-link" href="https://fishedge.live/" target="_top" rel="noopener" title="Back to FishEdge home" aria-label="Back to FishEdge home">&#8592; Home</a>
     <span id="nav-bar">
       <button id="prev-btn" type="button" title="Previous frame" aria-label="Previous frame">&#8592;</button>
       <input id="frame-slider" type="range" min="0" max="0" step="1" value="0" aria-label="Frame progress" />
@@ -1150,7 +1200,10 @@ body.combined-mode #combined-menu-btn{
   <div id="plot"></div>
   <div id="readout">Lat/Lon: -- | Value: --</div>
   <div id="feedback-float">
-    <button id="feedback-toggle" title="Send feedback">&#9993;</button>
+    <button id="feedback-toggle" title="Send feedback" aria-label="Send feedback">
+      <span class="fb-icon" aria-hidden="true"></span>
+      <span class="fb-label">Feedback</span>
+    </button>
     <div id="feedback-panel" style="display:none;">
       <input type="text" id="feedbackInput" placeholder="Questions / comments..." />
       <button id="feedbackSubmit">Send</button>
