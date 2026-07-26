@@ -45,7 +45,6 @@
       </div>
       <div class="hero-image">
         <img src="hero.png" alt="Live marine intelligence map preview — real Mid-Atlantic thermal front analysis from 2026-07-14, Ocean City MD focal point" />
-        <p class="freshness" id="freshness">Live data freshness · refreshing…</p>
       </div>
     </section>
 
@@ -102,10 +101,5 @@
   </footer>
 
   <script src="tournaments.js"></script>
-  <script>
-    // Tiny freshness indicator. Real timestamps come from a manifest in production.
-    document.getElementById('freshness').textContent =
-      'Live data · updated continuously · ' + new Date().toISOString().slice(0, 10);
-  </script>
 </body>
 </html>
