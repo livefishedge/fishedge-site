@@ -1533,7 +1533,7 @@ var BBOX = [...(REGION_FALLBACKS[REGION_ID]?.bbox ?? REGION_FALLBACKS.usec_south
 
 // Declared before setActiveRegion() so the initial call can assign to it
 // without hitting a Temporal Dead Zone ReferenceError.
-var BATHY_JSON_URL = `https://data.fishedge.live/data/${REGION_ID}/gebco_bath_latest/gebco_bathy.json`;
+var BATHY_JSON_URL = `https://data.fishedge.live/${REGION_ID}/gebco_bath_latest/gebco_bathy.json`;
 
 /**
  * Centralised region-state setter. Call whenever the active region changes
@@ -1548,7 +1548,7 @@ function setActiveRegion(regionId, regionMeta) {
     ? regionMeta.bbox.map(Number)
     : [...(REGION_FALLBACKS[regionId]?.bbox ?? REGION_FALLBACKS.usec_south.bbox)];
   const bathyPath = regionMeta?.bathy_path || "gebco_bath_latest/gebco_bathy.json";
-  BATHY_JSON_URL = `https://data.fishedge.live/data/${regionId}/${bathyPath}`;
+  BATHY_JSON_URL = `https://data.fishedge.live/${regionId}/${bathyPath}`;
   // Invalidate layer caches on region switch so old data doesn't bleed through
   if (prevRegion !== regionId) {
     window._bathyData = null;
@@ -8792,7 +8792,7 @@ async function loadGridForVar(v, dataObj = null) {
   const gridName = VAR_TO_GRID[v];
 
   try {
-    const res = await fetch(`https://data.fishedge.live/data/${REGION_ID}/grids/${gridName}`);
+    const res = await fetch(`https://data.fishedge.live/${REGION_ID}/grids/${gridName}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const grid = await res.json();
 
@@ -9201,7 +9201,7 @@ async function loadCaptainBriefing() {
   if (!panel || !status || !plansDiv || !healthDiv || !fullDiv) return;
 
   try {
-    const res = await fetch(`https://data.fishedge.live/data/${REGION_ID}/briefing/latest.json?t=${Date.now()}`);
+    const res = await fetch(`https://data.fishedge.live/${REGION_ID}/briefing/latest.json?t=${Date.now()}`);
     if (!res.ok) throw new Error(`No briefing artifact for ${REGION_ID}`);
     const briefing = await res.json();
     const when = briefing.generated_at ? new Date(briefing.generated_at).toLocaleString() : "unknown";
