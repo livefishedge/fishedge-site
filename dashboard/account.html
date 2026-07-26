@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ocean MVP — My Account</title>
+  <link rel="icon" href="data:,">
+  <style>
+    :root { --bg: #050b10; --fg: #e0e6ee; --accent: #1a7f7a; --accent2: #2dd4bf; --panel: rgba(5,11,16,0.97); --border: #1b2836; --err: #ff6b6b; --success: #2dd4bf; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { height: 100vh; background: var(--bg); color: var(--fg); font-family: system-ui,-apple-system,"Segoe UI",sans-serif; display: flex; align-items: center; justify-content: center; padding: 20px; }
+    #account-card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 36px 32px; max-width: 420px; width: 100%; }
+    h1 { font-size: 1.4rem; margin-bottom: 4px; color: var(--accent2); }
+    .subtitle { font-size: 0.85rem; opacity: 0.6; margin-bottom: 28px; line-height: 1.5; }
+    .info-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
+    .info-row:last-child { border-bottom: none; }
+    .info-label { opacity: 0.6; font-size: 0.78rem; }
+    .info-value { font-weight: 600; text-align: right; }
+    #verified-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 0.75rem; color: var(--success); background: rgba(45,212,191,0.12); padding: 2px 8px; border-radius: 20px; margin-top: 2px; }
+    #unverified-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 0.75rem; color: #fbbf24; background: rgba(251,191,36,0.12); padding: 2px 8px; border-radius: 20px; margin-top: 2px; }
+    #logout-btn {
+      width: 100%; padding: 12px; background: transparent; border: 1px solid var(--err); color: var(--err);
+      border-radius: 8px; font-size: 0.95rem; font-weight: 700; cursor: pointer; transition: background 0.15s; margin-top: 24px;
+    }
+    #logout-btn:hover { background: rgba(255,107,107,0.1); }
+    .back-link { font-size: 0.82rem; text-align: center; margin-top: 14px; opacity: 0.5; }
+    .back-link a { color: var(--accent2); text-decoration: none; }
+    .back-link a:hover { text-decoration: underline; }
+
+    /* Confirmation page state */
+    .confirm-card { text-align: center; }
+    .confirm-card h1 { margin-bottom: 12px; }
+    .spinner {
+      width: 40px; height: 40px; border: 3px solid var(--border); border-top-color: var(--accent2);
+      border-radius: 50%; animation: spin 0.8s linear infinite; margin: 20px auto;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .ok { color: var(--success); }
+    .err { color: var(--err); }
+  </style>
+</head>
+<body>
+<div id="account-card">
+  <!-- Dynamic content injected here -->
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js?v=20260531"></script>
+<script src="supabase-init.js?v=20260711"></script>
+<script>
+(function() {
+  var sb = window.sb;
+  var card = document.getElementById('account-card');
+
+  function renderConfirm(state, message) {
+    var cls = state === 'ok' ? 'ok' : (state === 'err' ? 'err' : '');
+    card.innerHTML =
+      '<div class="confirm-card">' +
+        '<h1 class="' + cls + '">' + (state === 'ok' ? 'Email Confirmed!' : (state === 'err' ? 'Confirmation Failed' : 'Verifying…')) + '</h1>' +
+        (state === 'loading' ? '<div class="spinner"></div>' : '') +
+        '<p class="' + cls + '" style="opacity:0.8;line-height:1.5">' + message + '</p>' +
+      '</div>';
+  }
+
+  function renderAccount(user, profile) {
+    var name = profile && profile.name ? profile.name : '—';
+    var region = profile && profile.selected_region ? profile.selected_region : '—';
+    var phone = profile && profile.phone ? profile.phone : '—';
+    var regionLabel = region === 'usec_south' ? 'US East Coast — South-Atlantic' :
+                      region === 'usec_md' ? 'US East Coast — Mid-Atlantic' : region;
+    var emailVerified = user.email_confirmed_at ? true : false;
+
+    card.innerHTML =
+      '<h1>My Account</h1>' +
+      '<p class="subtitle">Manage your profile and sign out.</p>' +
+      '<div class="info-row"><div><div class="info-label">Name</div><div class="info-value">' + name + '</div></div></div>' +
+      '<div class="info-row"><div><div class="info-label">Email</div><div class="info-value">' + user.email + '</div></div></div>' +
+      '<div class="info-row"><div><div class="info-label">Phone</div><div class="info-value">' + phone + '</div></div></div>' +
+      '<div class="info-row"><div><div class="info-label">Region</div><div class="info-value">' + regionLabel + '</div></div></div>' +
+      '<div class="info-row"><div><div class="info-label">Email</div><div class="info-value">' +
+        (emailVerified
+          ? '<span id="verified-badge">✓ Verified</span>'
+          : '<span id="unverified-badge">✗ Unverified</span>') +
+      '</div></div></div>' +
+      '<button id="logout-btn" type="button">Sign out</button>' +
+      '<button id="edit-profile-btn" type="button" style="width:100%;padding:12px;background:transparent;border:1px solid var(--accent2);color:var(--accent2);border-radius:8px;font-size:0.95rem;font-weight:700;cursor:pointer;transition:background 0.15s;margin-top:10px;">Edit Profile</button>' +
+      '<a href="index.html" style="display:block;text-align:center;padding:13px;background:var(--accent2);color:#050b10;border-radius:8px;font-size:1rem;font-weight:700;text-decoration:none;margin-top:16px;">Captain\'s Dashboard</a>';
+  }
+
+  function renderNotAuth() {
+    card.innerHTML =
+      '<h1 style="color:var(--accent2)">Not signed in</h1>' +
+      '<p class="subtitle">You need to sign in to view your account.</p>' +
+      '<div class="back-link"><a href="login.html">Sign in</a></div>';
+  }
+
+  async function init() {
+    // Check for returning from email confirmation link (session may be set in URL)
+    var _ref = await sb.auth.getSession();
+    var session = _ref.data.session;
+
+    if (session) {
+      var user = session.user;
+      if (!user.email_confirmed_at) {
+        try { sessionStorage.setItem('email_verification_required', 'true'); } catch(e) {}
+        await sb.auth.signOut();
+        window.location.replace('login.html');
+        return;
+      }
+      // Fetch profile
+      var profile = null;
+      try {
+        var r = await fetch(
+          'https://wfdpfeptmyiqifgwqpzu.supabase.co/rest/v1/profiles?user_id=eq.' + user.id + '&select=name,phone,selected_region',
+          { headers: { 'apikey': 'sb_publishable_W6wnJkT70jb69JUZgM1dow_nabPZycR', 'Authorization': 'Bearer ' + session.access_token } }
+        );
+        if (r.ok) {
+          var arr = await r.json();
+          if (arr && arr.length > 0) profile = arr[0];
+        }
+      } catch(e) {}
+
+      // If this is a fresh confirmation (no profile at all yet), redirect to viewer
+      // Otherwise show the account page (phone/region may be null but we show the page)
+      if (!profile) {
+        renderConfirm('ok', 'Email confirmed! Loading your dashboard…');
+        setTimeout(function() { window.location.replace('index.html'); }, 1000);
+        return;
+      }
+
+      renderAccount(user, profile);
+      attachLogout();
+      attachEditProfile();
+    } else {
+      window.location.replace('login.html');
+    }
+  }
+
+  function attachLogout() {
+    var btn = document.getElementById('logout-btn');
+    if (!btn) return;
+    btn.addEventListener('click', async function() {
+      btn.disabled = true;
+      btn.textContent = 'Signing out…';
+      await sb.auth.signOut();
+      window.location.replace('login.html');
+    });
+  }
+
+  function attachEditProfile() {
+    var btn = document.getElementById('edit-profile-btn');
+    if (!btn) return;
+    btn.addEventListener('click', function() {
+      window.location.href = 'profile-edit.html';
+    });
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>
