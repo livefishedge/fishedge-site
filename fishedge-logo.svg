@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 80" role="img" aria-label="FishEdge.live — Marine Fishing Intelligence">
+  <!-- Marlin + waves mark (left side) -->
+  <g transform="translate(6 8)">
+    <!-- Wave strokes -->
+    <path d="M 2 56 C 14 48, 26 50, 38 52 C 50 54, 56 56, 64 58"
+          stroke="#1B8DBA" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <path d="M 0 62 C 12 56, 22 58, 32 60 C 42 62, 52 64, 60 65"
+          stroke="#E87B1F" stroke-width="3" fill="none" stroke-linecap="round"/>
+
+    <!-- Marlin body — sleek leaping arc angled upper-right -->
+    <path d="M 18 36
+             C 22 28, 32 22, 44 22
+             C 52 22, 58 26, 60 30
+             C 58 38, 50 42, 38 42
+             C 30 42, 24 40, 18 36 Z"
+          fill="#0B3E63"/>
+
+    <!-- Bill (forward, pointing upper-left from the head) -->
+    <path d="M 18 36 L 6 30 L 18 40 Z" fill="#0B3E63"/>
+
+    <!-- Eye -->
+    <circle cx="48" cy="29" r="1.6" fill="#fff"/>
+
+    <!-- Tail (forked caudal fin) -->
+    <path d="M 60 30 L 70 22 L 66 30 L 70 38 Z" fill="#0B3E63"/>
+  </g>
+
+  <!-- Wordmark: Fish (navy) Edge (green) .live (orange) -->
+  <text x="86" y="44"
+        font-family="'Helvetica Neue', Arial, system-ui, sans-serif"
+        font-weight="900"
+        font-size="30"
+        letter-spacing="-0.5"
+        fill="#0B3E63">Fish<tspan fill="#4A9B3D">Edge</tspan><tspan fill="#E87B1F">.live</tspan></text>
+
+  <!-- Tagline -->
+  <text x="86" y="62"
+        font-family="'Helvetica Neue', Arial, system-ui, sans-serif"
+        font-weight="700"
+        font-size="8"
+        letter-spacing="1.6"
+        fill="#7a8896">MARINE FISHING INTELLIGENCE</text>
+</svg>

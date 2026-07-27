@@ -3,20 +3,19 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>FishEdge — Live marine intelligence for tournament captains</title>
-  <meta name="description" content="Live marine intelligence for tournament captains. Free access this season — join the Captain Pilot." />
-  <meta property="og:title" content="FishEdge — Live marine intelligence for tournament captains" />
-  <meta property="og:description" content="Shape the future of tournament fishing. Join the FishEdge Captain Pilot." />
+  <title>FishEdge.live — Marine Fishing Intelligence</title>
+  <meta name="description" content="Live marine intelligence for tournament captains. Real-time edges where ocean conditions shift and predatory fish hunt. Free pilot — 2026 season." />
+  <meta property="og:title" content="FishEdge.live — Marine Fishing Intelligence" />
+  <meta property="og:description" content="Live marine intelligence for tournament captains. Track the ocean edges where fish actually hunt — temperature breaks, chlorophyll fronts, current rips." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://fishedge.live" />
-  <link rel="icon" href="data:," />
+  <link rel="icon" type="image/svg+xml" href="fishedge-logo.svg" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <header class="topbar">
     <div class="brand">
-      <span class="logo">FishEdge</span>
-      <span class="tagline">live</span>
+      <a href="/" aria-label="FishEdge.home"><img src="fishedge-logo.svg" alt="FishEdge.live — Marine Fishing Intelligence" class="brand-logo" /></a>
     </div>
     <nav class="nav">
       <a href="#tournaments">Tournaments</a>
@@ -47,6 +46,25 @@
       </div>
       <div class="hero-image" id="hero-image" role="button" tabindex="0" aria-label="Enlarge hero image">
         <img src="hero.png" alt="Live marine intelligence map preview — real Mid-Atlantic thermal front analysis from 2026-07-14, Ocean City MD focal point" />
+      </div>
+    </section>
+
+    <section class="showcase">
+      <h2>See the edges in real time</h2>
+      <p class="showcase-intro">Public satellite oceanography and marine altimetry, refreshed continuously. Click any frame to enlarge.</p>
+      <div class="showcase-grid">
+        <div class="showcase-card" data-lightbox-src="gallery/usec-edge-network.png" role="button" tabindex="0" aria-label="Enlarge edge network image">
+          <img src="gallery/usec-edge-network.png" alt="Edge network visualization off the Carolina coast — temperature breaks and chlorophyll fronts tracing the productive boundaries" />
+          <span class="card-label">Edge Network</span>
+        </div>
+        <div class="showcase-card" data-lightbox-src="gallery/usec-carolinas-tracks.png" role="button" tabindex="0" aria-label="Enlarge Carolinas vessel tracks image">
+          <img src="gallery/usec-carolinas-tracks.png" alt="Vessel tracking and traffic patterns off the Carolina coast — fleet movement along shipping lanes and coastal corridors" />
+          <span class="card-label">Carolina Tracks</span>
+        </div>
+        <div class="showcase-card" data-lightbox-src="gallery/usec-delmarva-tracks.png" role="button" tabindex="0" aria-label="Enlarge Delmarva tracks image">
+          <img src="gallery/usec-delmarva-tracks.png" alt="Mid-Atlantic vessel traffic and ocean conditions off the Delmarva Peninsula — the primary operating area for the Captain Pilot" />
+          <span class="card-label">Delmarva Activity</span>
+        </div>
       </div>
     </section>
 
@@ -103,9 +121,9 @@
   <!-- Hero image lightbox (click-to-enlarge) — markup injected here so the
        opening animation has a guaranteed target to fade in. Hidden until JS
        adds .is-open. -->
-  <div class="hero-lightbox" id="hero-lightbox" role="dialog" aria-modal="true" aria-label="Hero image enlarged">
+  <div class="hero-lightbox" id="hero-lightbox" role="dialog" aria-modal="true" aria-label="Image enlarged">
     <button class="hero-lightbox-close" id="hero-lightbox-close" aria-label="Close">CLOSE</button>
-    <img src="hero.png" alt="Live marine intelligence map preview — real Mid-Atlantic thermal front analysis from 2026-07-14, Ocean City MD focal point (enlarged)" />
+    <img id="hero-lightbox-img" src="hero.png" alt="Live marine intelligence map preview — real Mid-Atlantic thermal front analysis from 2026-07-14, Ocean City MD focal point (enlarged)" />
   </div>
 
   <!-- FishEdge marketing interactions (auth-aware nav + hero lightbox).
@@ -161,44 +179,67 @@
       });
     }
 
-    // ---- 2) Hero image lightbox ----
+    // ---- 2) Hero + showcase image lightbox ----
     var heroBox  = document.getElementById('hero-image');
     var lightbox = document.getElementById('hero-lightbox');
+    var lightboxImg = document.getElementById('hero-lightbox-img');
     var closeBtn = document.getElementById('hero-lightbox-close');
 
-    if (heroBox && lightbox) {
-      var openLightbox = function () {
-        lightbox.classList.add('is-open');
-        document.body.style.overflow = 'hidden';
-        if (closeBtn) closeBtn.focus();
-      };
-      var closeLightbox = function () {
-        lightbox.classList.remove('is-open');
-        document.body.style.overflow = '';
-      };
+    var openLightbox = function (src, alt) {
+      if (!lightbox) return;
+      if (lightboxImg) {
+        if (src) lightboxImg.src = src;
+        if (alt) lightboxImg.alt = alt;
+      }
+      lightbox.classList.add('is-open');
+      document.body.style.overflow = 'hidden';
+      if (closeBtn) closeBtn.focus();
+    };
+    var closeLightbox = function () {
+      if (!lightbox) return;
+      lightbox.classList.remove('is-open');
+      document.body.style.overflow = '';
+    };
 
+    if (heroBox && lightbox) {
       heroBox.addEventListener('click', function (e) {
         e.preventDefault();
-        openLightbox();
+        var img = heroBox.querySelector('img');
+        openLightbox(img ? img.src : null, img ? img.alt : null);
       });
       heroBox.addEventListener('keydown', function (e) {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
-          openLightbox();
-        }
-      });
-      if (closeBtn) closeBtn.addEventListener('click', closeLightbox);
-      // Click backdrop (but not the image) to close
-      lightbox.addEventListener('click', function (e) {
-        if (e.target === lightbox) closeLightbox();
-      });
-      // Esc to close
-      document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape' && lightbox.classList.contains('is-open')) {
-          closeLightbox();
+          var img = heroBox.querySelector('img');
+          openLightbox(img ? img.src : null, img ? img.alt : null);
         }
       });
     }
+
+    // Showcase cards share the same lightbox
+    document.querySelectorAll('.showcase-card').forEach(function (card) {
+      var activate = function () {
+        var img = card.querySelector('img');
+        var src = card.getAttribute('data-lightbox-src') || (img ? img.src : null);
+        openLightbox(src, img ? img.alt : null);
+      };
+      card.addEventListener('click', activate);
+      card.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activate(); }
+      });
+    });
+
+    if (closeBtn) closeBtn.addEventListener('click', closeLightbox);
+    if (lightbox) {
+      lightbox.addEventListener('click', function (e) {
+        if (e.target === lightbox) closeLightbox();
+      });
+    }
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && lightbox && lightbox.classList.contains('is-open')) {
+        closeLightbox();
+      }
+    });
   })();
   </script>
 </body>

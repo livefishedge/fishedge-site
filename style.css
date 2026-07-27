@@ -3,8 +3,14 @@
   --bg-elev: #0e1f2d;
   --fg: #e6eef5;
   --fg-muted: #8aa0b3;
-  --accent: #3dd4d4;
-  --accent-warm: #f5b945;
+  /* FishEdge brand palette */
+  --brand-navy: #0B3E63;     /* marine depth — headings, brand mark */
+  --brand-cyan: #1B8DBA;     /* ocean water — links, eyebrow, data accents */
+  --brand-green: #4A9B3D;    /* intelligence — secondary actions */
+  --brand-orange: #E87B1F;   /* action / alerts — primary CTA */
+  /* Legacy aliases (kept for backward-compat within existing rules) */
+  --accent: #1B8DBA;        /* was cyan, now brand cyan */
+  --accent-warm: #E87B1F;    /* was amber, now brand orange */
   --border: #1a2d3e;
   --max-width: 1180px;
 }
@@ -39,20 +45,8 @@ a:hover { text-decoration: underline; }
   z-index: 100;
 }
 
-.brand { display: flex; align-items: baseline; gap: 6px; }
-.logo {
-  font-size: 22px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  color: var(--fg);
-}
-.tagline {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
-  color: var(--accent);
-}
+.brand { display: flex; align-items: center; gap: 6px; }
+.brand-logo { display: block; height: 44px; width: auto; }
 
 .nav { display: flex; align-items: center; gap: 22px; }
 .nav a {
@@ -75,10 +69,10 @@ a:hover { text-decoration: underline; }
 .hero {
   max-width: var(--max-width);
   margin: 0 auto;
-  padding: 80px 28px 60px;
+  padding: 72px 28px 48px;
   display: grid;
-  grid-template-columns: 1.1fr 1fr;
-  gap: 60px;
+  grid-template-columns: 0.85fr 1.15fr;
+  gap: 48px;
   align-items: center;
 }
 
@@ -167,11 +161,13 @@ h1 {
 /* Hero image */
 .hero-image {
   position: relative;
-  border-radius: 12px;
+  border-radius: 14px;
   overflow: hidden;
   border: 1px solid var(--border);
   background: var(--bg-elev);
-  aspect-ratio: 4/3;
+  aspect-ratio: 5/4;
+  min-height: 460px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(27, 141, 186, 0.15);
   cursor: zoom-in;
 }
 .hero-image img {
@@ -282,6 +278,65 @@ body.is-authenticated [data-when-auth="hide"] {
   font-size: 14px;
   color: var(--fg-muted);
   margin: 0;
+}
+
+/* ===== Showcase / gallery ===== */
+.showcase {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 80px 28px 40px;
+  border-top: 1px solid var(--border);
+}
+.showcase h2 {
+  font-size: 32px;
+  font-weight: 800;
+  margin: 0 0 8px;
+  letter-spacing: -0.015em;
+}
+.showcase-intro {
+  color: var(--fg-muted);
+  margin: 0 0 28px;
+  max-width: 640px;
+  font-size: 17px;
+}
+.showcase-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+}
+.showcase-card {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--bg-elev);
+  aspect-ratio: 4/3;
+  cursor: zoom-in;
+  transition: transform 0.2s ease, border-color 0.2s ease;
+}
+.showcase-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(27, 141, 186, 0.5);
+}
+.showcase-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.showcase-card .card-label {
+  position: absolute;
+  left: 14px;
+  bottom: 12px;
+  padding: 6px 12px;
+  background: rgba(6, 18, 28, 0.82);
+  border: 1px solid rgba(27, 141, 186, 0.4);
+  border-radius: 4px;
+  color: var(--fg);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
 /* ===== Tournaments ===== */
@@ -467,6 +522,10 @@ footer {
   .mission, .problem, .solution, .audience, .cta-final { padding: 40px 20px; }
   .mission h2, .problem h2, .solution h2, .audience h2, .cta-final h2 { font-size: 26px; }
   .mission p, .problem p, .solution p, .audience p, .cta-final p { font-size: 16px; }
+  .showcase { padding: 48px 20px 24px; }
+  .showcase h2 { font-size: 26px; }
+  .showcase-grid { grid-template-columns: 1fr; gap: 14px; }
+  .brand-logo { height: 36px; }
 }
 @media (max-width: 480px) {
   .features { grid-template-columns: 1fr; }
