@@ -146,45 +146,29 @@
       white-space: nowrap;
     }
 
-    /* Home link — STANDALONE fixed element in the top-right corner.
-       Visible in EVERY dashboard view (chl, sst, thermal_fronts, uv,
-       bathy, AND combined-mode).  Sits to the LEFT of the hamburger
-       button so it doesn't collide.  z-index 1100 puts it above the
-       OpenLayers map (z-index 1000) and below the global-error-overlay
-       (z-index 10000). */
-    #home-link{
-      position:fixed;
-      top:6px;
-      right:54px;
-      z-index:1100;
-      display:inline-flex;
-      align-items:center;
-      gap:4px;
-      padding:0 12px;
-      min-height:32px;
-      background:#0c1723;
+    /* Home link — sits inside #menu-panel below MY ACCOUNT. Visible in every
+       view because #hamburger-btn is now always visible (the combined-mode
+       display:none on #hamburger-btn was removed so the menu is reachable
+       from every dashboard view). */
+    #menu-panel .home-link{
+      display:block;
+      text-align:center;
+      padding:8px 0;
       color:var(--fg);
-      border:1px solid #273649;
-      border-radius:6px;
       font-size:12px;
       font-weight:800;
-      letter-spacing:0.04em;
+      letter-spacing:0.05em;
       text-decoration:none;
-      box-shadow:0 2px 8px rgba(0,0,0,.45);
-      transition: background 0.15s ease, border-color 0.15s ease;
+      border:1px solid var(--border);
+      border-radius:6px;
+      background:rgba(12,23,35,0.6);
+      transition: border-color 0.15s ease, background 0.15s ease;
     }
-    #home-link:hover{
-      background:#1a7f7a;
+    #menu-panel .home-link:hover{
       border-color:#2dd4bf;
+      background:rgba(26,127,122,0.25);
       color:#fff;
       text-decoration:none;
-    }
-    #home-link:focus-visible{
-      outline:2px solid #fde047;
-      outline-offset:2px;
-    }
-    @media (max-width:720px){
-      #home-link{ top:6px; right:50px; padding:0 8px; font-size:11px; }
     }
     #temp-unit-toggle{
       display:none;
@@ -617,7 +601,9 @@ body.combined-mode #combined-menu-btn{
     body.combined-mode #combined-menu-btn span{ display:block; width:18px; height:2px; background:var(--fg); border-radius:2px; }
     body.combined-mode #nav-bar{ display:none !important; }
     body.combined-mode #toolbar{ display:none !important; }
-    body.combined-mode #hamburger-btn{ display:none !important; }
+    /* Hamburger button stays visible in combined-mode so the captain can still
+       reach Home / MY ACCOUNT / product selector on every dashboard view. */
+    body.combined-mode #hamburger-btn{ display:flex !important; }
     body.combined-mode #plot{ display:none !important; }
     body.combined-mode #map{ display:block !important; position:absolute; top:0; left:0; right:0; bottom:0; z-index:1000; width:100%; height:100%; cursor:crosshair; }
     body.combined-mode #combined-readout{ display:block !important; }
@@ -993,11 +979,6 @@ body.combined-mode #combined-menu-btn{
   </style>
 </head>
 <body>
-  <!-- Home link: standalone fixed element in top-right, just left of the
-       hamburger button. Works in EVERY dashboard view including combined-mode,
-       where #hamburger-btn / #toolbar are hidden (display:none). -->
-  <a id="home-link" href="https://fishedge.live/" target="_top" rel="noopener" title="Back to FishEdge home" aria-label="Back to FishEdge home">&#8592; Home</a>
-
   <!-- Global error overlay: catches 'The string did not match the expected
        pattern' and any other uncaught errors on iOS Safari. Shows the
        actual error message + stack in a fixed div at the top of the page
@@ -1434,7 +1415,10 @@ body.combined-mode #combined-menu-btn{
         </div>
       </div>
       <div id="hamburger-cbar"></div>
-      <div style="text-align:center;margin-top:14px;" id="account-link-wrap" hidden>
+      <div class="home-link-wrap" style="text-align:center;margin-top:14px;">
+        <a class="home-link" href="https://fishedge.live/" target="_top" rel="noopener" title="Back to FishEdge home">&#8592; Home</a>
+      </div>
+      <div style="text-align:center;margin-top:8px;" id="account-link-wrap" hidden>
         <a href="account.html" style="color:var(--accent2);font-size:12px;font-weight:700;text-decoration:none;letter-spacing:0.05em;">MY ACCOUNT</a>
       </div>
     </div>
