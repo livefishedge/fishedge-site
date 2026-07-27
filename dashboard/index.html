@@ -146,7 +146,7 @@
       white-space: nowrap;
     }
 
-    /* Home link — sits inside #menu-panel below MY ACCOUNT. Visible in every
+    /* Home link — sits inside #menu-panel below My Account. Visible in every
        view because #hamburger-btn is now always visible (the combined-mode
        display:none on #hamburger-btn was removed so the menu is reachable
        from every dashboard view). */
@@ -1362,8 +1362,8 @@ body.combined-mode #combined-menu-btn{
       <div style="text-align:center;margin-bottom:8px;">
         <a class="combined-home-link" href="https://fishedge.live/" target="_top" rel="noopener" title="Back to FishEdge home" style="display:block;padding:8px 0;color:var(--fg);font-size:12px;font-weight:800;letter-spacing:0.05em;text-decoration:none;border:1px solid var(--border);border-radius:6px;background:rgba(12,23,35,0.6);">&#8592; Home</a>
       </div>
-      <div style="text-align:center;" id="account-link-wrap" hidden>
-        <a href="account.html" style="color:var(--accent2);font-size:12px;font-weight:700;text-decoration:none;letter-spacing:0.05em;">MY ACCOUNT</a>
+      <div style="text-align:center;" id="account-link-wrap">
+        <a href="account.html" style="color:var(--accent2);font-size:12px;font-weight:700;text-decoration:none;letter-spacing:0.05em;">My Account</a>
       </div>
     </div>
   </div>
@@ -1440,8 +1440,8 @@ body.combined-mode #combined-menu-btn{
       <div class="home-link-wrap" style="text-align:center;margin-top:14px;">
         <a class="home-link" href="https://fishedge.live/" target="_top" rel="noopener" title="Back to FishEdge home">&#8592; Home</a>
       </div>
-      <div style="text-align:center;margin-top:8px;" id="account-link-wrap" hidden>
-        <a href="account.html" style="color:var(--accent2);font-size:12px;font-weight:700;text-decoration:none;letter-spacing:0.05em;">MY ACCOUNT</a>
+      <div style="text-align:center;margin-top:8px;" id="account-link-wrap">
+        <a href="account.html" style="color:var(--accent2);font-size:12px;font-weight:700;text-decoration:none;letter-spacing:0.05em;">My Account</a>
       </div>
     </div>
 
@@ -2668,12 +2668,23 @@ const hReset = document.getElementById("hamburger-reset");
 if (hamburgerToggle && hamburgerPanel) {
   hamburgerToggle.addEventListener("click", (e) => {
     e.stopPropagation();
-    hamburgerPanel.classList.toggle("open");
+    // Universal hamburger: in Captain's Dashboard (combined-mode) toggles
+    // #combined-controls (the right-side sidebar).  In every other product
+    // view it toggles #menu-panel (the per-product dropdown).
+    var isCombined = document.body.classList.contains("combined-mode");
+    var target = isCombined ? document.getElementById("combined-controls") : hamburgerPanel;
+    if (target) target.classList.toggle("open");
+    else hamburgerPanel.classList.toggle("open");
   });
   // Close when tapping outside
   document.addEventListener("click", (e) => {
     if (!hamburgerPanel.contains(e.target) && !hamburgerToggle.contains(e.target)) {
       hamburgerPanel.classList.remove("open");
+    }
+    var cc = document.getElementById("combined-controls");
+    if (cc && cc.classList.contains("open") && !cc.contains(e.target)
+        && !hamburgerToggle.contains(e.target)) {
+      cc.classList.remove("open");
     }
   });
 }
