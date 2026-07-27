@@ -24,7 +24,7 @@
       <a href="https://app.fishedge.live/dashboard/login.html" class="nav-secondary" data-when-auth="hide" id="nav-login">Login</a>
       <a href="https://app.fishedge.live/dashboard/" class="nav-secondary" data-when-no-auth="hide" id="nav-dashboard" style="display:none;">Dashboard</a>
       <a href="https://app.fishedge.live/dashboard/register.html" class="nav-cta" data-when-auth="hide" id="nav-join">Join the Pilot</a>
-      <a href="https://app.fishedge.live/dashboard/" class="nav-cta" data-when-no-auth="hide" id="nav-go" style="display:none;">Open Dashboard</a>
+      <a href="https://app.fishedge.live/dashboard/logout.html" class="nav-cta" data-when-no-auth="hide" id="nav-go" style="display:none;">Log out</a>
     </nav>
   </header>
 
@@ -116,7 +116,7 @@
   /* ===== FishEdge marketing page logic =====
      1) Auth-aware nav: if a Supabase session exists (telltale: localStorage
         key 'ocean-mvp-auth' holds a JSON blob with access_token), swap
-        "Login" + "Join the Pilot" CTAs to "Dashboard" + "Open Dashboard".
+        "Login" + "Join the Pilot" CTAs to "Dashboard" + "Log out".
         Cross-origin caveat: dashboard sessions live in app.fishedge.live
         localStorage, so visitors who only ever hit fishedge.live without an
         app.fishedge.live auth won't trigger this — that's expected.

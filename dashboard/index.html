@@ -731,6 +731,20 @@ body.combined-mode #combined-menu-btn{
     body.combined-mode #combined-controls.open{ transform:translateX(0) !important; }
     body.combined-mode #combined-overlay{ display:none; }
     .combined-section{ display:flex; flex-direction:column; gap:8px; }
+    .combined-home-link{
+      display:block;
+      margin-top:10px;
+      padding:7px 8px;
+      border:1px solid var(--border);
+      border-radius:6px;
+      color:var(--fg);
+      font-size:12px;
+      font-weight:800;
+      letter-spacing:0.04em;
+      text-decoration:none;
+      background:rgba(12,23,35,0.6);
+    }
+    .combined-home-link:hover{ border-color:#2dd4bf; background:rgba(26,127,122,0.25); color:#fff; }
     .combined-section-title{
       font-size:11px;
       font-weight:700;
@@ -1238,6 +1252,7 @@ body.combined-mode #combined-menu-btn{
   <div id="combined-controls">
     <div style="text-align:center;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--border);">
       <a href="account.html" style="color:var(--accent2);font-size:12px;font-weight:700;text-decoration:none;letter-spacing:0.05em;">MY ACCOUNT</a>
+      <a class="combined-home-link" href="https://fishedge.live/" target="_top" rel="noopener" title="Back to FishEdge home">&#8592; Home</a>
     </div>
     <div class="combined-section">
       <div class="combined-section-title">Product</div>
