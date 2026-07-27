@@ -4,243 +4,104 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>FishEdge.live — Marine Fishing Intelligence</title>
-  <meta name="description" content="Live marine intelligence for tournament captains. Real-time edges where ocean conditions shift and predatory fish hunt. Free pilot — 2026 season." />
+  <meta name="description" content="Live AIS tracking, expert analysis, and subscription plans for competitive fishing." />
   <meta property="og:title" content="FishEdge.live — Marine Fishing Intelligence" />
-  <meta property="og:description" content="Live marine intelligence for tournament captains. Track the ocean edges where fish actually hunt — temperature breaks, chlorophyll fronts, current rips." />
+  <meta property="og:description" content="Live AIS tracking, expert analysis, and subscription plans for competitive fishing." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://fishedge.live" />
-  <link rel="icon" type="image/png" sizes="any" href="fishedge-logo-navy-transparent.png?v=5" />
-  <link rel="stylesheet" href="style.css" />
+  <meta property="og:image" content="https://fishedge.live/fishedge-logo-cream.png" />
+  <link rel="icon" type="image/png" sizes="any" href="fishedge-logo-cream-transparent.png?v=6" />
+  <link rel="stylesheet" href="style.css?v=6" />
 </head>
 <body>
   <header class="topbar">
     <div class="brand">
-      <a href="/" aria-label="FishEdge.home"><img src="fishedge-logo-navy-transparent.png?v=5" alt="FishEdge.live — Marine Fishing Intelligence" class="brand-logo" /></a>
+      <a href="/" aria-label="FishEdge.live home">
+        <img src="fishedge-logo-cream-transparent.png?v=6" alt="FishEdge.live — Marine Fishing Intelligence" class="brand-logo" />
+      </a>
     </div>
-    <nav class="nav">
-      <a href="#tournaments">Tournaments</a>
-      <a href="/about">About</a>
-      <a href="https://app.fishedge.live/dashboard/login.html" class="nav-secondary" data-when-auth="hide" id="nav-login">Login</a>
-      <a href="https://app.fishedge.live/dashboard/" class="nav-secondary" data-when-no-auth="hide" id="nav-dashboard" style="display:none;">Dashboard</a>
-      <a href="https://app.fishedge.live/dashboard/register.html" class="nav-cta" data-when-auth="hide" id="nav-join">Join the Pilot</a>
-      <a href="https://app.fishedge.live/dashboard/logout.html" class="nav-cta" data-when-no-auth="hide" id="nav-go" style="display:none;">Log out</a>
+    <nav class="nav" aria-label="Primary">
+      <a href="/">Homepage</a>
+      <a href="#features">Features</a>
+      <a href="#pricing">Pricing</a>
+      <a href="#contact">Contact</a>
+      <a href="https://app.fishedge.live/dashboard/login.html" class="nav-secondary">Log in</a>
+      <a href="#pricing" class="nav-cta">Subscribe</a>
     </nav>
   </header>
 
   <main>
     <section class="hero">
-      <div class="hero-text">
-        <p class="eyebrow">Live marine intelligence for tournament captains</p>
-        <h1>Shape the future of tournament fishing.</h1>
-        <p class="supporting">
-          Get free access this season and help us build the next-generation fishing intelligence platforms.
-        </p>
-        <div class="ctas">
-          <a class="cta-primary" href="https://app.fishedge.live/dashboard/register.html" data-when-auth="hide">Join the FishEdge Captain Pilot</a>
-          <div class="cta-secondary-wrap">
-            <a class="cta-secondary" href="https://app.fishedge.live/dashboard/" data-when-auth="hide">Explore the Live Dashboard</a>
-            <p class="cta-secondary-helper">See the edges captains look for.</p>
-          </div>
+      <div class="hero-inner">
+        <div class="hero-text">
+          <h1>Live AIS Tracking</h1>
+          <p class="sub">Marine AIS tracking with edge analytics. Tournament-grade intel for captains who want the edge before first light.</p>
+          <a class="cta-primary" href="#features">Learn More</a>
         </div>
-        <p class="trustline">Built for tournament captains. Shaped by your feedback.</p>
-      </div>
-      <div class="hero-image" id="hero-image" role="button" tabindex="0" aria-label="Enlarge hero image">
-        <img src="hero.png" alt="Live marine intelligence map preview — real Mid-Atlantic thermal front analysis from 2026-07-14, Ocean City MD focal point" />
-      </div>
-    </section>
-
-    <section class="showcase">
-      <h2>See the edges in real time</h2>
-      <p class="showcase-intro">Public satellite oceanography and marine altimetry, refreshed continuously. Click any frame to enlarge.</p>
-      <div class="showcase-grid">
-        <div class="showcase-card" data-lightbox-src="gallery/usec-edge-network.png" role="button" tabindex="0" aria-label="Enlarge edge network image">
-          <img src="gallery/usec-edge-network.png" alt="Edge network visualization off the Carolina coast — temperature breaks and chlorophyll fronts tracing the productive boundaries" />
-          <span class="card-label">Edge Network</span>
-        </div>
-        <div class="showcase-card" data-lightbox-src="gallery/usec-carolinas-tracks.png" role="button" tabindex="0" aria-label="Enlarge Carolinas vessel tracks image">
-          <img src="gallery/usec-carolinas-tracks.png" alt="Vessel tracking and traffic patterns off the Carolina coast — fleet movement along shipping lanes and coastal corridors" />
-          <span class="card-label">Carolina Tracks</span>
-        </div>
-        <div class="showcase-card" data-lightbox-src="gallery/usec-delmarva-tracks.png" role="button" tabindex="0" aria-label="Enlarge Delmarva tracks image">
-          <img src="gallery/usec-delmarva-tracks.png" alt="Mid-Atlantic vessel traffic and ocean conditions off the Delmarva Peninsula — the primary operating area for the Captain Pilot" />
-          <span class="card-label">Delmarva Activity</span>
+        <div class="hero-cards">
+          <a class="hero-card" href="#features">
+            <h3>Tournament Leaderboards</h3>
+            <p>Live rankings across the East Coast tournament circuit.</p>
+          </a>
+          <a class="hero-card" href="#features">
+            <h3>Expert Analysis</h3>
+            <p>Daily briefs from pro captains and analysts.</p>
+          </a>
+          <a class="hero-card" href="#features">
+            <h3>Expert Analysis</h3>
+            <p>Habitat, temperature, current — broken down by region.</p>
+          </a>
+          <a class="hero-card" href="#pricing">
+            <h3>Brand Subscription</h3>
+            <p>Get your brand in front of every captain on the leaderboard.</p>
+          </a>
         </div>
       </div>
     </section>
 
-    <section class="features">
-      <div class="feature">
-        <h3>Live ocean edges</h3>
-        <p>Chlorophyll, temperature, thermal fronts, currents — the productive boundaries captains actually watch.</p>
+    <section class="bottom">
+      <div class="expert-block">
+        <h2>Expert Analysis</h2>
+        <p>Daily intel from our captain network — what the water's doing, where the bite is, and why. Built for tournament captains by tournament captains.</p>
+        <a class="cta-primary" href="#features">Learn More</a>
       </div>
-      <div class="feature">
-        <h3>Save your spots</h3>
-        <p>Pin the places that matter. FishEdge watches them so you don’t have to.</p>
-      </div>
-      <div class="feature">
-        <h3>Built with captains</h3>
-        <p>The pilot is open to tournament captains across the East Coast. Tell us what works.</p>
+      <div class="pricing-block" id="pricing">
+        <h2>Subscription Plans</h2>
+        <div class="pricing-cards">
+          <article class="price-card">
+            <header class="price-card-header navy">Midsioition</header>
+            <div class="price-card-body">
+              <div class="price">$116<span class="per">/mo</span></div>
+              <ul>
+                <li>Daily Edge Brief</li>
+                <li>Tournament Leaderboard</li>
+                <li>Expert Analysis</li>
+              </ul>
+            </div>
+          </article>
+          <article class="price-card featured">
+            <header class="price-card-header orange">Subscription</header>
+            <div class="price-card-body">
+              <div class="price">$258<span class="per">/mo</span></div>
+              <ul>
+                <li>Daily Edge Brief</li>
+                <li>Tournament Leaderboard</li>
+                <li>Expert Subscription</li>
+              </ul>
+            </div>
+          </article>
+        </div>
       </div>
     </section>
 
-    <section id="tournaments" class="tournaments">
-      <h2>Upcoming tournaments</h2>
-      <p class="section-intro">East Coast tournament fishing context. Updated as the calendar changes.</p>
-      <div class="tournament-list" id="tournament-list">
-        <!-- Populated by tournaments.js -->
-      </div>
-    </section>
-
-    <section id="about" class="about">
-      <h2>About FishEdge</h2>
-      <p>
-        FishEdge is the customer-facing product of DataNinjaAI. We build live marine intelligence tools that turn public satellite data into operational decisions for tournament captains.
-      </p>
-      <p>
-        “FishEdge” means two things. The productive edges in the water where fish congregate — temperature breaks, chlorophyll fronts, current boundaries. And the competitive edge captains need to make the right call before first light.
-      </p>
-      <p>
-        The Captain Pilot is open through the 2026 season. <a href="/about">Read the full story →</a>
-      </p>
-    </section>
-
-    <section class="contact">
+    <section id="contact" class="contact">
       <h2>Get in touch</h2>
-      <p>
-        Email <a href="mailto:captains@fishedge.live">captains@fishedge.live</a> for pilot access, partnership, or feedback.
-      </p>
+      <p>Email <a href="mailto:captains@fishedge.live">captains@fishedge.live</a> for partnership or feedback.</p>
     </section>
   </main>
 
   <footer>
     <p>© 2026 DataNinjaAI · FishEdge is a product of DataNinjaAI · <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a></p>
   </footer>
-
-  <script src="tournaments.js"></script>
-
-  <!-- Hero image lightbox (click-to-enlarge) — markup injected here so the
-       opening animation has a guaranteed target to fade in. Hidden until JS
-       adds .is-open. -->
-  <div class="hero-lightbox" id="hero-lightbox" role="dialog" aria-modal="true" aria-label="Image enlarged">
-    <button class="hero-lightbox-close" id="hero-lightbox-close" aria-label="Close">CLOSE</button>
-    <img id="hero-lightbox-img" src="hero.png" alt="Live marine intelligence map preview — real Mid-Atlantic thermal front analysis from 2026-07-14, Ocean City MD focal point (enlarged)" />
-  </div>
-
-  <!-- FishEdge marketing interactions (auth-aware nav + hero lightbox).
-       Loaded from CDN because both scripts are public Supabase libraries and
-       we want them cached. -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js?v=20260726"></script>
-  <script>
-  /* ===== FishEdge marketing page logic =====
-     1) Auth-aware nav: if a Supabase session exists (telltale: localStorage
-        key 'ocean-mvp-auth' holds a JSON blob with access_token), swap
-        "Login" + "Join the Pilot" CTAs to "Dashboard" + "Log out".
-        Cross-origin caveat: dashboard sessions live in app.fishedge.live
-        localStorage, so visitors who only ever hit fishedge.live without an
-        app.fishedge.live auth won't trigger this — that's expected.
-     2) Hero image click-to-enlarge lightbox.
-     3) Esc / click-outside to close.
-     No telemetry; no cookies set. */
-  (function () {
-    'use strict';
-
-    // ---- 1) Auth-aware nav ----
-    // Two signals to detect auth:
-    // (a) localStorage 'ocean-mvp-auth' — works when user loaded the marketing
-    //     landing while already in the app.fishedge.live auth context (rare)
-    // (b) cookie 'fishedge_logged_in' — written by supabase-init.js on sign-in
-    //     across the whole .fishedge.live parent domain.  This is the
-    //     cross-subdomain signal that makes the detection actually work
-    //     when the captain lands on fishedge.live *first*.
-    var isAuthed = false;
-    try {
-      var cookieOk = /(?:^|;\s*)fishedge_logged_in=1(?:;|$)/.test(document.cookie);
-      if (cookieOk) { isAuthed = true; }
-    } catch (_) {}
-    if (!isAuthed) {
-      try {
-        var raw = localStorage.getItem('ocean-mvp-auth');
-        if (raw) {
-          var blob = JSON.parse(raw);
-          if (blob && (blob.access_token || blob.session)) isAuthed = true;
-        }
-      } catch (_) {}
-    }
-
-    if (isAuthed) {
-      document.body.classList.add('is-authenticated');
-      ['nav-login', 'nav-join'].forEach(function (id) {
-        var el = document.getElementById(id);
-        if (el) el.style.display = 'none';
-      });
-      ['nav-dashboard', 'nav-go'].forEach(function (id) {
-        var el = document.getElementById(id);
-        if (el) el.style.display = '';
-      });
-    }
-
-    // ---- 2) Hero + showcase image lightbox ----
-    var heroBox  = document.getElementById('hero-image');
-    var lightbox = document.getElementById('hero-lightbox');
-    var lightboxImg = document.getElementById('hero-lightbox-img');
-    var closeBtn = document.getElementById('hero-lightbox-close');
-
-    var openLightbox = function (src, alt) {
-      if (!lightbox) return;
-      if (lightboxImg) {
-        if (src) lightboxImg.src = src;
-        if (alt) lightboxImg.alt = alt;
-      }
-      lightbox.classList.add('is-open');
-      document.body.style.overflow = 'hidden';
-      if (closeBtn) closeBtn.focus();
-    };
-    var closeLightbox = function () {
-      if (!lightbox) return;
-      lightbox.classList.remove('is-open');
-      document.body.style.overflow = '';
-    };
-
-    if (heroBox && lightbox) {
-      heroBox.addEventListener('click', function (e) {
-        e.preventDefault();
-        var img = heroBox.querySelector('img');
-        openLightbox(img ? img.src : null, img ? img.alt : null);
-      });
-      heroBox.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          var img = heroBox.querySelector('img');
-          openLightbox(img ? img.src : null, img ? img.alt : null);
-        }
-      });
-    }
-
-    // Showcase cards share the same lightbox
-    document.querySelectorAll('.showcase-card').forEach(function (card) {
-      var activate = function () {
-        var img = card.querySelector('img');
-        var src = card.getAttribute('data-lightbox-src') || (img ? img.src : null);
-        openLightbox(src, img ? img.alt : null);
-      };
-      card.addEventListener('click', activate);
-      card.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activate(); }
-      });
-    });
-
-    if (closeBtn) closeBtn.addEventListener('click', closeLightbox);
-    if (lightbox) {
-      lightbox.addEventListener('click', function (e) {
-        if (e.target === lightbox) closeLightbox();
-      });
-    }
-    document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape' && lightbox && lightbox.classList.contains('is-open')) {
-        closeLightbox();
-      }
-    });
-  })();
-  </script>
 </body>
 </html>
