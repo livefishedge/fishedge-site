@@ -9,23 +9,21 @@
   <meta property="og:description" content="Live marine intelligence for tournament captains. Track the ocean edges where fish actually hunt — temperature breaks, chlorophyll fronts, current rips." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://fishedge.live" />
-  <meta property="og:image" content="https://fishedge.live/fishedge-logo-cream.png" />
-  <link rel="icon" type="image/png" sizes="any" href="fishedge-logo-transparent.png?v=8" />
-  <link rel="stylesheet" href="style.css?v=8" />
+  <link rel="icon" type="image/png" sizes="any" href="fishedge-logo-transparent.png?v=9" />
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <header class="topbar">
     <div class="brand">
-      <a href="/" aria-label="FishEdge.live home">
-        <img src="fishedge-logo-transparent.png?v=8" alt="FishEdge.live — Marine Fishing Intelligence" class="brand-logo" />
-      </a>
+      <a href="/" aria-label="FishEdge.home"><img src="fishedge-logo-transparent.png?v=9" alt="FishEdge.live — Marine Fishing Intelligence" class="brand-logo" /></a>
     </div>
-    <nav class="nav" aria-label="Primary">
-      <a href="/">Homepage</a>
+    <nav class="nav">
       <a href="#tournaments">Tournaments</a>
       <a href="/about">About</a>
-      <a href="https://app.fishedge.live/dashboard/login.html" class="nav-secondary" data-when-auth="hide">Log in</a>
-      <a href="https://app.fishedge.live/dashboard/register.html" class="nav-cta" data-when-auth="hide">Join the Pilot</a>
+      <a href="https://app.fishedge.live/dashboard/login.html" class="nav-secondary" data-when-auth="hide" id="nav-login">Login</a>
+      <a href="https://app.fishedge.live/dashboard/" class="nav-secondary" data-when-no-auth="hide" id="nav-dashboard" style="display:none;">Dashboard</a>
+      <a href="https://app.fishedge.live/dashboard/register.html" class="nav-cta" data-when-auth="hide" id="nav-join">Join the Pilot</a>
+      <a href="https://app.fishedge.live/dashboard/logout.html" class="nav-cta" data-when-no-auth="hide" id="nav-go" style="display:none;">Log out</a>
     </nav>
   </header>
 
@@ -118,15 +116,71 @@
     <p>© 2026 DataNinjaAI · FishEdge is a product of DataNinjaAI · <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a></p>
   </footer>
 
+  <script src="tournaments.js"></script>
+
+  <!-- Hero image lightbox (click-to-enlarge) — markup injected here so the
+       opening animation has a guaranteed target to fade in. Hidden until JS
+       adds .is-open. -->
   <div class="hero-lightbox" id="hero-lightbox" role="dialog" aria-modal="true" aria-label="Image enlarged">
     <button class="hero-lightbox-close" id="hero-lightbox-close" aria-label="Close">CLOSE</button>
     <img id="hero-lightbox-img" src="hero.png" alt="Live marine intelligence map preview — real Mid-Atlantic thermal front analysis from 2026-07-14, Ocean City MD focal point (enlarged)" />
   </div>
 
-  <script src="tournaments.js"></script>
+  <!-- FishEdge marketing interactions (auth-aware nav + hero lightbox).
+       Loaded from CDN because both scripts are public Supabase libraries and
+       we want them cached. -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js?v=20260726"></script>
   <script>
+  /* ===== FishEdge marketing page logic =====
+     1) Auth-aware nav: if a Supabase session exists (telltale: localStorage
+        key 'ocean-mvp-auth' holds a JSON blob with access_token), swap
+        "Login" + "Join the Pilot" CTAs to "Dashboard" + "Log out".
+        Cross-origin caveat: dashboard sessions live in app.fishedge.live
+        localStorage, so visitors who only ever hit fishedge.live without an
+        app.fishedge.live auth won't trigger this — that's expected.
+     2) Hero image click-to-enlarge lightbox.
+     3) Esc / click-outside to close.
+     No telemetry; no cookies set. */
   (function () {
-    var heroBox = document.getElementById('hero-image');
+    'use strict';
+
+    // ---- 1) Auth-aware nav ----
+    // Two signals to detect auth:
+    // (a) localStorage 'ocean-mvp-auth' — works when user loaded the marketing
+    //     landing while already in the app.fishedge.live auth context (rare)
+    // (b) cookie 'fishedge_logged_in' — written by supabase-init.js on sign-in
+    //     across the whole .fishedge.live parent domain.  This is the
+    //     cross-subdomain signal that makes the detection actually work
+    //     when the captain lands on fishedge.live *first*.
+    var isAuthed = false;
+    try {
+      var cookieOk = /(?:^|;\s*)fishedge_logged_in=1(?:;|$)/.test(document.cookie);
+      if (cookieOk) { isAuthed = true; }
+    } catch (_) {}
+    if (!isAuthed) {
+      try {
+        var raw = localStorage.getItem('ocean-mvp-auth');
+        if (raw) {
+          var blob = JSON.parse(raw);
+          if (blob && (blob.access_token || blob.session)) isAuthed = true;
+        }
+      } catch (_) {}
+    }
+
+    if (isAuthed) {
+      document.body.classList.add('is-authenticated');
+      ['nav-login', 'nav-join'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+      });
+      ['nav-dashboard', 'nav-go'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.style.display = '';
+      });
+    }
+
+    // ---- 2) Hero + showcase image lightbox ----
+    var heroBox  = document.getElementById('hero-image');
     var lightbox = document.getElementById('hero-lightbox');
     var lightboxImg = document.getElementById('hero-lightbox-img');
     var closeBtn = document.getElementById('hero-lightbox-close');
@@ -162,6 +216,7 @@
       });
     }
 
+    // Showcase cards share the same lightbox
     document.querySelectorAll('.showcase-card').forEach(function (card) {
       var activate = function () {
         var img = card.querySelector('img');
