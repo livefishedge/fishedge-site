@@ -303,6 +303,12 @@
           return;
         }
 
+        // Mark the shared parent domain immediately so fishedge.live can
+        // render the captain's logged-in homepage on the next visit.
+        try {
+          document.cookie = 'fishedge_logged_in=1; Path=/; Domain=.fishedge.live; Max-Age=' + (7 * 24 * 60 * 60) + '; Secure; SameSite=Lax';
+        } catch (_) {}
+
         // If there's a pending profile from registration, create it now
         try {
           var pending = sessionStorage.getItem('pending_profile');
