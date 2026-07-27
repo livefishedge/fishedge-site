@@ -1,0 +1,20 @@
+# FishEdge.live — Cloudflare Pages cache headers
+# Cap the logo + style cache to a few min so future fixes propagate in minutes, not 4h.
+
+/fishedge-logo.png
+  Cache-Control: public, max-age=300, must-revalidate
+
+/fishedge-logo-transparent.png
+  Cache-Control: public, max-age=300, must-revalidate
+
+/fishedge-logo-navy.png
+  Cache-Control: public, max-age=300, must-revalidate
+
+/fishedge-logo-navy-transparent.png
+  Cache-Control: public, max-age=300, must-revalidate
+
+/style.css
+  Cache-Control: public, max-age=300, must-revalidate
+
+/index.html
+  Cache-Control: public, max-age=60, must-revalidate
