@@ -589,7 +589,6 @@
     body.thermal-fronts-mode #hamburger-cbar,
     body.thermal-fronts-mode .hamburger-range-block{ display:none !important; }
     /* Combined mode: hide single-product slider/progress, show sidebar */
-body.combined-mode #combined-menu-btn{
       top:8px !important; right:8px !important; left:auto !important;
       z-index:1200 !important;
       display:flex !important;
@@ -598,7 +597,6 @@ body.combined-mode #combined-menu-btn{
       border-radius:8px;
       box-shadow:0 2px 10px rgba(0,0,0,0.25);
     }
-    body.combined-mode #combined-menu-btn span{ display:block; width:18px; height:2px; background:var(--fg); border-radius:2px; }
     body.combined-mode #nav-bar{ display:none !important; }
     body.combined-mode #toolbar{ display:none !important; }
     /* Captain's Dashboard uses #combined-controls (sidebar); #hamburger-btn
@@ -1367,11 +1365,7 @@ body.combined-mode #combined-menu-btn{
       </div>
     </div>
   </div>
-  <button id="combined-menu-btn" aria-label="Toggle sidebar" style="display:none;position:fixed;top:8px;right:8px;z-index:40;width:44px;height:44px;background:var(--panel);border:none;border-left:1px solid var(--border);cursor:pointer;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:0;">
-    <span style="display:block;width:18px;height:2px;background:var(--fg);border-radius:2px;"></span>
-    <span style="display:block;width:18px;height:2px;background:var(--fg);border-radius:2px;"></span>
-    <span style="display:block;width:18px;height:2px;background:var(--fg);border-radius:2px;"></span>
-  </button>
+
 
   <div id="briefing-panel" aria-live="polite" style="display:none">
     <h2>Captain Briefing</h2>
