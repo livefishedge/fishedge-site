@@ -599,6 +599,10 @@
     body.combined-mode #plot{ display:none !important; }
     body.combined-mode #map{ display:block !important; position:absolute; top:0; left:0; right:0; bottom:0; z-index:1000; width:100%; height:100%; cursor:crosshair; }
     body.combined-mode #combined-readout{ display:block !important; }
+    /* When the sidebar is open, hide the bottom-right readout so it doesn't
+       sit on top of the sidebar (z-index 1120 vs sidebar's 1110) and block
+       the My Account button. */
+    body.combined-mode:has(#combined-controls.open) #combined-readout{ display:none !important; }
     body.combined-mode #status{ display:none !important; }
 
     body.combined-mode .combined-mode-row button{
@@ -1351,7 +1355,7 @@
       <div id="combined-bathy-legend" class="combined-inline-legend"></div>
     <div class="combined-footer" style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border);">
       <div style="text-align:center;margin-bottom:8px;">
-        <a class="combined-home-link" href="https://fishedge.live/" target="_top" rel="noopener" title="Back to FishEdge home" style="display:block;padding:8px 0;color:var(--fg);font-size:12px;font-weight:800;letter-spacing:0.05em;text-decoration:none;border:1px solid var(--border);border-radius:6px;background:rgba(12,23,35,0.6);">&#8592; Home</a>
+        <a class="combined-home-link" href="https://fishedge.live/" target="_top" rel="noopener" title="Back to FishEdge home" style="display:block;padding:8px 0;color:var(--fg);font-size:12px;font-weight:800;letter-spacing:0.05em;text-decoration:none;border:1px solid var(--border);border-radius:6px;background:rgba(12,23,35,0.6);">Home</a>
       </div>
       <div style="text-align:center;" id="account-link-wrap">
         <a href="account.html" style="color:var(--accent2);font-size:12px;font-weight:700;text-decoration:none;letter-spacing:0.05em;">My Account</a>
@@ -1427,7 +1431,7 @@
       </div>
       <div id="hamburger-cbar"></div>
       <div class="home-link-wrap" style="text-align:center;margin-top:14px;">
-        <a class="home-link" href="https://fishedge.live/" target="_top" rel="noopener" title="Back to FishEdge home">&#8592; Home</a>
+        <a class="home-link" href="https://fishedge.live/" target="_top" rel="noopener" title="Back to FishEdge home">Home</a>
       </div>
       <div style="text-align:center;margin-top:8px;" id="account-link-wrap">
         <a href="account.html" style="color:var(--accent2);font-size:12px;font-weight:700;text-decoration:none;letter-spacing:0.05em;">My Account</a>
