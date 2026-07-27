@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>About FishEdge — Finding the frontlines of the bite</title>
+  <meta name="description" content="FishEdge tracks the ocean edges where fish actually hunt — temperature breaks, chlorophyll fronts, current rips — and puts them on a single live map." />
+  <meta property="og:title" content="About FishEdge — Live marine intelligence for anglers" />
+  <meta property="og:description" content="We eliminate the guesswork from offshore and coastal angling by mapping the active frontlines where predatory fish hunt, in real time." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://fishedge.live/about" />
+  <link rel="icon" href="data:," />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <a href="/" style="color:inherit;text-decoration:none;display:flex;align-items:baseline;gap:6px;">
+        <span class="logo">FishEdge</span>
+        <span class="tagline">live</span>
+      </a>
+    </div>
+    <nav class="nav">
+      <a href="/#tournaments">Tournaments</a>
+      <a href="/about" aria-current="page">About</a>
+      <a href="https://app.fishedge.live/dashboard/login.html" class="nav-secondary" data-when-auth="hide" id="nav-login">Login</a>
+      <a href="https://app.fishedge.live/dashboard/" class="nav-secondary" data-when-no-auth="hide" id="nav-dashboard" style="display:none;">Dashboard</a>
+      <a href="https://app.fishedge.live/dashboard/register.html" class="nav-cta" data-when-auth="hide" id="nav-join">Join the Pilot</a>
+      <a href="https://app.fishedge.live/dashboard/logout.html" class="nav-cta" data-when-no-auth="hide" id="nav-go" style="display:none;">Log out</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="page-hero">
+      <p class="eyebrow">About FishEdge Live</p>
+      <h1>Finding the frontlines of the bite.</h1>
+      <p class="page-lede">We track the invisible boundaries where ocean conditions shift and predatory fish hunt — and put them on a single live map.</p>
+    </section>
+
+    <section class="mission">
+      <h2>Our Mission</h2>
+      <p>At fishedge.live, our mission is to eliminate the guesswork from offshore and coastal angling by delivering real-time, actionable data on underwater marine edges. We track the critical boundaries where ocean water shifts — giving captains, sport fishers, and local anglers the exact coordinates where predatory fish hunt.</p>
+    </section>
+
+    <section class="problem">
+      <h2>The Ocean Is Vast, But the Bite Is Specific</h2>
+      <p>Every experienced captain knows that fish don't gather randomly in open water. They track the edges:</p>
+      <ul class="edge-list">
+        <li>Sudden sea surface temperature breaks</li>
+        <li>Shifting chlorophyll boundaries and color lines</li>
+        <li>Powerful oceanic current rips and upwellings</li>
+      </ul>
+      <p>Finding these invisible boundaries by burning fuel and staring at a basic sonar screen is inefficient, expensive, and stressful. When marine conditions change by the hour, yesterday's hot spot is today's dead water.</p>
+    </section>
+
+    <section class="solution">
+      <h2>Live Edge Intelligence</h2>
+      <p>fishedge.live was built to map these rapidly changing dynamics into a single, user-friendly live interface. We aggregate satellite oceanography, marine altimetry, and local weather patterns to pinpoint exactly where marine environments collide.</p>
+      <p>By tracking these active "frontlines," we give you the ultimate edge before you even leave the dock.</p>
+      <div class="features-3">
+        <div class="feature">
+          <h3>Real-Time Tracking</h3>
+          <p>Monitor active ocean fronts, current seams, and temperature breaks as they develop.</p>
+        </div>
+        <div class="feature">
+          <h3>Pre-Trip Planning</h3>
+          <p>Identify the exact coordination points worth your fuel and time.</p>
+        </div>
+        <div class="feature">
+          <h3>Increased Success</h3>
+          <p>Target pelagic and coastal gamefish with pinpoint data instead of relying on luck.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="audience">
+      <h2>Built For Anglers, By Anglers</h2>
+      <p>We believe that having a competitive edge on the water shouldn't require a degree in marine biology. Our team combines a passion for sport fishing with advanced data engineering to make complex marine data completely intuitive.</p>
+      <p>Whether you are charting a path across a continental shelf or hunting a weed line along a local current rip, fishedge.live keeps you exactly where the action is.</p>
+    </section>
+
+    <section class="cta-final">
+      <h2>Ready to Find Your Edge?</h2>
+      <p>Don't guess where the fish are hiding. Explore our live data maps today and start tracking the bite in real time.</p>
+      <div class="ctas">
+        <a class="cta-primary" href="https://app.fishedge.live/dashboard/">Explore the Live Map Now</a>
+      </div>
+    </section>
+
+    <section class="contact">
+      <h2>Get in touch</h2>
+      <p>Email <a href="mailto:captains@fishedge.live">captains@fishedge.live</a> for pilot access, partnership, or feedback.</p>
+    </section>
+  </main>
+
+  <footer>
+    <p>© 2026 DataNinjaAI · FishEdge is a product of DataNinjaAI · <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a></p>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js?v=20260726"></script>
+  <script>
+  /* ===== Auth-aware nav (mirrors index.html) =====
+     Detects an existing Supabase session via:
+       (a) cross-subdomain cookie 'fishedge_logged_in', or
+       (b) localStorage 'ocean-mvp-auth' (only when same-origin).
+     Swaps Login/Join CTAs for Dashboard/Log out. */
+  (function () {
+    'use strict';
+    var isAuthed = false;
+    try {
+      var cookieOk = /(?:^|;\s*)fishedge_logged_in=1(?:;|$)/.test(document.cookie);
+      if (cookieOk) { isAuthed = true; }
+    } catch (_) {}
+    if (!isAuthed) {
+      try {
+        var raw = localStorage.getItem('ocean-mvp-auth');
+        if (raw) {
+          var blob = JSON.parse(raw);
+          if (blob && (blob.access_token || blob.session)) isAuthed = true;
+        }
+      } catch (_) {}
+    }
+    if (isAuthed) {
+      document.body.classList.add('is-authenticated');
+      ['nav-login', 'nav-join'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+      });
+      ['nav-dashboard', 'nav-go'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.style.display = '';
+      });
+    }
+  })();
+  </script>
+</body>
+</html>

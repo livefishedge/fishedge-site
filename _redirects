@@ -1,0 +1,5 @@
+# Cloudflare Pages redirects
+# 200 = transparent rewrite (URL in browser stays /about, server serves /about.html)
+
+/about           /about.html           200
+/about/          /about.html           200
