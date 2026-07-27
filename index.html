@@ -127,32 +127,39 @@
     'use strict';
 
     // ---- 1) Auth-aware nav ----
+    // Two signals to detect auth:
+    // (a) localStorage 'ocean-mvp-auth' — works when user loaded the marketing
+    //     landing while already in the app.fishedge.live auth context (rare)
+    // (b) cookie 'fishedge_logged_in' — written by supabase-init.js on sign-in
+    //     across the whole .fishedge.live parent domain.  This is the
+    //     cross-subdomain signal that makes the detection actually work
+    //     when the captain lands on fishedge.live *first*.
+    var isAuthed = false;
     try {
-      var raw = localStorage.getItem('ocean-mvp-auth');
-      if (raw) {
-        var blob = JSON.parse(raw);
-        if (blob && (blob.access_token || blob.session)) {
-          document.body.classList.add('is-authenticated');
-
-          // Swap Login → Dashboard, Join → Open Dashboard
-          ['nav-login', 'nav-join'].forEach(function (id) {
-            var el = document.getElementById(id);
-            if (el) el.style.display = 'none';
-          });
-          ['nav-dashboard', 'nav-go'].forEach(function (id) {
-            var el = document.getElementById(id);
-            if (el) el.style.display = '';
-          });
-
-          // Hero CTAs: hide the marketing CTAs entirely (the secondary
-          // nav CTA "Dashboard" replaces them for returning users).
-          ['nav-dashboard'].forEach(function (id) {
-            var el = document.getElementById(id);
-            if (el) el.style.display = '';
-          });
+      var cookieOk = /(?:^|;\s*)fishedge_logged_in=1(?:;|$)/.test(document.cookie);
+      if (cookieOk) { isAuthed = true; }
+    } catch (_) {}
+    if (!isAuthed) {
+      try {
+        var raw = localStorage.getItem('ocean-mvp-auth');
+        if (raw) {
+          var blob = JSON.parse(raw);
+          if (blob && (blob.access_token || blob.session)) isAuthed = true;
         }
-      }
-    } catch (_) { /* not logged in — keep defaults */ }
+      } catch (_) {}
+    }
+
+    if (isAuthed) {
+      document.body.classList.add('is-authenticated');
+      ['nav-login', 'nav-join'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+      });
+      ['nav-dashboard', 'nav-go'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.style.display = '';
+      });
+    }
 
     // ---- 2) Hero image lightbox ----
     var heroBox  = document.getElementById('hero-image');
