@@ -1,0 +1,7 @@
+# Dashboard data fetches resolve to the marketing-site catch-all HTML under
+# app.fishedge.live/dashboard/*. Redirect them to the GitHub Pages viewer
+# (livefishedge/view) where the data is actually kept fresh (~30 min cadence).
+/dashboard/index-usec_south.json https://livefishedge.github.io/view/index-usec_south.json 302
+/dashboard/index-usec_md.json    https://livefishedge.github.io/view/index-usec_md.json 302
+/dashboard/index.json            https://livefishedge.github.io/view/index-usec_south.json 302
+/dashboard/data/*                https://livefishedge.github.io/view/data/:splat 302
