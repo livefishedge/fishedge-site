@@ -7316,14 +7316,16 @@ function thermalDateKey(ms) {
 }
 
 function thermalFrameTimeLabel(ms) {
+  // Bug fix 2026-08-02: was hardcoding timeZone: "UTC" and appending " UTC",
+  // which forced thermal-fronts-mode labels to UTC regardless of user's tz.
+  // Now uses browser local time (same convention as fmtLocalDateTime).
   return new Date(ms).toLocaleString(undefined, {
-    timeZone: "UTC",
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
     hour12: false
-  }) + " UTC";
+  });
 }
 
 function thermalColorForAge(ms, latestMs, oldestMs) {
