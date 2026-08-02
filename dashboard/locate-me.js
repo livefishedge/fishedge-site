@@ -180,8 +180,17 @@
   function detectActiveMaps() {
     const maps = [];
     if (typeof window === 'undefined') return maps;
-    if (window.desktopMapState && window.desktopMapState.map) maps.push(window.desktopMapState.map);
-    if (window.mobileMapState && window.mobileMapState.map) maps.push(window.mobileMapState.map);
+    // 1) Instrumented registry (preferred — set up by the inline shim before locate-me.js loads)
+    if (Array.isArray(window.__fishedgeMaps)) {
+      window.__fishedgeMaps.forEach(function (m) { if (m) maps.push(m); });
+    }
+    // 2) window globals (fallback — in case the dashboard exposes them someday)
+    if (window.desktopMapState && window.desktopMapState.map && maps.indexOf(window.desktopMapState.map) < 0) {
+      maps.push(window.desktopMapState.map);
+    }
+    if (window.mobileMapState && window.mobileMapState.map && maps.indexOf(window.mobileMapState.map) < 0) {
+      maps.push(window.mobileMapState.map);
+    }
     return maps;
   }
 
@@ -222,20 +231,32 @@
       const src = layer.getSource();
       src.clear();
       src.addFeatures([feats.point, feats.circle]);
-      if (!position.shown && map.getView && typeof map.getView === 'function') {
+      // Always recenter when the user clicks "Locate me". animate() with
+      // setCenter fallback if the animation throws.
+      if (map.getView && typeof map.getView === 'function') {
         const view = map.getView();
-        if (view && typeof view.animate === 'function') {
+        if (view) {
           const z = (typeof view.getZoom === 'function') ? (view.getZoom() || 0) : 0;
-          view.animate({
-            center: feats.center,
-            zoom: Math.max(z, 9),
-            duration: 600,
-          });
-          centeredFirst = true;
+          if (typeof view.animate === 'function') {
+            try {
+              view.animate({ center: feats.center, zoom: Math.max(z, 9), duration: 600 });
+              centeredFirst = true;
+            } catch (animErr) {
+              if (typeof view.setCenter === 'function') view.setCenter(feats.center);
+              if (typeof view.setZoom === 'function' && z < 9) view.setZoom(9);
+              centeredFirst = true;
+            }
+          } else if (typeof view.setCenter === 'function') {
+            view.setCenter(feats.center);
+            if (typeof view.setZoom === 'function' && z < 9) view.setZoom(9);
+            centeredFirst = true;
+          }
         }
       }
     }
-    position.shown = true;
+    if (typeof console !== 'undefined' && console.info) {
+      console.info('[fishedge-locate] showPosition: ' + maps.length + ' map(s), recentered=' + centeredFirst);
+    }
     return { shown: maps.length, maps: maps.length, centeredFirst: centeredFirst };
   }
 
@@ -523,9 +544,15 @@
 
     try {
       const position = await getCurrentPosition(nav);
-      showPosition(ol, position);
+      const result = showPosition(ol, position);
       STATE.lastPosition = position;
-      if (ui) ui.setStatus(formatStatus(position));
+      if (ui) {
+        if (result.maps === 0) {
+          ui.setStatus('Got position, but no map detected — try refreshing');
+        } else {
+          ui.setStatus(formatStatus(position));
+        }
+      }
       if (STATE.persistEnabled) {
         const c = position.coords;
         storePosition(storage, STORAGE_ENABLED_KEY, STORAGE_KEY, c.latitude, c.longitude, c.accuracy, position.timestamp);

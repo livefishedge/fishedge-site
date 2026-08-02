@@ -15,7 +15,35 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-init.js?v=20260711"></script>
   <script src="https://cdn.jsdelivr.net/npm/posthog-js@1.200.0/dist/array.js"></script>
-<script src="locate-me.js?v=20260802"></script>
+<script>
+/* Instrumentation shim for locate-me.js. The dashboard declares
+   mobileMapState / desktopMapState as local `let` variables in its
+   IIFE scope, never publishing them to window. This patches the
+   window.ol.Map constructor to track every created map instance in
+   window.__fishedgeMaps so locate-me.js can find them. */
+(function instrumentOlMap() {
+  if (typeof window === 'undefined') return;
+  if (!window.ol || !window.ol.Map) {
+    setTimeout(instrumentOlMap, 50);
+    return;
+  }
+  var OrigMap = window.ol.Map;
+  function TrackedMap(opts) {
+    var map = new OrigMap(opts);
+    (window.__fishedgeMaps = window.__fishedgeMaps || []).push(map);
+    return map;
+  }
+  // Preserve static methods/props (OL has things like ol.Map.EMPTY)
+  try {
+    Object.keys(OrigMap).forEach(function (k) { TrackedMap[k] = OrigMap[k]; });
+  } catch (_) {}
+  // Preserve prototype
+  TrackedMap.prototype = OrigMap.prototype;
+  window.ol.Map = TrackedMap;
+  console.info('[fishedge-locate] ol.Map instrumented; tracking map instances');
+})();
+</script>
+<script src="locate-me.js?v=20260803"></script>
 
 
   <style>
