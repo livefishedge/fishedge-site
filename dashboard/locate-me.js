@@ -462,18 +462,30 @@
     hooks = hooks || {};
     if (!doc || !doc.body) return null;
 
-    // Fixed-position host. If it already exists, reuse it.
-    let host = doc.getElementById('fishedge-locate-host');
-    if (!host) {
-      host = doc.createElement('div');
-      host.id = 'fishedge-locate-host';
-      host.style.cssText = 'position:fixed; top:64px; left:8px; z-index:1150; display:flex; flex-direction:column; gap:8px;';
-      doc.body.appendChild(host);
-    }
-
     // Idempotent: if the button is already mounted, return early.
     if (doc.getElementById('captain-locate-btn')) {
-      return { button: doc.getElementById('captain-locate-btn'), host: host };
+      return { button: doc.getElementById('captain-locate-btn'), host: doc.getElementById('captain-tools') };
+    }
+
+    // Remove any stale fallback host from the previous version so we don't
+    // leave an empty floating div sitting at top:64px left:8px.
+    const staleHost = doc.getElementById('fishedge-locate-host');
+    if (staleHost && staleHost.parentNode) staleHost.parentNode.removeChild(staleHost);
+
+    // Primary mount: append as the LAST child of #captain-tools so the
+    // compass icon sits to the right of captain-add-tool (waypoint) in
+    // the same container row. Matches Mike's 2026-08-02 16:48 ask:
+    // 'compass icon to the right of waypoint icon, in the same
+    // container box.'
+    let host = doc.getElementById('captain-tools');
+    if (!host) {
+      // Fallback: if #captain-tools doesn't exist (rare — only on pages
+      // without the captain tools palette), create a fixed-position row
+      // at upper-left so the button is still reachable.
+      host = doc.createElement('div');
+      host.id = 'fishedge-locate-host';
+      host.style.cssText = 'position:fixed; top:8px; left:8px; z-index:1150; display:flex; flex-direction:row; gap:8px;';
+      doc.body.appendChild(host);
     }
 
     const btn = doc.createElement('button');
