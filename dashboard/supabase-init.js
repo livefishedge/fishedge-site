@@ -225,4 +225,67 @@
     showExpiryWarning: showToast,
     hideExpiryWarning: hideToast,
   };
+
+// ============================================================
+// FishEdge marketing CTA hints (added 2026-08-02 by CTO).
+// Reads/writes parent-domain cookies that the marketing landing's
+// visitor-aware personalizer (cta-personalization.js) uses to choose
+// the right segment copy. NOT security tokens — the dashboard
+// re-validates every session server-side.
+// ============================================================
+const FISHEDGE_COOKIE_DOMAIN = '.fishedge.live';
+const FISHEDGE_COOKIE_MAX_AGE = 7 * 24 * 60 * 60; // 7 days
+
+function fishedgeDeleteCookie(name) {
+  document.cookie =
+    encodeURIComponent(name) + '=' +
+    '; expires=Thu, 01 Jan 1970 00:00:00 GMT' +
+    '; Max-Age=0' +
+    '; Path=/' +
+    '; Domain=' + FISHEDGE_COOKIE_DOMAIN +
+    '; Secure' +
+    '; SameSite=Lax';
+}
+
+function fishedgeSetCookie(name, value) {
+  document.cookie =
+    encodeURIComponent(name) + '=' + encodeURIComponent(value) +
+    '; Path=/' +
+    '; Domain=' + FISHEDGE_COOKIE_DOMAIN +
+    '; Max-Age=' + FISHEDGE_COOKIE_MAX_AGE +
+    '; Secure' +
+    '; SameSite=Lax';
+}
+
+function normalizeTier(rawTier) {
+  return rawTier === 'captain' ? 'captain' : 'player';
+}
+
+function syncFishedgeCookies(session) {
+  if (!session || !session.user) {
+    fishedgeDeleteCookie('fishedge_logged_in');
+    fishedgeDeleteCookie('fishedge_tier');
+    return;
+  }
+  fishedgeSetCookie('fishedge_logged_in', '1');
+  fishedgeDeleteCookie('fishedge_tier'); // clear stale before async resolve
+  const tier = normalizeTier(
+    session.user.app_metadata && session.user.app_metadata.fishedge_tier
+  );
+  fishedgeSetCookie('fishedge_tier', tier);
+}
+
+if (typeof sb !== 'undefined' && sb && sb.auth) {
+  // Initial session (best-effort, never blocks boot)
+  try {
+    sb.auth.getSession().then(function (r) {
+      try { syncFishedgeCookies(r && r.data && r.data.session); } catch (_) {}
+    }).catch(function () { syncFishedgeCookies(null); });
+  } catch (_) {}
+  // Every auth state change
+  sb.auth.onAuthStateChange(function (_event, session) {
+    try { syncFishedgeCookies(session); } catch (_) {}
+  });
+}
+
 })();
