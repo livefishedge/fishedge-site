@@ -448,6 +448,14 @@
       onLocateClick: function () {
         handleLocateClick({ navigator: nav, location: loc, storage: storage, ol: ol, ui: ui });
       },
+    });
+    // Add a second mount inside the captain tools palette (upper-left, only
+    // visible in combined-mode via CSS) so the button reaches the captain's
+    // dashboard next to the existing captain-tool icons.
+    const captainUi = buildCaptainToolButton(doc, {
+      onLocateClick: function () {
+        handleLocateClick({ navigator: nav, location: loc, storage: storage, ol: ol, ui: ui });
+      },
       onAutoFollowChange: function (checked) {
         STATE.autoFollow = checked;
         if (storage) {
@@ -584,6 +592,9 @@
     classifyError: classifyError,
     buildPositionFeatures: function (lat, lon, accuracyM) {
       return buildPositionFeatures(api.__ol || (typeof window !== 'undefined' ? window.ol : null), lat, lon, accuracyM);
+    },
+    buildCaptainToolButton: function (doc, hooks) {
+      return buildCaptainToolButton(doc || (typeof document !== 'undefined' ? document : null), hooks || {});
     },
     loadStoredPosition: function () { return loadStoredPosition(typeof localStorage !== 'undefined' ? localStorage : null, STORAGE_ENABLED_KEY, STORAGE_KEY); },
     clearStoredPosition: function () { return clearStoredPosition(typeof localStorage !== 'undefined' ? localStorage : null, STORAGE_KEY); },
