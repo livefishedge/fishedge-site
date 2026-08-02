@@ -563,15 +563,75 @@
     api.__handleLocateClick = handleLocateClick;
   }
 
-  // Auto-boot once the DOM is ready.
-  function autoBoot() {
-    try { boot(); } catch (e) { console.warn('[fishedge-locate] boot failed', e && e.message); }
+  // Auto-boot once the DOM is ready. Deferred via setTimeout(0) so we run
+  // AFTER any DOMContentLoaded handlers registered by the dashboard's main
+  // script (which loads later in <body>). Falls back to <body> if #toolbar
+  // is missing. Uses a MutationObserver to re-attach the button if some
+  // other script removes it from the DOM.
+  let mountObserver = null;
+  let mountedWrap = null;
+
+  function tryMount() {
+    try {
+      const doc = (typeof document !== 'undefined') ? document : null;
+      if (!doc) return false;
+      boot();
+      mountedWrap = doc.getElementById('fishedge-locate-wrap');
+      if (mountedWrap && mountObserver) {
+        mountObserver.observe(mountedWrap.parentNode || doc.body, {
+          childList: true,
+          subtree: false,
+        });
+      }
+      // Visible mount indicator for QA / DevTools
+      if (typeof console !== 'undefined' && console.info) {
+        console.info('[fishedge-locate] mounted; button:', mountedWrap ? 'YES' : 'NO');
+      }
+      return !!mountedWrap;
+    } catch (e) {
+      if (typeof console !== 'undefined' && console.warn) {
+        console.warn('[fishedge-locate] mount failed:', e && e.message);
+      }
+      return false;
+    }
   }
+
+  function onDomReady() {
+    // First attempt immediately (DOMContentLoaded fired).
+    if (tryMount()) return;
+    // Retry once after a tick in case the dashboard's own DOMContentLoaded
+    // handler hasn't finished wiring up the toolbar yet.
+    setTimeout(function () {
+      if (tryMount()) return;
+      // Final retry with rAF — last chance before the page becomes interactive.
+      if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(function () { tryMount(); });
+      }
+    }, 0);
+  }
+
+  // Watch for the button being removed (defensive — dashboard might re-render).
+  if (typeof MutationObserver === 'function') {
+    mountObserver = new MutationObserver(function (mutations) {
+      if (!mountedWrap) return;
+      for (let i = 0; i < mutations.length; i++) {
+        const m = mutations[i];
+        for (let j = 0; j < m.removedNodes.length; j++) {
+          if (m.removedNodes[j] === mountedWrap) {
+            // Re-mount. Skip if boot isn't ready.
+            try { boot(); mountedWrap = document.getElementById('fishedge-locate-wrap'); } catch (_) {}
+            return;
+          }
+        }
+      }
+    });
+  }
+
   if (typeof document !== 'undefined') {
     if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', autoBoot);
+      document.addEventListener('DOMContentLoaded', onDomReady);
     } else {
-      autoBoot();
+      onDomReady();
     }
   }
 })();
