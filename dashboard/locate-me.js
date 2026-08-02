@@ -452,7 +452,53 @@
     // Add a second mount inside the captain tools palette (upper-left, only
     // visible in combined-mode via CSS) so the button reaches the captain's
     // dashboard next to the existing captain-tool icons.
-    const captainUi = buildCaptainToolButton(doc, {
+    
+  // Locate-me button: 48x48 SVG icon, always visible at upper-left.
+  // Mounts into a fixed-position host (#fishedge-locate-host) so it's visible
+  // in ALL dashboard modes (regular + combined/captain), not gated by
+  // #captain-tools' display:none. Compass-needle SVG icon — clearly
+  // different from the waypoint crosshair.
+  function buildLocateButton(doc, hooks) {
+    hooks = hooks || {};
+    if (!doc || !doc.body) return null;
+
+    // Fixed-position host. If it already exists, reuse it.
+    let host = doc.getElementById('fishedge-locate-host');
+    if (!host) {
+      host = doc.createElement('div');
+      host.id = 'fishedge-locate-host';
+      host.style.cssText = 'position:fixed; top:64px; left:8px; z-index:1150; display:flex; flex-direction:column; gap:8px;';
+      doc.body.appendChild(host);
+    }
+
+    // Idempotent: if the button is already mounted, return early.
+    if (doc.getElementById('captain-locate-btn')) {
+      return { button: doc.getElementById('captain-locate-btn'), host: host };
+    }
+
+    const btn = doc.createElement('button');
+    btn.id = 'captain-locate-btn';
+    btn.type = 'button';
+    btn.className = 'captain-tool-btn';
+    btn.title = 'Locate me';
+    btn.setAttribute('aria-label', 'Locate me');
+    btn.setAttribute('data-tool', 'locate');
+    // Compass needle: outer circle + north/south diamond halves + center dot.
+    // Distinctive from the waypoint crosshair (concentric circles + cross arms).
+    btn.innerHTML = '<svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">'
+      + '<circle cx="11" cy="11" r="9" stroke="currentColor" stroke-width="1.6" fill="none"/>'
+      + '<path d="M11 3 L13.5 11 L11 9.5 L8.5 11 Z" fill="currentColor"/>'
+      + '<path d="M11 19 L13.5 11 L11 12.5 L8.5 11 Z" fill="currentColor" opacity="0.35"/>'
+      + '<circle cx="11" cy="11" r="1.2" fill="currentColor"/>'
+      + '</svg>';
+    btn.addEventListener('click', hooks.onLocateClick || function () {});
+    host.appendChild(btn);
+
+    console.info('[fishedge-locate] button mounted at #fishedge-locate-host');
+    return { button: btn, host: host };
+  }
+
+const captainUi = buildLocateButton(doc, {
       onLocateClick: function () {
         handleLocateClick({ navigator: nav, location: loc, storage: storage, ol: ol, ui: ui });
       },
@@ -593,8 +639,8 @@
     buildPositionFeatures: function (lat, lon, accuracyM) {
       return buildPositionFeatures(api.__ol || (typeof window !== 'undefined' ? window.ol : null), lat, lon, accuracyM);
     },
-    buildCaptainToolButton: function (doc, hooks) {
-      return buildCaptainToolButton(doc || (typeof document !== 'undefined' ? document : null), hooks || {});
+    buildLocateButton: function (doc, hooks) {
+      return buildLocateButton(doc || (typeof document !== 'undefined' ? document : null), hooks || {});
     },
     loadStoredPosition: function () { return loadStoredPosition(typeof localStorage !== 'undefined' ? localStorage : null, STORAGE_ENABLED_KEY, STORAGE_KEY); },
     clearStoredPosition: function () { return clearStoredPosition(typeof localStorage !== 'undefined' ? localStorage : null, STORAGE_KEY); },
