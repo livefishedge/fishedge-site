@@ -42,7 +42,7 @@
     accuracyStroke: 'rgba(25, 167, 255, 0.4)',
   };
 
-  const BUTTON_LABEL = '\uD83D\uDCCD My Boat'; // 📍 My Boat
+  const BUTTON_LABEL = 'Locate me';
   const BUTTON_ARIA = 'Locate me';
 
   // ----- Internal state -----
@@ -357,32 +357,49 @@
       if (el) el.addEventListener('click', hooks.onClear);
     }
 
-    return {
-      wrap: wrap,
-      button: btn,
-      popover: popover,
-      setStatus: function (text) {
-        const el = popover.querySelector('#' + statusId);
-        if (el) el.textContent = text;
-      },
-      setAutoFollowChecked: function (v) {
-        const el = popover.querySelector('#' + autofollowId);
-        if (el) el.checked = !!v;
-      },
-      setPersistChecked: function (v) {
-        const el = popover.querySelector('#' + persistId);
-        if (el) el.checked = !!v;
-      },
-    };
+    // Add a visible status indicator next to the button so the captain can see
+  // what is happening without having to open the popover.
+  const statusSpan = doc.createElement('span');
+  statusSpan.id = 'fishedge-locate-button-status';
+  statusSpan.style.cssText = 'font-size:11px; color:#9fb0c3; padding:0 8px; max-width:240px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-weight:600;';
+  statusSpan.textContent = '';
+  wrap.appendChild(statusSpan);
+
+  console.info('[fishedge-locate] button mounted into #toolbar');
+  return {
+    wrap: wrap,
+    button: btn,
+    popover: popover,
+    setStatus: function (text) {
+      const el = popover.querySelector('#' + statusId);
+      if (el) el.textContent = text;
+      if (statusSpan) statusSpan.textContent = text;
+    },
+    setAutoFollowChecked: function (v) {
+      const el = popover.querySelector('#' + autofollowId);
+      if (el) el.checked = !!v;
+    },
+    setPersistChecked: function (v) {
+      const el = popover.querySelector('#' + persistId);
+      if (el) el.checked = !!v;
+    },
+  };
   }
 
   // =========================================================================
   // BOOT
   // =========================================================================
 
+  // Idempotency guard: boot() is called from multiple paths (DOMContentLoaded,
+  // setTimeout retry, rAF retry, MutationObserver). Make it safe to call repeatedly
+  // by short-circuiting if the button is already in the DOM.
   function boot(env) {
     env = env || {};
     const doc = env.document || (typeof document !== 'undefined' ? document : null);
+    if (doc && doc.getElementById('fishedge-locate-wrap')) {
+      // Already mounted — don't re-create.
+      return doc.getElementById('fishedge-locate-wrap');
+    }
     const nav = env.navigator || (typeof navigator !== 'undefined' ? navigator : null);
     const ol = env.ol || (typeof window !== 'undefined' ? window.ol : null);
     const loc = env.location || (typeof location !== 'undefined' ? location : null);
@@ -628,6 +645,7 @@
   }
 
   if (typeof document !== 'undefined') {
+    console.info('[fishedge-locate] script loaded; readyState=' + document.readyState);
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', onDomReady);
     } else {
