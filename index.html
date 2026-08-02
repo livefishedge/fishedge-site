@@ -11,6 +11,8 @@
   <meta property="og:url" content="https://fishedge.live" />
   <link rel="icon" type="image/png" sizes="any" href="fishedge-logo-transparent.png?v=15" />
   <link rel="stylesheet" href="style.css" />
+<script src="cta-personalization-config.js?v=20260802"></script>
+<script src="cta-personalization.js?v=20260802"></script>
 </head>
 <body>
   <header class="topbar">
@@ -20,9 +22,9 @@
     <nav class="nav">
       <a href="#tournaments">Tournaments</a>
       <a href="/about">About</a>
-      <a href="https://app.fishedge.live/dashboard/login.html" class="nav-secondary" data-when-auth="hide" id="nav-login">Login</a>
+      <a href="https://app.fishedge.live/dashboard/login.html" class="nav-secondary" data-when-auth="hide" data-cta-surface="header-account" id="nav-login">Login</a>
       <a href="https://app.fishedge.live/dashboard/" class="nav-secondary" data-when-no-auth="hide" id="nav-dashboard" style="display:none;">Dashboard</a>
-      <a href="https://app.fishedge.live/dashboard/register.html" class="nav-cta" data-when-auth="hide" id="nav-join">Join the Pilot</a>
+      <a href="https://app.fishedge.live/dashboard/register.html" class="nav-cta" data-when-auth="hide" data-cta-surface="header-primary" id="nav-join">Join the Pilot</a>
       <a href="https://app.fishedge.live/dashboard/logout.html" class="nav-cta" data-when-no-auth="hide" id="nav-go" style="display:none;">Log out</a>
     </nav>
   </header>
@@ -36,9 +38,9 @@
           Get free access this season and help us build the next-generation fishing intelligence platforms.
         </p>
         <div class="ctas">
-          <a class="cta-primary" href="https://app.fishedge.live/dashboard/register.html" data-when-auth="hide">Join the FishEdge Captain Pilot</a>
+          <a class="cta-primary" href="https://app.fishedge.live/dashboard/register.html" data-when-auth="hide" data-cta-surface="hero-primary">Join the FishEdge Captain Pilot</a>
           <div class="cta-secondary-wrap">
-            <a class="cta-secondary" href="https://app.fishedge.live/dashboard/" data-when-auth="hide">Explore the Live Dashboard</a>
+            <a class="cta-secondary" href="https://app.fishedge.live/dashboard/" data-when-auth="hide" data-cta-surface="hero-secondary">Explore the Live Dashboard</a>
             <p class="cta-secondary-helper">See the edges captains look for.</p>
           </div>
         </div>
