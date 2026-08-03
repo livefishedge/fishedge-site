@@ -1,6 +1,6 @@
 {
   "region": "usec_south",
-  "last_updated": "2026-08-03T04:33:57.589480Z",
+  "last_updated": "2026-08-03T05:55:13.892047Z",
   "vars": [
     "chl",
     "sst",
@@ -472,6 +472,14 @@
         "label": "2026-08-01 14:31 UTC | S3A",
         "time_iso": "2026-08-01T14:31:00Z",
         "json_path": "https://data.fishedge.live/usec_south/chl/usec_south_20260801_2026213.1431_chl_S3A.json",
+        "grid_file": "frame_bbox"
+      },
+      {
+        "var": "chl",
+        "id": "usec_south_20260801_2026213.1608_chl_SGLI",
+        "label": "2026-08-01 16:08 UTC | SGLI",
+        "time_iso": "2026-08-01T16:08:00Z",
+        "json_path": "https://data.fishedge.live/usec_south/chl/usec_south_20260801_2026213.1608_chl_SGLI.json",
         "grid_file": "frame_bbox"
       },
       {
@@ -3186,6 +3194,14 @@
         "label": "2026-08-03 02:00 UTC",
         "time_iso": "2026-08-03T02:00:00Z",
         "json_path": "https://data.fishedge.live/usec_south/sst/sst_usec_south_2026215_20260803_02_g19.json",
+        "grid_file": "goes_sst_1000_grid.json"
+      },
+      {
+        "var": "sst",
+        "id": "sst_usec_south_2026215_20260803_03_g19",
+        "label": "2026-08-03 03:00 UTC",
+        "time_iso": "2026-08-03T03:00:00Z",
+        "json_path": "https://data.fishedge.live/usec_south/sst/sst_usec_south_2026215_20260803_03_g19.json",
         "grid_file": "goes_sst_1000_grid.json"
       }
     ],
@@ -6505,6 +6521,14 @@
         "time_iso": "2026-08-03T02:00:00Z",
         "json_path": "https://data.fishedge.live/usec_south/sst_front/sstfront_usec_south_2026215_20260803_02_g19.json",
         "grid_file": "frame_bbox"
+      },
+      {
+        "var": "sst_front",
+        "id": "sstfront_usec_south_2026215_20260803_03_g19",
+        "label": "2026-08-03 03:00 UTC",
+        "time_iso": "2026-08-03T03:00:00Z",
+        "json_path": "https://data.fishedge.live/usec_south/sst_front/sstfront_usec_south_2026215_20260803_03_g19.json",
+        "grid_file": "frame_bbox"
       }
     ]
   },
@@ -6538,11 +6562,11 @@
     "online_retention_days": 31
   },
   "_dashboard_rewrite": {
-    "rewritten_at": "2026-08-03T05:38:02.232629+00:00",
+    "rewritten_at": "2026-08-03T06:08:02.006300+00:00",
     "r2_base": "https://data.fishedge.live",
     "retention_days": 14,
     "cutoff_doy": 201,
-    "frames_kept": 811,
-    "frames_dropped_outside_retention": 925
+    "frames_kept": 814,
+    "frames_dropped_outside_retention": 923
   }
 }
