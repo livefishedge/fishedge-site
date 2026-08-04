@@ -472,6 +472,29 @@ footer {
   font-size: 13px;
 }
 
+/* Hamburger toggle button (default = hidden on desktop, shown on mobile below) */
+.nav-toggle {
+  display: none;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--fg);
+  padding: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  min-width: 44px;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+}
+.nav-toggle:hover { background: rgba(255, 255, 255, 0.06); }
+.nav-toggle svg { display: block; width: 22px; height: 22px; }
+.nav-toggle .icon-close { display: none; }
+.nav-toggle[aria-expanded="true"] .icon-open { display: none; }
+.nav-toggle[aria-expanded="true"] .icon-close { display: block; }
+
+body.nav-open { overflow: hidden; }
+
 /* ===== Mobile ===== */
 @media (max-width: 880px) {
   .hero { grid-template-columns: 1fr; padding: 48px 20px 40px; gap: 32px; }
@@ -550,26 +573,8 @@ footer {
 }
 .skip-link:focus { top: 12px; text-decoration: none; }
 
-.nav-toggle {
-  display: none;
-  background: transparent;
-  border: 1px solid var(--border);
-  color: var(--fg);
-  padding: 0;
-  border-radius: 6px;
-  cursor: pointer;
-  min-width: 44px;
-  min-height: 44px;
-  align-items: center;
-  justify-content: center;
-  -webkit-tap-highlight-color: transparent;
-}
-.nav-toggle:hover { background: rgba(255, 255, 255, 0.06); }
-.nav-toggle svg { display: block; width: 22px; height: 22px; }
-.nav-toggle .icon-close { display: none; }
-.nav-toggle[aria-expanded="true"] .icon-open { display: none; }
-.nav-toggle[aria-expanded="true"] .icon-close { display: block; }
-
+/* (hamburger toggle styles moved above the @media block so the
+   mobile-show override wins by source order) */
 body.nav-open { overflow: hidden; }
 
 @media (prefers-reduced-motion: reduce) {
