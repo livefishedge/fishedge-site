@@ -31,7 +31,9 @@
 
   const SUPABASE_URL = 'https://wfdpfeptmyiqifgwqpzu.supabase.co';
   const SUPABASE_ANON_KEY = 'sb_publishable_W6wnJkT70jb69JUZgM1dow_nabPZycR';
-  const APP_BASE_URL = 'https://app.fishedge.live/';
+  // Auth pages live under /dashboard/. Keeping this base path here ensures
+  // verification, password-reset, and resend links land on real pages.
+  const APP_BASE_URL = 'https://app.fishedge.live/dashboard/';
   const STORAGE_KEY = 'ocean-mvp-auth'; // stable, app-wide
   const ACTIVITY_REFRESH_MIN_MS = 30 * 60 * 1000; // 30 min
   const EXPIRY_WARN_MS = 5 * 60 * 1000; // 5 min before JWT exp
