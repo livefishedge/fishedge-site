@@ -65,6 +65,16 @@ a:hover { text-decoration: underline; }
 }
 .nav-cta:hover { background: #4be0e0; }
 
+/* ===== Legal pages ===== */
+.legal-page { max-width: var(--max-width); margin: 0 auto; padding: 72px 28px 96px; }
+.legal-page h1 { margin-bottom: 12px; }
+.legal-updated { color: var(--fg-muted); margin: 0 0 42px; }
+.legal-content { max-width: 780px; }
+.legal-content h2 { margin: 38px 0 10px; font-size: 24px; }
+.legal-content h3 { margin: 26px 0 8px; font-size: 18px; }
+.legal-content p, .legal-content li { color: var(--fg-muted); }
+.legal-content ul { padding-left: 24px; }
+
 /* ===== Hero ===== */
 .hero {
   max-width: var(--max-width);
