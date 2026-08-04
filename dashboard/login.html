@@ -64,6 +64,13 @@
     .forgot-link { text-align: right; margin-top: -4px; margin-bottom: 8px; font-size: 12px; }
     .forgot-link a { color: var(--accent2); text-decoration: none; }
     .forgot-link a:hover { text-decoration: underline; }
+    .method-divider { display:flex; align-items:center; gap:10px; margin:16px 0 8px; color:#7a8fa6; font-size:11px; text-transform:uppercase; letter-spacing:.08em; }
+    .method-divider::before, .method-divider::after { content:""; height:1px; flex:1; background:var(--border); }
+    .code-panel { margin-top:12px; padding:12px; border:1px solid var(--border); border-radius:8px; background:rgba(12,23,35,.55); }
+    .code-panel p { color:#9fb0c2; font-size:12px; line-height:1.45; margin-bottom:8px; }
+    .code-panel input { letter-spacing:.25em; text-align:center; }
+    .code-actions { display:flex; gap:8px; }
+    .code-actions button { flex:1; }
   </style>
 </head>
 <body>
@@ -102,6 +109,18 @@
       <button type="submit" id="signin-btn">Sign in</button>
     </form>
 
+    <div class="method-divider">or</div>
+    <button type="button" class="btn-secondary" id="email-code-btn">Sign in with email code</button>
+    <div id="email-code-panel" class="code-panel" style="display:none">
+      <p>We’ll send a one-time code to your registered email address.</p>
+      <label for="email-code">Email code</label>
+      <input class="auth-input" type="text" id="email-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456" />
+      <div class="code-actions">
+        <button type="button" class="btn-secondary" id="verify-email-code-btn">Verify code</button>
+        <button type="button" class="btn-secondary" id="resend-email-code-btn">Resend</button>
+      </div>
+    </div>
+
     <div id="msg"></div>
 
     <div class="register-link">New here? <a href="register.html">Create an account</a></div>
@@ -139,6 +158,54 @@
         el.style.display = 'block';
         const inputId = id === 'pw-error' ? 'password' : id.replace('-error', '');
         document.getElementById(inputId).style.borderColor = 'var(--err)';
+      }
+
+      function validEmail(email) { return !!email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email); }
+
+      async function sendEmailCode() {
+        var email = document.getElementById('email').value.trim();
+        if (!validEmail(email)) { setFieldError('email-error', 'Valid email required'); return; }
+        if (!window.sb) { showMsg('Auth not ready — refresh and try again.', 'error'); return; }
+        var btn = document.getElementById('email-code-btn');
+        btn.disabled = true;
+        btn.textContent = 'Sending code…';
+        var result = await sb.auth.signInWithOtp({ email: email, options: { shouldCreateUser: false } });
+        if (result.error) {
+          showMsg(result.error.message || 'Could not send a code. Check the email and try again.', 'error');
+          btn.disabled = false;
+          btn.textContent = 'Sign in with email code';
+          return;
+        }
+        document.getElementById('email-code-panel').style.display = 'block';
+        document.getElementById('email-code').focus();
+        showMsg('If that email is registered, a one-time code is on its way.', 'success');
+        btn.textContent = 'Code sent';
+      }
+
+      async function verifyEmailCode() {
+        var email = document.getElementById('email').value.trim();
+        var token = document.getElementById('email-code').value.trim();
+        if (!validEmail(email)) { setFieldError('email-error', 'Valid email required'); return; }
+        if (!/^\d{6}$/.test(token)) { showMsg('Enter the 6-digit code from your email.', 'error'); return; }
+        var btn = document.getElementById('verify-email-code-btn');
+        btn.disabled = true;
+        btn.textContent = 'Verifying…';
+        var result = await sb.auth.verifyOtp({ email: email, token: token, type: 'email' });
+        if (result.error) {
+          showMsg(result.error.message || 'Invalid or expired code. Request a new one.', 'error');
+          btn.disabled = false;
+          btn.textContent = 'Verify code';
+          return;
+        }
+        if (!await enforceEmailVerification(result.data.session)) {
+          btn.disabled = false;
+          btn.textContent = 'Verify code';
+          return;
+        }
+        try { document.cookie = 'fishedge_logged_in=1; Path=/; Domain=.fishedge.live; Max-Age=' + (7 * 24 * 60 * 60) + '; Secure; SameSite=Lax'; } catch (_) {}
+        showMsg('Signed in! Loading dashboard…', 'success');
+        btn.textContent = 'Verified';
+        setTimeout(() => window.location.replace('index.html'), 600);
       }
 
       async function enforceEmailVerification(session) {
@@ -192,6 +259,10 @@
         }
         pw.focus();
       });
+
+      document.getElementById('email-code-btn').addEventListener('click', sendEmailCode);
+      document.getElementById('verify-email-code-btn').addEventListener('click', verifyEmailCode);
+      document.getElementById('resend-email-code-btn').addEventListener('click', sendEmailCode);
 
       // ----- Resend confirmation (login-page mirror of verify-email.html) -----
       (function() {
