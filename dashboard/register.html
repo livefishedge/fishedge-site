@@ -70,7 +70,7 @@
     .btn-google:active { background: #e8e8e8; }
     .btn-google:disabled { opacity: 0.6; cursor: not-allowed; }
     .btn-google svg { flex-shrink: 0; }
-    #gsi-button { min-height: 44px; display: flex; justify-content: center; }
+    #gsi-button { width: 100%; min-height: 44px; display: flex; justify-content: center; overflow: hidden; }
     .method-divider {
       display:flex; align-items:center; gap:10px;
       margin:18px 0 8px;
@@ -252,7 +252,7 @@
           text: 'signup_with',
           shape: 'rectangular',
           logo_alignment: 'left',
-          width: 380,
+          width: Math.min(380, document.getElementById('gsi-button').clientWidth || 380),
         }
       );
     } catch (e) {
