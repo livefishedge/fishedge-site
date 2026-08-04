@@ -339,47 +339,6 @@ body.is-authenticated [data-when-auth="hide"] {
   text-transform: uppercase;
 }
 
-/* ===== Tournaments ===== */
-.tournaments {
-  max-width: var(--max-width);
-  margin: 0 auto;
-  padding: 60px 28px;
-  border-top: 1px solid var(--border);
-}
-.tournaments h2 {
-  font-size: 32px;
-  font-weight: 800;
-  margin: 0 0 8px;
-}
-.section-intro {
-  color: var(--fg-muted);
-  margin: 0 0 28px;
-}
-.tournament-list {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 18px;
-}
-.tournament {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 20px;
-  background: var(--bg-elev);
-}
-.tournament h3 { margin: 0 0 4px; font-size: 18px; font-weight: 800; }
-.tournament .meta { color: var(--fg-muted); font-size: 14px; margin: 0 0 8px; }
-.tournament .featured {
-  display: inline-block;
-  background: var(--accent-warm);
-  color: var(--bg);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  padding: 3px 8px;
-  border-radius: 4px;
-  margin-top: 4px;
-}
-
 /* ===== About (homepage inline section + /about page sections) ===== */
 .about, .contact {
   max-width: var(--max-width);
@@ -509,8 +468,7 @@ footer {
   h1 { font-size: 36px; }
   .supporting { font-size: 17px; }
   .features { grid-template-columns: 1fr 1fr; padding: 40px 20px; }
-  .tournament-list { grid-template-columns: 1fr; }
-  .tournaments, .about, .contact { padding: 40px 20px; }
+  .about, .contact { padding: 40px 20px; }
   .topbar { padding: 12px 16px; }
   .nav { gap: 12px; }
   .nav a { font-size: 13px; }

@@ -20,11 +20,10 @@
       <a href="/" aria-label="FishEdge.home"><img src="fishedge-logo-transparent.png?v=16" alt="FishEdge.live — Marine Fishing Intelligence" class="brand-logo" /></a>
     </div>
     <nav class="nav">
-      <a href="#tournaments">Tournaments</a>
       <a href="/#about">About</a>
       <a href="https://app.fishedge.live/dashboard/login.html" class="nav-secondary" data-when-auth="hide" data-cta-surface="header-account" id="nav-login">Login</a>
       <a href="https://app.fishedge.live/dashboard/" class="nav-secondary" data-when-no-auth="hide" id="nav-dashboard" style="display:none;">Dashboard</a>
-      <a href="https://app.fishedge.live/dashboard/register.html" class="nav-cta" data-when-auth="hide" data-cta-surface="header-primary" id="nav-join">Join the Pilot</a>
+      <a href="https://app.fishedge.live/dashboard/register.html" class="nav-cta" data-when-auth="hide" data-cta-surface="header-primary" id="nav-join">Join</a>
       <a href="https://app.fishedge.live/dashboard/logout.html" class="nav-cta" data-when-no-auth="hide" id="nav-go" style="display:none;">Log out</a>
     </nav>
   </header>
@@ -38,7 +37,7 @@
           Get free access this season and help us build the next-generation fishing intelligence platforms.
         </p>
         <div class="ctas">
-          <a class="cta-primary" href="https://app.fishedge.live/dashboard/register.html" data-when-auth="hide" data-cta-surface="hero-primary">Join the FishEdge Captain Pilot</a>
+          <a class="cta-primary" href="https://app.fishedge.live/dashboard/register.html" data-when-auth="hide" data-cta-surface="hero-primary">Join</a>
           <div class="cta-secondary-wrap">
             <a class="cta-secondary" href="https://app.fishedge.live/dashboard/" data-when-auth="hide" data-cta-surface="hero-secondary">Explore the Live Dashboard</a>
             <p class="cta-secondary-helper">See the edges captains look for.</p>
@@ -85,14 +84,6 @@
       </div>
     </section>
 
-    <section id="tournaments" class="tournaments">
-      <h2>Upcoming tournaments</h2>
-      <p class="section-intro">East Coast tournament fishing context. Updated as the calendar changes.</p>
-      <div class="tournament-list" id="tournament-list">
-        <!-- Populated by tournaments.js -->
-      </div>
-    </section>
-
     <section id="about" class="about">
       <h2>About FishEdge</h2>
       <p>
@@ -117,8 +108,6 @@
   <footer>
     <p>© 2026 DataNinjaAI · FishEdge is a product of DataNinjaAI · <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a></p>
   </footer>
-
-  <script src="tournaments.js"></script>
 
   <!-- Hero image lightbox (click-to-enlarge) — markup injected here so the
        opening animation has a guaranteed target to fade in. Hidden until JS
