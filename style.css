@@ -496,6 +496,13 @@ footer {
 body.nav-open { overflow: hidden; }
 
 /* ===== Mobile ===== */
+/* Laptop/tablet landscape: let the two-column hero image follow its
+   available width instead of forcing a 460px minimum that can overflow a
+   1024px viewport. */
+@media (min-width: 881px) and (max-width: 1100px) {
+  .hero-image { min-height: 0; }
+}
+
 @media (max-width: 880px) {
   .hero { grid-template-columns: 1fr; padding: 48px 20px 40px; gap: 32px; }
   .features { grid-template-columns: 1fr 1fr; padding: 40px 20px; }
