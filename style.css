@@ -500,15 +500,62 @@ body.nav-open { overflow: hidden; }
   .hero { grid-template-columns: 1fr; padding: 48px 20px 40px; gap: 32px; }
   .features { grid-template-columns: 1fr 1fr; padding: 40px 20px; }
   .about, .contact { padding: 40px 20px; }
-  .topbar { padding: 12px 16px; }
-  .nav-toggle { display: inline-flex; }
-  .nav { gap: 0; }
-  /* On mobile, nav becomes a slide-down drawer beneath the topbar */
+  /* Keep the primary actions visible. The previous mobile drawer hid the
+     whole nav below 880px, making About/Login/Join appear to disappear. */
+  .topbar { padding: 12px 16px; flex-wrap: wrap; gap: 8px 16px; }
+  .nav-toggle { display: none; }
   .nav {
-    position: absolute;
-    top: 100%;
-    left: 0;
-    right: 0;
+    position: static;
+    order: 3;
+    flex: 1 1 auto;
+    width: auto;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-direction: row;
+    align-items: center;
+    display: flex;
+    background: transparent;
+    border: 0;
+    padding: 0;
+    backdrop-filter: none;
+    z-index: auto;
+  }
+  .nav a {
+    padding: 8px 10px;
+    font-size: 14px;
+    border-bottom: 0;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+  }
+  .nav-cta {
+    margin: 0;
+    padding: 10px 14px;
+    text-align: center;
+    border-radius: 6px;
+  }
+  .page-hero { padding: 48px 20px 20px; }
+  .features-3 { grid-template-columns: 1fr; padding: 22px; }
+  .mission, .problem, .solution, .audience, .cta-final { padding: 40px 20px; }
+  .showcase { padding: 48px 20px 24px; }
+  .showcase-grid { grid-template-columns: 1fr; gap: 14px; }
+  .brand-logo { height: 36px; }
+}
+@media (max-width: 480px) {
+  .topbar { align-items: flex-start; }
+  .nav {
+    flex-basis: 100%;
+    justify-content: flex-start;
+    border-top: 1px solid var(--border);
+    padding-top: 8px;
+  }
+  .features { grid-template-columns: 1fr; }
+}
+
+/* Legacy drawer rules intentionally removed: primary navigation stays
+   visible at every viewport width. */
+/*
+  .nav {
     flex-direction: column;
     align-items: stretch;
     background: rgba(6, 18, 28, 0.98);
@@ -541,9 +588,7 @@ body.nav-open { overflow: hidden; }
   .showcase-grid { grid-template-columns: 1fr; gap: 14px; }
   .brand-logo { height: 36px; }
 }
-@media (max-width: 480px) {
-  .features { grid-template-columns: 1fr; }
-}
+*/
 
 /* ===== Accessibility ===== */
 :focus-visible {
