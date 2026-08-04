@@ -32,7 +32,7 @@ This is the customer-facing product of **DataNinjaAI** at
 - **Hosting:** Cloudflare Pages
 - **Domain:** Cloudflare DNS (apex + www + app + data)
 - **Email:** Cloudflare Email Routing → `captains@fishedge.live`
-- **Data:** Cloudflare R2 (`fishedge-data`), public, last 14 days rolling window
+- **Data:** Cloudflare R2 (`fishedge-data`), rolling 14-day delivery window
 - **Auth:** Supabase (unchanged from `livefishedge/view`)
 - **Local pipeline:** Unchanged. Downloads, processes, generates files locally.
   `rclone` syncs the last-14-day subset to R2 every 6 hours.
