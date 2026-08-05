@@ -1,6 +1,6 @@
 {
   "region": "usec_south",
-  "last_updated": "2026-08-05T19:32:37.536827+00:00",
+  "last_updated": "2026-08-05T20:09:01.489180Z",
   "vars": [
     "chl",
     "sst",
@@ -560,6 +560,22 @@
         "label": "2026-08-05 06:48 UTC | VNP",
         "time_iso": "2026-08-05T06:48:00Z",
         "json_path": "https://data.fishedge.live/usec_south/chl/usec_south_2026217.0648_chl_VNP.json",
+        "grid_file": "frame_bbox"
+      },
+      {
+        "var": "chl",
+        "id": "usec_south_20260805_2026217.1428_chl_S3A",
+        "label": "2026-08-05 14:28 UTC | S3A",
+        "time_iso": "2026-08-05T14:28:00Z",
+        "json_path": "https://data.fishedge.live/usec_south/chl/usec_south_20260805_2026217.1428_chl_S3A.json",
+        "grid_file": "frame_bbox"
+      },
+      {
+        "var": "chl",
+        "id": "usec_south_2026217.1730_chl_VJ2",
+        "label": "2026-08-05 17:30 UTC | VJ2",
+        "time_iso": "2026-08-05T17:30:00Z",
+        "json_path": "https://data.fishedge.live/usec_south/chl/usec_south_2026217.1730_chl_VJ2.json",
         "grid_file": "frame_bbox"
       }
     ],
@@ -3855,6 +3871,14 @@
         "time_iso": "2026-08-05T06:48:00Z",
         "json_path": "https://data.fishedge.live/usec_south/chl_front/chlfront_usec_south_2026217.0648_VNP.json",
         "grid_file": "frame_bbox"
+      },
+      {
+        "var": "chl_front",
+        "id": "chlfront_usec_south_2026217.1730_VJ2",
+        "label": "2026-08-05 17:30 UTC | VJ2",
+        "time_iso": "2026-08-05T17:30:00Z",
+        "json_path": "https://data.fishedge.live/usec_south/chl_front/chlfront_usec_south_2026217.1730_VJ2.json",
+        "grid_file": "frame_bbox"
       }
     ],
     "sst_front": [
@@ -6514,11 +6538,11 @@
     "online_retention_days": 31
   },
   "_dashboard_rewrite": {
-    "rewritten_at": "2026-08-05T20:08:02.568024+00:00",
+    "rewritten_at": "2026-08-05T20:38:02.584449+00:00",
     "r2_base": "https://data.fishedge.live",
     "retention_days": 14,
     "cutoff_doy": 203,
-    "frames_kept": 808,
-    "frames_dropped_outside_retention": 892
+    "frames_kept": 811,
+    "frames_dropped_outside_retention": 885
   }
 }
