@@ -4940,7 +4940,13 @@ function ensureMobilePlaceLayer(map) {
 }
 
 function ensureMobileCursorLayer(map) {
-  if (mobileMapState.cursorLayer) return;
+  if (mobileMapState.cursorLayer) {
+    // Product-layer rebuilds must never orphan the selected-point marker.
+    // Re-attach it if a renderer replaced the map's layer collection.
+    const layers = map?.getLayers?.().getArray?.() || [];
+    if (!layers.includes(mobileMapState.cursorLayer)) map.addLayer(mobileMapState.cursorLayer);
+    return;
+  }
   // Initial cursor position at BBOX center, in the view's projection.
   // Mobile map's view is EPSG:3857, so transform the 4326 BBOX center.
   const center4326 = [(BBOX[0] + BBOX[2]) / 2, (BBOX[1] + BBOX[3]) / 2];
@@ -4952,9 +4958,9 @@ function ensureMobileCursorLayer(map) {
   });
   mobileMapState.cursorFeature.setStyle(new ol.style.Style({
     image: new ol.style.Circle({
-      radius: 7,
-      fill: new ol.style.Fill({ color: "rgba(255,45,85,0.92)" }),
-      stroke: new ol.style.Stroke({ color: "#fff", width: 2.5 })
+      radius: 8,
+      fill: new ol.style.Fill({ color: "#1d4f91" }),
+      stroke: new ol.style.Stroke({ color: "#4d7dff", width: 2 })
     })
   }));
   mobileMapState.cursorLayer = new ol.layer.Vector({
@@ -5062,10 +5068,9 @@ function installMobileReadoutOnce(map) {
     updateMobileCursor(xy3857[0], xy3857[1]);
     renderMobileReadoutFromLonLat(xy4326[0], xy4326[1], ev.pixel);
   }
-  map.on("pointermove", handle);
   // OpenLayers' singleclick is the touch-safe selection event. On mobile,
-  // relying only on click can lose the final tap after a pan/gesture, which
-  // leaves the readout and selected-point marker unchanged.
+  // relying on pointermove/click can move the marker during a pan or pinch,
+  // leaving it detached from the last selected spot.
   map.on("singleclick", handle);
 }
 
@@ -7845,9 +7850,9 @@ function thermalEnsureCursorLayer(map) {
   });
   thermalFrontState.cursorFeature.setStyle(new ol.style.Style({
     image: new ol.style.Circle({
-      radius: 7,
-      fill: new ol.style.Fill({ color: "rgba(255,45,85,0.92)" }),
-      stroke: new ol.style.Stroke({ color: "#fff", width: 2.5 })
+      radius: 8,
+      fill: new ol.style.Fill({ color: "#1d4f91" }),
+      stroke: new ol.style.Stroke({ color: "#4d7dff", width: 2 })
     })
   }));
   thermalFrontState.cursorLayer = new ol.layer.Vector({
@@ -8000,6 +8005,7 @@ async function thermalInitMap() {
       return { coord: xy4326, pixel: ev.pixel };
     };
     map.on("pointermove", ev => {
+      if (IS_TOUCH) return;
       if (currentVar === "thermal_fronts") {
         const x = to4326(ev);
         if (!x) return;
