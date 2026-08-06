@@ -285,10 +285,8 @@
       display:none;
       position:fixed;
       inset:0;
-      width:100%;
-      max-width:100%;
+      width:100vw;
       height:100dvh;
-      min-height:100svh;
       touch-action:none;
       z-index:20;
       cursor:crosshair;
@@ -586,13 +584,6 @@
     #all-day-cb{ width:15px; height:15px; accent-color:#d84bff; }
 
     @media (max-width:720px){
-      #toolbar{
-        padding-left:calc(8px + env(safe-area-inset-left, 0px));
-        padding-right:calc(58px + env(safe-area-inset-right, 0px));
-        padding-top:calc(4px + env(safe-area-inset-top, 0px));
-      }
-      #nav-bar{ min-width:0; }
-      #frame-label{ max-width:calc(100vw - 24px); overflow:hidden; text-overflow:ellipsis; }
       /* Mobile: move feedback button to top-right, away from bottom map gestures. */
       body.mobile-device #feedback-float{
         bottom: calc(12px + env(safe-area-inset-bottom, 0px)) !important;
@@ -4952,14 +4943,14 @@ function ensureMobileCursorLayer(map) {
   });
   mobileMapState.cursorFeature.setStyle(new ol.style.Style({
     image: new ol.style.Circle({
-      radius: 7,
-      fill: new ol.style.Fill({ color: "rgba(255,45,85,0.92)" }),
-      stroke: new ol.style.Stroke({ color: "#fff", width: 2.5 })
+      radius: 3,
+      fill: new ol.style.Fill({ color: "rgba(255,255,255,0.45)" }),
+      stroke: new ol.style.Stroke({ color: "rgba(0,0,0,0.55)", width: 1 })
     })
   }));
   mobileMapState.cursorLayer = new ol.layer.Vector({
     source: new ol.source.Vector({ features: [mobileMapState.cursorFeature] }),
-    zIndex: 100
+    zIndex: 60
   });
   map.addLayer(mobileMapState.cursorLayer);
 }
@@ -5063,10 +5054,7 @@ function installMobileReadoutOnce(map) {
     renderMobileReadoutFromLonLat(xy4326[0], xy4326[1], ev.pixel);
   }
   map.on("pointermove", handle);
-  // OpenLayers' singleclick is the touch-safe selection event. On mobile,
-  // relying only on click can lose the final tap after a pan/gesture, which
-  // leaves the readout and selected-point marker unchanged.
-  map.on("singleclick", handle);
+  map.on("click", handle);
 }
 
 function makeMobileRasterCanvas(varKey, gridInfo, dataObj) {
@@ -7845,9 +7833,9 @@ function thermalEnsureCursorLayer(map) {
   });
   thermalFrontState.cursorFeature.setStyle(new ol.style.Style({
     image: new ol.style.Circle({
-      radius: 7,
-      fill: new ol.style.Fill({ color: "rgba(255,45,85,0.92)" }),
-      stroke: new ol.style.Stroke({ color: "#fff", width: 2.5 })
+      radius: 3,
+      fill: new ol.style.Fill({ color: "rgba(255,255,255,0.45)" }),
+      stroke: new ol.style.Stroke({ color: "rgba(0,0,0,0.55)", width: 1 })
     })
   }));
   thermalFrontState.cursorLayer = new ol.layer.Vector({
@@ -8008,14 +7996,6 @@ async function thermalInitMap() {
       }
     });
     map.on("click", ev => {
-      if (currentVar === "thermal_fronts") {
-        const x = to4326(ev);
-        if (!x) return;
-        thermalRenderReadout(x.coord, x.pixel);
-        thermalFrontHoverTip(x.coord, x.pixel);
-      }
-    });
-    map.on("singleclick", ev => {
       if (currentVar === "thermal_fronts") {
         const x = to4326(ev);
         if (!x) return;
