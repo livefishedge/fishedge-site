@@ -6922,30 +6922,24 @@ async function renderMobileFrame(frameMeta) {
   }
 
   const canvas = makeMobileRasterCanvas(currentVar, gridInfo, dataObj);
-  let url;
-  try { url = await canvasToOlUrl(canvas); }
-  catch (e) {
-    console.error("[OL mobile] canvas encoding failed", e);
-    throw new Error("Could not encode mobile raster: " + (e?.message || e));
-  }
-  if (!url) throw new Error("Could not encode mobile raster (empty url)");
   const extent = frameExtentFromGrid(gridInfo);
   if (!extent.every(Number.isFinite) || extent[0] >= extent[2] || extent[1] >= extent[3]) {
     throw new Error("Invalid mobile raster extent: " + JSON.stringify(extent));
   }
   let source;
   try {
-    source = new ol.source.ImageStatic({
-      url,
+    // Avoid Safari's URL parser entirely for the normal mobile product path.
+    // ImageStatic(blob:/data:) still raises "String did not match the
+    // expected pattern" on some iOS/OpenLayers combinations. ImageCanvas
+    // consumes the already-rendered canvas directly.
+    source = new ol.source.ImageCanvas({
+      canvasFunction: () => canvas,
       imageExtent: extent,
       projection: "EPSG:4326",
-      interpolate: false
+      ratio: 1
     });
   } catch (e) {
-    console.error("[OL mobile] new ol.source.ImageStatic failed, url:", url?.slice(0, 40), "len:", url?.length, "extent:", extent, e);
-    if (url && url.startsWith("blob:")) {
-      try { URL.revokeObjectURL(url); } catch (_) {}
-    }
+    console.error("[OL mobile] new ol.source.ImageCanvas failed, extent:", extent, e);
     throw e;
   }
   source.on("imageloaderror", () => {
@@ -6954,10 +6948,7 @@ async function renderMobileFrame(frameMeta) {
     document.body.classList.remove("mobile-map-ready");
     showFrame();
   });
-  if (mobileMapState.imageUrl && mobileMapState.imageUrl.startsWith("blob:")) {
-    URL.revokeObjectURL(mobileMapState.imageUrl);
-  }
-  mobileMapState.imageUrl = url;
+  mobileMapState.imageUrl = null;
   if (mobileMapState.imageLayer) {
     mobileMapState.imageLayer.setSource(source);
   } else {
