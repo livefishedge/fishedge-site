@@ -58,6 +58,7 @@
         '<h1 class="' + cls + '">' + (state === 'ok' ? 'Email Confirmed!' : (state === 'err' ? 'Confirmation Failed' : 'Verifying…')) + '</h1>' +
         (state === 'loading' ? '<div class="spinner"></div>' : '') +
         '<p class="' + cls + '" style="opacity:0.8;line-height:1.5">' + message + '</p>' +
+        (state === 'ok' ? '<a href="index.html" style="display:block;text-align:center;padding:13px;background:var(--accent2);color:#050b10;border-radius:8px;font-size:1rem;font-weight:700;text-decoration:none;margin-top:22px;">Open FishEdge Dashboard</a>' : '') +
       '</div>';
   }
 
@@ -122,8 +123,7 @@
       // If this is a fresh confirmation (no profile at all yet), redirect to viewer
       // Otherwise show the account page (phone/region may be null but we show the page)
       if (!profile) {
-        renderConfirm('ok', 'Email confirmed! Loading your dashboard…');
-        setTimeout(function() { window.location.replace('index.html'); }, 1000);
+        renderConfirm('ok', 'Signup successful — your email is verified and your FishEdge account is ready.');
         return;
       }
 
