@@ -5487,6 +5487,7 @@ async function renderCombinedMode() {
     try { window._combinedMap.dispose(); } catch (_) {}
     window._combinedMap.setTarget(undefined);
     window._combinedMap = null; // null BEFORE building new — so subsequent calls see a clean slate
+    window._combinedMapRef = null;
     window._combinedChlLayer = null;
     window._combinedSstLayer = null;
     window._combinedBathyLayer = null;
@@ -8755,6 +8756,7 @@ async function setCurrentVar(v, keepTime = true, keepRange = true) {
       try { window._combinedMap.dispose(); } catch (_) {}
       window._combinedMap.setTarget(undefined);
       window._combinedMap = null;
+      window._combinedMapRef = null;
     }
   }
 
@@ -10054,6 +10056,8 @@ function activateDistTool(map) {
   captainDistTool.mapRef = map;
   captainDistTool.points = [];
   document.getElementById('captain-dist-tool')?.classList.add('active');
+  const button = document.getElementById('captain-dist-tool');
+  if (button) button.title = 'Exit distance measurement (or press Escape)';
   document.getElementById('captain-dist-panel')?.classList.add('visible');
   updateDistPanel();
   map.getTargetElement().style.cursor = 'crosshair';
@@ -10064,6 +10068,8 @@ function deactivateDistTool() {
   captainDistTool.active = false;
   clearDistLayer();
   document.getElementById('captain-dist-tool')?.classList.remove('active');
+  const button = document.getElementById('captain-dist-tool');
+  if (button) button.title = 'Measure distance (M)';
   document.getElementById('captain-dist-panel')?.classList.remove('visible');
   const map = captainDistTool.mapRef;
   if (map) map.getTargetElement().style.cursor = 'crosshair';
@@ -10251,11 +10257,18 @@ let _captainMapClickHandler = null;
 let _captainMapClickMap = null;
 
 function activeCaptainToolMap() {
-  return window._combinedMapRef
-    || (typeof thermalFrontState !== 'undefined' && thermalFrontState.map)
-    || (typeof mobileMapState !== 'undefined' && mobileMapState.map)
-    || (typeof desktopMapState !== 'undefined' && desktopMapState.map)
-    || null;
+  if (typeof currentVar !== 'undefined' && currentVar === 'combined') {
+    return window._combinedMap && window._combinedMap.getTargetElement?.()
+      ? window._combinedMap
+      : null;
+  }
+  if (typeof currentVar !== 'undefined' && currentVar === 'thermal_fronts') {
+    return (typeof thermalFrontState !== 'undefined' && thermalFrontState.map) || null;
+  }
+  if (typeof IS_TOUCH !== 'undefined' && IS_TOUCH) {
+    return (typeof mobileMapState !== 'undefined' && mobileMapState.map) || null;
+  }
+  return (typeof desktopMapState !== 'undefined' && desktopMapState.map) || null;
 }
 
 function installCaptainToolHandler(map) {
@@ -10409,8 +10422,13 @@ document.addEventListener('webkitfullscreenchange', updateFsIcon);
 
 document.addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-  const map = window._combinedMapRef;
+  const map = activeCaptainToolMap();
   if (!map) return;
+  if (e.key === 'Escape') {
+    if (captainDistTool.active) deactivateDistTool();
+    if (captainAddTool.active) toggleAddTool(map);
+    return;
+  }
   if (e.key === 'm' || e.key === 'M') {
     if (captainDistTool.active) deactivateDistTool();
     else activateDistTool(map);
