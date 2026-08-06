@@ -5088,9 +5088,12 @@ function initMobileMapIfNeeded() {
   });
   mobileMapState.map.on("moveend", () => syncViewStateFromOlMap(mobileMapState.map));
   installOlGestureZoomFallback(mobileMapState.map, target);
-  // Add the OFM two-layer vector basemap so the mobile single-product pages
-  // match the combined dashboard's look.
-  applyOfmTwoLayerBasemap(mobileMapState.map);
+  // Keep mobile product rendering independent of the Mapbox-style vector
+  // basemap. Safari can throw "The string did not match the expected pattern"
+  // while ol-mapbox-style expands remote tile/sprite/glyph URLs, even though
+  // the product raster itself is valid. The native raster + land layers below
+  // are sufficient for mobile; the OFM basemap remains enabled for desktop
+  // and the combined dashboard.
   attachMapToUnifiedTarget(mobileMapState.map);
   return mobileMapState.map;
 }
