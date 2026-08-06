@@ -115,7 +115,7 @@
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js?v=20260531"></script>
-  <script src="supabase-init.js?v=20260804"></script>
+  <script src="supabase-init.js?v=20260711"></script>
   <script>
     // --- show the user's email in the headline ---
     (function() {
@@ -178,7 +178,7 @@
 
         var redirectTo = window.omvAuthRedirectUrl
           ? window.omvAuthRedirectUrl('account.html')
-          : new URL('account.html', 'https://app.fishedge.live/').href;
+          : new URL('account.html', 'https://livefishedge.github.io/view/').href;
         var res = await sb.auth.resend({
           type: 'signup',
           email: email,
@@ -201,6 +201,5 @@
       });
     })();
   </script>
-<script src="feedback.js?v=20260726"></script>
 </body>
 </html>

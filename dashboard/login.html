@@ -24,12 +24,12 @@
     input[type="email"], .auth-input {
       width: 100%; padding: 10px 12px; border: 1px solid var(--border);
       border-radius: 8px; background: #0c1723; color: var(--fg);
-      font-size: 16px; outline: none; margin-bottom: 12px;
+      font-size: 14px; outline: none; margin-bottom: 12px;
     }
     input:focus { border-color: var(--accent); }
     button {
       width: 100%; padding: 11px; background: var(--accent); color: #fff;
-      border: none; border-radius: 8px; font-size: 16px; font-weight: 700;
+      border: none; border-radius: 8px; font-size: 14px; font-weight: 700;
       cursor: pointer; transition: background 0.15s; margin-top: 4px;
     }
     button:hover { background: #1a9e92; }
@@ -45,6 +45,9 @@
     .success { color: #2dd4bf; }
     .error { color: #f87171; }
     .register-link { font-size: 12px; text-align: center; margin-top: 16px; opacity: 0.6; }
+    #gsi-button-wrap { margin-bottom: 18px; }
+    .divider { display: flex; align-items: center; gap: 10px; margin: 16px 0; color: #7a8fa6; font-size: 12px; opacity: 0.5; }
+    .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: #1b2836; }
     .register-link a { color: var(--accent2); text-decoration: none; }
     .register-link a:hover { text-decoration: underline; }
     .field-error { font-size: 0.75rem; color: var(--err); margin-top: -8px; margin-bottom: 8px; }
@@ -61,48 +64,12 @@
     .pw-wrap .pw-toggle:hover { color: var(--fg); }
     .pw-wrap .pw-toggle:focus-visible { outline: 2px solid var(--accent2); outline-offset: -3px; }
     .pw-wrap .pw-toggle svg { width: 18px; height: 18px; display: block; }
-    .forgot-link { text-align: right; margin-top: -4px; margin-bottom: 8px; font-size: 12px; }
-    .forgot-link a { color: var(--accent2); text-decoration: none; }
-    .forgot-link a:hover { text-decoration: underline; }
-    .method-divider { display:flex; align-items:center; gap:10px; margin:16px 0 8px; color:#7a8fa6; font-size:11px; text-transform:uppercase; letter-spacing:.08em; }
-    .method-divider::before, .method-divider::after { content:""; height:1px; flex:1; background:var(--border); }
-    .code-panel { margin-top:12px; padding:12px; border:1px solid var(--border); border-radius:8px; background:rgba(12,23,35,.55); }
-    .code-panel p { color:#9fb0c2; font-size:12px; line-height:1.45; margin-bottom:8px; }
-    .code-panel input { letter-spacing:.25em; text-align:center; }
-    .code-actions { display:flex; gap:8px; }
-    .code-actions button { flex:1; }
-
-    /* OAuth (Google) button — overrides the default `button` theme rule. */
-    .btn-google {
-      width: 100%;
-      padding: 11px 14px;
-      background: #ffffff;
-      color: #1f1f1f;
-      border: 1px solid #dadce0;
-      border-radius: 8px;
-      font-size: 14px; font-weight: 600;
-      cursor: pointer;
-      transition: background 0.15s, box-shadow 0.15s;
-      display: flex; align-items: center; justify-content: center;
-      gap: 12px;
-      margin-top: 4px;
-      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-    }
-    .btn-google:hover  { background: #f7f8f8; box-shadow: 0 1px 2px rgba(0,0,0,0.10); }
-    .btn-google:active { background: #e8e8e8; }
-    .btn-google:disabled { opacity: 0.6; cursor: not-allowed; }
-    .btn-google svg { flex-shrink: 0; }
-    #gsi-button { width: 100%; min-height: 44px; display: flex; justify-content: center; overflow: hidden; }
   </style>
 </head>
 <body>
   <div id="login-card">
     <h1>Ocean MVP</h1>
     <p class="subtitle">Sign in to access your marine intelligence dashboard.</p>
-
-    <div id="gsi-button"></div>
-
-    <div class="method-divider">or</div>
 
     <div id="verify-banner" style="display:none;margin-bottom:14px;padding:10px 12px;border:1px solid #f59e0b;background:rgba(245,158,11,0.08);color:#fbbf24;border-radius:8px;font-size:12.5px;line-height:1.4;">
       <div>Please verify your email before accessing the dashboard. Check your inbox for the confirmation link, then sign in.</div>
@@ -127,34 +94,24 @@
         </button>
       </div>
 
-      <div class="forgot-link"><a href="forgot-password.html">Forgot password?</a></div>
-
       <div id="email-error" class="field-error" style="display:none"></div>
       <div id="pw-error" class="field-error" style="display:none"></div>
 
       <button type="submit" id="signin-btn">Sign in</button>
     </form>
 
-    <div class="method-divider">or</div>
-    <button type="button" class="btn-secondary" id="email-code-btn">Sign in with email code</button>
-    <div id="email-code-panel" class="code-panel" style="display:none">
-      <p>We’ll send a one-time code to your registered email address.</p>
-      <label for="email-code">Email code</label>
-      <input class="auth-input" type="text" id="email-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456" />
-      <div class="code-actions">
-        <button type="button" class="btn-secondary" id="verify-email-code-btn">Verify code</button>
-        <button type="button" class="btn-secondary" id="resend-email-code-btn">Resend</button>
-      </div>
-    </div>
-
     <div id="msg"></div>
 
-    <div class="register-link">New here? <a href="register.html">Create an account</a></div>
-  </div>
+    <div id="gsi-button-wrap">
+      <div id="gsi-button"></div>
+    </div>
 
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <div class="divider" aria-hidden="true">or sign in with email</div>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js?v=20260531"></script>
-  <script src="supabase-init.js?v=20260804"></script>
+  <script src="supabase-init.js?v=20260711"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="gsi-auth.js"></script>
   <script>
     (function() {
       const sb = window.sb;
@@ -187,54 +144,6 @@
         document.getElementById(inputId).style.borderColor = 'var(--err)';
       }
 
-      function validEmail(email) { return !!email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email); }
-
-      async function sendEmailCode() {
-        var email = document.getElementById('email').value.trim();
-        if (!validEmail(email)) { setFieldError('email-error', 'Valid email required'); return; }
-        if (!window.sb) { showMsg('Auth not ready — refresh and try again.', 'error'); return; }
-        var btn = document.getElementById('email-code-btn');
-        btn.disabled = true;
-        btn.textContent = 'Sending code…';
-        var result = await sb.auth.signInWithOtp({ email: email, options: { shouldCreateUser: false } });
-        if (result.error) {
-          showMsg(result.error.message || 'Could not send a code. Check the email and try again.', 'error');
-          btn.disabled = false;
-          btn.textContent = 'Sign in with email code';
-          return;
-        }
-        document.getElementById('email-code-panel').style.display = 'block';
-        document.getElementById('email-code').focus();
-        showMsg('If that email is registered, a one-time code is on its way.', 'success');
-        btn.textContent = 'Code sent';
-      }
-
-      async function verifyEmailCode() {
-        var email = document.getElementById('email').value.trim();
-        var token = document.getElementById('email-code').value.trim();
-        if (!validEmail(email)) { setFieldError('email-error', 'Valid email required'); return; }
-        if (!/^\d{6}$/.test(token)) { showMsg('Enter the 6-digit code from your email.', 'error'); return; }
-        var btn = document.getElementById('verify-email-code-btn');
-        btn.disabled = true;
-        btn.textContent = 'Verifying…';
-        var result = await sb.auth.verifyOtp({ email: email, token: token, type: 'email' });
-        if (result.error) {
-          showMsg(result.error.message || 'Invalid or expired code. Request a new one.', 'error');
-          btn.disabled = false;
-          btn.textContent = 'Verify code';
-          return;
-        }
-        if (!await enforceEmailVerification(result.data.session)) {
-          btn.disabled = false;
-          btn.textContent = 'Verify code';
-          return;
-        }
-        try { document.cookie = 'fishedge_logged_in=1; Path=/; Domain=.fishedge.live; Max-Age=' + (7 * 24 * 60 * 60) + '; Secure; SameSite=Lax'; } catch (_) {}
-        showMsg('Signed in! Loading dashboard…', 'success');
-        btn.textContent = 'Verified';
-        setTimeout(() => window.location.replace('index.html'), 600);
-      }
-
       async function enforceEmailVerification(session) {
         if (!session || session.user.email_confirmed_at) return true;
         await sb.auth.signOut();
@@ -252,6 +161,19 @@
 
       sb.auth.getSession().then(async ({ data: { session } }) => {
         if (session && await enforceEmailVerification(session)) window.location.replace('index.html');
+      });
+
+      // ── Google Identity Services ─────────────────────────────────────────────
+      window.gsiAuth.initGoogleSignIn({
+        onSuccess: function (session) {
+          /* GSI gave us a Google-issued id_token; Supabase exchanged it for a
+           * session via signInWithIdToken. Redirect to dashboard. */
+          showMsg('Signed in! Loading dashboard…', 'success');
+          setTimeout(function () { window.location.replace('index.html'); }, 600);
+        },
+        onError: function (msg) {
+          showMsg(msg || 'Google sign-in failed.', 'error');
+        },
       });
 
       // PostHog
@@ -286,86 +208,6 @@
         }
         pw.focus();
       });
-
-      document.getElementById('email-code-btn').addEventListener('click', sendEmailCode);
-      document.getElementById('verify-email-code-btn').addEventListener('click', verifyEmailCode);
-      document.getElementById('resend-email-code-btn').addEventListener('click', sendEmailCode);
-
-      // ----- Continue with Google (via Google Identity Services) -----
-      // Bypasses Supabase's hosted OAuth proxy so Google's consent screen uses
-      // app.fishedge.live (the OAuth client's Authorized JavaScript origin)
-      // instead of wfdpfept…supabase.co. Supabase verifies the returned id_token
-      // against the same OAuth client_id configured in Auth → Providers → Google.
-      var GOOGLE_CLIENT_ID = '888175087139-ka81ic2ojma1ltmf0f6fc5krk0ua8hmj.apps.googleusercontent.com';
-
-      async function handleGoogleCredential(response) {
-        if (!response || !response.credential) {
-          showMsg('No Google credential returned. Try again.', 'error');
-          return;
-        }
-        if (!window.sb) {
-          showMsg('Auth not ready — refresh and try again.', 'error');
-          return;
-        }
-        showMsg('Signing you in…', '');
-        var res;
-        try {
-          res = await sb.auth.signInWithIdToken({
-            provider: 'google',
-            token: response.credential
-          });
-        } catch (e) {
-          showMsg((e && e.message) || 'Google sign-in failed.', 'error');
-          return;
-        }
-        if (res.error) {
-          showMsg(res.error.message || 'Google sign-in failed.', 'error');
-          return;
-        }
-        if (!await enforceEmailVerification(res.data.session)) return;
-        // Cross-subdomain login cookie
-        try {
-          document.cookie = 'fishedge_logged_in=1; Path=/; Domain=.fishedge.live; Max-Age=' + (7 * 24 * 60 * 60) + '; Secure; SameSite=Lax';
-        } catch (_) {}
-        showMsg('Signed in! Loading dashboard…', 'success');
-        setTimeout(function() { window.location.replace('index.html'); }, 600);
-      }
-
-      function initGoogleSignIn() {
-        if (!window.google || !window.google.accounts || !window.google.accounts.id) {
-          setTimeout(initGoogleSignIn, 200);
-          return;
-        }
-        try {
-          window.google.accounts.id.initialize({
-            client_id: GOOGLE_CLIENT_ID,
-            callback: handleGoogleCredential,
-            cancel_on_tap_outside: false,
-            itp_support: true,
-            use_fedcm: false,
-          });
-      window.google.accounts.id.renderButton(
-            document.getElementById('gsi-button'),
-            {
-              type: 'standard',
-              theme: 'outline',
-              size: 'large',
-              text: 'continue_with',
-              shape: 'rectangular',
-              logo_alignment: 'left',
-              width: Math.min(380, document.getElementById('gsi-button').clientWidth || 380),
-            }
-          );
-        } catch (e) {
-          console.warn('[GSI] init failed:', e);
-        }
-      }
-
-      if (document.readyState === 'complete') {
-        initGoogleSignIn();
-      } else {
-        window.addEventListener('load', initGoogleSignIn);
-      }
 
       // ----- Resend confirmation (login-page mirror of verify-email.html) -----
       (function() {
@@ -431,7 +273,7 @@
 
           var redirectTo = window.omvAuthRedirectUrl
             ? window.omvAuthRedirectUrl('account.html')
-            : new URL('account.html', 'https://app.fishedge.live/').href;
+            : new URL('account.html', 'https://livefishedge.github.io/view/').href;
           var res = await sb.auth.resend({
             type: 'signup',
             email: email,
@@ -482,12 +324,6 @@
           return;
         }
 
-        // Mark the shared parent domain immediately so fishedge.live can
-        // render the captain's logged-in homepage on the next visit.
-        try {
-          document.cookie = 'fishedge_logged_in=1; Path=/; Domain=.fishedge.live; Max-Age=' + (7 * 24 * 60 * 60) + '; Secure; SameSite=Lax';
-        } catch (_) {}
-
         // If there's a pending profile from registration, create it now
         try {
           var pending = sessionStorage.getItem('pending_profile');
@@ -507,6 +343,5 @@
       });
     })();
   </script>
-<script src="feedback.js?v=20260726"></script>
 </body>
 </html>

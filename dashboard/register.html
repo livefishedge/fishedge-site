@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>FishEdge — Create Account</title>
+  <title>Ocean MVP — Create Account</title>
   <link rel="icon" href="data:,">
   <style>
     :root { --bg: #050b10; --fg: #e0e6ee; --accent: #1a7f7a; --accent2: #2dd4bf; --panel: rgba(5,11,16,0.97); --border: #1b2836; --err: #ff6b6b; --success: #2dd4bf; }
@@ -16,7 +16,7 @@
     input, select {
       width: 100%; padding: 10px 12px;
       background: rgba(5, 11, 16, 0.8); border: 1px solid var(--border); border-radius: 8px;
-      color: var(--fg); font-size: 16px; outline: none; transition: border-color 0.2s;
+      color: var(--fg); font-size: 0.95rem; outline: none; transition: border-color 0.2s;
       -webkit-appearance: none; appearance: none;
       background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%237a8fa6' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
       background-repeat: no-repeat; background-position: right 10px center;
@@ -33,6 +33,9 @@
     .msg.success { background: rgba(45,212,191,0.15); color: var(--success); display: block; }
     .field-error { font-size: 0.75rem; color: var(--err); margin-top: 3px; }
     .login-link { font-size: 0.85rem; text-align: center; margin-top: 16px; opacity: 0.6; }
+    #gsi-button-wrap { margin-bottom: 16px; }
+    .divider { display: flex; align-items: center; gap: 10px; margin: 0 0 16px; color: #7a8fa6; font-size: 0.8rem; opacity: 0.5; }
+    .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: #1b2836; }
     .login-link a { color: var(--accent2); text-decoration: none; }
     .login-link a:hover { text-decoration: underline; }
     .reqs { font-size: 0.72rem; opacity: 0.5; margin-top: 4px; line-height: 1.5; }
@@ -49,37 +52,6 @@
     .pw-wrap .pw-toggle:hover { color: var(--fg); }
     .pw-wrap .pw-toggle:focus-visible { outline: 2px solid var(--accent2); outline-offset: -3px; }
     .pw-wrap .pw-toggle svg { width: 18px; height: 18px; display: block; }
-
-    /* OAuth (Google) button + sign-in method divider */
-    .btn-google {
-      width: 100%;
-      padding: 11px 14px;
-      background: #ffffff;
-      color: #1f1f1f;
-      border: 1px solid #dadce0;
-      border-radius: 8px;
-      font-size: 14px; font-weight: 600;
-      cursor: pointer;
-      transition: background 0.15s, box-shadow 0.15s;
-      display: flex; align-items: center; justify-content: center;
-      gap: 12px;
-      margin-top: 4px;
-      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-    }
-    .btn-google:hover  { background: #f7f8f8; box-shadow: 0 1px 2px rgba(0,0,0,0.10); }
-    .btn-google:active { background: #e8e8e8; }
-    .btn-google:disabled { opacity: 0.6; cursor: not-allowed; }
-    .btn-google svg { flex-shrink: 0; }
-    #gsi-button { width: 100%; min-height: 44px; display: flex; justify-content: center; overflow: hidden; }
-    .method-divider {
-      display:flex; align-items:center; gap:10px;
-      margin:18px 0 8px;
-      color:#7a8fa6; font-size:11px;
-      text-transform:uppercase; letter-spacing:.08em;
-    }
-    .method-divider::before, .method-divider::after {
-      content:""; height:1px; flex:1; background:var(--border);
-    }
   </style>
 </head>
 <body>
@@ -87,9 +59,10 @@
   <h1>Create Account</h1>
   <p class="subtitle">Enter your info to create an account. We'll send a verification email — confirm it before signing in.</p>
 
-  <div id="gsi-button"></div>
-
-  <div class="method-divider">or fill in your details</div>
+  <div id="gsi-button-wrap">
+    <div id="gsi-button"></div>
+  </div>
+  <div class="divider" aria-hidden="true">or register with email</div>
 
   <form id="reg-form" novalidate>
     <div class="field">
@@ -131,9 +104,10 @@
   <div class="login-link">Already have an account? <a href="login.html">Sign in</a></div>
 </div>
 
-<script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js?v=20260531"></script>
-<script src="supabase-init.js?v=20260804"></script>
+<script src="supabase-init.js?v=20260711"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="gsi-auth.js"></script>
 <script>
 (function() {
   var sb = window.sb;
@@ -188,83 +162,21 @@
 
   function authRedirectUrl(path) {
     if (window.omvAuthRedirectUrl) return window.omvAuthRedirectUrl(path);
-    return new URL(path, 'https://app.fishedge.live/').href;
+    return new URL(path, 'https://livefishedge.github.io/view/').href;
   }
 
-  // ----- Sign up with Google (via Google Identity Services) -----
-  // Bypasses Supabase's hosted OAuth proxy so Google's consent screen uses
-  // app.fishedge.live (the OAuth client's Authorized JavaScript origin)
-  // instead of wfdpfept…supabase.co. Supabase verifies the returned id_token
-  // against the same OAuth client_id configured in Auth → Providers → Google.
-  var GOOGLE_CLIENT_ID = '888175087139-ka81ic2ojma1ltmf0f6fc5krk0ua8hmj.apps.googleusercontent.com';
-
-  async function handleGoogleCredential(response) {
-    if (!response || !response.credential) {
-      showMsg('No Google credential returned. Try again.', 'error');
-      return;
-    }
-    if (!window.sb) {
-      showMsg('Auth not ready — refresh and try again.', 'error');
-      return;
-    }
-    showMsg('Signing you up…', '');
-    var res;
-    try {
-      res = await sb.auth.signInWithIdToken({
-        provider: 'google',
-        token: response.credential
-      });
-    } catch (e) {
-      showMsg((e && e.message) || 'Google sign-in failed.', 'error');
-      return;
-    }
-    if (res.error) {
-      showMsg(res.error.message || 'Google sign-in failed.', 'error');
-      return;
-    }
-    // Cross-subdomain login cookie
-    try {
-      document.cookie = 'fishedge_logged_in=1; Path=/; Domain=.fishedge.live; Max-Age=' + (7 * 24 * 60 * 60) + '; Secure; SameSite=Lax';
-    } catch (_) {}
-    showMsg('Signed up! Loading dashboard…', 'success');
-    setTimeout(function() { window.location.replace('index.html'); }, 600);
-  }
-
-  function initGoogleSignIn() {
-    if (!window.google || !window.google.accounts || !window.google.accounts.id) {
-      setTimeout(initGoogleSignIn, 200);
-      return;
-    }
-    try {
-      window.google.accounts.id.initialize({
-        client_id: GOOGLE_CLIENT_ID,
-        callback: handleGoogleCredential,
-        cancel_on_tap_outside: false,
-        itp_support: true,
-        use_fedcm: false,
-      });
-      window.google.accounts.id.renderButton(
-        document.getElementById('gsi-button'),
-        {
-          type: 'standard',
-          theme: 'outline',
-          size: 'large',
-          text: 'signup_with',
-          shape: 'rectangular',
-          logo_alignment: 'left',
-          width: Math.min(380, document.getElementById('gsi-button').clientWidth || 380),
-        }
-      );
-    } catch (e) {
-      console.warn('[GSI] init failed:', e);
-    }
-  }
-
-  if (document.readyState === 'complete') {
-    initGoogleSignIn();
-  } else {
-    window.addEventListener('load', initGoogleSignIn);
-  }
+  // ── Google Identity Services ─────────────────────────────────────────────
+  window.gsiAuth.initGoogleSignIn({
+    onSuccess: function (session) {
+      /* GSI → signInWithIdToken. For new users Google may or may not have
+       * their email verified; Supabase handles the OAuth metadata. */
+      showMsg('Signed up with Google! Loading…', 'success');
+      setTimeout(function () { window.location.replace('account.html'); }, 800);
+    },
+    onError: function (msg) {
+      showMsg(msg || 'Google sign-in failed.', 'error');
+    },
+  });
 
   document.getElementById('reg-form').addEventListener('submit', async function(e) {
     e.preventDefault();
@@ -322,6 +234,5 @@
   }
 })();
 </script>
-<script src="feedback.js?v=20260726"></script>
 </body>
 </html>
