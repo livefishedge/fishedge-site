@@ -4961,6 +4961,13 @@ function ensureMobileCursorLayer(map) {
       radius: 8,
       fill: new ol.style.Fill({ color: "#1d4f91" }),
       stroke: new ol.style.Stroke({ color: "#4d7dff", width: 2 })
+    }),
+    text: new ol.style.Text({
+      text: "1",
+      fill: new ol.style.Fill({ color: "#fff" }),
+      font: "bold 11px monospace",
+      textAlign: "center",
+      textBaseline: "middle"
     })
   }));
   mobileMapState.cursorLayer = new ol.layer.Vector({
@@ -5068,6 +5075,16 @@ function installMobileReadoutOnce(map) {
     updateMobileCursor(xy3857[0], xy3857[1]);
     renderMobileReadoutFromLonLat(xy4326[0], xy4326[1], ev.pixel);
   }
+  let touchMoved = false;
+  map.on("pointerdown", ev => {
+    if (ev.originalEvent?.pointerType === "touch") touchMoved = false;
+  });
+  map.on("pointerdrag", ev => {
+    if (ev.originalEvent?.pointerType === "touch") touchMoved = true;
+  });
+  map.on("pointerup", ev => {
+    if (ev.originalEvent?.pointerType === "touch" && !touchMoved) handle(ev);
+  });
   // OpenLayers' singleclick is the touch-safe selection event. On mobile,
   // relying on pointermove/click can move the marker during a pan or pinch,
   // leaving it detached from the last selected spot.
@@ -7853,6 +7870,13 @@ function thermalEnsureCursorLayer(map) {
       radius: 8,
       fill: new ol.style.Fill({ color: "#1d4f91" }),
       stroke: new ol.style.Stroke({ color: "#4d7dff", width: 2 })
+    }),
+    text: new ol.style.Text({
+      text: "1",
+      fill: new ol.style.Fill({ color: "#fff" }),
+      font: "bold 11px monospace",
+      textAlign: "center",
+      textBaseline: "middle"
     })
   }));
   thermalFrontState.cursorLayer = new ol.layer.Vector({
@@ -8028,6 +8052,20 @@ async function thermalInitMap() {
         thermalRenderReadout(x.coord, x.pixel);
         thermalFrontHoverTip(x.coord, x.pixel);
       }
+    });
+    let touchMoved = false;
+    map.on("pointerdown", ev => {
+      if (ev.originalEvent?.pointerType === "touch") touchMoved = false;
+    });
+    map.on("pointerdrag", ev => {
+      if (ev.originalEvent?.pointerType === "touch") touchMoved = true;
+    });
+    map.on("pointerup", ev => {
+      if (ev.originalEvent?.pointerType !== "touch" || touchMoved || currentVar !== "thermal_fronts") return;
+      const x = to4326(ev);
+      if (!x) return;
+      thermalRenderReadout(x.coord, x.pixel);
+      thermalFrontHoverTip(x.coord, x.pixel);
     });
   }
   return map;
