@@ -2,18 +2,25 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Captain's Dashboard</title>
-  <!-- 2026-08-02: force Pages redeploy after locate-me DOM-ready mount repair. -->
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@10.4.0/ol.css">
 
   <script src="https://cdn.plot.ly/plotly-2.34.0.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/ol@10.4.0/dist/ol.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/ol-mapbox-style@13.4.1/dist/olms.js"></script>
+  <script src="drawMobileUvArrowsLite.js?v=20260517-arrows2"></script>
+  <!-- Auth + Analytics -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-init.js?v=20260804"></script>
+  <script src="https://cdn.jsdelivr.net/npm/posthog-js@1.200.0/dist/array.js"></script>
 <script>
-/* Instrumentation shim for locate-me.js (same pattern as the dashboard).
-   The viewer's map state is module-scoped, not on window. Patch the
-   OL Map constructor to track every created instance globally. */
+/* Instrumentation shim for locate-me.js. The dashboard declares
+   mobileMapState / desktopMapState as local `let` variables in its
+   IIFE scope, never publishing them to window. This patches the
+   window.ol.Map constructor to track every created map instance in
+   window.__fishedgeMaps so locate-me.js can find them. */
 (function instrumentOlMap() {
   if (typeof window === 'undefined') return;
   if (!window.ol || !window.ol.Map) {
@@ -26,18 +33,17 @@
     (window.__fishedgeMaps = window.__fishedgeMaps || []).push(map);
     return map;
   }
-  try { Object.keys(OrigMap).forEach(function (k) { TrackedMap[k] = OrigMap[k]; }); } catch (_) {}
+  // Preserve static methods/props (OL has things like ol.Map.EMPTY)
+  try {
+    Object.keys(OrigMap).forEach(function (k) { TrackedMap[k] = OrigMap[k]; });
+  } catch (_) {}
+  // Preserve prototype
   TrackedMap.prototype = OrigMap.prototype;
   window.ol.Map = TrackedMap;
+  console.info('[fishedge-locate] ol.Map instrumented; tracking map instances');
 })();
 </script>
-<script src="/fish-locate.js?v=20260807-domready"></script>
-  <script src="https://cdn.jsdelivr.net/npm/ol-mapbox-style@13.4.1/dist/olms.js"></script>
-  <script src="drawMobileUvArrowsLite.js?v=20260517-arrows2"></script>
-  <!-- Auth + Analytics -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="supabase-init.js?v=20260711"></script>
-  <script src="https://cdn.jsdelivr.net/npm/posthog-js@1.200.0/dist/array.js"></script>
+<script src="locate-me.js?v=20260803"></script>
 
 
   <style>
@@ -47,7 +53,7 @@
     /* ======= Toolbar (fixed top bar - replaces #controls) ======= */
     #toolbar{
       position:fixed; top:0; left:0; right:0; z-index:940;
-      display:flex; align-items:center; gap:6px; flex-wrap:wrap;
+      display:flex; align-items:center; gap:6px; flex-wrap:nowrap;
       padding:4px 70px 4px 8px; background:var(--panel); border-bottom:1px solid var(--border);
       backdrop-filter:blur(6px);
     }
@@ -59,8 +65,9 @@
     #toolbar button{ padding:0 10px; cursor:pointer; }
     #toolbar button.active{ background:#1d4f91; border-color:#4d7dff; }
     #region-select{ padding:0 8px; min-width:130px; }
-    #nav-bar{ display:flex; align-items:center; gap:6px; flex:1 1 340px; min-width:260px; }
-    #prev-btn, #next-btn, #play-btn{ min-width:32px; padding:0 6px; font-size:16px; font-weight:900; }
+    #nav-bar{ display:flex; align-items:center; gap:6px; flex:1 1 auto; min-width:0; }
+    #prev-btn, #next-btn, #play-btn{ min-width:44px; min-height:44px; padding:0 12px; font-size:16px; font-weight:900; }
+    #toolbar a, #toolbar button, #toolbar select{ min-height:44px; }
     #frame-slider{ flex:1; min-width:120px; max-width:520px; accent-color:#d84bff; background:transparent; -webkit-appearance:none; appearance:none; }
     #frame-slider::-webkit-slider-runnable-track{
       height:6px; border-radius:3px;
@@ -96,7 +103,33 @@
     }
     #all-day-toggle{ display:flex; align-items:center; gap:6px; white-space:nowrap; font-size:13px; font-weight:800; }
     #all-day-cb{ width:15px; height:15px; accent-color:#d84bff; }
-    #toolbar-status{ color:#9fb0c3; font-size:12px; font-weight:700; white-space:nowrap; }
+    /* Status used to expand into a verbose extra row (for example,
+       "13/14 hourly frames ... showing 14"). Keep it out of the map UI. */
+    #toolbar-status{ display:none !important; }
+    #fishedge-locate-wrap{ flex:0 0 auto; margin-left:auto; }
+    #captain-tools #fishedge-locate-wrap{ margin-left:0; }
+    #fishedge-locate-btn svg, #captain-locate-btn svg{ display:block; width:22px; height:22px; }
+    /* #toolbar button is intentionally generic, but its selector is more
+       specific than .captain-tool-btn. Reassert the Captain Dashboard
+       compass treatment for the product-page copy so it cannot become a
+       solid blue toolbar button. */
+    #toolbar #fishedge-locate-btn{
+      width:30px; min-width:30px; height:30px; min-height:30px;
+      padding:0; border:1px solid transparent; border-radius:6px;
+      background:transparent; color:var(--fg);
+      display:flex; align-items:center; justify-content:center;
+      font-size:0;
+    }
+    #toolbar #fishedge-locate-btn:hover{
+      background:rgba(255,255,255,0.08);
+      border-color:rgba(255,255,255,0.2);
+    }
+    /* The toolbar Locate Me button (fishedge-locate-btn) and the Captain
+       Dashboard locate button (captain-locate-btn) both render the same
+       compass SVG via locate-me.js, so the compact-toolbar copy stays
+       visible on every page. Only the legacy ::before glyph is hidden so
+       the toolbar copy shows the same compass icon as the Captain
+       Dashboard (no mixed crosshair + compass). */
 
     /* Modebar host: NEW CSS for floating inside the plot at upper-left */
     #modebar-host{
@@ -112,56 +145,87 @@
       position:fixed;
       bottom:24px;
       right:24px;
-      z-index:500;
+      z-index:1100;
       display:flex;
-      flex-direction:column;
+      flex-direction:column-reverse;   /* panel pops UP, not DOWN — Mike 2026-07-26 17:09 */
       align-items:flex-end;
       gap:6px;
     }
     #feedback-toggle{
+      /* Labeled pill button — bigger and impossible to miss on a busy map.
+         Old 48x48 pure-icon circle was getting lost on the dashboard. */
       background:#2d7d46;
       color:#fff;
-      border:none;
-      border-radius:50%;
-      width:48px;
-      height:48px;
-      aspect-ratio:1 / 1;
-      padding:0;
-      font-size:0;
+      border:0;
+      border-radius:24px;
+      padding:10px 16px 10px 12px;
+      height:auto;
+      min-height:48px;
+      font-size:13px;
+      font-weight:800;
+      letter-spacing:0.02em;
       line-height:1;
       cursor:pointer;
-      box-shadow:0 2px 12px rgba(0,0,0,.5);
-      display:flex;
+      box-shadow:0 4px 16px rgba(45,125,70,.55), 0 1px 3px rgba(0,0,0,.4);
+      display:inline-flex;
       align-items:center;
-      justify-content:center;
+      gap:8px;
       flex:0 0 auto;
-      box-sizing:border-box;
-      overflow:hidden;
-      position:relative;
+      transition: background 0.15s ease, transform 0.1s ease;
     }
-    #feedback-toggle::before{
-      content:"";
+    #feedback-toggle:hover{ background:#3a9d5c; transform: translateY(-1px); }
+    #feedback-toggle:active{ transform: translateY(0); }
+    #feedback-toggle:focus-visible{ outline:2px solid #fde047; outline-offset:2px; }
+    #feedback-toggle .fb-icon{
       width:18px;
       height:14px;
       border:2px solid currentColor;
       border-radius:4px;
       box-sizing:border-box;
       display:block;
+      position:relative;
     }
-    #feedback-toggle::after{
+    #feedback-toggle .fb-icon::after{
       content:"";
       position:absolute;
+      right:-2px;
+      bottom:-3px;
       width:7px;
       height:7px;
       border-right:2px solid currentColor;
       border-bottom:2px solid currentColor;
       transform:rotate(45deg);
-      margin-top:13px;
-      margin-left:-8px;
-      background:#2d7d46;
     }
-    #feedback-toggle:hover{ background:#3a9d5c; }
-    #feedback-toggle:hover::after{ background:#3a9d5c; }
+    #feedback-toggle .fb-label{
+      font: inherit;
+      color: inherit;
+      white-space: nowrap;
+    }
+
+    /* Home link — sits inside #menu-panel below My Account. Visible in every
+       view because #hamburger-btn is now always visible (the combined-mode
+       display:none on #hamburger-btn was removed so the menu is reachable
+       from every dashboard view). */
+    #menu-panel .home-link{
+      display:block;
+      text-align:center;
+      padding:8px 0;
+      color:var(--fg);
+      font-size:12px;
+      font-weight:800;
+      letter-spacing:0.05em;
+      text-decoration:none;
+      border:1px solid var(--border);
+      border-radius:6px;
+      background:rgba(12,23,35,0.6);
+      transition: border-color 0.15s ease, background 0.15s ease;
+    }
+    #menu-panel .home-link:hover{
+      border-color:#2dd4bf;
+      background:rgba(26,127,122,0.25);
+      color:#fff;
+      text-decoration:none;
+    }
     #temp-unit-toggle{
       display:none;
       min-width:44px;
@@ -546,6 +610,23 @@
     #all-day-cb{ width:15px; height:15px; accent-color:#d84bff; }
 
     @media (max-width:720px){
+      /* Keep every layer's time controls in one compact touch row. */
+      #toolbar{
+        gap:4px;
+        padding-left:calc(6px + env(safe-area-inset-left, 0px));
+        padding-right:calc(52px + env(safe-area-inset-right, 0px));
+        padding-top:calc(3px + env(safe-area-inset-top, 0px));
+        padding-bottom:3px;
+      }
+      #nav-bar{ order:0; flex:1 1 auto; flex-basis:auto; gap:4px; min-width:0; }
+      #prev-btn, #next-btn{ min-width:32px; min-height:36px; padding:0 5px; font-size:15px; }
+      #play-btn{ min-width:42px; min-height:36px; padding:0 6px !important; font-size:12px !important; }
+      #frame-slider{ flex:1 1 auto; min-width:44px; width:auto; max-width:none; }
+      #frame-label{ display:none !important; }
+      #fishedge-locate-wrap{ margin-left:0; }
+      #fishedge-locate-wrap > button{ width:38px; min-width:38px; min-height:36px; padding:0; font-size:0; }
+      #fishedge-locate-wrap > button::before{ content:none; display:none; }
+      #fishedge-locate-button-status{ display:none; }
       /* Mobile: move feedback button to top-right, away from bottom map gestures. */
       body.mobile-device #feedback-float{
         bottom: calc(12px + env(safe-area-inset-bottom, 0px)) !important;
@@ -554,11 +635,17 @@
         right: auto !important;
         z-index: 1300 !important;
       }
-      #toolbar{ gap:6px; padding-right:58px; }
-      #nav-bar{ order:1; flex-basis:100%; }
-      #toolbar-status{ order:2; flex:1 1 100%; white-space:normal; }
       #menu-panel{ top:58px; right:8px; }
     }
+
+    /* Respect user motion preferences */
+    @media (prefers-reduced-motion: reduce){
+      *,*::before,*::after{ animation-duration:0.01ms !important; animation-iteration-count:1 !important; transition-duration:0.01ms !important; }
+    }
+
+    /* Visible focus rings for keyboard users */
+    :focus-visible{ outline:2px solid #1aa9ff; outline-offset:2px; border-radius:4px; }
+    #feedback-float:focus-visible{ outline-offset:4px; }
 
     /* Plot: full viewport */
     #plot{ height: 100dvh; min-height: 200px; }
@@ -580,23 +667,21 @@
     body.thermal-fronts-mode #nav-bar{ display:flex !important; }
     body.thermal-fronts-mode #hamburger-cbar,
     body.thermal-fronts-mode .hamburger-range-block{ display:none !important; }
-    /* Combined mode: hide single-product slider/progress, show sidebar */
-body.combined-mode #combined-menu-btn{
-      top:8px !important; right:8px !important; left:auto !important;
-      z-index:1200 !important;
-      display:flex !important;
-      border-left:1px solid var(--border);
-      border-right:none;
-      border-radius:8px;
-      box-shadow:0 2px 10px rgba(0,0,0,0.25);
-    }
-    body.combined-mode #combined-menu-btn span{ display:block; width:18px; height:2px; background:var(--fg); border-radius:2px; }
+
     body.combined-mode #nav-bar{ display:none !important; }
     body.combined-mode #toolbar{ display:none !important; }
-    body.combined-mode #hamburger-btn{ display:none !important; }
+    /* Captain's Dashboard uses #combined-controls (sidebar); #hamburger-btn
+       (universal hamburger) toggles it.  Visible in every view.
+       z-index:1200 keeps the toggle reachable when the sidebar is open
+       (sidebar is z-index:1110). */
+    body.combined-mode #hamburger-btn{ display:flex !important; z-index:1200 !important; justify-content:center; align-items:center; }
     body.combined-mode #plot{ display:none !important; }
     body.combined-mode #map{ display:block !important; position:absolute; top:0; left:0; right:0; bottom:0; z-index:1000; width:100%; height:100%; cursor:crosshair; }
     body.combined-mode #combined-readout{ display:block !important; }
+    /* When the sidebar is open, hide the bottom-right readout so it doesn't
+       sit on top of the sidebar (z-index 1120 vs sidebar's 1110) and block
+       the My Account button. */
+    body.combined-mode:has(#combined-controls.open) #combined-readout{ display:none !important; }
     body.combined-mode #status{ display:none !important; }
 
     body.combined-mode .combined-mode-row button{
@@ -628,7 +713,7 @@ body.combined-mode #combined-menu-btn{
     #captain-tools{
       display:none;
       position:fixed;
-      top:8px; left:8px;
+      top:56px; left:8px;
       z-index:1150;
       background:var(--panel);
       border:1px solid var(--border);
@@ -639,7 +724,11 @@ body.combined-mode #combined-menu-btn{
       box-shadow:0 4px 16px rgba(0,0,0,0.4);
       align-items:center;
     }
-    body.combined-mode #captain-tools{ display:flex; }
+    #captain-tools{ display:flex; }
+    body.combined-mode #captain-tools{ top:8px; }
+    body.mobile-device #captain-tools{ top:calc(46px + env(safe-area-inset-top, 0px)); }
+    body.mobile-device #captain-dist-panel{ top:92px !important; max-width:calc(100vw - 24px); box-sizing:border-box; }
+    body.mobile-device #captain-fs-btn{ display:none !important; }
     .captain-tool-btn{
       width:30px; height:30px;
       min-width:30px;
@@ -671,19 +760,19 @@ body.combined-mode #combined-menu-btn{
     #captain-fs-btn:hover{ background:rgba(255,255,255,0.08); border-color:rgba(255,255,255,0.2); }
     #captain-save-btn{
       display:none;
+      position:fixed;
+      top:44px; left:8px;
+      z-index:1150;
       background:#1d4f91;
       border:1px solid #4d7dff;
-      border-radius:6px;
+      border-radius:8px;
       color:#fff;
-      padding:2px 8px;
+      padding:0 10px;
+      height:28px;
       cursor:pointer;
-      font-size:10px;
+      font-size:12px;
       font-weight:700;
-      text-transform:uppercase;
-      letter-spacing:0.6px;
-      white-space:nowrap;
     }
-    #captain-save-btn:hover{ background:#2a5fb0; }
     #captain-dist-panel.visible, #captain-pts-panel.visible{ display:block !important; }
     #combined-readout{
       display:none;
@@ -720,6 +809,20 @@ body.combined-mode #combined-menu-btn{
     body.combined-mode #combined-controls.open{ transform:translateX(0) !important; }
     body.combined-mode #combined-overlay{ display:none; }
     .combined-section{ display:flex; flex-direction:column; gap:8px; }
+    .combined-home-link{
+      display:block;
+      margin-top:10px;
+      padding:7px 8px;
+      border:1px solid var(--border);
+      border-radius:6px;
+      color:var(--fg);
+      font-size:12px;
+      font-weight:800;
+      letter-spacing:0.04em;
+      text-decoration:none;
+      background:rgba(12,23,35,0.6);
+    }
+    .combined-home-link:hover{ border-color:#2dd4bf; background:rgba(26,127,122,0.25); color:#fff; }
     .combined-section-title{
       font-size:11px;
       font-weight:700;
@@ -966,12 +1069,9 @@ body.combined-mode #combined-menu-btn{
     }
     #hamburger-btn{ z-index:1000; }
   </style>
-
-<!-- locate-me cache-buster: 20260806 (force CDN revalidate after 47412bc01e stuck) -->
 </head>
 <body>
-<!-- host for fishedge-locate-me button (rendered by /locate-me.js) -->
-<div id="fishedge-locate-host" style="position:fixed;top:8px;right:8px;z-index:1100;"></div>
+  <a href="#main-content" class="skip-link" style="position:absolute;top:-100px;left:16px;z-index:9999;background:#1aa9ff;color:#061824;padding:12px 18px;border-radius:6px;font-weight:700;font-size:14px;text-decoration:none;transition:top 0.15s ease" onfocus="this.style.top='12px'" onblur="this.style.top='-100px'">Skip to map</a>
   <!-- Global error overlay: catches 'The string did not match the expected
        pattern' and any other uncaught errors on iOS Safari. Shows the
        actual error message + stack in a fixed div at the top of the page
@@ -1038,11 +1138,14 @@ body.combined-mode #combined-menu-btn{
 
     function setAccountLinkVisible(visible) {
       function apply() {
-        const el = document.getElementById('account-link-wrap');
-        if (el) el.hidden = !visible;
+        // Both combined-mode (Captain's Dashboard) and the per-product hamburger
+        // menu (#menu-panel) need the account link visible independently — flip both.
+        document.querySelectorAll('#account-link-wrap').forEach(function (el) {
+          el.hidden = !visible;
+        });
       }
       apply();
-      if (!document.getElementById('account-link-wrap')) {
+      if (!document.querySelector('#account-link-wrap')) {
         document.addEventListener('DOMContentLoaded', apply, { once: true });
       }
     }
@@ -1175,7 +1278,10 @@ body.combined-mode #combined-menu-btn{
   <div id="plot"></div>
   <div id="readout">Lat/Lon: -- | Value: --</div>
   <div id="feedback-float">
-    <button id="feedback-toggle" title="Send feedback">&#9993;</button>
+    <button id="feedback-toggle" title="Send feedback" aria-label="Send feedback">
+      <span class="fb-icon" aria-hidden="true"></span>
+      <span class="fb-label">Feedback</span>
+    </button>
     <div id="feedback-panel" style="display:none;">
       <input type="text" id="feedbackInput" placeholder="Questions / comments..." />
       <button id="feedbackSubmit">Send</button>
@@ -1213,22 +1319,22 @@ body.combined-mode #combined-menu-btn{
       </svg>
     </button>
   </div>
+  <button id="captain-save-btn" title="Save waypoints" style="display:none;align-items:center;gap:8px;position:fixed;left:8px;top:44px;z-index:1150;background:#1d4f91;border:1px solid #4d7dff;border-radius:8px;color:#fff;padding:0 8px 0 10px;height:28px;cursor:pointer;font-size:12px;font-weight:700;">
+    <span>Save Waypoints</span><span id="captain-save-dismiss" role="button" aria-label="Hide save waypoints" title="Hide" style="font-size:16px;line-height:1;opacity:.8;">×</span>
+  </button>
   <div id="captain-pts-panel" style="display:none;position:fixed;top:80px;left:8px;z-index:1150;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;width:280px;max-height:320px;overflow-y:auto;font-size:12px;color:var(--fg);">
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;">
-      <div id="captain-pts-title" style="font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:0.6px;color:#7a8fa8;">My Waypoints</div>
-      <button id="captain-save-btn" title="Save waypoints">Save Waypoints</button>
-    </div>
+    <div id="captain-pts-title" style="font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:0.6px;color:#7a8fa8;margin-bottom:8px;">My Waypoints</div>
     <div id="captain-pts-list"></div>
   </div>
-  <div id="captain-dist-panel" style="display:none;position:fixed;top:52px;left:8px;z-index:1150;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-size:12px;color:var(--fg);min-width:200px;">
-    <div style="font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:0.6px;color:#7a8fa8;margin-bottom:8px;">Distance</div>
+  <div id="captain-dist-panel" style="display:none;position:fixed;top:96px;left:8px;z-index:1150;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-size:12px;color:var(--fg);min-width:200px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:0.6px;color:#7a8fa8;margin-bottom:8px;">
+      <span>Distance</span>
+      <button id="captain-dist-exit" type="button" title="Exit distance measurement" style="border:1px solid #4d7dff;border-radius:5px;background:#1d4f91;color:#fff;padding:3px 7px;font-size:11px;font-weight:700;cursor:pointer;">Exit</button>
+    </div>
     <div id="captain-dist-list"></div>
     <div id="captain-dist-total" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-weight:700;color:var(--fg);"></div>
   </div>
   <div id="combined-controls">
-    <div style="text-align:center;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--border);">
-      <a href="account.html" style="color:var(--accent2);font-size:12px;font-weight:700;text-decoration:none;letter-spacing:0.05em;">MY ACCOUNT</a>
-    </div>
     <div class="combined-section">
       <div class="combined-section-title">Product</div>
       <select id="combined-product-select">
@@ -1270,8 +1376,8 @@ body.combined-mode #combined-menu-btn{
       <div id="combined-sst-units" style="margin:0 0 4px 0;display:flex;flex-direction:column;gap:5px;">
         <div style="font-size:11px;color:#9fb0c3;">Units</div>
         <div class="combined-mode-row" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
-          <button id="combined-sst-mode-c" class="active" type="button">°C</button>
-          <button id="combined-sst-mode-f" type="button">°F</button>
+          <button id="combined-sst-mode-c" type="button">°C</button>
+          <button id="combined-sst-mode-f" class="active" type="button">°F</button>
         </div>
       </div>
       <div id="combined-sst-scan-time" style="font-size:11px;color:#ff8c00;margin-left:28px;margin-bottom:8px;"></div>
@@ -1294,12 +1400,12 @@ body.combined-mode #combined-menu-btn{
       <div id="combined-thermal-units" style="margin:0 0 8px 0;display:flex;flex-direction:column;gap:5px;">
         <div style="font-size:11px;color:#9fb0c3;">Units</div>
         <div class="combined-mode-row" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
-          <button id="combined-thermal-mode-c" class="active" type="button">°C</button>
-          <button id="combined-thermal-mode-f" type="button">°F</button>
+          <button id="combined-thermal-mode-c" type="button">°C</button>
+          <button id="combined-thermal-mode-f" class="active" type="button">°F</button>
         </div>
         <div class="combined-mode-row" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
-          <button id="combined-thermal-mode-km" class="active" type="button">km</button>
-          <button id="combined-thermal-mode-nm" type="button">nm</button>
+          <button id="combined-thermal-mode-km" type="button">km</button>
+          <button id="combined-thermal-mode-nm" class="active" type="button">nm</button>
         </div>
       </div>
       <label class="combined-toggle">
@@ -1333,13 +1439,18 @@ body.combined-mode #combined-menu-btn{
         <span>Bathymetry</span>
       </label>
       <div id="combined-bathy-legend" class="combined-inline-legend"></div>
+    <div class="combined-footer" style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border);">
+      <div style="text-align:center;margin-bottom:8px;">
+        <a class="combined-home-link" href="https://fishedge.live/" target="_top" rel="noopener" title="Back to FishEdge home" style="display:block;padding:8px 0;color:var(--fg);font-size:12px;font-weight:800;letter-spacing:0.05em;text-decoration:none;border:1px solid var(--border);border-radius:6px;background:rgba(12,23,35,0.6);">Home</a>
+      </div>
+      <div style="text-align:center;" id="account-link-wrap">
+        <a href="account.html" style="color:var(--accent2);font-size:12px;font-weight:700;text-decoration:none;letter-spacing:0.05em;">My Account</a>
+      </div>
     </div>
   </div>
-  <button id="combined-menu-btn" aria-label="Toggle sidebar" style="display:none;position:fixed;top:8px;right:8px;z-index:40;width:44px;height:44px;background:var(--panel);border:none;border-left:1px solid var(--border);cursor:pointer;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:0;">
-    <span style="display:block;width:18px;height:2px;background:var(--fg);border-radius:2px;"></span>
-    <span style="display:block;width:18px;height:2px;background:var(--fg);border-radius:2px;"></span>
-    <span style="display:block;width:18px;height:2px;background:var(--fg);border-radius:2px;"></span>
-  </button>
+    
+  </div>
+
 
   <div id="briefing-panel" aria-live="polite" style="display:none">
     <h2>Captain Briefing</h2>
@@ -1387,12 +1498,12 @@ body.combined-mode #combined-menu-btn{
           <button id="thermal-mode-daily" type="button">Daily</button>
         </div>
         <div class="mode-row" style="margin-top:4px;">
-          <button id="thermal-mode-c" class="active" type="button">°C</button>
-          <button id="thermal-mode-f" type="button">°F</button>
+          <button id="thermal-mode-c" type="button">°C</button>
+          <button id="thermal-mode-f" class="active" type="button">°F</button>
         </div>
         <div class="mode-row" style="margin-top:4px;">
-          <button id="thermal-mode-km" class="active" type="button">km</button>
-          <button id="thermal-mode-nm" type="button">nm</button>
+          <button id="thermal-mode-km" type="button">km</button>
+          <button id="thermal-mode-nm" class="active" type="button">nm</button>
         </div>
       </div>
       <div class="hamburger-range-block">
@@ -1405,8 +1516,11 @@ body.combined-mode #combined-menu-btn{
         </div>
       </div>
       <div id="hamburger-cbar"></div>
-      <div style="text-align:center;margin-top:14px;" id="account-link-wrap" hidden>
-        <a href="account.html" style="color:var(--accent2);font-size:12px;font-weight:700;text-decoration:none;letter-spacing:0.05em;">MY ACCOUNT</a>
+      <div class="home-link-wrap" style="text-align:center;margin-top:14px;">
+        <a class="home-link" href="https://fishedge.live/" target="_top" rel="noopener" title="Back to FishEdge home">Home</a>
+      </div>
+      <div style="text-align:center;margin-top:8px;" id="account-link-wrap">
+        <a href="account.html" style="color:var(--accent2);font-size:12px;font-weight:700;text-decoration:none;letter-spacing:0.05em;">My Account</a>
       </div>
     </div>
 
@@ -1559,7 +1673,7 @@ var BBOX = [...(REGION_FALLBACKS[REGION_ID]?.bbox ?? REGION_FALLBACKS.usec_south
 
 // Declared before setActiveRegion() so the initial call can assign to it
 // without hitting a Temporal Dead Zone ReferenceError.
-var BATHY_JSON_URL = `data/${REGION_ID}/gebco_bath_latest/gebco_bathy.json`;
+var BATHY_JSON_URL = `https://data.fishedge.live/${REGION_ID}/gebco_bath_latest/gebco_bathy.json`;
 
 /**
  * Centralised region-state setter. Call whenever the active region changes
@@ -1574,9 +1688,10 @@ function setActiveRegion(regionId, regionMeta) {
     ? regionMeta.bbox.map(Number)
     : [...(REGION_FALLBACKS[regionId]?.bbox ?? REGION_FALLBACKS.usec_south.bbox)];
   const bathyPath = regionMeta?.bathy_path || "gebco_bath_latest/gebco_bathy.json";
-  BATHY_JSON_URL = `data/${regionId}/${bathyPath}`;
+  BATHY_JSON_URL = `https://data.fishedge.live/${regionId}/${bathyPath}`;
   // Invalidate layer caches on region switch so old data doesn't bleed through
   if (prevRegion !== regionId) {
+    regionRevision += 1;
     window._bathyData = null;
     window._bathyLayer = null;
     window._bathyContourSource = null;
@@ -1607,6 +1722,37 @@ function setActiveRegion(regionId, regionMeta) {
         desktopMapState.landLayer = null;
         desktopMapState.landLayerBBox = null;
         desktopMapState.landLayerURL = null;
+      }
+      if (mobileMapState && mobileMapState.placeLayer) {
+        if (mobileMapState.map) mobileMapState.map.removeLayer(mobileMapState.placeLayer);
+        mobileMapState.placeLayer = null;
+        mobileMapState.placeLayerRegion = null;
+      }
+      if (desktopMapState && desktopMapState.placeLayer) {
+        if (desktopMapState.map) desktopMapState.map.removeLayer(desktopMapState.placeLayer);
+        desktopMapState.placeLayer = null;
+        desktopMapState.placeLayerRegion = null;
+      }
+      // USEC MD bug fix: invalidate thermal-front state on region switch so
+      // the old frontLayer (built from the previous region's index.json +
+      // frame fetches) cannot survive the switch and paint stale data over
+      // the new region's map. thermalFrontState is a `let` declared further
+      // down — guard with typeof so the boot-time call (which runs before
+      // the let is reached) never trips a TDZ ReferenceError.
+      if (typeof thermalFrontState !== 'undefined' && thermalFrontState) {
+        thermalFrontState.loading = false;
+        thermalFrontState.initialized = false;
+        thermalFrontState.loadedRegion = null;
+        thermalFrontState.frameData = [];
+        if (thermalFrontState.frontLayer && thermalFrontState.map) {
+          thermalFrontState.map.removeLayer(thermalFrontState.frontLayer);
+        }
+        thermalFrontState.frontLayer = null;
+        if (thermalFrontState.cursorLayer && thermalFrontState.map) {
+          thermalFrontState.map.removeLayer(thermalFrontState.cursorLayer);
+        }
+        thermalFrontState.cursorLayer = null;
+        thermalFrontState.cursorFeature = null;
       }
     } catch (_) { /* TDZ-safe: ignore on first-boot edge case */ }
   }
@@ -1789,12 +1935,29 @@ let userRanges = {
   combined: { ...DEFAULT_RANGES.combined }
 };
 
-let tempUnit = localStorage.getItem("sst_temp_unit") === "F" ? "F" : "C";
-let thermalDistUnit = localStorage.getItem("thermal_dist_unit") === "nm" ? "nm" : "km";
+let tempUnit = localStorage.getItem("sst_temp_unit") === "C" ? "C" : "F";
+let thermalDistUnit = localStorage.getItem("thermal_dist_unit") === "km" ? "km" : "nm";
 // cToF: converts absolute Celsius temperature to Fahrenheit (used for point values)
 function cToF(c) { return c * 9 / 5 + 32; }
 // kmToNm: converts kilometers to nautical miles (1 nm ≈ 1.852 km, so km → nm divides)
 function kmToNm(km) { return km * 1.852; }
+
+function kmToNmDistance(km) { return km / 1.852; }
+function nmToKmDistance(nm) { return nm * 1.852; }
+const MS_TO_KT = 1.94384;
+function msToKt(ms) { return ms * MS_TO_KT; }
+function mToFathom(m) { return m * 0.546806649; }
+let depthUnit = localStorage.getItem("depth_unit") === "m" ? "m" : "fathom";
+function formatDepth(meters) {
+  if (meters === null || meters === undefined) return "";
+  if (depthUnit === "fathom") return `${mToFathom(meters).toFixed(1)} fm`;
+  return `${meters.toFixed(0)}m`;
+}
+function formatArrowSpeed(ms) {
+  if (!Number.isFinite(ms)) return "";
+  return `${msToKt(ms).toFixed(2)} kt`;
+}
+
 function formatDist(km) {
   if (km === null || km === undefined) return "";
   if (thermalDistUnit === "nm") return `${kmToNm(km).toFixed(1)} nm`;
@@ -1887,7 +2050,12 @@ const gridCache = {};
 let _readoutHooked = false;
 let _relayoutHooked = false;
 
-let viewState = { hasRange:false, xRange:null, yRange:null };
+let viewState = {
+  hasRange:false, xRange:null, yRange:null,
+  center4326:null, resolution:null
+};
+let pendingViewRange = null;
+let regionRevision = 0;
 function viewportFromParams(params = QUERY_PARAMS) {
   const x0 = Number(params.get("x0"));
   const x1 = Number(params.get("x1"));
@@ -1970,6 +2138,14 @@ function currentViewportRanges() {
       ? { xRange: viewState.xRange, yRange: viewState.yRange }
       : null);
 }
+function captureCurrentViewState() {
+  let map = null;
+  if (currentVar === "combined") map = window._combinedMap;
+  else if (currentVar === "thermal_fronts") map = thermalFrontState.map;
+  else map = mobileMapState.map || desktopMapState.map;
+  if (map) syncViewStateFromOlMap(map);
+  return currentViewportRanges();
+}
 function appendViewportParams(url) {
   const vp = currentViewportRanges();
   if (vp) {
@@ -1984,22 +2160,66 @@ function appendViewportParams(url) {
   return url;
 }
 function syncViewStateFromOlMap(map) {
+  if (pendingViewRange) return;
   const vp = mapViewportRanges(map);
   if (!vp) return;
   viewState.hasRange = true;
   viewState.xRange = vp.xRange;
   viewState.yRange = vp.yRange;
+  const view = map.getView();
+  const center = view.getCenter?.();
+  const projection = view.getProjection?.().getCode?.();
+  if (center && center.length >= 2 && projection) {
+    viewState.center4326 = projection === 'EPSG:4326'
+      ? [center[0], center[1]]
+      : ol.proj.transform(center, projection, 'EPSG:4326');
+    viewState.resolution = Number(view.getResolution?.());
+  }
 }
 function syncProductSelectors() {
   if (hamburgerProductSelect) hamburgerProductSelect.value = currentVar;
   if (combinedProductSelect) combinedProductSelect.value = currentVar;
 }
-function applyViewStateToOlMap(map, fallbackExtent) {
+function applyViewStateToOlMap(map, fallbackExtent, preferredRange = null) {
   if (!map) return;
   const size = map.getSize();
   if (!size || size[0] <= 0 || size[1] <= 0) return;
   const view = map.getView();
   const viewProjCode = view.getProjection().getCode();
+  // Prefer extent-based preservation over center+resolution. setCenter +
+  // setResolution does NOT account for target/map dimension differences —
+  // the same resolution on a 1200x800 vs 800x600 map shows different
+  // geographic areas, which is the "jumpy" behavior Mike reported when
+  // switching between layers. view.fit(extent) adjusts zoom automatically
+  // so the same geographic area is shown regardless of map size.
+  const restoreRange = preferredRange || pendingViewRange;
+  if (restoreRange?.xRange && restoreRange?.yRange) {
+    const extent4326 = [restoreRange.xRange[0], restoreRange.yRange[0], restoreRange.xRange[1], restoreRange.yRange[1]];
+    const extent = viewProjCode === 'EPSG:4326'
+      ? extent4326
+      : ol.proj.transformExtent(extent4326, 'EPSG:4326', viewProjCode);
+    view.fit(extent, { size, padding: [0,0,0,0], nearest: true });
+    if (restoreRange === pendingViewRange) pendingViewRange = null;
+    return;
+  }
+  if (viewState.hasRange && viewState.xRange && viewState.yRange) {
+    const extent4326 = [viewState.xRange[0], viewState.yRange[0], viewState.xRange[1], viewState.yRange[1]];
+    const extent = viewProjCode === 'EPSG:4326'
+      ? extent4326
+      : ol.proj.transformExtent(extent4326, 'EPSG:4326', viewProjCode);
+    view.fit(extent, { size, padding: [0,0,0,0], nearest: true });
+    return;
+  }
+  // Fall back to center+resolution only when no extent is saved (e.g. on
+  // very first render before syncViewStateFromOlMap has captured anything).
+  if (viewState.center4326 && Number.isFinite(viewState.resolution)) {
+    const center = viewProjCode === 'EPSG:4326'
+      ? viewState.center4326
+      : ol.proj.transform(viewState.center4326, 'EPSG:4326', viewProjCode);
+    view.setCenter(center);
+    view.setResolution(viewState.resolution);
+    return;
+  }
   // null = "preserve whatever view state is already set" — but only if the view has a center
   if (fallbackExtent === null) {
     // If view has no center yet (first render), fall back to BBOX
@@ -2039,6 +2259,7 @@ let mobileMapState = {
   bathyContourLayerURL: null,     // bathy URL the contour layer was last built for
   arrowLayer: null,
   placeLayer: null,
+  placeLayerRegion: null,
   cursorLayer: null,
   cursorFeature: null,
   currentGridInfo: null,
@@ -2053,6 +2274,7 @@ let desktopMapState = {
   landLayerBBox: null,    // bbox the current land canvas was built for
   landLayerURL: null,     // bathy URL the current land canvas was built for
   placeLayer: null,
+  placeLayerRegion: null,
   arrowLayer: null,
   bathyContourLayer: null,
   currentGridInfo: null,
@@ -2179,6 +2401,7 @@ async function initDesktopMapIfNeeded() {
   }
   if (desktopMapState.map) {
     attachMapToUnifiedTarget(desktopMapState.map);
+    installCaptainToolHandler(desktopMapState.map);
     return desktopMapState.map;
   }
   const target = getUnifiedMapTarget();
@@ -2222,6 +2445,7 @@ async function initDesktopMapIfNeeded() {
     interactions: desktopInteractions
   });
   desktopMapState.map.on("moveend", () => syncViewStateFromOlMap(desktopMapState.map));
+  installCaptainToolHandler(desktopMapState.map);
   installOlGestureZoomFallback(desktopMapState.map, target);
   // Add the OFM two-layer vector basemap (water below, land above). This
   // replaces the previous bathy-derived land mask as the desktop single-
@@ -2281,14 +2505,14 @@ function renderDesktopReadout(lon, lat, pixel) {
   if (currentVar === "bathy" && pixel && desktopMapState.bathyContourLayer) {
     const contourDepth = bathyContourDepthAtPixel(desktopMapState.map, pixel);
     if (contourDepth !== null) {
-      setReadout(`${base}, ${contourDepth}m (contour)`);
+      setReadout(`${base}, ${formatDepth(contourDepth)} (contour)`);
       return;
     }
   }
   if (currentVar === "uv" && pixel && desktopMapState.arrowLayer) {
     const arrowSpeed = uvArrowSpeedAtPixel(desktopMapState.map, pixel);
     if (arrowSpeed !== null) {
-      setReadout(`${base}, ${arrowSpeed.toFixed(2)} m/s (arrow)`);
+      setReadout(`${base}, ${formatArrowSpeed(arrowSpeed)} (arrow)`);
       return;
     }
   }
@@ -2299,7 +2523,7 @@ function renderDesktopReadout(lon, lat, pixel) {
   }
   const { value, row, col } = sample;
   if (currentVar === "sst") setReadout(`${base}, ${formatSstValue(value)}`);
-  else if (currentVar === "bathy") setReadout(`${base}, ${value.toFixed(0)}m`);
+  else if (currentVar === "bathy") setReadout(`${base}, ${formatDepth(value)}`);
   else if (currentVar === "uv") {
     const d = (dataObj && dataObj.data && !Array.isArray(dataObj.data)) ? dataObj.data : dataObj;
     const adt = Number(d?.adt?.[row]?.[col]);
@@ -2395,18 +2619,39 @@ async function renderDesktopFrame(frameMeta) {
   desktopMapState.currentGridInfo = gridInfo;
   desktopMapState.currentDataObj = dataObj;
 
-  // Build raster canvas. Skip toBlob/createObjectURL/ImageStatic — those
-  // throw "The string did not match the expected pattern" on iOS Safari for
-  // large sparse rasters. canvasToOlSource uses ol.source.ImageCanvas which
-  // never parses a URL string.
+  // Build raster canvas
   const canvas = makeMobileRasterCanvas(currentVar, gridInfo, dataObj);
+  let url;
+  try {
+    // toBlob + createObjectURL avoids the iOS Safari 'The string did not
+    // match the expected pattern' error that toDataURL throws for some
+    // large/sparse-canvas combinations. Affects S3 OLCI sparse frames
+    // and any other large frame on iOS mobile Safari.
+    url = await new Promise((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        if (blob) resolve(URL.createObjectURL(blob));
+        else reject(new Error("canvas.toBlob returned null"));
+      }, "image/png");
+    });
+  } catch (e) {
+    console.error("[OL] canvas.toBlob failed for", currentVar, frameMeta?.id || frameMeta?.json_path, e);
+    throw e;
+  }
+  console.log("[OL] canvas encoded via toBlob, url:", url?.slice(0, 30));
+  if (!url) throw new Error("Could not encode desktop raster");
+
   const extent = frameExtentFromGrid(gridInfo);
   console.log("[OL] extent:", extent);
   let source;
   try {
-    source = canvasToOlSource(canvas, extent);
+    source = new ol.source.ImageStatic({
+      url,
+      imageExtent: extent,
+      projection: "EPSG:4326",
+      interpolate: false
+    });
   } catch (e) {
-    console.error("[OL] canvasToOlSource failed for", currentVar, frameMeta?.id || frameMeta?.json_path, "extent:", extent, e);
+    console.error("[OL] new ol.source.ImageStatic failed for", currentVar, frameMeta?.id || frameMeta?.json_path, "url:", url?.slice(0, 30), e);
     throw e;
   }
   source.on("imageloaderror", () => {
@@ -2590,6 +2835,8 @@ function resetViewportToWidthFit() {
   viewState.hasRange = false;
   viewState.xRange = null;
   viewState.yRange = null;
+  viewState.center4326 = null;
+  viewState.resolution = null;
   if (mobileMapState.map) {
     const extent = mobileMapState.currentGridInfo ? frameExtentFromGrid(mobileMapState.currentGridInfo) : BBOX;
     mobileMapState.map.updateSize();
@@ -2612,12 +2859,23 @@ const hReset = document.getElementById("hamburger-reset");
 if (hamburgerToggle && hamburgerPanel) {
   hamburgerToggle.addEventListener("click", (e) => {
     e.stopPropagation();
-    hamburgerPanel.classList.toggle("open");
+    // Universal hamburger: in Captain's Dashboard (combined-mode) toggles
+    // #combined-controls (the right-side sidebar).  In every other product
+    // view it toggles #menu-panel (the per-product dropdown).
+    var isCombined = document.body.classList.contains("combined-mode");
+    var target = isCombined ? document.getElementById("combined-controls") : hamburgerPanel;
+    if (target) target.classList.toggle("open");
+    else hamburgerPanel.classList.toggle("open");
   });
   // Close when tapping outside
   document.addEventListener("click", (e) => {
     if (!hamburgerPanel.contains(e.target) && !hamburgerToggle.contains(e.target)) {
       hamburgerPanel.classList.remove("open");
+    }
+    var cc = document.getElementById("combined-controls");
+    if (cc && cc.classList.contains("open") && !cc.contains(e.target)
+        && !hamburgerToggle.contains(e.target)) {
+      cc.classList.remove("open");
     }
   });
 }
@@ -2822,8 +3080,15 @@ if (sstHoursSelect) {
     }
     const renderData = { ...base.data, z: composite, sst: composite, data: composite, nx, ny, bbox: base.data?.bbox };
     const canvas = makeMobileRasterCanvas("sst", base.grid, renderData);
-    const source = canvasToOlSource(canvas, frameExtentFromGrid(base.grid));
-    const layer = new ol.layer.Image({ source, zIndex: 9 });
+    const url = canvas.toDataURL("image/png");
+    if (!url || !url.startsWith("data:image/png")) { if (sstScanTimeDiv) sstScanTimeDiv.textContent = "Render failed"; return; }
+    const layer = new ol.layer.Image({
+      source: new ol.source.ImageStatic({
+        url, imageExtent: frameExtentFromGrid(base.grid),
+        projection: "EPSG:4326", interpolate: false
+      }),
+      zIndex: 9
+    });
     const chk = document.getElementById("chk-combined-sst");
     layer.setVisible(chk ? chk.checked : false);
     window._combinedMap.addLayer(layer);
@@ -4445,46 +4710,6 @@ function drawLinePixels(imgData, x0, y0, x1, y1, color, imgWidth, lineWidth) {
   }
 }
 
-// canvasToOlSource(canvas, imageExtent): wrap a canvas in an
-// ol.source.ImageCanvas so we never round-trip through canvas.toDataURL,
-// canvas.toBlob, URL.createObjectURL, or new ol.source.ImageStatic.
-//
-// Background: iOS Safari's CSS/JS URL parser throws
-// "The string did not match the expected pattern" when fed very large or
-// malformed data: or blob: URLs (confirmed via curl/grep on Safari's own
-// response). That is the root cause of the "Mobile OL error:
-// The string did not match the expected pattern" alert on iPhone.
-// ol.source.ImageCanvas receives a callback that returns a canvas for each
-// tile draw — it never parses a URL string, so the failure mode goes away.
-function canvasToOlSource(canvas, imageExtent) {
-  if (!canvas) throw new Error("canvasToOlSource: missing canvas");
-  if (!Array.isArray(imageExtent) || imageExtent.length !== 4 ||
-      !imageExtent.every(Number.isFinite) ||
-      imageExtent[2] <= imageExtent[0] || imageExtent[3] <= imageExtent[1]) {
-    throw new Error("canvasToOlSource: invalid extent " + JSON.stringify(imageExtent));
-  }
-  return new ol.source.ImageCanvas({
-    projection: "EPSG:4326",
-    ratio: 1,
-    interpolate: false,
-    canvasFunction: function(requestedExtent, resolution, pixelRatio, size) {
-      const out = document.createElement("canvas");
-      out.width = Math.max(1, Math.ceil(size[0]));
-      out.height = Math.max(1, Math.ceil(size[1]));
-      const ctx = out.getContext("2d", { willReadFrequently: false });
-      ctx.clearRect(0, 0, out.width, out.height);
-      const dx = (imageExtent[0] - requestedExtent[0]) / resolution * pixelRatio;
-      const dy = (requestedExtent[3] - imageExtent[3]) / resolution * pixelRatio;
-      const dw = (imageExtent[2] - imageExtent[0]) / resolution * pixelRatio;
-      const dh = (imageExtent[3] - imageExtent[1]) / resolution * pixelRatio;
-      if ([dx, dy, dw, dh].every(Number.isFinite) && dw > 0 && dh > 0) {
-        ctx.drawImage(canvas, dx, dy, dw, dh);
-      }
-      return out;
-    }
-  });
-}
-
 function makeMobileLandCanvas(bathy) {
   const z = bathy.depth;
   if (!is2D(z)) return null;
@@ -4521,6 +4746,8 @@ function makeMobileLandCanvas(bathy) {
 
 async function ensureDesktopLandLayer(map) {
   if (!map) return;
+  const requestRevision = regionRevision;
+  const requestUrl = BATHY_JSON_URL;
   // Region-switch safety: if the cached landLayer was built for a different
   // bbox or bathy URL, tear it down so it gets rebuilt against the new region.
   const curBBox = BBOX.join(",");
@@ -4531,19 +4758,27 @@ async function ensureDesktopLandLayer(map) {
     desktopMapState.landLayerURL = null;
   }
   if (desktopMapState.landLayer) return;
-  const bathy = await loadBathymetryJson(BATHY_JSON_URL);
+  const bathy = await loadBathymetryJson(requestUrl);
+  if (requestRevision !== regionRevision || requestUrl !== BATHY_JSON_URL) return;
   const canvas = makeMobileLandCanvas(bathy);
   if (!canvas) return;
   const extent = frameExtentFromGrid({ xAxis: bathy.xAxis, yAxis: bathy.yAxis });
-  const source = canvasToOlSource(canvas, extent);
+  const source = new ol.source.ImageStatic({
+    url: canvas.toDataURL("image/png"),
+    imageExtent: extent,
+    projection: "EPSG:4326",
+    interpolate: false
+  });
   desktopMapState.landLayer = new ol.layer.Image({ source, zIndex: 20 });
   desktopMapState.landLayerBBox = curBBox;
-  desktopMapState.landLayerURL = BATHY_JSON_URL;
+  desktopMapState.landLayerURL = requestUrl;
   map.addLayer(desktopMapState.landLayer);
 }
 
 async function ensureDesktopPlaceLayer(map) {
-  if (!map || desktopMapState.placeLayer) return;
+  if (!map) return;
+  if (desktopMapState.placeLayer && desktopMapState.placeLayerRegion === REGION_ID) return;
+  if (desktopMapState.placeLayer) map.removeLayer(desktopMapState.placeLayer);
   const features = PLACE_LABELS
     .filter(placeInRegion)
     .map(p => new ol.Feature({
@@ -4560,6 +4795,7 @@ async function ensureDesktopPlaceLayer(map) {
   });
   if (desktopMapState.placeLayer) map.removeLayer(desktopMapState.placeLayer);
   desktopMapState.placeLayer = layer;
+  desktopMapState.placeLayerRegion = REGION_ID;
   map.addLayer(layer);
 }
 
@@ -4715,6 +4951,8 @@ function extractContourSegments(bd, level, sx, sy, extent) {
 
 async function ensureMobileLandLayer(map) {
   if (!map) return;
+  const requestRevision = regionRevision;
+  const requestUrl = BATHY_JSON_URL;
   // Region-switch safety: rebuild land canvas when BBOX or bathy URL changed
   // (Friday's gridCache.__bathy_json fix cleared the contour data cache but left
   // the OL ImageStatic land layer pinned to the previous region's beige canvas).
@@ -4726,14 +4964,20 @@ async function ensureMobileLandLayer(map) {
     mobileMapState.landLayerURL = null;
   }
   if (mobileMapState.landLayer) return;
-  const bathy = await loadBathymetryJson(BATHY_JSON_URL);
+  const bathy = await loadBathymetryJson(requestUrl);
+  if (requestRevision !== regionRevision || requestUrl !== BATHY_JSON_URL) return;
   const canvas = makeMobileLandCanvas(bathy);
   if (!canvas) return;
   const extent = frameExtentFromGrid({ xAxis: bathy.xAxis, yAxis: bathy.yAxis });
-  const source = canvasToOlSource(canvas, extent);
+  const source = new ol.source.ImageStatic({
+    url: canvas.toDataURL("image/png"),
+    imageExtent: extent,
+    projection: "EPSG:4326",
+    interpolate: false
+  });
   mobileMapState.landLayer = new ol.layer.Image({ source, zIndex: 20 });
   mobileMapState.landLayerBBox = curBBox;
-  mobileMapState.landLayerURL = BATHY_JSON_URL;
+  mobileMapState.landLayerURL = requestUrl;
   map.addLayer(mobileMapState.landLayer);
 }
 
@@ -4815,6 +5059,8 @@ function mobilePlaceStyle(feature) {
 }
 
 function ensureMobilePlaceLayer(map) {
+  if (mobileMapState.placeLayer && mobileMapState.placeLayerRegion === REGION_ID) return;
+  if (mobileMapState.placeLayer) map.removeLayer(mobileMapState.placeLayer);
   const features = PLACE_LABELS
     .filter(placeInRegion)
     .map(p => new ol.Feature({
@@ -4831,6 +5077,7 @@ function ensureMobilePlaceLayer(map) {
   });
   if (mobileMapState.placeLayer) map.removeLayer(mobileMapState.placeLayer);
   mobileMapState.placeLayer = layer;
+  mobileMapState.placeLayerRegion = REGION_ID;
   map.addLayer(layer);
 }
 
@@ -4848,8 +5095,8 @@ function ensureMobileCursorLayer(map) {
   mobileMapState.cursorFeature.setStyle(new ol.style.Style({
     image: new ol.style.Circle({
       radius: 3,
-      fill: new ol.style.Fill({ color: "rgba(255,255,255,0.45)" }),
-      stroke: new ol.style.Stroke({ color: "rgba(0,0,0,0.55)", width: 1 })
+      fill: new ol.style.Fill({ color: 'rgba(255,255,255,0.45)' }),
+      stroke: new ol.style.Stroke({ color: 'rgba(0,0,0,0.55)', width: 1 })
     })
   }));
   mobileMapState.cursorLayer = new ol.layer.Vector({
@@ -4898,14 +5145,14 @@ function renderMobileReadoutFromLonLat(lon, lat, pixel) {
   if (pixel && mobileMapState.bathyContourLayer && currentVar === "bathy") {
     const contourDepth = bathyContourDepthAtPixel(mobileMapState.map, pixel);
     if (contourDepth !== null) {
-      setReadout(`${base}, ${contourDepth}m (contour)`);
+      setReadout(`${base}, ${formatDepth(contourDepth)} (contour)`);
       return;
     }
   }
   if (pixel && mobileMapState.arrowLayer && currentVar === "uv") {
     const arrowSpeed = uvArrowSpeedAtPixel(mobileMapState.map, pixel);
     if (arrowSpeed !== null) {
-      setReadout(`${base}, ${arrowSpeed.toFixed(2)} m/s (arrow)`);
+      setReadout(`${base}, ${formatArrowSpeed(arrowSpeed)} (arrow)`);
       return;
     }
   }
@@ -4957,8 +5204,13 @@ function installMobileReadoutOnce(map) {
     updateMobileCursor(xy3857[0], xy3857[1]);
     renderMobileReadoutFromLonLat(xy4326[0], xy4326[1], ev.pixel);
   }
-  map.on("pointermove", handle);
-  map.on("click", handle);
+  // Root-cause fix for "marker disappears after zoom/click" on mobile:
+  // the previous code bound both `pointermove` (which fires continuously
+  // during pinch-zoom and pan) and `click` (unreliable on touch). Using
+  // OpenLayers' `singleclick` alone — touch-safe selection, fires only
+  // on a completed tap/click with no drag — keeps the marker pinned to
+  // the last selected point through any subsequent zoom or pan.
+  map.on("singleclick", handle);
 }
 
 function makeMobileRasterCanvas(varKey, gridInfo, dataObj) {
@@ -5048,6 +5300,7 @@ function initMobileMapIfNeeded() {
   if (!target || !window.ol) return null;
   if (mobileMapState.map) {
     attachMapToUnifiedTarget(mobileMapState.map);
+    installCaptainToolHandler(mobileMapState.map);
     return mobileMapState.map;
   }
   // View projection is EPSG:3857 (Web Mercator) to match the OpenFreeMap
@@ -5087,13 +5340,11 @@ function initMobileMapIfNeeded() {
     interactions: mobileInteractions
   });
   mobileMapState.map.on("moveend", () => syncViewStateFromOlMap(mobileMapState.map));
+  installCaptainToolHandler(mobileMapState.map);
   installOlGestureZoomFallback(mobileMapState.map, target);
-  // Keep mobile product rendering independent of the Mapbox-style vector
-  // basemap. Safari can throw "The string did not match the expected pattern"
-  // while ol-mapbox-style expands remote tile/sprite/glyph URLs, even though
-  // the product raster itself is valid. The native raster + land layers below
-  // are sufficient for mobile; the OFM basemap remains enabled for desktop
-  // and the combined dashboard.
+  // Add the OFM two-layer vector basemap so the mobile single-product pages
+  // match the combined dashboard's look.
+  applyOfmTwoLayerBasemap(mobileMapState.map);
   attachMapToUnifiedTarget(mobileMapState.map);
   return mobileMapState.map;
 }
@@ -5239,6 +5490,7 @@ async function renderCombinedMode() {
     try { window._combinedMap.dispose(); } catch (_) {}
     window._combinedMap.setTarget(undefined);
     window._combinedMap = null; // null BEFORE building new — so subsequent calls see a clean slate
+    window._combinedMapRef = null;
     window._combinedChlLayer = null;
     window._combinedSstLayer = null;
     window._combinedBathyLayer = null;
@@ -5337,20 +5589,36 @@ async function renderCombinedMode() {
     window._combinedChlData = data;
     window._combinedChlGrid = grid;
     const canvas = makeMobileRasterCanvas("chl", grid, data);
-    const extent = frameExtentFromGrid(grid);
-    let src;
+    let url;
     try {
-      // canvasToOlSource uses ol.source.ImageCanvas which avoids the
-      // iOS Safari "The string did not match the expected pattern" error
-      // that toBlob/createObjectURL/ImageStatic would throw here.
-      src = canvasToOlSource(canvas, extent);
+      // toBlob + createObjectURL avoids the iOS Safari 'The string did not
+      // match the expected pattern' error that toDataURL throws for some
+      // large/sparse-canvas combinations (specifically S3 OLCI sparse
+      // frames on the captain's mobile dashboard).
+      url = await new Promise((resolve, reject) => {
+        canvas.toBlob((blob) => {
+          if (blob) resolve(URL.createObjectURL(blob));
+          else reject(new Error("canvas.toBlob returned null"));
+        }, "image/png");
+      });
     } catch (e) {
-      console.error("[OL chl] canvasToOlSource failed", frame?.id || frame?.json_path, e);
+      console.error("[OL chl] canvas.toBlob failed", frame?.id || frame?.json_path, e);
       return;
     }
-    const layer = new ol.layer.Image({ source: src, zIndex: 10 });
-    map.addLayer(layer);
-    window._combinedChlLayer = layer;
+    if (url) {
+      const extent = frameExtentFromGrid(grid);
+      let src;
+      try {
+        src = new ol.source.ImageStatic({ url, imageExtent: extent, projection: "EPSG:4326", interpolate: false });
+      } catch (e) {
+        console.error("[OL chl] ImageStatic source failed, url:", url?.slice(0, 30), frame?.id || frame?.json_path, e);
+        try { URL.revokeObjectURL(url); } catch (_) {}
+        return;
+      }
+      const layer = new ol.layer.Image({ source: src, zIndex: 10 });
+      map.addLayer(layer);
+      window._combinedChlLayer = layer;
+    }
     const chlT = epochMsForFrame("chl", frame);
     window._combinedChlScanTime = chlT;
     if (chlScanTimeDiv) chlScanTimeDiv.textContent = chlT
@@ -5419,14 +5687,17 @@ async function renderCombinedMode() {
         }
         const renderData = { ...base.data, z: composite, sst: composite, data: composite, nx, ny, bbox: base.data?.bbox };
         const canvas = makeMobileRasterCanvas("sst", base.grid, renderData);
-        const extent = frameExtentFromGrid(base.grid);
-        const src = canvasToOlSource(canvas, extent);
-        const layer = new ol.layer.Image({ source: src, zIndex: 9 });
-        layer.setVisible(false);
-        map.addLayer(layer);
-        window._combinedSstLayer = layer;
-        window._combinedSstData = renderData;
-        window._combinedSstGrid = base.grid;
+        const url = canvas.toDataURL("image/png");
+        if (url && url.startsWith("data:image/png")) {
+          const extent = frameExtentFromGrid(base.grid);
+          const src = new ol.source.ImageStatic({ url, imageExtent: extent, projection: "EPSG:4326", interpolate: false });
+          const layer = new ol.layer.Image({ source: src, zIndex: 9 });
+          layer.setVisible(false);
+          map.addLayer(layer);
+          window._combinedSstLayer = layer;
+          window._combinedSstData = renderData;
+          window._combinedSstGrid = base.grid;
+        }
         const epochTimes = compositeFrames.map(item => epochMsForFrame("sst", item.frame)).filter(t => t);
         const meanTime = epochTimes.length ? epochTimes.reduce((a, b) => a + b, 0) / epochTimes.length : null;
         if (sstScanTimeDiv) sstScanTimeDiv.textContent = meanTime
@@ -5899,15 +6170,37 @@ async function buildChlCompositeLayer(map, hoursOrOpts) {
   }
 
   const canvas = makeMobileRasterCanvas("chl", base.grid, renderData);
+  let url;
+  try {
+    // toBlob + createObjectURL avoids the iOS Safari 'The string did not
+    // match the expected pattern' error that toDataURL throws for some
+    // large/sparse-canvas combinations. Return a Promise<{layer, ...}>
+    // wrapping the blob URL.
+    url = await new Promise((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        if (blob) resolve(URL.createObjectURL(blob));
+        else reject(new Error("canvas.toBlob returned null"));
+      }, "image/png");
+    });
+  } catch (e) {
+    console.error("[OL composite] canvas.toBlob failed", e);
+    return {};
+  }
+  if (!url) return {};
   let layer;
   try {
-    // canvasToOlSource uses ol.source.ImageCanvas — Safari-safe, no URL parsing.
     layer = new ol.layer.Image({
-      source: canvasToOlSource(canvas, frameExtentFromGrid(base.grid)),
+      source: new ol.source.ImageStatic({
+        url,
+        imageExtent: frameExtentFromGrid(base.grid),
+        projection: "EPSG:4326",
+        interpolate: false
+      }),
       zIndex: 10
     });
   } catch (e) {
-    console.error("[OL composite] canvasToOlSource failed", e);
+    console.error("[OL composite] ImageStatic source failed, url:", url?.slice(0, 30), e);
+    try { URL.revokeObjectURL(url); } catch (_) {}
     return {};
   }
   const epochTimes = selected.map(item => epochMsForFrame("chl", item.frame)).filter(t => t);
@@ -6296,12 +6589,15 @@ async function combinedChlRenderSelected() {
       if (!is2D(z)) { if (chlScanTimeDiv) chlScanTimeDiv.textContent = "Frame has no 2D data"; return; }
       const renderData = { ...data, z, chl: z, data: z, nx: z[0]?.length || 0, ny: z.length, bbox: data?.bbox };
       const canvas = makeMobileRasterCanvas("chl", grid, renderData);
-      if (s.opSeq !== mySeq) return;
+      const url = await new Promise((resolve, reject) => {
+        canvas.toBlob((blob) => blob ? resolve(URL.createObjectURL(blob)) : reject(new Error("toBlob null")), "image/png");
+      });
+      if (s.opSeq !== mySeq) { try { URL.revokeObjectURL(url); } catch (_) {} return; }
       if (window._combinedChlLayer && window._combinedMap) {
         try { window._combinedMap.removeLayer(window._combinedChlLayer); } catch (_) {}
       }
       const layer = new ol.layer.Image({
-        source: canvasToOlSource(canvas, frameExtentFromGrid(grid)),
+        source: new ol.source.ImageStatic({ url, imageExtent: frameExtentFromGrid(grid), projection: "EPSG:4326", interpolate: false }),
         zIndex: 10
       });
       const chk = document.getElementById("chk-combined-chl");
@@ -6583,7 +6879,12 @@ function buildThermalHoursComposite(map, hours) {
   }
 
   const extent = [west, north - ny * cellDeg, west + nx * cellDeg, north];
-  const source = canvasToOlSource(canvas, extent);
+  const source = new ol.source.ImageStatic({
+    url: canvas.toDataURL("image/png"),
+    imageExtent: extent,
+    projection: "EPSG:4326",
+    interpolate: false
+  });
   const densityLayer = new ol.layer.Image({ source, zIndex: 30, opacity: 0.90 });
 
   console.log("[thermal] frontDensityCells=" + nonzero + " hours=" + hours + " frames=" + frontItems.length);
@@ -6828,43 +7129,7 @@ async function buildThermalFrontDensityCanvas(frontData, grid) {
   return canvas;
 }
 
-async function renderMobilePlotlyFrame(frameMeta) {
-  let dataObj, gridInfo;
-  if (currentVar === "bathy") {
-    dataObj = await loadBathymetryJson(BATHY_JSON_URL);
-    gridInfo = { xAxis: dataObj.xAxis, yAxis: dataObj.yAxis, nx: dataObj.xAxis.length, ny: dataObj.yAxis.length };
-  } else {
-    dataObj = await fetchFrameData(currentVar, frameMeta);
-    gridInfo = await loadGridForVar(currentVar, dataObj);
-  }
-  const figure = currentVar === "bathy"
-    ? buildBathy(dataObj)
-    : buildForVar(currentVar, gridInfo, dataObj);
-  detachInactiveMapTargets(null);
-  const mapTarget = document.getElementById("map");
-  if (mapTarget) mapTarget.style.display = "none";
-  plotDiv.style.display = "block";
-  mobileMapState.currentGridInfo = gridInfo;
-  mobileMapState.currentDataObj = dataObj;
-  await Plotly.react(plotDiv, figure.data, figure.layout, { responsive: true, displayModeBar: false });
-  setupReadoutHandlersOnce();
-  await renderFooterColorbarToDiv(document.getElementById("hamburger-cbar"), currentVar);
-  updateSliderUI();
-  return true;
-}
-
 async function renderMobileFrame(frameMeta) {
-  // Mobile Safari has continued to reject an internal OpenLayers URL during
-  // product-page rendering even after raster and basemap URL sources were
-  // removed. The product pages already have a tested Plotly fallback; use it
-  // as the mobile product renderer until the OL path can be isolated with a
-  // Safari console. The combined dashboard has its own renderer and is not
-  // affected by this guard.
-  if (isMobileMapMode()) {
-    console.info("[OL mobile] disabled for product pages; using Plotly renderer");
-    document.body.classList.remove("mobile-map-ready");
-    return renderMobilePlotlyFrame(frameMeta);
-  }
   if (currentVar === "chl_front" || currentVar === "sst_front" || currentVar === "thermal_fronts" || currentVar === "combined") {
     document.body.classList.remove("mobile-map-ready");
     detachInactiveMapTargets(null);
@@ -6895,26 +7160,40 @@ async function renderMobileFrame(frameMeta) {
   mobileMapState.currentGridInfo = gridInfo;
   mobileMapState.currentDataObj = dataObj;
 
-  // Defensive: currentVar can flip to a multi-layer value (e.g. 'combined')
-  // during the async fetch above, AFTER the early-return at the top of
-  // this function ran. The mobile raster canvas only handles single-variable
-  // 2-D rasters, so bail out cleanly for any non-raster view.
-  if (currentVar !== "chl" && currentVar !== "sst" && currentVar !== "uv" && currentVar !== "bathy") {
-    console.info("[OL mobile] renderMobileFrame: skipping — currentVar=" + currentVar + " has no 2-D mobile raster");
-    document.body.classList.remove("mobile-map-ready");
-    return false;
-  }
-
   const canvas = makeMobileRasterCanvas(currentVar, gridInfo, dataObj);
+  // toBlob + createObjectURL: try first; fall back to toDataURL on iOS Safari
+  // (the 2026-05 note saying 'data URLs are more reliable' was for the
+  // static basemap raster; the dynamic chl/sst canvases are different).
+  let url;
+  try {
+    url = await new Promise((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        if (blob) resolve(URL.createObjectURL(blob));
+        else reject(new Error("canvas.toBlob returned null"));
+      }, "image/png");
+    });
+  } catch (e) {
+    console.error("[OL mobile] toBlob failed, falling back to toDataURL", e);
+    try { url = canvas.toDataURL("image/png"); } catch (e2) {
+      console.error("[OL mobile] toDataURL also failed", e2);
+      throw new Error("Could not encode mobile raster (both toBlob and toDataURL failed)");
+    }
+  }
+  if (!url) throw new Error("Could not encode mobile raster (empty url)");
   const extent = frameExtentFromGrid(gridInfo);
   let source;
   try {
-    // Skip toBlob/toDataURL/ImageStatic entirely — they can throw on iOS Safari.
-    // canvasToOlSource uses ol.source.ImageCanvas which never round-trips
-    // through the URL parser.
-    source = canvasToOlSource(canvas, extent);
+    source = new ol.source.ImageStatic({
+      url,
+      imageExtent: extent,
+      projection: "EPSG:4326",
+      interpolate: false
+    });
   } catch (e) {
-    console.error("[OL mobile] canvasToOlSource failed, extent:", extent, e);
+    console.error("[OL mobile] new ol.source.ImageStatic failed, url:", url?.slice(0, 40), "len:", url?.length, "extent:", extent, e);
+    if (url && url.startsWith("blob:")) {
+      try { URL.revokeObjectURL(url); } catch (_) {}
+    }
     throw e;
   }
   source.on("imageloaderror", () => {
@@ -6923,6 +7202,10 @@ async function renderMobileFrame(frameMeta) {
     document.body.classList.remove("mobile-map-ready");
     showFrame();
   });
+  if (mobileMapState.imageUrl && mobileMapState.imageUrl.startsWith("blob:")) {
+    URL.revokeObjectURL(mobileMapState.imageUrl);
+  }
+  mobileMapState.imageUrl = url;
   if (mobileMapState.imageLayer) {
     mobileMapState.imageLayer.setSource(source);
   } else {
@@ -7704,18 +7987,21 @@ function thermalFrontHoverTip(coord, pixel) {
 
 function thermalEnsureCursorLayer(map) {
   if (!map || thermalFrontState.cursorLayer) return;
+  // The thermal map view is EPSG:3857. Keep the cursor geometry in the
+  // map projection, just like the Captain Dashboard cursor and all other
+  // manually-created vector features in this file.
   thermalFrontState.cursorFeature = new ol.Feature({
     geometry: new ol.geom.Point(toMapProjection([(BBOX[0] + BBOX[2]) / 2, (BBOX[1] + BBOX[3]) / 2]))
   });
   thermalFrontState.cursorFeature.setStyle(new ol.style.Style({
     image: new ol.style.Circle({
       radius: 3,
-      fill: new ol.style.Fill({ color: "rgba(255,255,255,0.45)" }),
-      stroke: new ol.style.Stroke({ color: "rgba(0,0,0,0.55)", width: 1 })
+      fill: new ol.style.Fill({ color: 'rgba(255,255,255,0.45)' }),
+      stroke: new ol.style.Stroke({ color: 'rgba(0,0,0,0.55)', width: 1 })
     })
   }));
   thermalFrontState.cursorLayer = new ol.layer.Vector({
-    source: new ol.source.Vector({ features: [thermalFrontState.cursorFeature], projection: "EPSG:4326" }),
+    source: new ol.source.Vector({ features: [thermalFrontState.cursorFeature] }),
     zIndex: 60
   });
   map.addLayer(thermalFrontState.cursorLayer);
@@ -7822,7 +8108,9 @@ function thermalRenderReadout(coord, pixel) {
       }
     }
   }
-  if (thermalFrontState.cursorFeature) thermalFrontState.cursorFeature.getGeometry().setCoordinates(cursorCoord);
+  if (thermalFrontState.cursorFeature) {
+    thermalFrontState.cursorFeature.getGeometry().setCoordinates(toMapProjection(cursorCoord));
+  }
   const base = formatReadoutCoords(readoutCoord[0], readoutCoord[1]);
   if (Number.isFinite(gradient)) {
     const gradC = gradient * (tempUnit === "F" ? 9 / 5 : 1);
@@ -7863,15 +8151,13 @@ async function thermalInitMap() {
       const xy4326 = ol.proj.transform(ev.coordinate, "EPSG:3857", "EPSG:4326");
       return { coord: xy4326, pixel: ev.pixel };
     };
-    map.on("pointermove", ev => {
-      if (currentVar === "thermal_fronts") {
-        const x = to4326(ev);
-        if (!x) return;
-        thermalRenderReadout(x.coord, x.pixel);
-        thermalFrontHoverTip(x.coord, x.pixel);
-      }
-    });
-    map.on("click", ev => {
+    // Same root-cause fix as installMobileReadoutOnce: bind to `singleclick`
+    // only. `pointermove` fires continuously during pinch-zoom and pan on
+    // mobile, which moves the cursor off the selected front point; `click`
+    // is unreliable on touch. `singleclick` fires only on a completed
+    // tap/click with no drag, pinning the marker and readout to the
+    // selected front through any subsequent zoom or pan.
+    map.on("singleclick", ev => {
       if (currentVar === "thermal_fronts") {
         const x = to4326(ev);
         if (!x) return;
@@ -8285,7 +8571,7 @@ function thermalUpdateLegendAndStatus() {
         statsText += ` | mean ΔSST: ${displaySst.toFixed(2)}${sstLabel}`;
       }
     }
-    if (toolbarStatus) toolbarStatus.textContent = `${thermalFrontState.frameIdx + 1}/${thermalFrontState.dailyFrames.length} daily frames - ${dayItem?.date || ""}${statsText}`;
+    if (toolbarStatus) toolbarStatus.textContent = "";
     if (legendEl) {
       legendEl.style.display = "";
       const allDays = !!thermalAllDayCb?.checked;
@@ -8298,7 +8584,7 @@ function thermalUpdateLegendAndStatus() {
     }
   } else {
     const total = thermalAllDayCb?.checked ? list.length : 1;
-    if (toolbarStatus) toolbarStatus.textContent = `${thermalFrontState.frameIdx + 1}/${list.length} hourly frames - ${thermalFrontState.selectedDate || ""} - showing ${total}`;
+    if (toolbarStatus) toolbarStatus.textContent = "";
     const displayedCount = thermalDisplayedFrontItems().length;
     if (legendEl) {
       legendEl.style.display = displayedCount > 1 ? "" : "none";
@@ -8350,9 +8636,12 @@ async function thermalLoadData() {
   if (thermalFrontState.loading) return;
   if (thermalFrontState.initialized && thermalFrontState.loadedRegion === REGION_ID) return;
   thermalFrontState.loading = true;
+  const requestRevision = regionRevision;
+  const requestRegion = REGION_ID;
   if (toolbarStatus) toolbarStatus.textContent = "Loading thermal fronts...";
   try {
     const idx = await loadIndex();
+    if (requestRevision !== regionRevision || requestRegion !== REGION_ID) return;
     const fbv = idx.frames || idx.framesByVar || idx.frames_by_var || {};
     const sourceFrames = (fbv.thermal_fronts && fbv.thermal_fronts.length) ? fbv.thermal_fronts : (fbv.sst_front || []);
     thermalFrontState.frames = sourceFrames
@@ -8365,6 +8654,7 @@ async function thermalLoadData() {
       const res = await fetch(framePathOf(f) + "?t=" + Date.now());
       return { meta: f, t: f.t, data: res.ok ? await res.json() : { features: [] } };
     }));
+    if (requestRevision !== regionRevision || requestRegion !== REGION_ID) return;
     thermalFrontState.frameData = thermalFrontState.frameData.filter(item => Array.isArray(item.data?.features) && item.data.features.length > 0);
     thermalBuildDailyFrames();
     const requestedMs = requestedTimeFromParams();
@@ -8379,7 +8669,7 @@ async function thermalLoadData() {
     thermalFrontState.loadedRegion = REGION_ID;
     window.__thermalFrontsState = thermalFrontState;
   } finally {
-    thermalFrontState.loading = false;
+    if (requestRevision === regionRevision) thermalFrontState.loading = false;
   }
 }
 
@@ -8393,31 +8683,15 @@ async function renderThermalFrontsNative() {
     if (toolbarStatus) toolbarStatus.textContent = "No thermal-front frames available for this region.";
     return;
   }
-  const requestedViewport = viewportFromParams();
-  if (!map.__thermalInitialFitDone) {
-    map.updateSize();
-    // v4.16 switched the thermal-fronts map view to EPSG:3857 (Web Mercator)
-    // to match the OFM vector tile schema. The viewport extent and BBOX are
-    // still in EPSG:4326 (lat/lon) by viewer convention. OL's view.fit() does
-    // NOT auto-detect projection — passing a 4326 extent to a 3857 view
-    // causes the map to fit to a tiny region near (0, 0) at the equator,
-    // which leaves the entire US East Coast off-screen and produces
-    // near-zero readout values when the user moves the cursor. Transform
-    // the extent to 3857 before fitting.
-    const extent4326 = requestedViewport
-      ? [requestedViewport.xRange[0], requestedViewport.yRange[0], requestedViewport.xRange[1], requestedViewport.yRange[1]]
-      : BBOX.map(Number);
-    const viewProjCode = map.getView().getProjection().getCode();
-    const extentForFit = viewProjCode === "EPSG:4326"
-      ? extent4326
-      : ol.proj.transformExtent(extent4326, "EPSG:4326", viewProjCode);
-    map.getView().fit(extentForFit, {
-      size: map.getSize(),
-      padding: [58, 0, 0, 0],
-      nearest: true
-    });
-    map.__thermalInitialFitDone = true;
-  }
+  // Preserve the live viewport when entering thermal fronts from another
+  // product layer. URL viewport parameters still take precedence on a fresh
+  // page load; otherwise use the range captured by setCurrentVar().
+  // Thermal fronts shares the desktop map with product layers. Restore the
+  // exact transition extent after the target is measurable, using the same
+  // fit contract as every other layer. No thermal-only padding or one-time
+  // fit is allowed to change the geographic FOV on re-entry.
+  map.updateSize();
+  applyViewStateToOlMap(map, null, pendingViewRange);
   const list = thermalActiveFrameList();
   thermalFrontState.frameIdx = Math.max(0, Math.min(thermalFrontState.frameIdx, Math.max(0, list.length - 1)));
   thermalRenderFrontLayer();
@@ -8473,7 +8747,7 @@ async function setCurrentVar(v, keepTime = true, keepRange = true) {
   const prevT = (keepTime && prevFrame) ? epochMsForFrame(prevVar, prevFrame) : null;
 
   // Save the live OL/Plotly viewport before switching products.
-  const liveRange = keepRange ? currentViewportRanges() : null;
+  const liveRange = keepRange ? captureCurrentViewState() : null;
   const savedRange = liveRange
     ? { x: liveRange.xRange, y: liveRange.yRange }
     : ((keepRange && viewState.hasRange) ? { x: viewState.xRange, y: viewState.yRange } : null);
@@ -8485,6 +8759,7 @@ async function setCurrentVar(v, keepTime = true, keepRange = true) {
       try { window._combinedMap.dispose(); } catch (_) {}
       window._combinedMap.setTarget(undefined);
       window._combinedMap = null;
+      window._combinedMapRef = null;
     }
   }
 
@@ -8524,6 +8799,9 @@ async function setCurrentVar(v, keepTime = true, keepRange = true) {
     viewState.xRange = savedRange.x;
     viewState.yRange = savedRange.y;
     viewState.hasRange = true;
+    pendingViewRange = { xRange: [...savedRange.x], yRange: [...savedRange.y] };
+  } else {
+    pendingViewRange = null;
   }
 
   syncRangeInputsToVar();
@@ -8792,7 +9070,7 @@ async function loadGridForVar(v, dataObj = null) {
   const gridName = VAR_TO_GRID[v];
 
   try {
-    const res = await fetch(`data/${REGION_ID}/grids/${gridName}`);
+    const res = await fetch(`https://data.fishedge.live/${REGION_ID}/grids/${gridName}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const grid = await res.json();
 
@@ -9201,7 +9479,7 @@ async function loadCaptainBriefing() {
   if (!panel || !status || !plansDiv || !healthDiv || !fullDiv) return;
 
   try {
-    const res = await fetch(`data/${REGION_ID}/briefing/latest.json?t=${Date.now()}`);
+    const res = await fetch(`https://data.fishedge.live/${REGION_ID}/briefing/latest.json?t=${Date.now()}`);
     if (!res.ok) throw new Error(`No briefing artifact for ${REGION_ID}`);
     const briefing = await res.json();
     const when = briefing.generated_at ? new Date(briefing.generated_at).toLocaleString() : "unknown";
@@ -9716,11 +9994,7 @@ function showSaveMenu() {
   if (!captainAddTool.points.length) return;
   const menu = document.createElement('div');
   menu.id = 'captain-save-menu';
-  const saveBtn = document.getElementById('captain-save-btn');
-  const btnRect = saveBtn.getBoundingClientRect();
-  const menuWidth = 160;
-  const leftPos = Math.max(8, btnRect.right - menuWidth);
-  menu.style.cssText = `position:fixed;left:${leftPos}px;top:${btnRect.bottom + 4}px;z-index:1155;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:8px;width:${menuWidth}px;display:flex;flex-direction:column;gap:2px;box-shadow:0 4px 16px rgba(0,0,0,0.4);`;
+  menu.style.cssText = 'position:fixed;left:8px;top:80px;z-index:1155;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:8px;width:160px;display:flex;flex-direction:column;gap:2px;box-shadow:0 4px 16px rgba(0,0,0,0.4);';
   const formats = [
     { label: 'GPX (Chartplotter)', ext: 'gpx', fn: () => waypointsToGPX(captainAddTool.points) },
     { label: 'CSV (Spreadsheet)', ext: 'csv', fn: () => waypointsToCSV(captainAddTool.points) },
@@ -9774,7 +10048,7 @@ function applyLoadedWaypoints(pts) {
   const map = window._combinedMapRef;
   if (map) renderPtsLayer(map);
   updatePtsPanel();
-  document.getElementById('captain-save-btn')?.style.setProperty('display', 'inline-block');
+  document.getElementById('captain-save-btn')?.style.setProperty('display', 'flex');
 }
 
 // ── Distance tool ────────────────────────────────────────────────────────
@@ -9785,6 +10059,8 @@ function activateDistTool(map) {
   captainDistTool.mapRef = map;
   captainDistTool.points = [];
   document.getElementById('captain-dist-tool')?.classList.add('active');
+  const button = document.getElementById('captain-dist-tool');
+  if (button) button.title = 'Exit distance measurement (or press Escape)';
   document.getElementById('captain-dist-panel')?.classList.add('visible');
   updateDistPanel();
   map.getTargetElement().style.cursor = 'crosshair';
@@ -9795,6 +10071,8 @@ function deactivateDistTool() {
   captainDistTool.active = false;
   clearDistLayer();
   document.getElementById('captain-dist-tool')?.classList.remove('active');
+  const button = document.getElementById('captain-dist-tool');
+  if (button) button.title = 'Measure distance (M)';
   document.getElementById('captain-dist-panel')?.classList.remove('visible');
   const map = captainDistTool.mapRef;
   if (map) map.getTargetElement().style.cursor = 'crosshair';
@@ -9964,7 +10242,7 @@ function addWaypoint(lon, lat, map) {
   captainAddTool.points.push({ lon, lat, chl, sst, freshness, ts: Date.now() });
   renderPtsLayer(map);
   updatePtsPanel();
-  document.getElementById('captain-save-btn')?.style.setProperty('display', 'inline-block');
+  document.getElementById('captain-save-btn')?.style.setProperty('display', 'flex');
 }
 
 window.removeWaypoint = function(idx) {
@@ -9979,9 +10257,30 @@ window.removeWaypoint = function(idx) {
 // ── Map click handler ───────────────────────────────────────────────────
 
 let _captainMapClickHandler = null;
+let _captainMapClickMap = null;
+
+function activeCaptainToolMap() {
+  if (typeof currentVar !== 'undefined' && currentVar === 'combined') {
+    return window._combinedMap && window._combinedMap.getTargetElement?.()
+      ? window._combinedMap
+      : null;
+  }
+  if (typeof currentVar !== 'undefined' && currentVar === 'thermal_fronts') {
+    return (typeof thermalFrontState !== 'undefined' && thermalFrontState.map) || null;
+  }
+  if (typeof IS_TOUCH !== 'undefined' && IS_TOUCH) {
+    return (typeof mobileMapState !== 'undefined' && mobileMapState.map) || null;
+  }
+  return (typeof desktopMapState !== 'undefined' && desktopMapState.map) || null;
+}
 
 function installCaptainToolHandler(map) {
-  if (_captainMapClickHandler) { map.un('click', _captainMapClickHandler); _captainMapClickHandler = null; }
+  if (!map) return;
+  if (_captainMapClickHandler && _captainMapClickMap) {
+    _captainMapClickMap.un('click', _captainMapClickHandler);
+  }
+  _captainMapClickHandler = null;
+  _captainMapClickMap = map;
   _captainMapClickHandler = (ev) => {
     if (!ev.coordinate) return;
     // Combined map is EPSG:3857; transform to 4326 before treating as lon/lat.
@@ -10068,14 +10367,19 @@ function combinedFrontClickInfo(map, coord, pixel) {
 // ── Button wiring ───────────────────────────────────────────────────────
 
 document.getElementById('captain-dist-tool')?.addEventListener('click', () => {
-  const map = window._combinedMapRef;
+  const map = activeCaptainToolMap();
   if (!map) return;
   if (captainDistTool.active) { deactivateDistTool(); }
   else { activateDistTool(map); }
 });
 
+document.getElementById('captain-dist-exit')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  deactivateDistTool();
+});
+
 document.getElementById('captain-add-tool')?.addEventListener('click', () => {
-  const map = window._combinedMapRef;
+  const map = activeCaptainToolMap();
   if (!map) return;
   toggleAddTool(map);
 });
@@ -10085,6 +10389,11 @@ document.getElementById('captain-save-btn')?.addEventListener('click', (e) => {
   const menu = document.getElementById('captain-save-menu');
   if (menu) { closeSaveMenu(); return; }
   showSaveMenu();
+});
+
+document.getElementById('captain-save-dismiss')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  document.getElementById('captain-save-btn')?.style.setProperty('display', 'none');
 });
 
 document.getElementById('captain-fs-btn')?.addEventListener('click', () => {
@@ -10126,8 +10435,13 @@ document.addEventListener('webkitfullscreenchange', updateFsIcon);
 
 document.addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-  const map = window._combinedMapRef;
+  const map = activeCaptainToolMap();
   if (!map) return;
+  if (e.key === 'Escape') {
+    if (captainDistTool.active) deactivateDistTool();
+    if (captainAddTool.active) toggleAddTool(map);
+    return;
+  }
   if (e.key === 'm' || e.key === 'M') {
     if (captainDistTool.active) deactivateDistTool();
     else activateDistTool(map);
