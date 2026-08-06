@@ -31,7 +31,7 @@
   window.ol.Map = TrackedMap;
 })();
 </script>
-<script src="fish-locate.js?v=20260807-domready"></script>
+<script src="/fish-locate.js?v=20260807-domready"></script>
   <script src="https://cdn.jsdelivr.net/npm/ol-mapbox-style@13.4.1/dist/olms.js"></script>
   <script src="drawMobileUvArrowsLite.js?v=20260517-arrows2"></script>
   <!-- Auth + Analytics -->
@@ -654,6 +654,21 @@ body.combined-mode #combined-menu-btn{
     }
     .captain-tool-btn:hover{ background:rgba(255,255,255,0.08); border-color:rgba(255,255,255,0.2); }
     .captain-tool-btn.active{ background:rgba(29,79,145,0.7); border-color:#4d7dff; }
+    #captain-fs-btn{
+      width:30px; height:30px;
+      min-width:30px;
+      background:transparent;
+      border:1px solid transparent;
+      border-radius:6px;
+      color:var(--fg);
+      cursor:pointer;
+      display:flex; align-items:center; justify-content:center;
+      padding:0;
+      transition:background 0.15s, border-color 0.15s;
+      font-size:16px;
+      line-height:1;
+    }
+    #captain-fs-btn:hover{ background:rgba(255,255,255,0.08); border-color:rgba(255,255,255,0.2); }
     #captain-save-btn{
       display:none;
       background:#1d4f91;
@@ -1173,6 +1188,11 @@ body.combined-mode #combined-menu-btn{
   <div id="thermal-hover-tip"></div>
   <div id="combined-overlay"></div>
   <div id="captain-tools" role="toolbar" aria-label="Captain tools">
+    <button id="captain-fs-btn" class="captain-tool-btn" title="Fullscreen">
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="2" y="2" width="14" height="14" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linejoin="round"/>
+      </svg>
+    </button>
     <button id="captain-dist-tool" class="captain-tool-btn" title="Measure distance (M)" data-tool="dist">
       <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
         <line x1="3" y1="10" x2="17" y2="10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
@@ -1190,14 +1210,6 @@ body.combined-mode #combined-menu-btn{
         <line x1="11" y1="16" x2="11" y2="20" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
         <line x1="2" y1="11" x2="6" y2="11" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
         <line x1="16" y1="11" x2="20" y2="11" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-      </svg>
-    </button>
-    <button id="captain-locate-btn-combined" type="button" class="captain-tool-btn" title="Locate me" aria-label="Locate me" data-tool="locate">
-      <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="11" cy="11" r="9" stroke="currentColor" stroke-width="1.6" fill="none"/>
-        <path d="M11 3 L13.5 11 L11 9.5 L8.5 11 Z" fill="currentColor"/>
-        <path d="M11 19 L13.5 11 L11 12.5 L8.5 11 Z" fill="currentColor" opacity="0.35"/>
-        <circle cx="11" cy="11" r="1.2" fill="currentColor"/>
       </svg>
     </button>
   </div>
@@ -2158,30 +2170,6 @@ function installOlGestureZoomFallback(map, target) {
   target.addEventListener("touchcancel", clearTouchPinch, { passive: false });
 }
 
-function canvasToOlUrl(canvas) {
-  return new Promise((resolve, reject) => {
-    let settled = false;
-    const fail = (err) => { if (!settled) { settled = true; reject(err); } };
-    const useDataUrl = () => {
-      try {
-        const dataUrl = canvas.toDataURL("image/png");
-        if (!dataUrl || !dataUrl.startsWith("data:image/png")) throw new Error("invalid canvas data URL");
-        if (!settled) { settled = true; resolve(dataUrl); }
-      } catch (err) { fail(err); }
-    };
-    try {
-      canvas.toBlob((blob) => {
-        if (!blob) return useDataUrl();
-        try {
-          const blobUrl = URL.createObjectURL(blob);
-          if (!blobUrl) throw new Error("empty canvas blob URL");
-          if (!settled) { settled = true; resolve(blobUrl); }
-        } catch (_) { useDataUrl(); }
-      }, "image/png");
-    } catch (_) { useDataUrl(); }
-  });
-}
-
 async function initDesktopMapIfNeeded() {
   document.body.classList.remove("mobile-map-ready");
   if (currentVar === "thermal_fronts") {
@@ -2407,35 +2395,18 @@ async function renderDesktopFrame(frameMeta) {
   desktopMapState.currentGridInfo = gridInfo;
   desktopMapState.currentDataObj = dataObj;
 
-  // Build raster canvas
+  // Build raster canvas. Skip toBlob/createObjectURL/ImageStatic — those
+  // throw "The string did not match the expected pattern" on iOS Safari for
+  // large sparse rasters. canvasToOlSource uses ol.source.ImageCanvas which
+  // never parses a URL string.
   const canvas = makeMobileRasterCanvas(currentVar, gridInfo, dataObj);
-  let url;
-  try {
-    // Safari can reject either canvas.toBlob/createObjectURL or a data URL
-    // for large sparse rasters. Try blob URL first, then FileReader data URL.
-    url = await canvasToOlUrl(canvas);
-  } catch (e) {
-    console.error("[OL] canvas.toBlob failed for", currentVar, frameMeta?.id || frameMeta?.json_path, e);
-    throw e;
-  }
-  console.log("[OL] canvas encoded via toBlob, url:", url?.slice(0, 30));
-  if (!url) throw new Error("Could not encode desktop raster");
-
   const extent = frameExtentFromGrid(gridInfo);
-  if (!extent.every(Number.isFinite) || extent[0] >= extent[2] || extent[1] >= extent[3]) {
-    throw new Error("Invalid CHL raster extent: " + JSON.stringify(extent));
-  }
   console.log("[OL] extent:", extent);
   let source;
   try {
-    source = new ol.source.ImageStatic({
-      url,
-      imageExtent: extent,
-      projection: "EPSG:4326",
-      interpolate: false
-    });
+    source = canvasToOlSource(canvas, extent);
   } catch (e) {
-    console.error("[OL] new ol.source.ImageStatic failed for", currentVar, frameMeta?.id || frameMeta?.json_path, "url:", url?.slice(0, 30), e);
+    console.error("[OL] canvasToOlSource failed for", currentVar, frameMeta?.id || frameMeta?.json_path, "extent:", extent, e);
     throw e;
   }
   source.on("imageloaderror", () => {
@@ -2851,15 +2822,8 @@ if (sstHoursSelect) {
     }
     const renderData = { ...base.data, z: composite, sst: composite, data: composite, nx, ny, bbox: base.data?.bbox };
     const canvas = makeMobileRasterCanvas("sst", base.grid, renderData);
-    const url = canvas.toDataURL("image/png");
-    if (!url || !url.startsWith("data:image/png")) { if (sstScanTimeDiv) sstScanTimeDiv.textContent = "Render failed"; return; }
-    const layer = new ol.layer.Image({
-      source: new ol.source.ImageStatic({
-        url, imageExtent: frameExtentFromGrid(base.grid),
-        projection: "EPSG:4326", interpolate: false
-      }),
-      zIndex: 9
-    });
+    const source = canvasToOlSource(canvas, frameExtentFromGrid(base.grid));
+    const layer = new ol.layer.Image({ source, zIndex: 9 });
     const chk = document.getElementById("chk-combined-sst");
     layer.setVisible(chk ? chk.checked : false);
     window._combinedMap.addLayer(layer);
@@ -4481,6 +4445,46 @@ function drawLinePixels(imgData, x0, y0, x1, y1, color, imgWidth, lineWidth) {
   }
 }
 
+// canvasToOlSource(canvas, imageExtent): wrap a canvas in an
+// ol.source.ImageCanvas so we never round-trip through canvas.toDataURL,
+// canvas.toBlob, URL.createObjectURL, or new ol.source.ImageStatic.
+//
+// Background: iOS Safari's CSS/JS URL parser throws
+// "The string did not match the expected pattern" when fed very large or
+// malformed data: or blob: URLs (confirmed via curl/grep on Safari's own
+// response). That is the root cause of the "Mobile OL error:
+// The string did not match the expected pattern" alert on iPhone.
+// ol.source.ImageCanvas receives a callback that returns a canvas for each
+// tile draw — it never parses a URL string, so the failure mode goes away.
+function canvasToOlSource(canvas, imageExtent) {
+  if (!canvas) throw new Error("canvasToOlSource: missing canvas");
+  if (!Array.isArray(imageExtent) || imageExtent.length !== 4 ||
+      !imageExtent.every(Number.isFinite) ||
+      imageExtent[2] <= imageExtent[0] || imageExtent[3] <= imageExtent[1]) {
+    throw new Error("canvasToOlSource: invalid extent " + JSON.stringify(imageExtent));
+  }
+  return new ol.source.ImageCanvas({
+    projection: "EPSG:4326",
+    ratio: 1,
+    interpolate: false,
+    canvasFunction: function(requestedExtent, resolution, pixelRatio, size) {
+      const out = document.createElement("canvas");
+      out.width = Math.max(1, Math.ceil(size[0]));
+      out.height = Math.max(1, Math.ceil(size[1]));
+      const ctx = out.getContext("2d", { willReadFrequently: false });
+      ctx.clearRect(0, 0, out.width, out.height);
+      const dx = (imageExtent[0] - requestedExtent[0]) / resolution * pixelRatio;
+      const dy = (requestedExtent[3] - imageExtent[3]) / resolution * pixelRatio;
+      const dw = (imageExtent[2] - imageExtent[0]) / resolution * pixelRatio;
+      const dh = (imageExtent[3] - imageExtent[1]) / resolution * pixelRatio;
+      if ([dx, dy, dw, dh].every(Number.isFinite) && dw > 0 && dh > 0) {
+        ctx.drawImage(canvas, dx, dy, dw, dh);
+      }
+      return out;
+    }
+  });
+}
+
 function makeMobileLandCanvas(bathy) {
   const z = bathy.depth;
   if (!is2D(z)) return null;
@@ -4531,12 +4535,7 @@ async function ensureDesktopLandLayer(map) {
   const canvas = makeMobileLandCanvas(bathy);
   if (!canvas) return;
   const extent = frameExtentFromGrid({ xAxis: bathy.xAxis, yAxis: bathy.yAxis });
-  const source = new ol.source.ImageStatic({
-    url: canvas.toDataURL("image/png"),
-    imageExtent: extent,
-    projection: "EPSG:4326",
-    interpolate: false
-  });
+  const source = canvasToOlSource(canvas, extent);
   desktopMapState.landLayer = new ol.layer.Image({ source, zIndex: 20 });
   desktopMapState.landLayerBBox = curBBox;
   desktopMapState.landLayerURL = BATHY_JSON_URL;
@@ -4731,12 +4730,7 @@ async function ensureMobileLandLayer(map) {
   const canvas = makeMobileLandCanvas(bathy);
   if (!canvas) return;
   const extent = frameExtentFromGrid({ xAxis: bathy.xAxis, yAxis: bathy.yAxis });
-  const source = new ol.source.ImageStatic({
-    url: canvas.toDataURL("image/png"),
-    imageExtent: extent,
-    projection: "EPSG:4326",
-    interpolate: false
-  });
+  const source = canvasToOlSource(canvas, extent);
   mobileMapState.landLayer = new ol.layer.Image({ source, zIndex: 20 });
   mobileMapState.landLayerBBox = curBBox;
   mobileMapState.landLayerURL = BATHY_JSON_URL;
@@ -5340,36 +5334,20 @@ async function renderCombinedMode() {
     window._combinedChlData = data;
     window._combinedChlGrid = grid;
     const canvas = makeMobileRasterCanvas("chl", grid, data);
-    let url;
+    const extent = frameExtentFromGrid(grid);
+    let src;
     try {
-      // toBlob + createObjectURL avoids the iOS Safari 'The string did not
-      // match the expected pattern' error that toDataURL throws for some
-      // large/sparse-canvas combinations (specifically S3 OLCI sparse
-      // frames on the captain's mobile dashboard).
-      url = await new Promise((resolve, reject) => {
-        canvas.toBlob((blob) => {
-          if (blob) resolve(URL.createObjectURL(blob));
-          else reject(new Error("canvas.toBlob returned null"));
-        }, "image/png");
-      });
+      // canvasToOlSource uses ol.source.ImageCanvas which avoids the
+      // iOS Safari "The string did not match the expected pattern" error
+      // that toBlob/createObjectURL/ImageStatic would throw here.
+      src = canvasToOlSource(canvas, extent);
     } catch (e) {
-      console.error("[OL chl] canvas.toBlob failed", frame?.id || frame?.json_path, e);
+      console.error("[OL chl] canvasToOlSource failed", frame?.id || frame?.json_path, e);
       return;
     }
-    if (url) {
-      const extent = frameExtentFromGrid(grid);
-      let src;
-      try {
-        src = new ol.source.ImageStatic({ url, imageExtent: extent, projection: "EPSG:4326", interpolate: false });
-      } catch (e) {
-        console.error("[OL chl] ImageStatic source failed, url:", url?.slice(0, 30), frame?.id || frame?.json_path, e);
-        try { URL.revokeObjectURL(url); } catch (_) {}
-        return;
-      }
-      const layer = new ol.layer.Image({ source: src, zIndex: 10 });
-      map.addLayer(layer);
-      window._combinedChlLayer = layer;
-    }
+    const layer = new ol.layer.Image({ source: src, zIndex: 10 });
+    map.addLayer(layer);
+    window._combinedChlLayer = layer;
     const chlT = epochMsForFrame("chl", frame);
     window._combinedChlScanTime = chlT;
     if (chlScanTimeDiv) chlScanTimeDiv.textContent = chlT
@@ -5438,17 +5416,14 @@ async function renderCombinedMode() {
         }
         const renderData = { ...base.data, z: composite, sst: composite, data: composite, nx, ny, bbox: base.data?.bbox };
         const canvas = makeMobileRasterCanvas("sst", base.grid, renderData);
-        const url = canvas.toDataURL("image/png");
-        if (url && url.startsWith("data:image/png")) {
-          const extent = frameExtentFromGrid(base.grid);
-          const src = new ol.source.ImageStatic({ url, imageExtent: extent, projection: "EPSG:4326", interpolate: false });
-          const layer = new ol.layer.Image({ source: src, zIndex: 9 });
-          layer.setVisible(false);
-          map.addLayer(layer);
-          window._combinedSstLayer = layer;
-          window._combinedSstData = renderData;
-          window._combinedSstGrid = base.grid;
-        }
+        const extent = frameExtentFromGrid(base.grid);
+        const src = canvasToOlSource(canvas, extent);
+        const layer = new ol.layer.Image({ source: src, zIndex: 9 });
+        layer.setVisible(false);
+        map.addLayer(layer);
+        window._combinedSstLayer = layer;
+        window._combinedSstData = renderData;
+        window._combinedSstGrid = base.grid;
         const epochTimes = compositeFrames.map(item => epochMsForFrame("sst", item.frame)).filter(t => t);
         const meanTime = epochTimes.length ? epochTimes.reduce((a, b) => a + b, 0) / epochTimes.length : null;
         if (sstScanTimeDiv) sstScanTimeDiv.textContent = meanTime
@@ -5921,37 +5896,15 @@ async function buildChlCompositeLayer(map, hoursOrOpts) {
   }
 
   const canvas = makeMobileRasterCanvas("chl", base.grid, renderData);
-  let url;
-  try {
-    // toBlob + createObjectURL avoids the iOS Safari 'The string did not
-    // match the expected pattern' error that toDataURL throws for some
-    // large/sparse-canvas combinations. Return a Promise<{layer, ...}>
-    // wrapping the blob URL.
-    url = await new Promise((resolve, reject) => {
-      canvas.toBlob((blob) => {
-        if (blob) resolve(URL.createObjectURL(blob));
-        else reject(new Error("canvas.toBlob returned null"));
-      }, "image/png");
-    });
-  } catch (e) {
-    console.error("[OL composite] canvas.toBlob failed", e);
-    return {};
-  }
-  if (!url) return {};
   let layer;
   try {
+    // canvasToOlSource uses ol.source.ImageCanvas — Safari-safe, no URL parsing.
     layer = new ol.layer.Image({
-      source: new ol.source.ImageStatic({
-        url,
-        imageExtent: frameExtentFromGrid(base.grid),
-        projection: "EPSG:4326",
-        interpolate: false
-      }),
+      source: canvasToOlSource(canvas, frameExtentFromGrid(base.grid)),
       zIndex: 10
     });
   } catch (e) {
-    console.error("[OL composite] ImageStatic source failed, url:", url?.slice(0, 30), e);
-    try { URL.revokeObjectURL(url); } catch (_) {}
+    console.error("[OL composite] canvasToOlSource failed", e);
     return {};
   }
   const epochTimes = selected.map(item => epochMsForFrame("chl", item.frame)).filter(t => t);
@@ -6340,15 +6293,12 @@ async function combinedChlRenderSelected() {
       if (!is2D(z)) { if (chlScanTimeDiv) chlScanTimeDiv.textContent = "Frame has no 2D data"; return; }
       const renderData = { ...data, z, chl: z, data: z, nx: z[0]?.length || 0, ny: z.length, bbox: data?.bbox };
       const canvas = makeMobileRasterCanvas("chl", grid, renderData);
-      const url = await new Promise((resolve, reject) => {
-        canvas.toBlob((blob) => blob ? resolve(URL.createObjectURL(blob)) : reject(new Error("toBlob null")), "image/png");
-      });
-      if (s.opSeq !== mySeq) { try { URL.revokeObjectURL(url); } catch (_) {} return; }
+      if (s.opSeq !== mySeq) return;
       if (window._combinedChlLayer && window._combinedMap) {
         try { window._combinedMap.removeLayer(window._combinedChlLayer); } catch (_) {}
       }
       const layer = new ol.layer.Image({
-        source: new ol.source.ImageStatic({ url, imageExtent: frameExtentFromGrid(grid), projection: "EPSG:4326", interpolate: false }),
+        source: canvasToOlSource(canvas, frameExtentFromGrid(grid)),
         zIndex: 10
       });
       const chk = document.getElementById("chk-combined-chl");
@@ -6630,12 +6580,7 @@ function buildThermalHoursComposite(map, hours) {
   }
 
   const extent = [west, north - ny * cellDeg, west + nx * cellDeg, north];
-  const source = new ol.source.ImageStatic({
-    url: canvas.toDataURL("image/png"),
-    imageExtent: extent,
-    projection: "EPSG:4326",
-    interpolate: false
-  });
+  const source = canvasToOlSource(canvas, extent);
   const densityLayer = new ol.layer.Image({ source, zIndex: 30, opacity: 0.90 });
 
   console.log("[thermal] frontDensityCells=" + nonzero + " hours=" + hours + " frames=" + frontItems.length);
@@ -6880,42 +6825,6 @@ async function buildThermalFrontDensityCanvas(frontData, grid) {
   return canvas;
 }
 
-// Keep mobile raster rendering entirely inside OpenLayers.  In iOS Safari,
-// converting a sparse canvas to a blob/data URL and handing that URL to
-// ImageStatic can throw `The string did not match the expected pattern`.
-// ImageCanvas avoids the URL parser altogether while preserving the raster's
-// geographic extent during view rendering.
-function makeMobileImageCanvasSource(canvas, imageExtent) {
-  if (!canvas || !Array.isArray(imageExtent) || imageExtent.length !== 4 ||
-      !imageExtent.every(Number.isFinite) || imageExtent[2] <= imageExtent[0] ||
-      imageExtent[3] <= imageExtent[1]) {
-    throw new Error("Invalid mobile raster extent");
-  }
-  return new ol.source.ImageCanvas({
-    projection: "EPSG:4326",
-    ratio: 1,
-    interpolate: false,
-    canvasFunction: function(requestedExtent, resolution, pixelRatio, size) {
-      const out = document.createElement("canvas");
-      out.width = Math.max(1, Math.ceil(size[0]));
-      out.height = Math.max(1, Math.ceil(size[1]));
-      const ctx = out.getContext("2d", { willReadFrequently: false });
-      ctx.clearRect(0, 0, out.width, out.height);
-
-      // The raster canvas is already north-up. Place it into the requested
-      // OpenLayers canvas using the same geographic extent/resolution.
-      const dx = (imageExtent[0] - requestedExtent[0]) / resolution * pixelRatio;
-      const dy = (requestedExtent[3] - imageExtent[3]) / resolution * pixelRatio;
-      const dw = (imageExtent[2] - imageExtent[0]) / resolution * pixelRatio;
-      const dh = (imageExtent[3] - imageExtent[1]) / resolution * pixelRatio;
-      if ([dx, dy, dw, dh].every(Number.isFinite) && dw > 0 && dh > 0) {
-        ctx.drawImage(canvas, dx, dy, dw, dh);
-      }
-      return out;
-    }
-  });
-}
-
 async function renderMobileFrame(frameMeta) {
   if (currentVar === "chl_front" || currentVar === "sst_front" || currentVar === "thermal_fronts" || currentVar === "combined") {
     document.body.classList.remove("mobile-map-ready");
@@ -6959,17 +6868,26 @@ async function renderMobileFrame(frameMeta) {
 
   const canvas = makeMobileRasterCanvas(currentVar, gridInfo, dataObj);
   const extent = frameExtentFromGrid(gridInfo);
-  if (!extent.every(Number.isFinite) || extent[0] >= extent[2] || extent[1] >= extent[3]) {
-    throw new Error("Invalid mobile raster extent: " + JSON.stringify(extent));
+  let source;
+  try {
+    // Skip toBlob/toDataURL/ImageStatic entirely — they can throw on iOS Safari.
+    // canvasToOlSource uses ol.source.ImageCanvas which never round-trips
+    // through the URL parser.
+    source = canvasToOlSource(canvas, extent);
+  } catch (e) {
+    console.error("[OL mobile] canvasToOlSource failed, extent:", extent, e);
+    throw e;
   }
-  const source = makeMobileImageCanvasSource(canvas, extent);
   source.on("imageloaderror", () => {
     console.error("Mobile map image layer failed to load; falling back to Plotly.");
     mobileMapState.disabled = true;
     document.body.classList.remove("mobile-map-ready");
     showFrame();
   });
-  mobileMapState.imageUrl = null;
+  if (mobileMapState.imageUrl && mobileMapState.imageUrl.startsWith("blob:")) {
+    URL.revokeObjectURL(mobileMapState.imageUrl);
+  }
+  mobileMapState.imageUrl = url;
   if (mobileMapState.imageLayer) {
     mobileMapState.imageLayer.setSource(source);
   } else {
@@ -10134,6 +10052,42 @@ document.getElementById('captain-save-btn')?.addEventListener('click', (e) => {
   showSaveMenu();
 });
 
+document.getElementById('captain-fs-btn')?.addEventListener('click', () => {
+  const fullscreenEl = document.fullscreenElement || document.webkitFullscreenElement || document.querySelector('#map') || document.documentElement;
+  const target = document.fullscreenElement ? null : fullscreenEl;
+  if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+    if (fullscreenEl.requestFullscreen) fullscreenEl.requestFullscreen();
+    else if (fullscreenEl.webkitRequestFullscreen) fullscreenEl.webkitRequestFullscreen();
+    else if (fullscreenEl.webkitEnterFullscreen) fullscreenEl.webkitEnterFullscreen();
+  } else {
+    if (document.exitFullscreen) document.exitFullscreen();
+    else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+    else if (document.webkitCancelFullScreen) document.webkitCancelFullScreen();
+  }
+});
+
+// Fullscreen icon toggle
+function updateFsIcon() {
+  const btn = document.getElementById('captain-fs-btn');
+  if (!btn) return;
+  const isFs = !!(document.fullscreenElement || document.webkitIsFullScreen);
+  btn.innerHTML = isFs
+    ? `<svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+         <line x1="1" y1="1" x2="6" y2="6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+         <line x1="17" y1="1" x2="12" y2="6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+         <line x1="1" y1="17" x2="6" y2="12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+         <line x1="17" y1="17" x2="12" y2="12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+       </svg>`
+    : `<svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+         <polyline points="1,6 1,1 6,1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+         <polyline points="12,1 17,1 17,6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+         <polyline points="1,12 1,17 6,17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+         <polyline points="17,12 17,17 12,17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+       </svg>`;
+  btn.title = isFs ? 'Exit fullscreen' : 'Fullscreen';
+}
+document.addEventListener('fullscreenchange', updateFsIcon);
+document.addEventListener('webkitfullscreenchange', updateFsIcon);
 
 document.addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
