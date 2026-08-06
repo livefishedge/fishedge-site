@@ -6829,6 +6829,18 @@ async function buildThermalFrontDensityCanvas(frontData, grid) {
 }
 
 async function renderMobileFrame(frameMeta) {
+  // Mobile Safari has continued to reject an internal OpenLayers URL during
+  // product-page rendering even after raster and basemap URL sources were
+  // removed. The product pages already have a tested Plotly fallback; use it
+  // as the mobile product renderer until the OL path can be isolated with a
+  // Safari console. The combined dashboard has its own renderer and is not
+  // affected by this guard.
+  if (isMobileMapMode()) {
+    console.info("[OL mobile] disabled for product pages; using fallback renderer");
+    document.body.classList.remove("mobile-map-ready");
+    detachInactiveMapTargets(null);
+    return false;
+  }
   if (currentVar === "chl_front" || currentVar === "sst_front" || currentVar === "thermal_fronts" || currentVar === "combined") {
     document.body.classList.remove("mobile-map-ready");
     detachInactiveMapTargets(null);
