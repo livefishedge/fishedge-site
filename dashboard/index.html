@@ -713,7 +713,7 @@
     #captain-tools{
       display:none;
       position:fixed;
-      top:8px; left:8px;
+      top:56px; left:8px;
       z-index:1150;
       background:var(--panel);
       border:1px solid var(--border);
@@ -725,6 +725,8 @@
       align-items:center;
     }
     #captain-tools{ display:flex; }
+    body.combined-mode #captain-tools{ top:8px; }
+    body.mobile-device #captain-tools{ top:calc(46px + env(safe-area-inset-top, 0px)); }
     body.mobile-device #captain-fs-btn{ display:none !important; }
     .captain-tool-btn{
       width:30px; height:30px;
@@ -2396,6 +2398,7 @@ async function initDesktopMapIfNeeded() {
   }
   if (desktopMapState.map) {
     attachMapToUnifiedTarget(desktopMapState.map);
+    installCaptainToolHandler(desktopMapState.map);
     return desktopMapState.map;
   }
   const target = getUnifiedMapTarget();
@@ -2439,6 +2442,7 @@ async function initDesktopMapIfNeeded() {
     interactions: desktopInteractions
   });
   desktopMapState.map.on("moveend", () => syncViewStateFromOlMap(desktopMapState.map));
+  installCaptainToolHandler(desktopMapState.map);
   installOlGestureZoomFallback(desktopMapState.map, target);
   // Add the OFM two-layer vector basemap (water below, land above). This
   // replaces the previous bathy-derived land mask as the desktop single-
@@ -5293,6 +5297,7 @@ function initMobileMapIfNeeded() {
   if (!target || !window.ol) return null;
   if (mobileMapState.map) {
     attachMapToUnifiedTarget(mobileMapState.map);
+    installCaptainToolHandler(mobileMapState.map);
     return mobileMapState.map;
   }
   // View projection is EPSG:3857 (Web Mercator) to match the OpenFreeMap
@@ -5332,6 +5337,7 @@ function initMobileMapIfNeeded() {
     interactions: mobileInteractions
   });
   mobileMapState.map.on("moveend", () => syncViewStateFromOlMap(mobileMapState.map));
+  installCaptainToolHandler(mobileMapState.map);
   installOlGestureZoomFallback(mobileMapState.map, target);
   // Add the OFM two-layer vector basemap so the mobile single-product pages
   // match the combined dashboard's look.
@@ -10242,9 +10248,23 @@ window.removeWaypoint = function(idx) {
 // ── Map click handler ───────────────────────────────────────────────────
 
 let _captainMapClickHandler = null;
+let _captainMapClickMap = null;
+
+function activeCaptainToolMap() {
+  return window._combinedMapRef
+    || (typeof thermalFrontState !== 'undefined' && thermalFrontState.map)
+    || (typeof mobileMapState !== 'undefined' && mobileMapState.map)
+    || (typeof desktopMapState !== 'undefined' && desktopMapState.map)
+    || null;
+}
 
 function installCaptainToolHandler(map) {
-  if (_captainMapClickHandler) { map.un('click', _captainMapClickHandler); _captainMapClickHandler = null; }
+  if (!map) return;
+  if (_captainMapClickHandler && _captainMapClickMap) {
+    _captainMapClickMap.un('click', _captainMapClickHandler);
+  }
+  _captainMapClickHandler = null;
+  _captainMapClickMap = map;
   _captainMapClickHandler = (ev) => {
     if (!ev.coordinate) return;
     // Combined map is EPSG:3857; transform to 4326 before treating as lon/lat.
@@ -10331,14 +10351,14 @@ function combinedFrontClickInfo(map, coord, pixel) {
 // ── Button wiring ───────────────────────────────────────────────────────
 
 document.getElementById('captain-dist-tool')?.addEventListener('click', () => {
-  const map = window._combinedMapRef;
+  const map = activeCaptainToolMap();
   if (!map) return;
   if (captainDistTool.active) { deactivateDistTool(); }
   else { activateDistTool(map); }
 });
 
 document.getElementById('captain-add-tool')?.addEventListener('click', () => {
-  const map = window._combinedMapRef;
+  const map = activeCaptainToolMap();
   if (!map) return;
   toggleAddTool(map);
 });
