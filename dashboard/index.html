@@ -6884,10 +6884,6 @@ async function renderMobileFrame(frameMeta) {
     document.body.classList.remove("mobile-map-ready");
     showFrame();
   });
-  if (mobileMapState.imageUrl && mobileMapState.imageUrl.startsWith("blob:")) {
-    URL.revokeObjectURL(mobileMapState.imageUrl);
-  }
-  mobileMapState.imageUrl = url;
   if (mobileMapState.imageLayer) {
     mobileMapState.imageLayer.setSource(source);
   } else {
