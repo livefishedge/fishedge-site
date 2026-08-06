@@ -602,7 +602,7 @@
       #frame-label{ display:none !important; }
       #fishedge-locate-wrap{ margin-left:0; }
       #fishedge-locate-wrap > button{ width:38px; min-width:38px; min-height:36px; padding:0; font-size:0; }
-      #fishedge-locate-wrap > button::before{ content:"⌖"; font-size:20px; line-height:1; }
+      #fishedge-locate-wrap > button::before{ content:none; display:none; }
       #fishedge-locate-button-status{ display:none; }
       /* Mobile: move feedback button to top-right, away from bottom map gestures. */
       body.mobile-device #feedback-float{
@@ -8560,7 +8560,13 @@ async function renderThermalFrontsNative() {
     if (toolbarStatus) toolbarStatus.textContent = "No thermal-front frames available for this region.";
     return;
   }
-  const requestedViewport = viewportFromParams();
+  // Preserve the live viewport when entering thermal fronts from another
+  // product layer. URL viewport parameters still take precedence on a fresh
+  // page load; otherwise use the range captured by setCurrentVar().
+  const requestedViewport = viewportFromParams()
+    || (viewState.hasRange && viewState.xRange && viewState.yRange
+      ? { xRange: viewState.xRange, yRange: viewState.yRange }
+      : null);
   if (!map.__thermalInitialFitDone) {
     map.updateSize();
     // v4.16 switched the thermal-fronts map view to EPSG:3857 (Web Mercator)

@@ -326,7 +326,15 @@
     btn.type = 'button';
     btn.setAttribute('aria-label', BUTTON_ARIA);
     btn.setAttribute('title', 'Show my GPS position on the map');
-    btn.textContent = BUTTON_LABEL;
+    // Use the same compass glyph as the Captain Dashboard locate control.
+    // Keeping one symbol across product pages avoids a different-looking
+    // Locate Me control when users switch layers.
+    btn.innerHTML = '<svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">'
+      + '<circle cx="11" cy="11" r="9" stroke="currentColor" stroke-width="1.6" fill="none"/>'
+      + '<path d="M11 3 L13.5 11 L11 9.5 L8.5 11 Z" fill="currentColor"/>'
+      + '<path d="M11 19 L13.5 11 L11 12.5 L8.5 11 Z" fill="currentColor" opacity="0.35"/>'
+      + '<circle cx="11" cy="11" r="1.2" fill="currentColor"/>'
+      + '</svg>';
     btn.addEventListener('click', hooks.onLocateClick || function () {});
     wrap.appendChild(btn);
 
