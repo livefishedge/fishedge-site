@@ -159,8 +159,10 @@
     return [
       new ol.style.Style({
         filter: function (f) { return f.get('kind') === 'boat-position-accuracy'; },
-        fill: new ol.style.Fill({ color: COLORS.accuracyFill }),
-        stroke: new ol.style.Stroke({ color: COLORS.accuracyStroke, width: 1 }),
+        // Mike 2026-08-06: open ring (no fill) — outline only, stroke width
+        // bumped to 2 so the GPS accuracy radius stays visible against busy
+        // charts when the underlying raster already has the same blue tint.
+        stroke: new ol.style.Stroke({ color: COLORS.accuracyStroke, width: 2 }),
       }),
       new ol.style.Style({
         filter: function (f) { return f.get('kind') === 'boat-position-point'; },
