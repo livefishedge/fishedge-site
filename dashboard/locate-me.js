@@ -315,7 +315,9 @@
   function buildToolbarButton(doc, hooks) {
     hooks = hooks || {};
     const toolbar = doc.querySelector ? doc.querySelector('#toolbar') : null;
-    if (!toolbar) return null;
+    const captainTools = doc.getElementById('captain-tools');
+    const host = captainTools || toolbar;
+    if (!host) return null;
 
     const wrap = doc.createElement('div');
     wrap.id = 'fishedge-locate-wrap';
@@ -361,7 +363,7 @@
       '</div>';
 
     wrap.appendChild(popover);
-    toolbar.appendChild(wrap);
+    host.appendChild(wrap);
 
     // Right-click (or long-press on touch) opens the popover. Click closes it
     // when clicking outside the wrap.
@@ -395,7 +397,7 @@
   statusSpan.textContent = '';
   wrap.appendChild(statusSpan);
 
-  console.info('[fishedge-locate] button mounted into #toolbar');
+  console.info('[fishedge-locate] button mounted into #captain-tools');
   return {
     wrap: wrap,
     button: btn,
@@ -470,6 +472,13 @@
   function buildLocateButton(doc, hooks) {
     hooks = hooks || {};
     if (!doc || !doc.body) return null;
+
+    // The toolbar builder mounts the shared compass into #captain-tools on
+    // every page. Reuse that one control instead of creating a duplicate.
+    const sharedButton = doc.getElementById('fishedge-locate-btn');
+    if (sharedButton && sharedButton.parentNode?.closest?.('#captain-tools')) {
+      return { button: sharedButton, host: doc.getElementById('captain-tools') };
+    }
 
     // Idempotent: if the button is already mounted, return early.
     if (doc.getElementById('captain-locate-btn')) {
