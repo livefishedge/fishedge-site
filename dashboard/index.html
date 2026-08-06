@@ -7861,8 +7861,19 @@ function thermalFrontHoverTip(coord, pixel) {
 
 function thermalEnsureCursorLayer(map) {
   if (!map || thermalFrontState.cursorLayer) return;
+  // Coordinates must stay in EPSG:4326 to match the source's
+  // `projection: "EPSG:4326"` declaration below. The previous code called
+  // `toMapProjection` which transforms 4326 → 3857, causing a
+  // source/geometry projection mismatch: OpenLayers treated the 3857
+  // coordinates as 4326 and double-transformed them, placing the cursor
+  // at a random off-screen location. The same bug does not affect the
+  // product-layer cursor because `ensureMobileCursorLayer`'s source has
+  // no `projection` hint and the feature is created directly in the
+  // map's projection. thermalRenderReadout's setCoordinates also passes
+  // 4326 (from to4326(ev)), so keeping the geometry in 4326 makes both
+  // the initial position and the click-updated position consistent.
   thermalFrontState.cursorFeature = new ol.Feature({
-    geometry: new ol.geom.Point(toMapProjection([(BBOX[0] + BBOX[2]) / 2, (BBOX[1] + BBOX[3]) / 2]))
+    geometry: new ol.geom.Point([(BBOX[0] + BBOX[2]) / 2, (BBOX[1] + BBOX[3]) / 2])
   });
   thermalFrontState.cursorFeature.setStyle(new ol.style.Style({
     image: new ol.style.Circle({
