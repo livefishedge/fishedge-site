@@ -107,6 +107,16 @@
        "13/14 hourly frames ... showing 14"). Keep it out of the map UI. */
     #toolbar-status{ display:none !important; }
     #fishedge-locate-wrap{ flex:0 0 auto; margin-left:auto; }
+    /* Product pages use the same fixed compass control as Captain Dashboard.
+       Hide the older toolbar copy so there is only one Locate Me symbol. */
+    body:not(.combined-mode) #fishedge-locate-wrap{ display:none !important; }
+    body:not(.combined-mode) #captain-tools{
+      display:flex;
+      top:calc(8px + env(safe-area-inset-top, 0px));
+      left:calc(8px + env(safe-area-inset-left, 0px));
+    }
+    body:not(.combined-mode) #captain-tools .captain-tool-btn:not(#captain-locate-btn),
+    body:not(.combined-mode) #captain-tools #captain-save-btn{ display:none !important; }
 
     /* Modebar host: NEW CSS for floating inside the plot at upper-left */
     #modebar-host{
@@ -2009,7 +2019,10 @@ const gridCache = {};
 let _readoutHooked = false;
 let _relayoutHooked = false;
 
-let viewState = { hasRange:false, xRange:null, yRange:null };
+let viewState = {
+  hasRange:false, xRange:null, yRange:null,
+  center4326:null, resolution:null
+};
 function viewportFromParams(params = QUERY_PARAMS) {
   const x0 = Number(params.get("x0"));
   const x1 = Number(params.get("x1"));
@@ -2092,6 +2105,14 @@ function currentViewportRanges() {
       ? { xRange: viewState.xRange, yRange: viewState.yRange }
       : null);
 }
+function captureCurrentViewState() {
+  let map = null;
+  if (currentVar === "combined") map = window._combinedMap;
+  else if (currentVar === "thermal_fronts") map = thermalFrontState.map;
+  else map = mobileMapState.map || desktopMapState.map;
+  if (map) syncViewStateFromOlMap(map);
+  return currentViewportRanges();
+}
 function appendViewportParams(url) {
   const vp = currentViewportRanges();
   if (vp) {
@@ -2111,6 +2132,15 @@ function syncViewStateFromOlMap(map) {
   viewState.hasRange = true;
   viewState.xRange = vp.xRange;
   viewState.yRange = vp.yRange;
+  const view = map.getView();
+  const center = view.getCenter?.();
+  const projection = view.getProjection?.().getCode?.();
+  if (center && center.length >= 2 && projection) {
+    viewState.center4326 = projection === 'EPSG:4326'
+      ? [center[0], center[1]]
+      : ol.proj.transform(center, projection, 'EPSG:4326');
+    viewState.resolution = Number(view.getResolution?.());
+  }
 }
 function syncProductSelectors() {
   if (hamburgerProductSelect) hamburgerProductSelect.value = currentVar;
@@ -2122,6 +2152,17 @@ function applyViewStateToOlMap(map, fallbackExtent) {
   if (!size || size[0] <= 0 || size[1] <= 0) return;
   const view = map.getView();
   const viewProjCode = view.getProjection().getCode();
+  // Preserve the actual camera when moving between product maps. Fitting the
+  // old visible extent changes zoom whenever the target/map dimensions differ,
+  // which creates the jump users see during layer switches.
+  if (viewState.center4326 && Number.isFinite(viewState.resolution)) {
+    const center = viewProjCode === 'EPSG:4326'
+      ? viewState.center4326
+      : ol.proj.transform(viewState.center4326, 'EPSG:4326', viewProjCode);
+    view.setCenter(center);
+    view.setResolution(viewState.resolution);
+    return;
+  }
   // null = "preserve whatever view state is already set" — but only if the view has a center
   if (fallbackExtent === null) {
     // If view has no center yet (first render), fall back to BBOX
@@ -2733,6 +2774,8 @@ function resetViewportToWidthFit() {
   viewState.hasRange = false;
   viewState.xRange = null;
   viewState.yRange = null;
+  viewState.center4326 = null;
+  viewState.resolution = null;
   if (mobileMapState.map) {
     const extent = mobileMapState.currentGridInfo ? frameExtentFromGrid(mobileMapState.currentGridInfo) : BBOX;
     mobileMapState.map.updateSize();
@@ -8563,12 +8606,15 @@ async function renderThermalFrontsNative() {
   // Preserve the live viewport when entering thermal fronts from another
   // product layer. URL viewport parameters still take precedence on a fresh
   // page load; otherwise use the range captured by setCurrentVar().
-  const requestedViewport = viewportFromParams()
-    || (viewState.hasRange && viewState.xRange && viewState.yRange
+  const requestedViewport = (!viewState.center4326 ? viewportFromParams() : null)
+    || (!viewState.center4326 && viewState.hasRange && viewState.xRange && viewState.yRange
       ? { xRange: viewState.xRange, yRange: viewState.yRange }
       : null);
   if (!map.__thermalInitialFitDone) {
     map.updateSize();
+    if (viewState.center4326 && Number.isFinite(viewState.resolution)) {
+      applyViewStateToOlMap(map, null);
+    } else {
     // v4.16 switched the thermal-fronts map view to EPSG:3857 (Web Mercator)
     // to match the OFM vector tile schema. The viewport extent and BBOX are
     // still in EPSG:4326 (lat/lon) by viewer convention. OL's view.fit() does
@@ -8589,6 +8635,7 @@ async function renderThermalFrontsNative() {
       padding: [58, 0, 0, 0],
       nearest: true
     });
+    }
     map.__thermalInitialFitDone = true;
   }
   const list = thermalActiveFrameList();
@@ -8646,7 +8693,7 @@ async function setCurrentVar(v, keepTime = true, keepRange = true) {
   const prevT = (keepTime && prevFrame) ? epochMsForFrame(prevVar, prevFrame) : null;
 
   // Save the live OL/Plotly viewport before switching products.
-  const liveRange = keepRange ? currentViewportRanges() : null;
+  const liveRange = keepRange ? captureCurrentViewState() : null;
   const savedRange = liveRange
     ? { x: liveRange.xRange, y: liveRange.yRange }
     : ((keepRange && viewState.hasRange) ? { x: viewState.xRange, y: viewState.yRange } : null);
