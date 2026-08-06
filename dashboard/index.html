@@ -31,7 +31,7 @@
   window.ol.Map = TrackedMap;
 })();
 </script>
-<script src="/fish-locate.js?v=20260807-domready"></script>
+<script src="fish-locate.js?v=20260807-domready"></script>
   <script src="https://cdn.jsdelivr.net/npm/ol-mapbox-style@13.4.1/dist/olms.js"></script>
   <script src="drawMobileUvArrowsLite.js?v=20260517-arrows2"></script>
   <!-- Auth + Analytics -->
@@ -654,21 +654,6 @@ body.combined-mode #combined-menu-btn{
     }
     .captain-tool-btn:hover{ background:rgba(255,255,255,0.08); border-color:rgba(255,255,255,0.2); }
     .captain-tool-btn.active{ background:rgba(29,79,145,0.7); border-color:#4d7dff; }
-    #captain-fs-btn{
-      width:30px; height:30px;
-      min-width:30px;
-      background:transparent;
-      border:1px solid transparent;
-      border-radius:6px;
-      color:var(--fg);
-      cursor:pointer;
-      display:flex; align-items:center; justify-content:center;
-      padding:0;
-      transition:background 0.15s, border-color 0.15s;
-      font-size:16px;
-      line-height:1;
-    }
-    #captain-fs-btn:hover{ background:rgba(255,255,255,0.08); border-color:rgba(255,255,255,0.2); }
     #captain-save-btn{
       display:none;
       background:#1d4f91;
@@ -1188,11 +1173,6 @@ body.combined-mode #combined-menu-btn{
   <div id="thermal-hover-tip"></div>
   <div id="combined-overlay"></div>
   <div id="captain-tools" role="toolbar" aria-label="Captain tools">
-    <button id="captain-fs-btn" class="captain-tool-btn" title="Fullscreen">
-      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect x="2" y="2" width="14" height="14" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linejoin="round"/>
-      </svg>
-    </button>
     <button id="captain-dist-tool" class="captain-tool-btn" title="Measure distance (M)" data-tool="dist">
       <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
         <line x1="3" y1="10" x2="17" y2="10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
@@ -10134,42 +10114,6 @@ document.getElementById('captain-save-btn')?.addEventListener('click', (e) => {
   showSaveMenu();
 });
 
-document.getElementById('captain-fs-btn')?.addEventListener('click', () => {
-  const fullscreenEl = document.fullscreenElement || document.webkitFullscreenElement || document.querySelector('#map') || document.documentElement;
-  const target = document.fullscreenElement ? null : fullscreenEl;
-  if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-    if (fullscreenEl.requestFullscreen) fullscreenEl.requestFullscreen();
-    else if (fullscreenEl.webkitRequestFullscreen) fullscreenEl.webkitRequestFullscreen();
-    else if (fullscreenEl.webkitEnterFullscreen) fullscreenEl.webkitEnterFullscreen();
-  } else {
-    if (document.exitFullscreen) document.exitFullscreen();
-    else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
-    else if (document.webkitCancelFullScreen) document.webkitCancelFullScreen();
-  }
-});
-
-// Fullscreen icon toggle
-function updateFsIcon() {
-  const btn = document.getElementById('captain-fs-btn');
-  if (!btn) return;
-  const isFs = !!(document.fullscreenElement || document.webkitIsFullScreen);
-  btn.innerHTML = isFs
-    ? `<svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
-         <line x1="1" y1="1" x2="6" y2="6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-         <line x1="17" y1="1" x2="12" y2="6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-         <line x1="1" y1="17" x2="6" y2="12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-         <line x1="17" y1="17" x2="12" y2="12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-       </svg>`
-    : `<svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
-         <polyline points="1,6 1,1 6,1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-         <polyline points="12,1 17,1 17,6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-         <polyline points="1,12 1,17 6,17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-         <polyline points="17,12 17,17 12,17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-       </svg>`;
-  btn.title = isFs ? 'Exit fullscreen' : 'Fullscreen';
-}
-document.addEventListener('fullscreenchange', updateFsIcon);
-document.addEventListener('webkitfullscreenchange', updateFsIcon);
 
 document.addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
