@@ -727,6 +727,7 @@
     #captain-tools{ display:flex; }
     body.combined-mode #captain-tools{ top:8px; }
     body.mobile-device #captain-tools{ top:calc(46px + env(safe-area-inset-top, 0px)); }
+    body.mobile-device #captain-dist-panel{ top:92px !important; max-width:calc(100vw - 24px); box-sizing:border-box; }
     body.mobile-device #captain-fs-btn{ display:none !important; }
     .captain-tool-btn{
       width:30px; height:30px;
@@ -1326,8 +1327,11 @@
     <div id="captain-pts-title" style="font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:0.6px;color:#7a8fa8;margin-bottom:8px;">My Waypoints</div>
     <div id="captain-pts-list"></div>
   </div>
-  <div id="captain-dist-panel" style="display:none;position:fixed;top:52px;left:8px;z-index:1150;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-size:12px;color:var(--fg);min-width:200px;">
-    <div style="font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:0.6px;color:#7a8fa8;margin-bottom:8px;">Distance</div>
+  <div id="captain-dist-panel" style="display:none;position:fixed;top:96px;left:8px;z-index:1150;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-size:12px;color:var(--fg);min-width:200px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:0.6px;color:#7a8fa8;margin-bottom:8px;">
+      <span>Distance</span>
+      <button id="captain-dist-exit" type="button" title="Exit distance measurement" style="border:1px solid #4d7dff;border-radius:5px;background:#1d4f91;color:#fff;padding:3px 7px;font-size:11px;font-weight:700;cursor:pointer;">Exit</button>
+    </div>
     <div id="captain-dist-list"></div>
     <div id="captain-dist-total" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-weight:700;color:var(--fg);"></div>
   </div>
@@ -10368,6 +10372,11 @@ document.getElementById('captain-dist-tool')?.addEventListener('click', () => {
   if (!map) return;
   if (captainDistTool.active) { deactivateDistTool(); }
   else { activateDistTool(map); }
+});
+
+document.getElementById('captain-dist-exit')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  deactivateDistTool();
 });
 
 document.getElementById('captain-add-tool')?.addEventListener('click', () => {
