@@ -129,6 +129,9 @@
        the fixed surface for the combined Captain dashboard, where the
        toolbar is not the product-page control surface. */
     body:not(.combined-mode) #fishedge-locate-host{ display:none !important; }
+    /* Do not flash the previous product while its replacement is loading. */
+    body.product-switching #plot,
+    body.product-switching #map{ visibility:hidden !important; }
     /* The toolbar Locate Me button (fishedge-locate-btn) and the Captain
        Dashboard locate button (captain-locate-btn) both render the same
        compass SVG via locate-me.js, so the compact-toolbar copy stays
@@ -1748,6 +1751,7 @@ function setActiveRegion(regionId, regionMeta) {
         thermalFrontState.loading = false;
         thermalFrontState.initialized = false;
         thermalFrontState.loadedRegion = null;
+        thermalFrontState.loadedFull = false;
         thermalFrontState.frameData = [];
         if (thermalFrontState.frontLayer && thermalFrontState.map) {
           thermalFrontState.map.removeLayer(thermalFrontState.frontLayer);
@@ -2305,6 +2309,7 @@ let thermalFrontState = {
   initialized: false,
   loading: false,
   loadedRegion: null,
+  loadedFull: false,
   // v4.1: Set of date strings (YYYY-MM-DD) the user has selected for
   // the "All days this period" overlay in daily mode. Empty set after
   // a "None" preset. Default behavior: on first build of dailyFrames
@@ -5730,7 +5735,7 @@ async function renderCombinedMode() {
   await rebuildCombinedUvLayer(map, { hoursMode: uvHoursSel?.value || "latest" });
 
   // ── Layer: Thermal fronts — fixed-pixel point symbols
-  await thermalLoadData();
+  await thermalLoadData({ full: false });
   const thermalItems = thermalFrontState.frameData.length
     ? [thermalFrontState.frameData[thermalFrontState.frameData.length - 1]]
     : [];
@@ -7645,7 +7650,7 @@ function thermalCurrentFrameTime() {
 }
 
 function thermalClosestFrameIndex(items, targetMs) {
-  if (!items.length || !Number.isFinite(targetMs)) return Math.max(0, items.length - 1);
+  if (!items.length || !Number.isFinite(targetMs)) return 0;
   let bestIdx = 0;
   let bestDist = Infinity;
   for (let i = 0; i < items.length; i++) {
@@ -8640,9 +8645,11 @@ function thermalSetFrame(idx) {
   renderThermalFrontsNative();
 }
 
-async function thermalLoadData() {
+async function thermalLoadData(options = {}) {
+  const full = options.full !== false;
   if (thermalFrontState.loading) return;
-  if (thermalFrontState.initialized && thermalFrontState.loadedRegion === REGION_ID) return;
+  if (thermalFrontState.initialized && thermalFrontState.loadedRegion === REGION_ID &&
+      (!full || thermalFrontState.loadedFull)) return;
   thermalFrontState.loading = true;
   const requestRevision = regionRevision;
   const requestRegion = REGION_ID;
@@ -8652,12 +8659,17 @@ async function thermalLoadData() {
     if (requestRevision !== regionRevision || requestRegion !== REGION_ID) return;
     const fbv = idx.frames || idx.framesByVar || idx.frames_by_var || {};
     const sourceFrames = (fbv.thermal_fronts && fbv.thermal_fronts.length) ? fbv.thermal_fronts : (fbv.sst_front || []);
-    thermalFrontState.frames = sourceFrames
+    const allFrames = sourceFrames
       .map(f => ({ ...f, t: epochMsForFrame("sst_front", f) ?? epochMsForFrame("thermal_fronts", f) }))
       .filter(f => Number.isFinite(f.t))
       .sort((a, b) => a.t - b.t);
-    const latest = thermalFrontState.frames.at(-1)?.t;
-    if (latest) thermalFrontState.frames = thermalFrontState.frames.filter(f => latest - f.t <= 21 * 864e5);
+    const latest = allFrames.at(-1)?.t;
+    const retainedFrames = latest
+      ? allFrames.filter(f => latest - f.t <= 21 * 864e5)
+      : allFrames;
+    thermalFrontState.frames = full
+      ? retainedFrames
+      : retainedFrames.filter(f => latest - f.t <= 72 * 3600000);
     thermalFrontState.frameData = await Promise.all(thermalFrontState.frames.map(async f => {
       const res = await fetch(framePathOf(f) + "?t=" + Date.now());
       return { meta: f, t: f.t, data: res.ok ? await res.json() : { features: [] } };
@@ -8675,6 +8687,7 @@ async function thermalLoadData() {
     thermalFrontState.frameIdx = thermalClosestFrameIndex(thermalActiveFrameList(), requestedMs);
     thermalFrontState.initialized = true;
     thermalFrontState.loadedRegion = REGION_ID;
+    thermalFrontState.loadedFull = full;
     window.__thermalFrontsState = thermalFrontState;
   } finally {
     if (requestRevision === regionRevision) thermalFrontState.loading = false;
@@ -8686,7 +8699,7 @@ async function renderThermalFrontsNative() {
   document.body.classList.remove("mobile-map-ready");
   plotDiv.style.display = "block";
   const map = await thermalInitMap();
-  await thermalLoadData();
+  await thermalLoadData({ full: true });
   if (!thermalFrontState.frameData.length) {
     if (toolbarStatus) toolbarStatus.textContent = "No thermal-front frames available for this region.";
     return;
@@ -9583,10 +9596,10 @@ async function loadCaptainBriefing() {
     const initialT = requestedTimeFromParams();
     const initialFrames = framesByVar[currentVar] || [];
     const initialTimes = frameTimesByVar[currentVar] || [];
-    currentFrameIdx = initialFrames.length
-      ? (initialT !== null
-          ? closestDaytimeIndex(currentVar, initialTimes, initialFrames, initialT)
-          : initialFrames.length - 1)
+    // Product pages intentionally open on the oldest frame. A requested
+    // ?t= timestamp still overrides that default.
+    currentFrameIdx = initialFrames.length && initialT !== null
+      ? closestDaytimeIndex(currentVar, initialTimes, initialFrames, initialT)
       : 0;
     syncRangeInputsToVar();
     updateSliderUI();
