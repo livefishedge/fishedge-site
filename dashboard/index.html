@@ -2170,6 +2170,30 @@ function installOlGestureZoomFallback(map, target) {
   target.addEventListener("touchcancel", clearTouchPinch, { passive: false });
 }
 
+function canvasToOlUrl(canvas) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const fail = (err) => { if (!settled) { settled = true; reject(err); } };
+    const useDataUrl = () => {
+      try {
+        const dataUrl = canvas.toDataURL("image/png");
+        if (!dataUrl || !dataUrl.startsWith("data:image/png")) throw new Error("invalid canvas data URL");
+        if (!settled) { settled = true; resolve(dataUrl); }
+      } catch (err) { fail(err); }
+    };
+    try {
+      canvas.toBlob((blob) => {
+        if (!blob) return useDataUrl();
+        try {
+          const blobUrl = URL.createObjectURL(blob);
+          if (!blobUrl) throw new Error("empty canvas blob URL");
+          if (!settled) { settled = true; resolve(blobUrl); }
+        } catch (_) { useDataUrl(); }
+      }, "image/png");
+    } catch (_) { useDataUrl(); }
+  });
+}
+
 async function initDesktopMapIfNeeded() {
   document.body.classList.remove("mobile-map-ready");
   if (currentVar === "thermal_fronts") {
@@ -2399,16 +2423,9 @@ async function renderDesktopFrame(frameMeta) {
   const canvas = makeMobileRasterCanvas(currentVar, gridInfo, dataObj);
   let url;
   try {
-    // toBlob + createObjectURL avoids the iOS Safari 'The string did not
-    // match the expected pattern' error that toDataURL throws for some
-    // large/sparse-canvas combinations. Affects S3 OLCI sparse frames
-    // and any other large frame on iOS mobile Safari.
-    url = await new Promise((resolve, reject) => {
-      canvas.toBlob((blob) => {
-        if (blob) resolve(URL.createObjectURL(blob));
-        else reject(new Error("canvas.toBlob returned null"));
-      }, "image/png");
-    });
+    // Safari can reject either canvas.toBlob/createObjectURL or a data URL
+    // for large sparse rasters. Try blob URL first, then FileReader data URL.
+    url = await canvasToOlUrl(canvas);
   } catch (e) {
     console.error("[OL] canvas.toBlob failed for", currentVar, frameMeta?.id || frameMeta?.json_path, e);
     throw e;
@@ -2417,6 +2434,9 @@ async function renderDesktopFrame(frameMeta) {
   if (!url) throw new Error("Could not encode desktop raster");
 
   const extent = frameExtentFromGrid(gridInfo);
+  if (!extent.every(Number.isFinite) || extent[0] >= extent[2] || extent[1] >= extent[3]) {
+    throw new Error("Invalid CHL raster extent: " + JSON.stringify(extent));
+  }
   console.log("[OL] extent:", extent);
   let source;
   try {
