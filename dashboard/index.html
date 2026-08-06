@@ -773,7 +773,6 @@
       font-size:12px;
       font-weight:700;
     }
-    body.combined-mode #captain-save-btn{ display:flex; }
     #captain-dist-panel.visible, #captain-pts-panel.visible{ display:block !important; }
     #combined-readout{
       display:none;
@@ -1320,8 +1319,8 @@
       </svg>
     </button>
   </div>
-  <button id="captain-save-btn" title="Save waypoints" style="display:none;position:fixed;left:8px;top:44px;z-index:1150;background:#1d4f91;border:1px solid #4d7dff;border-radius:8px;color:#fff;padding:0 10px;height:28px;cursor:pointer;font-size:12px;font-weight:700;">
-    Save Waypoints
+  <button id="captain-save-btn" title="Save waypoints" style="display:none;align-items:center;gap:8px;position:fixed;left:8px;top:44px;z-index:1150;background:#1d4f91;border:1px solid #4d7dff;border-radius:8px;color:#fff;padding:0 8px 0 10px;height:28px;cursor:pointer;font-size:12px;font-weight:700;">
+    <span>Save Waypoints</span><span id="captain-save-dismiss" role="button" aria-label="Hide save waypoints" title="Hide" style="font-size:16px;line-height:1;opacity:.8;">×</span>
   </button>
   <div id="captain-pts-panel" style="display:none;position:fixed;top:80px;left:8px;z-index:1150;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;width:280px;max-height:320px;overflow-y:auto;font-size:12px;color:var(--fg);">
     <div id="captain-pts-title" style="font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:0.6px;color:#7a8fa8;margin-bottom:8px;">My Waypoints</div>
@@ -10390,6 +10389,11 @@ document.getElementById('captain-save-btn')?.addEventListener('click', (e) => {
   const menu = document.getElementById('captain-save-menu');
   if (menu) { closeSaveMenu(); return; }
   showSaveMenu();
+});
+
+document.getElementById('captain-save-dismiss')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  document.getElementById('captain-save-btn')?.style.setProperty('display', 'none');
 });
 
 document.getElementById('captain-fs-btn')?.addEventListener('click', () => {
