@@ -124,6 +124,11 @@
       background:rgba(255,255,255,0.08);
       border-color:rgba(255,255,255,0.2);
     }
+    /* Product pages already expose Locate Me in the toolbar.  The fixed
+       host otherwise creates a second compass beside the hamburger. Keep
+       the fixed surface for the combined Captain dashboard, where the
+       toolbar is not the product-page control surface. */
+    body:not(.combined-mode) #fishedge-locate-host{ display:none !important; }
     /* The toolbar Locate Me button (fishedge-locate-btn) and the Captain
        Dashboard locate button (captain-locate-btn) both render the same
        compass SVG via locate-me.js, so the compact-toolbar copy stays
