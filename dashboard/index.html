@@ -107,16 +107,12 @@
        "13/14 hourly frames ... showing 14"). Keep it out of the map UI. */
     #toolbar-status{ display:none !important; }
     #fishedge-locate-wrap{ flex:0 0 auto; margin-left:auto; }
-    /* Product pages use the same fixed compass control as Captain Dashboard.
-       Hide the older toolbar copy so there is only one Locate Me symbol. */
-    body:not(.combined-mode) #fishedge-locate-wrap{ display:none !important; }
-    body:not(.combined-mode) #captain-tools{
-      display:flex;
-      top:calc(8px + env(safe-area-inset-top, 0px));
-      left:calc(8px + env(safe-area-inset-left, 0px));
-    }
-    body:not(.combined-mode) #captain-tools .captain-tool-btn:not(#captain-locate-btn),
-    body:not(.combined-mode) #captain-tools #captain-save-btn{ display:none !important; }
+    /* The toolbar Locate Me button (fishedge-locate-btn) and the Captain
+       Dashboard locate button (captain-locate-btn) both render the same
+       compass SVG via locate-me.js, so the compact-toolbar copy stays
+       visible on every page. Only the legacy ::before glyph is hidden so
+       the toolbar copy shows the same compass icon as the Captain
+       Dashboard (no mixed crosshair + compass). */
 
     /* Modebar host: NEW CSS for floating inside the plot at upper-left */
     #modebar-host{
@@ -2152,9 +2148,22 @@ function applyViewStateToOlMap(map, fallbackExtent) {
   if (!size || size[0] <= 0 || size[1] <= 0) return;
   const view = map.getView();
   const viewProjCode = view.getProjection().getCode();
-  // Preserve the actual camera when moving between product maps. Fitting the
-  // old visible extent changes zoom whenever the target/map dimensions differ,
-  // which creates the jump users see during layer switches.
+  // Prefer extent-based preservation over center+resolution. setCenter +
+  // setResolution does NOT account for target/map dimension differences —
+  // the same resolution on a 1200x800 vs 800x600 map shows different
+  // geographic areas, which is the "jumpy" behavior Mike reported when
+  // switching between layers. view.fit(extent) adjusts zoom automatically
+  // so the same geographic area is shown regardless of map size.
+  if (viewState.hasRange && viewState.xRange && viewState.yRange) {
+    const extent4326 = [viewState.xRange[0], viewState.yRange[0], viewState.xRange[1], viewState.yRange[1]];
+    const extent = viewProjCode === 'EPSG:4326'
+      ? extent4326
+      : ol.proj.transformExtent(extent4326, 'EPSG:4326', viewProjCode);
+    view.fit(extent, { size, padding: [0,0,0,0], nearest: true });
+    return;
+  }
+  // Fall back to center+resolution only when no extent is saved (e.g. on
+  // very first render before syncViewStateFromOlMap has captured anything).
   if (viewState.center4326 && Number.isFinite(viewState.resolution)) {
     const center = viewProjCode === 'EPSG:4326'
       ? viewState.center4326
