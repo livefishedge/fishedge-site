@@ -323,6 +323,7 @@
 
     const btn = doc.createElement('button');
     btn.id = 'fishedge-locate-btn';
+    btn.className = 'captain-tool-btn';
     btn.type = 'button';
     btn.setAttribute('aria-label', BUTTON_ARIA);
     btn.setAttribute('title', 'Show my GPS position on the map');
