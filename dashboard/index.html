@@ -1678,6 +1678,26 @@ function setActiveRegion(regionId, regionMeta) {
         desktopMapState.landLayerBBox = null;
         desktopMapState.landLayerURL = null;
       }
+      // USEC MD bug fix: invalidate thermal-front state on region switch so
+      // the old frontLayer (built from the previous region's index.json +
+      // frame fetches) cannot survive the switch and paint stale data over
+      // the new region's map. thermalFrontState is a `let` declared further
+      // down — guard with typeof so the boot-time call (which runs before
+      // the let is reached) never trips a TDZ ReferenceError.
+      if (typeof thermalFrontState !== 'undefined' && thermalFrontState) {
+        thermalFrontState.initialized = false;
+        thermalFrontState.loadedRegion = null;
+        thermalFrontState.frameData = [];
+        if (thermalFrontState.frontLayer && thermalFrontState.map) {
+          thermalFrontState.map.removeLayer(thermalFrontState.frontLayer);
+        }
+        thermalFrontState.frontLayer = null;
+        if (thermalFrontState.cursorLayer && thermalFrontState.map) {
+          thermalFrontState.map.removeLayer(thermalFrontState.cursorLayer);
+        }
+        thermalFrontState.cursorLayer = null;
+        thermalFrontState.cursorFeature = null;
+      }
     } catch (_) { /* TDZ-safe: ignore on first-boot edge case */ }
   }
 }
@@ -4943,9 +4963,17 @@ function ensureMobileCursorLayer(map) {
   });
   mobileMapState.cursorFeature.setStyle(new ol.style.Style({
     image: new ol.style.Circle({
-      radius: 3,
-      fill: new ol.style.Fill({ color: "rgba(255,255,255,0.45)" }),
-      stroke: new ol.style.Stroke({ color: "rgba(0,0,0,0.55)", width: 1 })
+      radius: 8,
+      fill: new ol.style.Fill({ color: '#1d4f91' }),
+      stroke: new ol.style.Stroke({ color: '#4d7dff', width: 2 })
+    }),
+    text: new ol.style.Text({
+      text: '1',
+      offsetY: 1,
+      fill: new ol.style.Fill({ color: '#fff' }),
+      font: 'bold 11px monospace',
+      textAlign: 'center',
+      textBaseline: 'middle'
     })
   }));
   mobileMapState.cursorLayer = new ol.layer.Vector({
@@ -5053,8 +5081,13 @@ function installMobileReadoutOnce(map) {
     updateMobileCursor(xy3857[0], xy3857[1]);
     renderMobileReadoutFromLonLat(xy4326[0], xy4326[1], ev.pixel);
   }
-  map.on("pointermove", handle);
-  map.on("click", handle);
+  // Root-cause fix for "marker disappears after zoom/click" on mobile:
+  // the previous code bound both `pointermove` (which fires continuously
+  // during pinch-zoom and pan) and `click` (unreliable on touch). Using
+  // OpenLayers' `singleclick` alone — touch-safe selection, fires only
+  // on a completed tap/click with no drag — keeps the marker pinned to
+  // the last selected point through any subsequent zoom or pan.
+  map.on("singleclick", handle);
 }
 
 function makeMobileRasterCanvas(varKey, gridInfo, dataObj) {
@@ -7833,9 +7866,17 @@ function thermalEnsureCursorLayer(map) {
   });
   thermalFrontState.cursorFeature.setStyle(new ol.style.Style({
     image: new ol.style.Circle({
-      radius: 3,
-      fill: new ol.style.Fill({ color: "rgba(255,255,255,0.45)" }),
-      stroke: new ol.style.Stroke({ color: "rgba(0,0,0,0.55)", width: 1 })
+      radius: 8,
+      fill: new ol.style.Fill({ color: '#1d4f91' }),
+      stroke: new ol.style.Stroke({ color: '#4d7dff', width: 2 })
+    }),
+    text: new ol.style.Text({
+      text: '1',
+      offsetY: 1,
+      fill: new ol.style.Fill({ color: '#fff' }),
+      font: 'bold 11px monospace',
+      textAlign: 'center',
+      textBaseline: 'middle'
     })
   }));
   thermalFrontState.cursorLayer = new ol.layer.Vector({
@@ -7987,15 +8028,13 @@ async function thermalInitMap() {
       const xy4326 = ol.proj.transform(ev.coordinate, "EPSG:3857", "EPSG:4326");
       return { coord: xy4326, pixel: ev.pixel };
     };
-    map.on("pointermove", ev => {
-      if (currentVar === "thermal_fronts") {
-        const x = to4326(ev);
-        if (!x) return;
-        thermalRenderReadout(x.coord, x.pixel);
-        thermalFrontHoverTip(x.coord, x.pixel);
-      }
-    });
-    map.on("click", ev => {
+    // Same root-cause fix as installMobileReadoutOnce: bind to `singleclick`
+    // only. `pointermove` fires continuously during pinch-zoom and pan on
+    // mobile, which moves the cursor off the selected front point; `click`
+    // is unreliable on touch. `singleclick` fires only on a completed
+    // tap/click with no drag, pinning the marker and readout to the
+    // selected front through any subsequent zoom or pan.
+    map.on("singleclick", ev => {
       if (currentVar === "thermal_fronts") {
         const x = to4326(ev);
         if (!x) return;
