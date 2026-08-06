@@ -6880,6 +6880,42 @@ async function buildThermalFrontDensityCanvas(frontData, grid) {
   return canvas;
 }
 
+// Keep mobile raster rendering entirely inside OpenLayers.  In iOS Safari,
+// converting a sparse canvas to a blob/data URL and handing that URL to
+// ImageStatic can throw `The string did not match the expected pattern`.
+// ImageCanvas avoids the URL parser altogether while preserving the raster's
+// geographic extent during view rendering.
+function makeMobileImageCanvasSource(canvas, imageExtent) {
+  if (!canvas || !Array.isArray(imageExtent) || imageExtent.length !== 4 ||
+      !imageExtent.every(Number.isFinite) || imageExtent[2] <= imageExtent[0] ||
+      imageExtent[3] <= imageExtent[1]) {
+    throw new Error("Invalid mobile raster extent");
+  }
+  return new ol.source.ImageCanvas({
+    projection: "EPSG:4326",
+    ratio: 1,
+    interpolate: false,
+    canvasFunction: function(requestedExtent, resolution, pixelRatio, size) {
+      const out = document.createElement("canvas");
+      out.width = Math.max(1, Math.ceil(size[0]));
+      out.height = Math.max(1, Math.ceil(size[1]));
+      const ctx = out.getContext("2d", { willReadFrequently: false });
+      ctx.clearRect(0, 0, out.width, out.height);
+
+      // The raster canvas is already north-up. Place it into the requested
+      // OpenLayers canvas using the same geographic extent/resolution.
+      const dx = (imageExtent[0] - requestedExtent[0]) / resolution * pixelRatio;
+      const dy = (requestedExtent[3] - imageExtent[3]) / resolution * pixelRatio;
+      const dw = (imageExtent[2] - imageExtent[0]) / resolution * pixelRatio;
+      const dh = (imageExtent[3] - imageExtent[1]) / resolution * pixelRatio;
+      if ([dx, dy, dw, dh].every(Number.isFinite) && dw > 0 && dh > 0) {
+        ctx.drawImage(canvas, dx, dy, dw, dh);
+      }
+      return out;
+    }
+  });
+}
+
 async function renderMobileFrame(frameMeta) {
   if (currentVar === "chl_front" || currentVar === "sst_front" || currentVar === "thermal_fronts" || currentVar === "combined") {
     document.body.classList.remove("mobile-map-ready");
@@ -6926,22 +6962,7 @@ async function renderMobileFrame(frameMeta) {
   if (!extent.every(Number.isFinite) || extent[0] >= extent[2] || extent[1] >= extent[3]) {
     throw new Error("Invalid mobile raster extent: " + JSON.stringify(extent));
   }
-  let source;
-  try {
-    // Avoid Safari's URL parser entirely for the normal mobile product path.
-    // ImageStatic(blob:/data:) still raises "String did not match the
-    // expected pattern" on some iOS/OpenLayers combinations. ImageCanvas
-    // consumes the already-rendered canvas directly.
-    source = new ol.source.ImageCanvas({
-      canvasFunction: () => canvas,
-      imageExtent: extent,
-      projection: "EPSG:4326",
-      ratio: 1
-    });
-  } catch (e) {
-    console.error("[OL mobile] new ol.source.ImageCanvas failed, extent:", extent, e);
-    throw e;
-  }
+  const source = makeMobileImageCanvasSource(canvas, extent);
   source.on("imageloaderror", () => {
     console.error("Mobile map image layer failed to load; falling back to Plotly.");
     mobileMapState.disabled = true;
