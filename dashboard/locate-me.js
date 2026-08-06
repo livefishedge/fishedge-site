@@ -166,10 +166,12 @@
       }),
       new ol.style.Style({
         filter: function (f) { return f.get('kind') === 'boat-position-point'; },
+        // Mike 2026-08-06: open ring (no fill) — keep the white border so
+        // the center dot stays visible against busy charts. Bumped stroke
+        // width to 3 to balance the now-empty interior.
         image: new ol.style.Circle({
           radius: 7,
-          fill: new ol.style.Fill({ color: COLORS.point }),
-          stroke: new ol.style.Stroke({ color: COLORS.pointBorder, width: 2 }),
+          stroke: new ol.style.Stroke({ color: COLORS.pointBorder, width: 3 }),
         }),
       }),
     ];
