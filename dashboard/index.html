@@ -1784,7 +1784,10 @@ async function initializeData() {
     syncTimeControls();
     syncArrowLegend();
     syncControlsHeight();
-    if (framesByVar[currentVar]?.length) await showFrame();
+    // Thermal Fronts is derived from sst_front and therefore has no normal
+    // framesByVar entry. It still needs its dedicated renderer on direct
+    // ?var=thermal_fronts loads.
+    if (currentVar === "thermal_fronts" || framesByVar[currentVar]?.length) await showFrame();
     else { }
     if (currentVar === "combined") document.body.classList.add("combined-mode");
   } catch (e) {
@@ -8816,7 +8819,9 @@ async function setCurrentVar(v, keepTime = true, keepRange = true) {
   syncFrontOverlayControls();
   syncThermalFrontsVisibility();
 
-  if (frames.length) await showFrame();
+  // Thermal Fronts loads its own sst_front-derived frame list inside the
+  // dedicated renderer; it is intentionally absent from framesByVar.
+  if (frames.length || currentVar === "thermal_fronts") await showFrame();
   else return;
 }
 
@@ -9578,15 +9583,17 @@ async function loadCaptainBriefing() {
     const initialT = requestedTimeFromParams();
     const initialFrames = framesByVar[currentVar] || [];
     const initialTimes = frameTimesByVar[currentVar] || [];
-    currentFrameIdx = initialFrames.length && initialT !== null
-      ? closestDaytimeIndex(currentVar, initialTimes, initialFrames, initialT)
+    currentFrameIdx = initialFrames.length
+      ? (initialT !== null
+          ? closestDaytimeIndex(currentVar, initialTimes, initialFrames, initialT)
+          : initialFrames.length - 1)
       : 0;
     syncRangeInputsToVar();
     updateSliderUI();
     syncTimeControls();
     syncArrowLegend();
     syncControlsHeight();
-    if (framesByVar[currentVar]?.length) await showFrame();
+    if (currentVar === "thermal_fronts" || framesByVar[currentVar]?.length) await showFrame();
     else { }
     // Apply combined-mode body class at startup if already on combined
     if (currentVar === "combined") document.body.classList.add("combined-mode");
