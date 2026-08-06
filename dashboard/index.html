@@ -6828,6 +6828,31 @@ async function buildThermalFrontDensityCanvas(frontData, grid) {
   return canvas;
 }
 
+async function renderMobilePlotlyFrame(frameMeta) {
+  let dataObj, gridInfo;
+  if (currentVar === "bathy") {
+    dataObj = await loadBathymetryJson(BATHY_JSON_URL);
+    gridInfo = { xAxis: dataObj.xAxis, yAxis: dataObj.yAxis, nx: dataObj.xAxis.length, ny: dataObj.yAxis.length };
+  } else {
+    dataObj = await fetchFrameData(currentVar, frameMeta);
+    gridInfo = await loadGridForVar(currentVar, dataObj);
+  }
+  const figure = currentVar === "bathy"
+    ? buildBathy(dataObj)
+    : buildForVar(currentVar, gridInfo, dataObj);
+  detachInactiveMapTargets(null);
+  const mapTarget = document.getElementById("map");
+  if (mapTarget) mapTarget.style.display = "none";
+  plotDiv.style.display = "block";
+  mobileMapState.currentGridInfo = gridInfo;
+  mobileMapState.currentDataObj = dataObj;
+  await Plotly.react(plotDiv, figure.data, figure.layout, { responsive: true, displayModeBar: false });
+  setupReadoutHandlersOnce();
+  await renderFooterColorbarToDiv(document.getElementById("hamburger-cbar"), currentVar);
+  updateSliderUI();
+  return true;
+}
+
 async function renderMobileFrame(frameMeta) {
   // Mobile Safari has continued to reject an internal OpenLayers URL during
   // product-page rendering even after raster and basemap URL sources were
@@ -6836,10 +6861,9 @@ async function renderMobileFrame(frameMeta) {
   // Safari console. The combined dashboard has its own renderer and is not
   // affected by this guard.
   if (isMobileMapMode()) {
-    console.info("[OL mobile] disabled for product pages; using fallback renderer");
+    console.info("[OL mobile] disabled for product pages; using Plotly renderer");
     document.body.classList.remove("mobile-map-ready");
-    detachInactiveMapTargets(null);
-    return false;
+    return renderMobilePlotlyFrame(frameMeta);
   }
   if (currentVar === "chl_front" || currentVar === "sst_front" || currentVar === "thermal_fronts" || currentVar === "combined") {
     document.body.classList.remove("mobile-map-ready");
