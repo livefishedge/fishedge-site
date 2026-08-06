@@ -202,10 +202,16 @@
     map.getLayers().forEach(function (l) {
       if (l && l.get && l.get('fishedge-locate') === true) found = l;
     });
-    if (found) return found;
+    if (found) {
+      // Keep Locate Me above every raster, land, contour, and front layer
+      // even when the active product has rebuilt its layer stack.
+      if (typeof found.setZIndex === 'function') found.setZIndex(1000);
+      return found;
+    }
     const layer = new ol.layer.Vector({
       source: new ol.source.Vector(),
       style: buildPositionStyle(ol),
+      zIndex: 1000,
     });
     layer.set('fishedge-locate', true);
     map.addLayer(layer);
