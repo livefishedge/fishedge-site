@@ -1,6 +1,6 @@
 {
   "region": "usec_md",
-  "last_updated": "2026-08-08T17:01:13.574611Z",
+  "last_updated": "2026-08-08T18:02:48.007773Z",
   "vars": [
     "chl",
     "sst",
@@ -666,6 +666,16 @@
         "label": "2026-08-07 18:36 UTC | VJ2",
         "time_iso": "2026-08-07T18:36:00Z",
         "json_path": "https://data.fishedge.live/usec_md/chl/usec_md_2026219.1836_chl_VJ2.json",
+        "grid_file": "frame_bbox",
+        "product_level": null,
+        "stitched": false
+      },
+      {
+        "var": "chl",
+        "id": "usec_md_20260808_2026220.1431_chl_S3A-S3B",
+        "label": "2026-08-08 14:31 UTC | S3A-S3B",
+        "time_iso": "2026-08-08T14:31:00Z",
+        "json_path": "https://data.fishedge.live/usec_md/chl/usec_md_20260808_2026220.1431_chl_S3A-S3B.json",
         "grid_file": "frame_bbox",
         "product_level": null,
         "stitched": false
@@ -3488,6 +3498,36 @@
         "label": "2026-08-08 12:00 UTC",
         "time_iso": "2026-08-08T12:00:00Z",
         "json_path": "https://data.fishedge.live/usec_md/sst/sst_usec_md_2026220_20260808_12_g19.json",
+        "grid_file": "goes_sst_1000_grid.json",
+        "product_level": null,
+        "stitched": false
+      },
+      {
+        "var": "sst",
+        "id": "sst_usec_md_2026220_20260808_13_g19",
+        "label": "2026-08-08 13:00 UTC",
+        "time_iso": "2026-08-08T13:00:00Z",
+        "json_path": "https://data.fishedge.live/usec_md/sst/sst_usec_md_2026220_20260808_13_g19.json",
+        "grid_file": "goes_sst_1000_grid.json",
+        "product_level": null,
+        "stitched": false
+      },
+      {
+        "var": "sst",
+        "id": "sst_usec_md_2026220_20260808_14_g19",
+        "label": "2026-08-08 14:00 UTC",
+        "time_iso": "2026-08-08T14:00:00Z",
+        "json_path": "https://data.fishedge.live/usec_md/sst/sst_usec_md_2026220_20260808_14_g19.json",
+        "grid_file": "goes_sst_1000_grid.json",
+        "product_level": null,
+        "stitched": false
+      },
+      {
+        "var": "sst",
+        "id": "sst_usec_md_2026220_20260808_15_g19",
+        "label": "2026-08-08 15:00 UTC",
+        "time_iso": "2026-08-08T15:00:00Z",
+        "json_path": "https://data.fishedge.live/usec_md/sst/sst_usec_md_2026220_20260808_15_g19.json",
         "grid_file": "goes_sst_1000_grid.json",
         "product_level": null,
         "stitched": false
@@ -7057,6 +7097,36 @@
         "grid_file": "frame_bbox",
         "product_level": null,
         "stitched": false
+      },
+      {
+        "var": "sst_front",
+        "id": "sstfront_usec_md_2026220_20260808_13_g19",
+        "label": "2026-08-08 13:00 UTC",
+        "time_iso": "2026-08-08T13:00:00Z",
+        "json_path": "https://data.fishedge.live/usec_md/sst_front/sstfront_usec_md_2026220_20260808_13_g19.json",
+        "grid_file": "frame_bbox",
+        "product_level": null,
+        "stitched": false
+      },
+      {
+        "var": "sst_front",
+        "id": "sstfront_usec_md_2026220_20260808_14_g19",
+        "label": "2026-08-08 14:00 UTC",
+        "time_iso": "2026-08-08T14:00:00Z",
+        "json_path": "https://data.fishedge.live/usec_md/sst_front/sstfront_usec_md_2026220_20260808_14_g19.json",
+        "grid_file": "frame_bbox",
+        "product_level": null,
+        "stitched": false
+      },
+      {
+        "var": "sst_front",
+        "id": "sstfront_usec_md_2026220_20260808_15_g19",
+        "label": "2026-08-08 15:00 UTC",
+        "time_iso": "2026-08-08T15:00:00Z",
+        "json_path": "https://data.fishedge.live/usec_md/sst_front/sstfront_usec_md_2026220_20260808_15_g19.json",
+        "grid_file": "frame_bbox",
+        "product_level": null,
+        "stitched": false
       }
     ]
   },
@@ -7065,11 +7135,11 @@
     "bathy_path": "gebco_bath_latest/gebco_bathy.json"
   },
   "_dashboard_rewrite": {
-    "rewritten_at": "2026-08-08T17:08:18.706263+00:00",
+    "rewritten_at": "2026-08-08T18:04:36.293305+00:00",
     "r2_base": "https://data.fishedge.live",
     "retention_days": 14,
     "cutoff_doy": 206,
-    "frames_kept": 704,
-    "frames_dropped_outside_retention": 672
+    "frames_kept": 711,
+    "frames_dropped_outside_retention": 669
   }
 }

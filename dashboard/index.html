@@ -8288,13 +8288,18 @@ function thermalRenderReadout(coord, pixel) {
     thermalFrontState.cursorFeature.getGeometry().setCoordinates(toMapProjection(cursorCoord));
   }
   const base = formatReadoutCoords(readoutCoord[0], readoutCoord[1]);
-  if (Number.isFinite(gradient)) {
-    const gradC = gradient * (tempUnit === "F" ? 9 / 5 : 1);
-    const gradDisplay = thermalDistUnit === "nm"
-      ? `${kmToNm(gradC).toFixed(3)} °${tempUnit}/nm`
-      : `${gradC.toFixed(3)} °${tempUnit}/km`;
-    const parts = [gradDisplay];
-    if (deltaSst && Number.isFinite(deltaSst.value)) {
+  const hasGradient = Number.isFinite(gradient);
+  const hasDeltaSst = deltaSst && Number.isFinite(deltaSst.value);
+  if (hasGradient || hasDeltaSst) {
+    const parts = [];
+    if (hasGradient) {
+      const gradC = gradient * (tempUnit === "F" ? 9 / 5 : 1);
+      const gradDisplay = thermalDistUnit === "nm"
+        ? `${kmToNm(gradC).toFixed(3)} °${tempUnit}/nm`
+        : `${gradC.toFixed(3)} °${tempUnit}/km`;
+      parts.push(gradDisplay);
+    }
+    if (hasDeltaSst) {
       const deltaVal = tempUnit === "F" ? deltaSst.value * 9 / 5 : deltaSst.value;
       parts.push(`${deltaSst.label} ${deltaVal.toFixed(2)} ${tempUnitLabel()}`);
     }
