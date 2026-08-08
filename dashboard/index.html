@@ -7968,10 +7968,11 @@ function thermalFeatureStyle(feature, resolution, map) {
 // date of the points." Renders a small floating tip with a colored
 // dot (matches the point's rainbow color) + the date/hour label.
 // Readouts must be anchored to an actual visible front, not a nearby blank
-// area. Two km tolerates line/cell-center rendering differences while
-// preventing a blank click from borrowing another front's metric.
-const MAX_THERMAL_HIT_DISTANCE_KM = 2;
-const MAX_THERMAL_DAILY_HIT_DISTANCE_KM = 2;
+// area. Five km tolerates line/cell-center rendering differences while
+// remaining close enough to reject genuinely blank-water clicks. The
+// readout source is still restricted to the active frame/day below.
+const MAX_THERMAL_HIT_DISTANCE_KM = 5;
+const MAX_THERMAL_DAILY_HIT_DISTANCE_KM = 5;
 
 // Snap-to-segment proximity for thermal fronts. Unlike
 // thermalNearestGradient (which finds the closest vertex), this
@@ -7987,11 +7988,6 @@ function thermalNearestFrontHit(coord) {
   let bestPoint = null;
   let bestGrad = null;
   let bestDelta = null;
-  // Also track nearest valid (non-null gradient) separately for fallback.
-  let validDist = Infinity;
-  let validPoint = null;
-  let validGrad = null;
-  let validDelta = null;
   const toRad = Math.PI / 180;
   const R = 6371;
   for (const item of thermalReadoutFrontItems()) {
@@ -8064,20 +8060,12 @@ function thermalNearestFrontHit(coord) {
           bestGrad = useGrad;
           bestDelta = useDelta;
         }
-        if (Number.isFinite(useGrad)) {
-          if (candDist < validDist) {
-            validDist = candDist;
-            validPoint = [candLon, candLat];
-            validGrad = useGrad;
-            validDelta = useDelta;
-          }
-        }
       }
     }
   }
-  if (validGrad !== null) {
-    return { dist: validDist, gradient: validGrad, point: validPoint, deltaSst: validDelta };
-  }
+  // Snap to the nearest geometry, not the nearest vertex that happens to
+  // have a complete metric payload. A missing gradient must not move the
+  // cursor to a different, farther-away vertex.
   return { dist: bestDist, gradient: bestGrad, point: bestPoint, deltaSst: bestDelta };
 }
 
@@ -8226,6 +8214,7 @@ function thermalRadiusMean(coord) {
   const RADIUS_KM = 5;
   const gradVals = [], sstVals = [];
   let nearestFrontKm = Infinity;
+  let nearestPoint = null;
   for (const item of thermalReadoutFrontItems()) {
     const features = Array.isArray(item.data?.features) ? item.data.features : [];
     for (const feature of features) {
@@ -8238,7 +8227,10 @@ function thermalRadiusMean(coord) {
         const ptLat = Number(pt[1]);
         if (!Number.isFinite(ptLon) || !Number.isFinite(ptLat)) continue;
         const d = thermalHaversineKm([coord[0], coord[1]], [ptLon, ptLat]);
-        nearestFrontKm = Math.min(nearestFrontKm, d);
+        if (d < nearestFrontKm) {
+          nearestFrontKm = d;
+          nearestPoint = [ptLon, ptLat];
+        }
         if (d > RADIUS_KM) continue;
         const g = thermalGradientForFeaturePoint(props, i);
         if (g !== null && Number.isFinite(g)) gradVals.push(g);
@@ -8248,10 +8240,13 @@ function thermalRadiusMean(coord) {
     }
   }
   if (nearestFrontKm > MAX_THERMAL_DAILY_HIT_DISTANCE_KM) return null;
-  if (!gradVals.length && !sstVals.length) return null;
+  // Keep the snap even when this particular vertex has no valid metric;
+  // otherwise the cursor can remain at the click or jump to another point.
   return {
     gradient: gradVals.length ? gradVals.reduce((a, b) => a + b, 0) / gradVals.length : null,
-    deltaSst: sstVals.length ? { label: "ΔSST", value: sstVals.reduce((a, b) => a + b, 0) / sstVals.length } : null
+    deltaSst: sstVals.length ? { label: "ΔSST", value: sstVals.reduce((a, b) => a + b, 0) / sstVals.length } : null,
+    point: nearestPoint,
+    dist: nearestFrontKm
   };
 }
 
@@ -8269,13 +8264,20 @@ function thermalRenderReadout(coord, pixel) {
   if (thermalFrontState.mode === "daily") {
     // Daily mode: compute 5km-radius mean of gradient and SST delta across all front points within 5km
     const mean = thermalRadiusMean(coord);
-    if (mean) { gradient = mean.gradient; deltaSst = mean.deltaSst; }
+    if (mean) {
+      gradient = mean.gradient;
+      deltaSst = mean.deltaSst;
+      if (mean.point) {
+        cursorCoord = mean.point;
+        readoutCoord = mean.point;
+      }
+    }
   } else {
     // Animation mode: snap to the nearest point on any front line segment
-    // (not just the nearest vertex) with a zoom-independent 8 km hit radius.
+    // (not just the nearest vertex) with a zoom-independent 5 km hit radius.
     // Clicking between two vertices on the same line still snaps to it.
     const hit = thermalNearestFrontHit(coord);
-    if (pixel && hit.point && Number.isFinite(hit.gradient) && hit.dist <= MAX_THERMAL_HIT_DISTANCE_KM) {
+    if (pixel && hit.point && hit.dist <= MAX_THERMAL_HIT_DISTANCE_KM) {
       cursorCoord = hit.point;
       readoutCoord = hit.point;
       gradient = hit.gradient;
@@ -9113,9 +9115,11 @@ function installRegionSelector(){
 
 /* ========================= LOADING ========================= */
 async function loadIndex() {
-  // 1. Fetch selected region index ONCE with a cache-buster
+  // 1. Fetch selected region index ONCE with conditional revalidation
   const indexUrl = REGIONS[REGION_ID]?.index || `index-${REGION_ID}.json`;
-  const res = await fetch(indexUrl + "?t=" + Date.now());
+  // Revalidate the manifest without a unique query string so conditional
+  // browser/CDN requests can return a fast 304 when it has not changed.
+  const res = await fetch(indexUrl, { cache: "no-cache" });
   if (!res.ok) throw new Error(`Failed to load ${indexUrl}`);
   const data = await res.json();
 
@@ -9301,7 +9305,10 @@ async function loadGridForVar(v, dataObj = null) {
 async function fetchFrameData(varKey, frameMeta) {
   const p = framePathOf(frameMeta);
   if (!p) throw new Error("Frame has no json path");
-  const res = await fetch(p + (p.includes('?') ? '&' : '?') + 't=' + Date.now());
+  // Frame paths are content-addressed by timestamp/product and are immutable
+  // once published. Do not append Date.now(): that defeated browser and R2
+  // edge caching and made every dashboard load download the same frames again.
+  const res = await fetch(p, { cache: "force-cache" });
   if (!res.ok) throw new Error(`Frame load failed: ${p}`);
   return await res.json();
 }
