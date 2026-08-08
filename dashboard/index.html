@@ -7996,6 +7996,13 @@ function thermalNearestFrontHit(coord) {
       const coords = feature?.geometry?.coordinates || [];
       const props = feature?.properties || {};
       if (!Array.isArray(coords) || coords.length < 1) continue;
+      // Pre-compute feature-level scalar fallbacks. Per-vertex arrays
+      // (gradient_map / delta_sst_map) are sparse in production data —
+      // many features emit them as all-null arrays. Without these
+      // fallbacks, clicking on such a front yields a hit but no
+      // readout, which is the user-visible bug.
+      const scalarGrad = Number.isFinite(props.gradient_per_km) ? props.gradient_per_km : null;
+      const scalarDelta = Number.isFinite(props.strength_median) ? { label: 'ΔSST', value: props.strength_median } : null;
       for (let i = 0; i < coords.length; i++) {
         const a = coords[i];
         if (!Array.isArray(a) || a.length < 2) continue;
@@ -8054,6 +8061,12 @@ function thermalNearestFrontHit(coord) {
             useDelta = { label: delta.label, value: delta.value + (nextD.value - delta.value) * candSegT };
           }
         }
+        // Scalar fallback: if both vertex and segment-interpolated values
+        // are null, use the feature's overall metrics. This is the
+        // difference between "click on a front → readout" and "click on
+        // a front → nothing".
+        if (!Number.isFinite(useGrad) && scalarGrad !== null) useGrad = scalarGrad;
+        if ((!useDelta || !Number.isFinite(useDelta.value)) && scalarDelta) useDelta = scalarDelta;
         if (candDist < bestDist) {
           bestDist = candDist;
           bestPoint = [candLon, candLat];
