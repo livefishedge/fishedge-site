@@ -1,6 +1,6 @@
 {
   "region": "usec_md",
-  "last_updated": "2026-08-08T16:31:45.211659Z",
+  "last_updated": "2026-08-08T17:01:13.574611Z",
   "vars": [
     "chl",
     "sst",
@@ -7065,11 +7065,11 @@
     "bathy_path": "gebco_bath_latest/gebco_bathy.json"
   },
   "_dashboard_rewrite": {
-    "rewritten_at": "2026-08-08T16:38:02.859431+00:00",
+    "rewritten_at": "2026-08-08T17:08:18.706263+00:00",
     "r2_base": "https://data.fishedge.live",
     "retention_days": 14,
     "cutoff_doy": 206,
     "frames_kept": 704,
-    "frames_dropped_outside_retention": 675
+    "frames_dropped_outside_retention": 672
   }
 }
