@@ -21,7 +21,10 @@
   var FETCH_TIMEOUT_MS = 12000;
   var BBOX_PAD = 0.05;
   var MAX_FEATURES = 250;
-  var BASEMAP_ZINDEX = 5;
+  // Labels must sit above raster products (zIndex 10+) and beneath the
+  // Captain controls. The previous zIndex 5 put every structure underneath
+  // CHL/SST/UV imagery, making the toggle appear to do nothing.
+  var BASEMAP_ZINDEX = 60;
   var REGION_BBOXES = {
     usec_south: [-81, 31, -73, 36],
     usec_md: [-76.5, 35.5, -71.5, 40.5],

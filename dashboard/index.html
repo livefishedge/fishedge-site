@@ -37,7 +37,7 @@
   <!-- Auth + Analytics -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-init.js?v=20260806c"></script>
-  <script src="canyon-charts.js?v=20260814e-centroid-labels"></script>
+  <script src="canyon-charts.js?v=20260814f-structure-layer"></script>
   <script src="https://cdn.jsdelivr.net/npm/posthog-js@1.200.0/dist/array.js"></script>
 
 
@@ -109,14 +109,10 @@
     .captain-drag-handle::before{
       content:"⋮"; font-size:22px; line-height:1; font-weight:900;
     }
-    #feedback-drag-handle{
-      position:absolute; left:-13px; top:50%; transform:translateY(-50%);
-      width:18px; height:30px; display:flex; align-items:center; justify-content:center;
-      color:#d7f4df; cursor:grab; border-radius:6px; opacity:.85;
-      background:rgba(10,16,24,.82); font-size:20px; font-weight:900;
-      touch-action:none;
+    @media (max-width:720px){
+      #map .ol-zoom{ display:none !important; }
+      body.no-native-fullscreen #captain-fs-btn{ display:none !important; }
     }
-    #feedback-drag-handle:active{ cursor:grabbing; }
     body.fishedge-app-fullscreen{ overflow:hidden !important; }
     body.fishedge-app-fullscreen #map,
     body.fishedge-app-fullscreen #plot{
@@ -1233,7 +1229,6 @@ body.combined-mode #combined-menu-btn{
   <div id="modebar-host"><div id="modebar-tip"></div></div>
   <div id="readout">Lat/Lon: -- | Value: --</div>
   <div id="feedback-float">
-    <span id="feedback-drag-handle" title="Drag feedback button" aria-label="Drag feedback button">⋮</span>
     <button id="feedback-toggle" title="Send feedback" aria-label="Send feedback">
       <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
         <path d="M5 5.5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-7l-4.5 3v-3H5a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
@@ -2000,7 +1995,7 @@ const gridCache = {};
 let _readoutHooked = false;
 let _relayoutHooked = false;
 
-let viewState = { hasRange:false, xRange:null, yRange:null };
+let viewState = { hasRange:false, xRange:null, yRange:null, centerLonLat:null, zoom:null, rotation:0 };
 function viewportFromParams(params = QUERY_PARAMS) {
   const x0 = Number(params.get("x0"));
   const x1 = Number(params.get("x1"));
@@ -2083,6 +2078,20 @@ function currentViewportRanges() {
       ? { xRange: viewState.xRange, yRange: viewState.yRange }
       : null);
 }
+function currentLiveViewState() {
+  let map = null;
+  if (currentVar === "combined") map = window._combinedMap;
+  else if (currentVar === "thermal_fronts") map = thermalFrontState.map;
+  else map = isMobileMapMode() ? (mobileMapState.map || desktopMapState.map) : (desktopMapState.map || mobileMapState.map);
+  if (!map || !map.getView) return null;
+  const view = map.getView();
+  const center = view.getCenter();
+  const zoom = view.getZoom();
+  if (!center || !Number.isFinite(zoom)) return null;
+  const code = view.getProjection().getCode();
+  const lonLat = code === "EPSG:4326" ? center : ol.proj.transform(center, code, "EPSG:4326");
+  return { centerLonLat: lonLat, zoom, rotation: Number(view.getRotation?.() || 0) };
+}
 function appendViewportParams(url) {
   const vp = currentViewportRanges();
   if (vp) {
@@ -2102,6 +2111,15 @@ function syncViewStateFromOlMap(map) {
   viewState.hasRange = true;
   viewState.xRange = vp.xRange;
   viewState.yRange = vp.yRange;
+  const live = currentLiveViewStateForMap(map);
+  if (live) Object.assign(viewState, live);
+}
+function currentLiveViewStateForMap(map) {
+  if (!map || !map.getView) return null;
+  const view = map.getView(), center = view.getCenter(), zoom = view.getZoom();
+  if (!center || !Number.isFinite(zoom)) return null;
+  const code = view.getProjection().getCode();
+  return { centerLonLat: code === "EPSG:4326" ? center : ol.proj.transform(center, code, "EPSG:4326"), zoom, rotation: Number(view.getRotation?.() || 0) };
 }
 function syncProductSelectors() {
   if (hamburgerProductSelect) hamburgerProductSelect.value = currentVar;
@@ -2113,6 +2131,15 @@ function applyViewStateToOlMap(map, fallbackExtent) {
   if (!size || size[0] <= 0 || size[1] <= 0) return;
   const view = map.getView();
   const viewProjCode = view.getProjection().getCode();
+  if (Array.isArray(viewState.centerLonLat) && viewState.centerLonLat.length === 2 && Number.isFinite(viewState.zoom)) {
+    const center = viewProjCode === 'EPSG:4326'
+      ? viewState.centerLonLat
+      : ol.proj.transform(viewState.centerLonLat, 'EPSG:4326', viewProjCode);
+    view.setCenter(center);
+    view.setZoom(viewState.zoom);
+    if (Number.isFinite(viewState.rotation)) view.setRotation(viewState.rotation);
+    return;
+  }
   // null = "preserve whatever view state is already set" — but only if the view has a center
   if (fallbackExtent === null) {
     // If view has no center yet (first render), fall back to BBOX
@@ -2750,6 +2777,9 @@ function resetViewportToWidthFit() {
   viewState.hasRange = false;
   viewState.xRange = null;
   viewState.yRange = null;
+  viewState.centerLonLat = null;
+  viewState.zoom = null;
+  viewState.rotation = 0;
   if (mobileMapState.map) {
     const extent = mobileMapState.currentGridInfo ? frameExtentFromGrid(mobileMapState.currentGridInfo) : BBOX;
     mobileMapState.map.updateSize();
@@ -2994,7 +3024,7 @@ if (sstHoursSelect) {
     const meanTime = epochTimes.length ? epochTimes.reduce((a, b) => a + b, 0) / epochTimes.length : null;
     window._combinedSstScanTime = meanTime;
     if (sstScanTimeDiv) sstScanTimeDiv.textContent = meanTime
-      ? new Date(meanTime).toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+      ? fmtDaytimeLocal(meanTime)
       : "";
   });
 }
@@ -3548,8 +3578,8 @@ function parseUvDateFromName(filename) {
 
 function fmtLocalDateTime(dt) {
   return dt.toLocaleString(undefined, {
-    year:"numeric", month:"2-digit", day:"2-digit",
-    hour:"2-digit", minute:"2-digit",
+    year:"numeric", month:"numeric", day:"numeric",
+    hour:"numeric", minute:"2-digit",
     hour12:false
   });
 }
@@ -3559,8 +3589,15 @@ function fmtCompactLocalDateTime(dt) {
     hour: "2-digit", minute: "2-digit", hour12: false
   });
 }
+function fmtDaytimeLocal(msOrDate, includeYear = true) {
+  const dt = msOrDate instanceof Date ? msOrDate : new Date(msOrDate);
+  return dt.toLocaleString(undefined, {
+    ...(includeYear ? { year: "numeric" } : {}),
+    month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit", hour12: false
+  });
+}
 function fmtLocalDate(dt) {
-  return dt.toLocaleDateString(undefined, { year:"numeric", month:"2-digit", day:"2-digit" });
+  return dt.toLocaleDateString(undefined, { year:"numeric", month:"numeric", day:"numeric" });
 }
 
 function framePathOf(f){ return String(f?.json_path || f?.path || f?.file || f?.url || f?.json || ""); }
@@ -5629,7 +5666,7 @@ async function renderCombinedMode() {
     const chlT = epochMsForFrame("chl", frame);
     window._combinedChlScanTime = chlT;
     if (chlScanTimeDiv) chlScanTimeDiv.textContent = chlT
-      ? new Date(chlT).toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+      ? fmtDaytimeLocal(chlT)
       : "";
   } else {
     if (chlScanTimeDiv) chlScanTimeDiv.textContent = "";
@@ -5705,7 +5742,7 @@ async function renderCombinedMode() {
         const epochTimes = compositeFrames.map(item => epochMsForFrame("sst", item.frame)).filter(t => t);
         const meanTime = epochTimes.length ? epochTimes.reduce((a, b) => a + b, 0) / epochTimes.length : null;
         if (sstScanTimeDiv) sstScanTimeDiv.textContent = meanTime
-          ? new Date(meanTime).toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+          ? fmtDaytimeLocal(meanTime)
           : "";
       }
     }
@@ -6201,9 +6238,7 @@ async function buildChlCompositeLayer(map, hoursOrOpts) {
     // Single-frame: that frame's time, no averaging.
     const t = epochTimes[0];
     window._combinedChlScanTime = t;
-    scanTime = new Date(t).toLocaleString(undefined, {
-      year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
-    });
+    scanTime = fmtDaytimeLocal(t);
   } else {
     const earliest = Math.min.apply(null, epochTimes);
     const latest = Math.max.apply(null, epochTimes);
@@ -6213,18 +6248,14 @@ async function buildChlCompositeLayer(map, hoursOrOpts) {
       // so the pre-chip dropdown path is byte-for-byte unchanged.
       const meanTime = epochTimes.reduce((a, b) => a + b, 0) / epochTimes.length;
       window._combinedChlScanTime = meanTime;
-      scanTime = new Date(meanTime).toLocaleString(undefined, {
-        year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
-      });
+      scanTime = fmtDaytimeLocal(meanTime);
     } else {
       // "auto" / chip-driven: describe the actual data shown.
       // Median of K frames: <earliest> - <latest>. The label claims
       // a range, not a single time, because the displayed pixel
       // values are a per-pixel median across those frames.
       window._combinedChlScanTime = latest;
-      const fmt = ms => new Date(ms).toLocaleString(undefined, {
-        year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
-      });
+      const fmt = ms => fmtDaytimeLocal(ms);
       scanTime = `Median of ${epochTimes.length} frames: ${fmt(earliest)} – ${fmt(latest)}`;
     }
   }
@@ -6596,9 +6627,7 @@ async function combinedChlRenderSelected() {
       const t = combinedChlFrameTimeMs(frame);
       window._combinedChlScanTime = t || null;
       if (chlScanTimeDiv && t) {
-        chlScanTimeDiv.textContent = new Date(t).toLocaleString(undefined, {
-          year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
-        });
+        chlScanTimeDiv.textContent = fmtDaytimeLocal(t);
       }
     } catch (err) {
       console.error("[CHL chip] single-frame render failed", err);
@@ -6757,9 +6786,7 @@ async function rebuildCombinedUvLayer(map, { hoursMode = "latest" } = {}) {
     const uvT = epochMsForFrame("uv", frame);
     if (uvScanTimeDiv) {
       if (uvT) {
-        const fmt = new Date(uvT).toLocaleString(undefined, {
-          year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
-        });
+        const fmt = fmtDaytimeLocal(uvT);
         uvScanTimeDiv.textContent = hoursMode === "latest"
           ? fmt
           : `Latest in last ${hoursMode} hours: ${fmt}`;
@@ -6807,9 +6834,7 @@ function buildThermalHoursComposite(map, hours) {
   // Scan time: mid-point timestamp in local format
   const tSorted = frontItems.map(i => i.t).filter(Boolean).sort((a, b) => a - b);
   const scanTime = tSorted.length > 0
-    ? new Date(tSorted[Math.floor(tSorted.length / 2)]).toLocaleString(undefined, {
-        year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
-      })
+      ? fmtDaytimeLocal(tSorted[Math.floor(tSorted.length / 2)])
     : "";
 
   // ImageStatic overlay. This avoids thousands of separate vector symbols and
@@ -6936,7 +6961,7 @@ async function buildUvCompositeLayer(map, count) {
   }).filter(Boolean).sort((a, b) => a - b);
   const midTime = frameTimes.length > 0 ? frameTimes[Math.floor(frameTimes.length / 2)] : null;
   const scanTime = midTime
-    ? new Date(midTime).toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+    ? fmtDaytimeLocal(midTime)
     : "";
 
   if (!valid.length) return { scanTime };
@@ -7467,9 +7492,9 @@ function thermalFrameTimeLabel(ms) {
   // which forced thermal-fronts-mode labels to UTC regardless of user's tz.
   // Now uses browser local time (same convention as fmtLocalDateTime).
   return new Date(ms).toLocaleString(undefined, {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
     minute: "2-digit",
     hour12: false
   });
@@ -8817,6 +8842,12 @@ async function renderThermalFrontsNative() {
     });
     map.__thermalInitialFitDone = true;
   }
+  // Product switching may have captured an exact center/zoom. Restore it
+  // after the one-time regional fit instead of refitting an extent to a new
+  // viewport and changing the user's field of view.
+  if (Array.isArray(viewState.centerLonLat) && Number.isFinite(viewState.zoom)) {
+    applyViewStateToOlMap(map, null);
+  }
   const list = thermalActiveFrameList();
   thermalFrontState.frameIdx = Math.max(0, Math.min(thermalFrontState.frameIdx, Math.max(0, list.length - 1)));
   thermalRenderFrontLayer();
@@ -8873,6 +8904,7 @@ async function setCurrentVar(v, keepTime = true, keepRange = true) {
 
   // Save the live OL/Plotly viewport before switching products.
   const liveRange = keepRange ? currentViewportRanges() : null;
+  const liveView = keepRange ? currentLiveViewState() : null;
   const savedRange = liveRange
     ? { x: liveRange.xRange, y: liveRange.yRange }
     : ((keepRange && viewState.hasRange) ? { x: viewState.xRange, y: viewState.yRange } : null);
@@ -8924,6 +8956,7 @@ async function setCurrentVar(v, keepTime = true, keepRange = true) {
     viewState.yRange = savedRange.y;
     viewState.hasRange = true;
   }
+  if (liveView) Object.assign(viewState, liveView);
 
   syncRangeInputsToVar();
   updateSliderUI();
@@ -10498,6 +10531,11 @@ function updateFsIcon() {
 document.addEventListener('fullscreenchange', updateFsIcon);
 document.addEventListener('webkitfullscreenchange', updateFsIcon);
 window.addEventListener('resize', updateFsIcon);
+if (!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen)) {
+  // iOS Safari cannot fullscreen arbitrary DOM content. Hide the control
+  // there rather than presenting a button that cannot perform its promise.
+  document.body.classList.add('no-native-fullscreen');
+}
 
 document.addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
@@ -10588,7 +10626,7 @@ function installDraggable(target, handle, storageKey, ignoreSelector) {
 }
 
 installDraggable(document.getElementById("captain-tools"), document.querySelector("#captain-tools .captain-drag-handle"), "fishedge_captain_tools_position", null);
-installDraggable(document.getElementById("feedback-float"), document.getElementById("feedback-drag-handle"), "fishedge_feedback_position", null);
+installDraggable(document.getElementById("feedback-float"), document.getElementById("feedback-toggle"), "fishedge_feedback_position", null);
 </script>
 <!-- rebuilt:captains-dashboard-readout-v2-$(date +%s) -->
 </body>
