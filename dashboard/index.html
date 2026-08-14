@@ -1640,7 +1640,7 @@ async function initializeData() {
     syncTimeControls();
     syncArrowLegend();
     syncControlsHeight();
-    if (framesByVar[currentVar]?.length) await showFrame();
+    if (currentVar === "thermal_fronts" || framesByVar[currentVar]?.length) await showFrame();
     else { }
     if (currentVar === "combined") document.body.classList.add("combined-mode");
   } catch (e) {
@@ -1824,12 +1824,27 @@ let userRanges = {
   combined: { ...DEFAULT_RANGES.combined }
 };
 
-let tempUnit = localStorage.getItem("sst_temp_unit") === "F" ? "F" : "C";
-let thermalDistUnit = localStorage.getItem("thermal_dist_unit") === "nm" ? "nm" : "km";
+let tempUnit = localStorage.getItem("sst_temp_unit") === "C" ? "C" : "F";
+let thermalDistUnit = localStorage.getItem("thermal_dist_unit") === "km" ? "km" : "nm";
 // cToF: converts absolute Celsius temperature to Fahrenheit (used for point values)
 function cToF(c) { return c * 9 / 5 + 32; }
 // kmToNm: converts kilometers to nautical miles (1 nm ≈ 1.852 km, so km → nm divides)
 function kmToNm(km) { return km * 1.852; }
+function kmToNmDistance(km) { return km / 1.852; }
+function nmToKmDistance(nm) { return nm * 1.852; }
+const MS_TO_KT = 1.94384;
+function msToKt(ms) { return ms * MS_TO_KT; }
+function mToFathom(m) { return m * 0.546806649; }
+let depthUnit = localStorage.getItem("depth_unit") === "m" ? "m" : "fathom";
+function formatDepth(meters) {
+  if (meters === null || meters === undefined) return "";
+  if (depthUnit === "fathom") return `${mToFathom(meters).toFixed(1)} fm`;
+  return `${meters.toFixed(0)}m`;
+}
+function formatArrowSpeed(ms) {
+  if (!Number.isFinite(ms)) return "";
+  return `${msToKt(ms).toFixed(2)} kt`;
+}
 function formatDist(km) {
   if (km === null || km === undefined) return "";
   if (thermalDistUnit === "nm") return `${kmToNm(km).toFixed(1)} nm`;
@@ -2376,7 +2391,7 @@ function renderDesktopReadout(lon, lat, pixel) {
   }
   const { value, row, col } = sample;
   if (currentVar === "sst") setReadout(`${base}, ${formatSstValue(value)}`);
-  else if (currentVar === "bathy") setReadout(`${base}, ${value.toFixed(0)}m`);
+  else if (currentVar === "bathy") setReadout(`${base}, ${formatDepth(value)}`);
   else if (currentVar === "uv") {
     const d = (dataObj && dataObj.data && !Array.isArray(dataObj.data)) ? dataObj.data : dataObj;
     const adt = Number(d?.adt?.[row]?.[col]);
@@ -8847,7 +8862,7 @@ async function setCurrentVar(v, keepTime = true, keepRange = true) {
   syncFrontOverlayControls();
   syncThermalFrontsVisibility();
 
-  if (frames.length) await showFrame();
+  if (frames.length || currentVar === "thermal_fronts") await showFrame();
   else return;
 }
 
@@ -9594,7 +9609,7 @@ async function loadCaptainBriefing() {
     syncTimeControls();
     syncArrowLegend();
     syncControlsHeight();
-    if (framesByVar[currentVar]?.length) await showFrame();
+    if (currentVar === "thermal_fronts" || framesByVar[currentVar]?.length) await showFrame();
     else { }
     // Apply combined-mode body class at startup if already on combined
     if (currentVar === "combined") document.body.classList.add("combined-mode");
