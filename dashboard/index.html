@@ -98,6 +98,7 @@
     #all-day-toggle{ display:flex; align-items:center; gap:6px; white-space:nowrap; font-size:13px; font-weight:800; }
     #all-day-cb{ width:15px; height:15px; accent-color:#d84bff; }
     #toolbar-status{ color:#9fb0c3; font-size:12px; font-weight:700; white-space:nowrap; }
+    #captain-tools, #feedback-float{ touch-action:none; user-select:none; }
 
     /* Modebar host: NEW CSS for floating inside the plot at upper-left */
     #modebar-host{
@@ -1191,7 +1192,7 @@ body.combined-mode #combined-menu-btn{
     <span id="nav-bar">
       <button id="prev-btn" type="button" title="Previous frame" aria-label="Previous frame">&#8592;</button>
       <input id="frame-slider" type="range" min="0" max="0" step="1" value="0" aria-label="Frame progress" />
-      <button id="play-btn" type="button" title="Play/Pause" style="min-width:52px;font-size:13px;font-weight:900;">Play</button>
+      <button id="play-btn" type="button" title="Play" aria-label="Play" style="min-width:32px;font-size:16px;font-weight:900;">▶</button>
       <button id="next-btn" type="button" title="Next frame" aria-label="Next frame">&#8594;</button>
       <span id="frame-label"></span>
     </span>
@@ -3514,6 +3515,12 @@ function fmtLocalDateTime(dt) {
     hour12:false
   });
 }
+function fmtCompactLocalDateTime(dt) {
+  return dt.toLocaleString(undefined, {
+    year: undefined, month: "numeric", day: "numeric",
+    hour: "2-digit", minute: "2-digit", hour12: false
+  });
+}
 function fmtLocalDate(dt) {
   return dt.toLocaleDateString(undefined, { year:"numeric", month:"2-digit", day:"2-digit" });
 }
@@ -3525,12 +3532,12 @@ function timeOnlyLabel(varKey, frameMeta) {
   if (varKey === "bathy") return ""; /* EMPTY for bathy */
   if (frameMeta?.time_iso) {
     const dt = new Date(frameMeta.time_iso);
-    if (!isNaN(dt.getTime())) return fmtLocalDateTime(dt);
+    if (!isNaN(dt.getTime())) return varKey === "chl" && isMobileDevice() ? fmtCompactLocalDateTime(dt) : fmtLocalDateTime(dt);
   }
   if (frameMeta?.label) return String(frameMeta.label);
   const path = framePathOf(frameMeta);
   const filename = String(path).split("/").pop() || "";
-  if (varKey === "chl") { const dt = parseChlUtcFromName(filename); return dt ? fmtLocalDateTime(dt) : ""; }
+  if (varKey === "chl") { const dt = parseChlUtcFromName(filename); return dt ? (isMobileDevice() ? fmtCompactLocalDateTime(dt) : fmtLocalDateTime(dt)) : ""; }
   if (varKey === "sst") { const dt = parseSstUtcFromName(filename); return dt ? fmtLocalDateTime(dt) : ""; }
   if (varKey === "chl_front" || varKey === "sst_front") { const dt = parseFrontUtcFromName(filename); return dt ? fmtLocalDateTime(dt) : ""; }
   if (varKey === "uv")  { const dt = parseUvDateFromName(filename);  return dt ? fmtLocalDate(dt) : ""; }
@@ -8637,7 +8644,7 @@ function thermalUpdateLegendAndStatus() {
         statsText += ` | mean ΔSST: ${displaySst.toFixed(2)}${sstLabel}`;
       }
     }
-    if (toolbarStatus) toolbarStatus.textContent = `${thermalFrontState.frameIdx + 1}/${thermalFrontState.dailyFrames.length} daily frames - ${dayItem?.date || ""}${statsText}`;
+    if (toolbarStatus) toolbarStatus.textContent = "";
     if (legendEl) {
       legendEl.style.display = "";
       const allDays = !!thermalAllDayCb?.checked;
@@ -8650,7 +8657,7 @@ function thermalUpdateLegendAndStatus() {
     }
   } else {
     const total = thermalAllDayCb?.checked ? list.length : 1;
-    if (toolbarStatus) toolbarStatus.textContent = `${thermalFrontState.frameIdx + 1}/${list.length} hourly frames - ${thermalFrontState.selectedDate || ""} - showing ${total}`;
+    if (toolbarStatus) toolbarStatus.textContent = "";
     const displayedCount = thermalDisplayedFrontItems().length;
     if (legendEl) {
       legendEl.style.display = displayedCount > 1 ? "" : "none";
@@ -8905,7 +8912,9 @@ function stepFrame(delta) {
 function setPlaying(on) {
   if (on === playing) return;
   playing = on;
-  playBtn.textContent = playing ? "Pause" : "Play";
+  playBtn.textContent = playing ? "❚❚" : "▶";
+  playBtn.title = playing ? "Pause" : "Play";
+  playBtn.setAttribute("aria-label", playing ? "Pause" : "Play");
   if (playing) {
     if (playTimer) clearInterval(playTimer);
     playTimer = setInterval(() => stepFrame(+1), playIntervalMs);
@@ -10537,6 +10546,69 @@ function applyUrlWaypoints() {
   applyLoadedWaypoints(_urlWaypoints);
   _urlWaypoints = null;
 }
+
+// Keep the compact controls and feedback affordance usable on small screens.
+// A click still activates the control; a pointer movement turns it into a drag.
+function installDraggable(target, handle, storageKey, ignoreSelector) {
+  if (!target || !handle || target.dataset.draggableInstalled) return;
+  target.dataset.draggableInstalled = "1";
+  let drag = null;
+  let moved = false;
+  try {
+    const saved = JSON.parse(localStorage.getItem(storageKey) || "null");
+    if (saved && Number.isFinite(saved.left) && Number.isFinite(saved.top)) {
+      target.style.left = `${saved.left}px`;
+      target.style.top = `${saved.top}px`;
+      target.style.right = "auto";
+      target.style.bottom = "auto";
+    }
+  } catch (_) {}
+  handle.addEventListener("pointerdown", (event) => {
+    if (ignoreSelector && event.target.closest(ignoreSelector)) return;
+    const rect = target.getBoundingClientRect();
+    drag = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, left: rect.left, top: rect.top };
+    moved = false;
+    handle.setPointerCapture?.(event.pointerId);
+    event.preventDefault();
+  });
+  handle.addEventListener("pointermove", (event) => {
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    const dx = event.clientX - drag.startX;
+    const dy = event.clientY - drag.startY;
+    if (!moved && Math.hypot(dx, dy) < 4) return;
+    moved = true;
+    const margin = 6;
+    const maxX = Math.max(margin, window.innerWidth - target.offsetWidth - margin);
+    const maxY = Math.max(margin, window.innerHeight - target.offsetHeight - margin);
+    const left = Math.max(margin, Math.min(maxX, drag.left + dx));
+    const top = Math.max(margin, Math.min(maxY, drag.top + dy));
+    target.style.left = `${left}px`;
+    target.style.top = `${top}px`;
+    target.style.right = "auto";
+    target.style.bottom = "auto";
+  });
+  const finish = (event) => {
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    if (moved) {
+      try { localStorage.setItem(storageKey, JSON.stringify({ left: parseFloat(target.style.left), top: parseFloat(target.style.top) })); } catch (_) {}
+      target.dataset.dragSuppressClick = "1";
+      setTimeout(() => { delete target.dataset.dragSuppressClick; }, 0);
+    }
+    drag = null;
+  };
+  handle.addEventListener("pointerup", finish);
+  handle.addEventListener("pointercancel", finish);
+  handle.addEventListener("click", (event) => {
+    if (target.dataset.dragSuppressClick === "1") {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      delete target.dataset.dragSuppressClick;
+    }
+  }, true);
+}
+
+installDraggable(document.getElementById("captain-tools"), document.getElementById("captain-tools"), "fishedge_captain_tools_position", "button");
+installDraggable(document.getElementById("feedback-float"), document.getElementById("feedback-toggle"), "fishedge_feedback_position", null);
 </script>
 <!-- rebuilt:captains-dashboard-readout-v2-$(date +%s) -->
 </body>
