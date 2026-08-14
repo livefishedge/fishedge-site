@@ -10002,13 +10002,6 @@ setInterval(pollForUpdates, 60000);
 // CAPTAIN TOOLS — Distance & Waypoint tools for combined map
 // ═══════════════════════════════════════════════════════════════
 
-let captainDistTool = {
-  active: false,
-  points: [],
-  lineLayer: null,
-  mapRef: null
-};
-
 let captainAddTool = {
   active: false,
   points: [],
@@ -10227,116 +10220,6 @@ function applyLoadedWaypoints(pts) {
   document.getElementById('captain-save-btn')?.style.setProperty('display', 'flex');
 }
 
-// ── Distance tool ────────────────────────────────────────────────────────
-
-function activateDistTool(map) {
-  if (captainAddTool.active) toggleAddTool(map);
-  captainDistTool.active = true;
-  captainDistTool.mapRef = map;
-  captainDistTool.points = [];
-  document.getElementById('captain-dist-tool')?.classList.add('active');
-  const button = document.getElementById('captain-dist-tool');
-  if (button) button.title = 'Exit distance measurement (or press Escape)';
-  document.getElementById('captain-dist-panel')?.classList.add('visible');
-  updateDistPanel();
-  map.getTargetElement().style.cursor = 'crosshair';
-}
-
-function deactivateDistTool() {
-  if (!captainDistTool.active) return;
-  captainDistTool.active = false;
-  clearDistLayer();
-  document.getElementById('captain-dist-tool')?.classList.remove('active');
-  const button = document.getElementById('captain-dist-tool');
-  if (button) button.title = 'Measure distance (M)';
-  document.getElementById('captain-dist-panel')?.classList.remove('visible');
-  const map = captainDistTool.mapRef;
-  if (map) map.getTargetElement().style.cursor = 'crosshair';
-  captainDistTool.points = [];
-  updateDistPanel();
-}
-
-function clearDistLayer() {
-  if (captainDistTool.lineLayer && captainDistTool.mapRef) {
-    captainDistTool.mapRef.removeLayer(captainDistTool.lineLayer);
-    captainDistTool.lineLayer = null;
-  }
-}
-
-function getDistanceKm(p1, p2) {
-  const R = 6371;
-  const dLat = (p2.lat - p1.lat) * Math.PI / 180;
-  const dLon = (p2.lon - p1.lon) * Math.PI / 180;
-  const a = Math.sin(dLat / 2) ** 2 +
-    Math.cos(p1.lat * Math.PI / 180) * Math.cos(p2.lat * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
-function updateDistPanel() {
-  const list = document.getElementById('captain-dist-list');
-  const total = document.getElementById('captain-dist-total');
-  if (!list) return;
-  list.innerHTML = '';
-  let running = 0;
-  for (let i = 0; i < captainDistTool.points.length; i++) {
-    const p = captainDistTool.points[i];
-    if (i > 0) {
-      const prev = captainDistTool.points[i - 1];
-      const d = getDistanceKm(prev, p);
-      running += d;
-      list.innerHTML += `<div style="color:#7a8fa8;margin-bottom:2px;">Pt ${i}: ${p.lat.toFixed(4)}, ${p.lon.toFixed(4)} &nbsp;<b style="color:var(--fg);">${d.toFixed(1)} km</b></div>`;
-    } else {
-      list.innerHTML += `<div style="color:#7a8fa8;margin-bottom:2px;">Pt ${i}: ${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}</div>`;
-    }
-  }
-  if (total) total.textContent = captainDistTool.points.length >= 2
-    ? `Total: ${running.toFixed(2)} km / ${(running / 1.852).toFixed(2)} nm` : '';
-}
-
-function renderDistLayer(map) {
-  if (captainDistTool.lineLayer) map.removeLayer(captainDistTool.lineLayer);
-  if (captainDistTool.points.length < 2) return;
-  const pts = captainDistTool.points.map(p => toMapProjection([p.lon, p.lat]));
-  const feats = [];
-  let running = 0;
-  for (let i = 1; i < pts.length; i++) {
-    const d = getDistanceKm(captainDistTool.points[i - 1], captainDistTool.points[i]);
-    running += d;
-    feats.push(new ol.Feature({
-      geometry: new ol.geom.LineString([pts[i - 1], pts[i]]),
-      segIdx: i
-    }));
-  }
-  const ptFeats = captainDistTool.points.map((p, i) => new ol.Feature({
-    geometry: new ol.geom.Point(toMapProjection([p.lon, p.lat])),
-    label: String(i)
-  }));
-  const src = new ol.source.Vector({ features: [...feats, ...ptFeats], wrapX: false, projection: "EPSG:4326" });
-  const layer = new ol.layer.Vector({
-    source: src,
-    style: feat => {
-      if (feat.getGeometry().getType() === 'LineString') {
-        return new ol.style.Style({
-          stroke: new ol.style.Stroke({ color: '#ff9800', width: 2.5, lineDash: [6, 4] })
-        });
-      }
-      return new ol.style.Style({
-        image: new ol.style.Circle({ radius: 5, fill: new ol.style.Fill({ color: '#ff9800' }), stroke: new ol.style.Stroke({ color: '#fff', width: 1.5 }) }),
-        text: new ol.style.Text({ text: feat.get('label'), offsetY: -12, fill: new ol.style.Fill({ color: '#ff9800' }), font: 'bold 11px monospace', stroke: new ol.style.Stroke({ color: '#fff', width: 2 }) })
-      });
-    },
-    zIndex: 50
-  });
-  map.addLayer(layer);
-  captainDistTool.lineLayer = layer;
-}
-
-function addDistPoint(lon, lat, map) {
-  captainDistTool.points.push({ lon, lat });
-  renderDistLayer(map);
-  updateDistPanel();
-}
-
 // ── Add waypoint tool ─────────────────────────────────────────────────
 
 function toggleAddTool(map) {
@@ -10346,7 +10229,6 @@ function toggleAddTool(map) {
     document.getElementById('captain-pts-panel')?.classList.remove('visible');
     map.getTargetElement().style.cursor = 'crosshair';
   } else {
-    if (captainDistTool.active) deactivateDistTool();
     captainAddTool.active = true;
     captainAddTool.mapRef = map;
     document.getElementById('captain-add-tool')?.classList.add('active');
