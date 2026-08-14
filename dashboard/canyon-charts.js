@@ -2,8 +2,8 @@
 // The current authoritative source is BOEM's US Submarine Canyons service.
 // Labels are placed at polygon centroids, not at an average of all vertices;
 // averaging vertices can put a long/concave canyon label in the wrong water.
-// Layer zIndex is low so the grounds sit with the basemap context, beneath
-// SST / CHL / thermal-fronts overlays.
+// Layer zIndex is above raster products so labels remain visible when the
+// Underwater toggle is enabled, while the Captain controls stay on top.
 
 (function () {
   'use strict';
@@ -206,14 +206,18 @@
   }
 
   function mergeFeatures(boem, gebco) {
-    var merged = boem.slice();
-    gebco.forEach(function (item) {
+    // Prefer the gazetteer anchor for a named feature; BOEM's polygon
+    // centroid is retained only when GEBCO has no matching name.
+    var merged = gebco.slice();
+    boem.forEach(function (item) {
       var duplicate = merged.some(function (existing) {
         var nameA = String(existing.name || '').toLowerCase();
         var nameB = String(item.name || '').toLowerCase();
         var nameMatch = nameA === nameB || nameB.indexOf(nameA) === 0 || nameA.indexOf(nameB) === 0;
-        var dx = existing.point[0] - item.point[0], dy = existing.point[1] - item.point[1];
-        return nameMatch && Math.sqrt(dx * dx + dy * dy) < 0.6;
+        // BOEM uses short names ("Norfolk") while GEBCO uses the full
+        // gazetteer name ("Norfolk Canyon"). Treat those as the same named
+        // feature even when the polygon centroid and gazetteer anchor differ.
+        return nameMatch;
       });
       if (!duplicate) merged.push(item);
     });

@@ -163,6 +163,9 @@
       box-sizing:border-box;
       overflow:hidden;
       position:relative;
+      touch-action:none;
+      -webkit-user-select:none;
+      user-select:none;
     }
     #feedback-toggle svg{ width:22px; height:22px; display:block; }
     #feedback-toggle::before{
@@ -2632,6 +2635,7 @@ async function renderDesktopFrame(frameMeta) {
   if (mapDivEl) {
     attachMapToUnifiedTarget(map);
   }
+  if (captainAddTool.points.length) renderPtsLayer(map);
 
   // Ensure desktop land layer is present (persists across product switches)
   if (landTrace && desktopMapState.landLayer) {
@@ -5585,6 +5589,7 @@ async function renderCombinedMode() {
   window._combinedMapRef = map;
   attachMapToUnifiedTarget(map);
   installCaptainToolHandler(map);
+  if (captainAddTool.points.length) renderPtsLayer(map);
   map.on("moveend", () => syncViewStateFromOlMap(map));
   console.log("[combined] OL map created, target:", !!map.getTargetElement(), "size:", map.getSize());
   const cv0 = map.getTargetElement()?.querySelector("canvas");
@@ -7226,6 +7231,7 @@ async function renderMobileFrame(frameMeta) {
   }
   installMobileReadoutOnce(map);
   map.updateSize();
+  if (captainAddTool.points.length) renderPtsLayer(map);
 
   const regionKey = `${REGION_ID}:${currentVar}`;
   if (mobileMapState.fittedRegion !== regionKey) {
@@ -10231,7 +10237,7 @@ function applyLoadedWaypoints(pts) {
   captainAddTool.active = true;
   document.getElementById('captain-add-tool')?.classList.add('active');
   document.getElementById('captain-pts-panel')?.classList.add('visible');
-  const map = window._combinedMapRef;
+  const map = activeCaptainToolMap();
   if (map) renderPtsLayer(map);
   updatePtsPanel();
   document.getElementById('captain-save-btn')?.style.setProperty('display', 'inline-block');
@@ -10290,7 +10296,19 @@ function updatePtsPanel() {
 }
 
 function renderPtsLayer(map) {
-  if (captainAddTool.markerLayer) map.removeLayer(captainAddTool.markerLayer);
+  if (!map) return;
+  // Re-home the same waypoint set whenever the active product map changes.
+  // The old implementation only remembered the layer's previous map, so the
+  // points disappeared when switching between Combined/CHL/SST/UV/Bathy.
+  if (captainAddTool.markerLayer && captainAddTool.mapRef && captainAddTool.mapRef !== map) {
+    try { captainAddTool.mapRef.removeLayer(captainAddTool.markerLayer); } catch (_) {}
+    captainAddTool.markerLayer = null;
+  }
+  if (captainAddTool.markerLayer) {
+    try { map.removeLayer(captainAddTool.markerLayer); } catch (_) {}
+    captainAddTool.markerLayer = null;
+  }
+  captainAddTool.mapRef = map;
   if (captainAddTool.points.length === 0) return;
   const feats = captainAddTool.points.map((p, i) => {
     const f = new ol.Feature({ geometry: new ol.geom.Point(toMapProjection([p.lon, p.lat])), idx: i });
