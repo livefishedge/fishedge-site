@@ -2134,6 +2134,16 @@ function applyViewStateToOlMap(map, fallbackExtent) {
   if (!size || size[0] <= 0 || size[1] <= 0) return;
   const view = map.getView();
   const viewProjCode = view.getProjection().getCode();
+  // Preserve the geographic rectangle, not just OL zoom/center. The combined
+  // and single-product maps can have different viewport dimensions; replaying
+  // the same zoom number changes the visible field of view.
+  if (viewState.hasRange && viewState.xRange && viewState.yRange) {
+    const extent4326 = [viewState.xRange[0], viewState.yRange[0], viewState.xRange[1], viewState.yRange[1]];
+    const extent = viewProjCode === 'EPSG:4326' ? extent4326 : ol.proj.transformExtent(extent4326, 'EPSG:4326', viewProjCode);
+    view.fit(extent, { size, nearest: true, duration: 0 });
+    if (Number.isFinite(viewState.rotation)) view.setRotation(viewState.rotation);
+    return;
+  }
   if (Array.isArray(viewState.centerLonLat) && viewState.centerLonLat.length === 2 && Number.isFinite(viewState.zoom)) {
     const center = viewProjCode === 'EPSG:4326'
       ? viewState.centerLonLat
@@ -2162,6 +2172,24 @@ function applyViewStateToOlMap(map, fallbackExtent) {
   if (!extent4326) return;
   const extent = viewProjCode === 'EPSG:4326' ? extent4326 : ol.proj.transformExtent(extent4326, 'EPSG:4326', viewProjCode);
   view.fit(extent, { size, nearest: true });
+}
+
+function scheduleViewportRestore() {
+  if (!viewState.hasRange) return;
+  const restore = () => {
+    let map = null;
+    if (currentVar === "combined") map = window._combinedMap;
+    else if (currentVar === "thermal_fronts") map = thermalFrontState.map;
+    else map = isMobileMapMode() ? mobileMapState.map : desktopMapState.map;
+    if (!map) return;
+    map.updateSize();
+    applyViewStateToOlMap(map, null);
+  };
+  requestAnimationFrame(() => {
+    restore();
+    requestAnimationFrame(restore);
+  });
+  setTimeout(restore, 250);
 }
 applyInitialViewportParams();
 let landTrace = null;
@@ -2554,6 +2582,7 @@ async function renderDesktopFrame(frameMeta) {
     if (loadDiv) loadDiv.remove();
     return false;
   }
+  installCaptainToolHandler(map);
 
   // Combined: render all layers simultaneously as a snapshot
   if (currentVar === "combined") {
@@ -7230,6 +7259,7 @@ async function renderMobileFrame(frameMeta) {
     await ensureMobileBathyContourLayer(map, dataObj, gridInfo);
   }
   installMobileReadoutOnce(map);
+  installCaptainToolHandler(map);
   map.updateSize();
   if (captainAddTool.points.length) renderPtsLayer(map);
 
@@ -8278,6 +8308,8 @@ async function thermalInitMap() {
   if (desktopMapState.placeLayer) desktopMapState.placeLayer.setVisible(true);
   await ensureDesktopLandLayer(map);
   await ensureDesktopPlaceLayer(map);
+  installCaptainToolHandler(map);
+  if (captainAddTool.points.length) renderPtsLayer(map);
   thermalEnsureCursorLayer(map);
   if (thermalFrontState.cursorLayer) thermalFrontState.cursorLayer.setVisible(true);
   if (!map.__thermalReadoutInstalled) {
@@ -8849,8 +8881,8 @@ async function renderThermalFrontsNative() {
     map.__thermalInitialFitDone = true;
   }
   // Product switching may have captured an exact center/zoom. Restore it
-  // after the one-time regional fit instead of refitting an extent to a new
-  // viewport and changing the user's field of view.
+  // after the one-time regional fit; the shared post-render viewport restore
+  // also replays the geographic rectangle after asynchronous layer work.
   if (Array.isArray(viewState.centerLonLat) && Number.isFinite(viewState.zoom)) {
     applyViewStateToOlMap(map, null);
   }
@@ -8971,7 +9003,10 @@ async function setCurrentVar(v, keepTime = true, keepRange = true) {
   syncFrontOverlayControls();
   syncThermalFrontsVisibility();
 
-  if (frames.length || currentVar === "thermal_fronts") await showFrame();
+  if (frames.length || currentVar === "thermal_fronts") {
+    await showFrame();
+    scheduleViewportRestore();
+  }
   if (currentVar === "combined" && toolbarStatus) toolbarStatus.textContent = "";
   else return;
 }
@@ -10350,9 +10385,15 @@ window.removeWaypoint = function(idx) {
 // ── Map click handler ───────────────────────────────────────────────────
 
 let _captainMapClickHandler = null;
+let _captainMapClickMap = null;
 
 function installCaptainToolHandler(map) {
-  if (_captainMapClickHandler) { map.un('click', _captainMapClickHandler); _captainMapClickHandler = null; }
+  if (!map) return;
+  if (_captainMapClickHandler && _captainMapClickMap) {
+    _captainMapClickMap.un('click', _captainMapClickHandler);
+  }
+  _captainMapClickHandler = null;
+  _captainMapClickMap = map;
   // Captain's Dashboard has its own persistent readout (#combined-readout,
   // z-index 1120) sitting on top of #readout (z-index 950) at the same
   // bottom-right position. setReadout() targets #readout, so writing
@@ -10374,7 +10415,10 @@ function installCaptainToolHandler(map) {
     if (currentVar !== "combined" && !toolsActive) return;
     if (!ev.coordinate) return;
     // Combined map is EPSG:3857; transform to 4326 before treating as lon/lat.
-    const xy4326 = ol.proj.transform(ev.coordinate, "EPSG:3857", "EPSG:4326");
+    const projection = map.getView().getProjection().getCode();
+    const xy4326 = projection === "EPSG:4326"
+      ? ev.coordinate
+      : ol.proj.transform(ev.coordinate, projection, "EPSG:4326");
     const lon = xy4326[0];
     const lat = xy4326[1];
     if (captainDistTool.active) { addDistPoint(lon, lat, map); return; }
@@ -10599,15 +10643,14 @@ function installDraggable(target, handle, storageKey, ignoreSelector) {
       target.style.bottom = "auto";
     }
   } catch (_) {}
-  handle.addEventListener("pointerdown", (event) => {
+  const begin = (event) => {
     if (ignoreSelector && event.target.closest(ignoreSelector)) return;
     const rect = target.getBoundingClientRect();
     drag = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, left: rect.left, top: rect.top };
     moved = false;
-    handle.setPointerCapture?.(event.pointerId);
-    event.preventDefault();
-  });
-  handle.addEventListener("pointermove", (event) => {
+    event.stopPropagation();
+  };
+  const move = (event) => {
     if (!drag || event.pointerId !== drag.pointerId) return;
     const dx = event.clientX - drag.startX;
     const dy = event.clientY - drag.startY;
@@ -10622,7 +10665,8 @@ function installDraggable(target, handle, storageKey, ignoreSelector) {
     target.style.top = `${top}px`;
     target.style.right = "auto";
     target.style.bottom = "auto";
-  });
+    if (moved) event.preventDefault();
+  };
   const finish = (event) => {
     if (!drag || event.pointerId !== drag.pointerId) return;
     if (moved) {
@@ -10632,8 +10676,13 @@ function installDraggable(target, handle, storageKey, ignoreSelector) {
     }
     drag = null;
   };
-  handle.addEventListener("pointerup", finish);
-  handle.addEventListener("pointercancel", finish);
+  // Listen on window so dragging continues when the pointer leaves the
+  // circular feedback button or a compact toolbar. Pointer capture is not
+  // consistently honored by mobile browsers and transformed elements.
+  handle.addEventListener("pointerdown", begin, { passive: false });
+  window.addEventListener("pointermove", move, { passive: false });
+  window.addEventListener("pointerup", finish, { passive: false });
+  window.addEventListener("pointercancel", finish, { passive: false });
   handle.addEventListener("click", (event) => {
     if (target.dataset.dragSuppressClick === "1") {
       event.preventDefault();

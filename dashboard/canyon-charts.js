@@ -89,7 +89,15 @@
 
   function featurePoint(feature) {
     var geometry = feature.geometry || {};
+    if (feature.centroid && Number.isFinite(Number(feature.centroid.x)) && Number.isFinite(Number(feature.centroid.y))) {
+      return [Number(feature.centroid.x), Number(feature.centroid.y)];
+    }
     if (feature.centroid && Array.isArray(feature.centroid.coordinates)) return feature.centroid.coordinates;
+    // ArcGIS JSON polygon geometry uses `rings`; normalize it for the same
+    // centroid fallback used by GeoJSON responses.
+    if (Array.isArray(geometry.rings)) {
+      geometry = { type: 'Polygon', coordinates: geometry.rings };
+    }
     var candidates = [];
     if (geometry.type === 'Polygon') {
       var polygon = polygonCentroid(geometry.coordinates);
@@ -125,7 +133,10 @@
       inSR: '4326',
       outSR: '4326',
       outFields: 'Name,Region,Sys_Can,DepthMin_m,DepthMax_m,Length_Km',
-      f: 'geojson',
+      // ArcGIS JSON includes the service-calculated centroid when
+      // returnCentroid=true. GeoJSON silently omitted that field, which made
+      // multipart canyons fall back to an inaccurate largest-polygon point.
+      f: 'json',
       returnGeometry: 'true',
       returnCentroid: 'true',
       resultRecordCount: String(MAX_FEATURES),
@@ -143,9 +154,10 @@
         return (j.features || []).map(function (f) {
           var point = featurePoint(f);
           if (!point) return null;
-          return { point: point, name: (f.properties && f.properties.Name) || 'Unnamed',
-            type: 'Canyon', region: f.properties && f.properties.Region,
-            system: f.properties && f.properties.Sys_Can };
+          var p = f.attributes || {};
+          return { point: point, name: p.Name || 'Unnamed',
+            type: 'Canyon', region: p.Region,
+            system: p.Sys_Can };
         }).filter(Boolean);
       })
       .finally(function () { clearTimeout(timeout); });
@@ -298,13 +310,8 @@
   }
 
   function showAttribution() {
-    if (state.attributionEl) return;
-    var card = document.createElement('div');
-    card.id = 'fishing-grounds-attribution';
-    card.textContent = ATTRIBUTION;
-    card.style.cssText = 'position:fixed;bottom:8px;left:8px;z-index:1100;background:rgba(10,16,24,.88);color:#cbd5e1;border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:6px 10px;font:11px/1.4 system-ui,sans-serif;max-width:360px;pointer-events:none;opacity:1';
-    document.body.appendChild(card);
-    state.attributionEl = card;
+    // Source metadata remains on the vector layer for diagnostics, but the
+    // viewer intentionally has no visible attribution card.
   }
 
   function hideAttribution() {
@@ -316,7 +323,7 @@
   function setVisible(visible) {
     state.visible = Boolean(visible);
     state.layers.forEach(function (layer) { layer.setVisible(state.visible); });
-    if (state.visible) showAttribution(); else hideAttribution();
+    hideAttribution();
     window.dispatchEvent(new CustomEvent('fishedge-underwater-visibility', {
       detail: { visible: state.visible }
     }));
