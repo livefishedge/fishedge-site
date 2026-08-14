@@ -690,6 +690,11 @@ body.combined-mode #combined-menu-btn{
       line-height:1;
     }
     #captain-fs-btn:hover{ background:rgba(255,255,255,0.08); border-color:rgba(255,255,255,0.2); }
+    /* One locate control lives in the shared Captain tools row. The locate
+       script also creates a legacy fixed host; keep that host functional but
+       invisible so it cannot duplicate the compass over the hamburger. */
+    #fishedge-locate-host{ display:none !important; }
+    #captain-dist-panel.visible, #captain-pts-panel.visible{ display:block !important; }
     #captain-save-btn{
       display:none;
       background:#1d4f91;
@@ -1215,6 +1220,15 @@ body.combined-mode #combined-menu-btn{
         <rect x="2" y="2" width="14" height="14" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linejoin="round"/>
       </svg>
     </button>
+    <button id="captain-dist-tool" class="captain-tool-btn" title="Measure distance (M)" data-tool="dist" aria-label="Measure distance">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <line x1="3" y1="10" x2="17" y2="10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <polyline points="7,6 3,10 7,14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        <polyline points="13,6 17,10 13,14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        <line x1="7" y1="7" x2="7" y2="13" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+        <line x1="13" y1="7" x2="13" y2="13" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+      </svg>
+    </button>
     <button id="captain-underwater-tool" class="captain-tool-btn" title="Show underwater structures" aria-label="Show underwater structures" aria-pressed="false">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
         <path d="M3 9c2.2 0 2.2 2 4.4 2s2.2-2 4.4-2 2.2 2 4.4 2 2.2-2 4.4-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
@@ -1239,6 +1253,14 @@ body.combined-mode #combined-menu-btn{
       <button id="captain-save-btn" title="Save waypoints">Save Waypoints</button>
     </div>
     <div id="captain-pts-list"></div>
+  </div>
+  <div id="captain-dist-panel" style="display:none;position:fixed;top:96px;left:8px;z-index:1150;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-size:12px;color:var(--fg);min-width:200px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:0.6px;color:#7a8fa8;margin-bottom:8px;">
+      <span>Distance</span>
+      <button id="captain-dist-exit" type="button" title="Exit distance measurement" style="border:1px solid #4d7dff;border-radius:5px;background:#1d4f91;color:#fff;padding:3px 7px;font-size:11px;font-weight:700;cursor:pointer;">Exit</button>
+    </div>
+    <div id="captain-dist-list"></div>
+    <div id="captain-dist-total" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-weight:700;color:var(--fg);"></div>
   </div>
   <div id="combined-controls">
     <div style="text-align:center;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--border);">
@@ -9244,6 +9266,27 @@ function plotConfig() {
           }
         }
       },
+      {
+        name: "Measure Distance",
+        title: "Measure distance between two points",
+        icon: Plotly.Icons.drawline,
+        click: () => {
+          if (measureMode === "off") {
+            measureMode = "start";
+            markerMode = "off";
+            plotDiv.classList.add("measure-mode");
+            plotDiv.classList.remove("crosshair-mode", "remove-mode");
+            measurePoints = [];
+            setReadout("Measure Mode: Click START point");
+          } else {
+            measureMode = "off";
+            plotDiv.classList.remove("measure-mode");
+            measurePoints = [];
+            setReadout("");
+          }
+          showFrame();
+        }
+      },
     ]
   };
 }
@@ -9854,12 +9897,120 @@ setInterval(pollForUpdates, 60000);
 // CAPTAIN TOOLS — Distance & Waypoint tools for combined map
 // ═══════════════════════════════════════════════════════════════
 
+let captainDistTool = {
+  active: false,
+  points: [],
+  lineLayer: null,
+  mapRef: null
+};
+
 let captainAddTool = {
   active: false,
   points: [],
   markerLayer: null,
   mapRef: null
 };
+
+function activeCaptainToolMap() {
+  if (currentVar === "combined") return window._combinedMapRef || window._combinedMap || null;
+  if (isMobileMapMode()) return mobileMapState.map || desktopMapState.map || null;
+  return desktopMapState.map || mobileMapState.map || null;
+}
+
+function activateDistTool(map) {
+  if (!map) return;
+  if (captainAddTool.active) toggleAddTool(map);
+  captainDistTool.active = true;
+  captainDistTool.mapRef = map;
+  captainDistTool.points = [];
+  document.getElementById('captain-dist-tool')?.classList.add('active');
+  document.getElementById('captain-dist-tool')?.setAttribute('aria-pressed', 'true');
+  document.getElementById('captain-dist-panel')?.classList.add('visible');
+  updateDistPanel();
+  map.getTargetElement()?.style.setProperty('cursor', 'crosshair');
+}
+
+function deactivateDistTool() {
+  if (!captainDistTool.active) return;
+  captainDistTool.active = false;
+  clearDistLayer();
+  document.getElementById('captain-dist-tool')?.classList.remove('active');
+  document.getElementById('captain-dist-tool')?.setAttribute('aria-pressed', 'false');
+  document.getElementById('captain-dist-panel')?.classList.remove('visible');
+  const map = captainDistTool.mapRef;
+  if (map) map.getTargetElement()?.style.setProperty('cursor', 'crosshair');
+  captainDistTool.points = [];
+  updateDistPanel();
+}
+
+function clearDistLayer() {
+  if (captainDistTool.lineLayer && captainDistTool.mapRef) {
+    captainDistTool.mapRef.removeLayer(captainDistTool.lineLayer);
+    captainDistTool.lineLayer = null;
+  }
+}
+
+function getDistanceKm(p1, p2) {
+  const R = 6371;
+  const dLat = (p2.lat - p1.lat) * Math.PI / 180;
+  const dLon = (p2.lon - p1.lon) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(p1.lat * Math.PI / 180) * Math.cos(p2.lat * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function updateDistPanel() {
+  const list = document.getElementById('captain-dist-list');
+  const total = document.getElementById('captain-dist-total');
+  if (!list) return;
+  list.innerHTML = '';
+  let running = 0;
+  captainDistTool.points.forEach((p, i) => {
+    if (i > 0) {
+      const d = getDistanceKm(captainDistTool.points[i - 1], p);
+      running += d;
+      list.innerHTML += `<div style="color:#7a8fa8;margin-bottom:2px;">Pt ${i}: ${p.lat.toFixed(4)}, ${p.lon.toFixed(4)} &nbsp;<b style="color:var(--fg);">${d.toFixed(1)} km</b></div>`;
+    } else {
+      list.innerHTML += `<div style="color:#7a8fa8;margin-bottom:2px;">Pt ${i}: ${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}</div>`;
+    }
+  });
+  if (total) total.textContent = captainDistTool.points.length >= 2
+    ? `Total: ${running.toFixed(2)} km / ${(running / 1.852).toFixed(2)} nm` : '';
+}
+
+function renderDistLayer(map) {
+  clearDistLayer();
+  if (captainDistTool.points.length < 1) return;
+  const projected = captainDistTool.points.map(p => toMapProjection([p.lon, p.lat]));
+  const features = [];
+  for (let i = 1; i < projected.length; i++) {
+    features.push(new ol.Feature({
+      geometry: new ol.geom.LineString([projected[i - 1], projected[i]])
+    }));
+  }
+  projected.forEach((xy, i) => features.push(new ol.Feature({
+    geometry: new ol.geom.Point(xy), label: String(i)
+  })));
+  const source = new ol.source.Vector({ features, wrapX: false });
+  const layer = new ol.layer.Vector({
+    source,
+    style: feature => feature.getGeometry().getType() === 'LineString'
+      ? new ol.style.Style({ stroke: new ol.style.Stroke({ color: '#ff9800', width: 2.5, lineDash: [6, 4] }) })
+      : new ol.style.Style({
+          image: new ol.style.Circle({ radius: 5, fill: new ol.style.Fill({ color: '#ff9800' }), stroke: new ol.style.Stroke({ color: '#fff', width: 1.5 }) }),
+          text: new ol.style.Text({ text: feature.get('label'), offsetY: -12, fill: new ol.style.Fill({ color: '#ff9800' }), font: 'bold 11px monospace', stroke: new ol.style.Stroke({ color: '#fff', width: 2 }) })
+        }),
+    zIndex: 50
+  });
+  map.addLayer(layer);
+  captainDistTool.lineLayer = layer;
+}
+
+function addDistPoint(lon, lat, map) {
+  captainDistTool.points.push({ lon, lat });
+  renderDistLayer(map);
+  updateDistPanel();
+}
 
 // ── Format writers ──────────────────────────────────────────────────────────
 
@@ -10191,13 +10342,14 @@ function installCaptainToolHandler(map) {
   };
   _captainMapClickHandler = (ev) => {
     // On single-product pages this handler exists only to service the waypoint tool.
-    const toolsActive = captainAddTool.active;
+    const toolsActive = captainAddTool.active || captainDistTool.active;
     if (currentVar !== "combined" && !toolsActive) return;
     if (!ev.coordinate) return;
     // Combined map is EPSG:3857; transform to 4326 before treating as lon/lat.
     const xy4326 = ol.proj.transform(ev.coordinate, "EPSG:3857", "EPSG:4326");
     const lon = xy4326[0];
     const lat = xy4326[1];
+    if (captainDistTool.active) { addDistPoint(lon, lat, map); return; }
     if (captainAddTool.active) { addWaypoint(lon, lat, map); return; }
     // ── Feature readout (Captain's Dashboard click → bottom-right box) ──
     // Priority: bathy contour line > thermal front gradient > UV arrow > raster
@@ -10277,8 +10429,20 @@ function combinedFrontClickInfo(map, coord, pixel) {
 
 // ── Button wiring ───────────────────────────────────────────────────────
 
+document.getElementById('captain-dist-tool')?.addEventListener('click', () => {
+  const map = activeCaptainToolMap();
+  if (!map) return;
+  if (captainDistTool.active) deactivateDistTool();
+  else activateDistTool(map);
+});
+
+document.getElementById('captain-dist-exit')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  deactivateDistTool();
+});
+
 document.getElementById('captain-add-tool')?.addEventListener('click', () => {
-  const map = window._combinedMapRef;
+  const map = activeCaptainToolMap();
   if (!map) return;
   toggleAddTool(map);
 });
@@ -10347,11 +10511,15 @@ document.addEventListener('webkitfullscreenchange', updateFsIcon);
 
 document.addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-  const map = window._combinedMapRef;
+  const map = activeCaptainToolMap();
   if (!map) return;
-  if (e.key === 'a' || e.key === 'A') {
+  if (e.key === 'm' || e.key === 'M') {
+    if (captainDistTool.active) deactivateDistTool();
+    else activateDistTool(map);
+  } else if (e.key === 'a' || e.key === 'A') {
     toggleAddTool(map);
   } else if (e.key === 'Escape') {
+    if (captainDistTool.active) deactivateDistTool();
     captainAddTool.active = false;
     document.getElementById('captain-add-tool')?.classList.remove('active');
     document.getElementById('captain-pts-panel')?.classList.remove('visible');
