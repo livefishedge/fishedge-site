@@ -37,7 +37,7 @@
   <!-- Auth + Analytics -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-init.js?v=20260806c"></script>
-  <script src="canyon-charts.js?v=20260813d-basemap-grounds"></script>
+  <script src="canyon-charts.js?v=20260814e-centroid-labels"></script>
   <script src="https://cdn.jsdelivr.net/npm/posthog-js@1.200.0/dist/array.js"></script>
 
 
@@ -99,6 +99,33 @@
     #all-day-cb{ width:15px; height:15px; accent-color:#d84bff; }
     #toolbar-status{ color:#9fb0c3; font-size:12px; font-weight:700; white-space:nowrap; }
     #captain-tools, #feedback-float{ touch-action:none; user-select:none; }
+    .captain-drag-handle{
+      width:18px; height:30px; flex:0 0 18px; cursor:grab;
+      display:flex; align-items:center; justify-content:center;
+      border-radius:5px; color:#8fa3b8; opacity:.8;
+      touch-action:none;
+    }
+    .captain-drag-handle:active{ cursor:grabbing; }
+    .captain-drag-handle::before{
+      content:"⋮"; font-size:22px; line-height:1; font-weight:900;
+    }
+    #feedback-drag-handle{
+      position:absolute; left:-13px; top:50%; transform:translateY(-50%);
+      width:18px; height:30px; display:flex; align-items:center; justify-content:center;
+      color:#d7f4df; cursor:grab; border-radius:6px; opacity:.85;
+      background:rgba(10,16,24,.82); font-size:20px; font-weight:900;
+      touch-action:none;
+    }
+    #feedback-drag-handle:active{ cursor:grabbing; }
+    body.fishedge-app-fullscreen{ overflow:hidden !important; }
+    body.fishedge-app-fullscreen #map,
+    body.fishedge-app-fullscreen #plot{
+      position:fixed !important; inset:0 !important; width:100vw !important;
+      height:100dvh !important; z-index:2000 !important;
+    }
+    body.fishedge-app-fullscreen #captain-tools,
+    body.fishedge-app-fullscreen #hamburger-btn,
+    body.fishedge-app-fullscreen #feedback-float{ z-index:2150 !important; }
 
     /* Modebar host: NEW CSS for floating inside the plot at upper-left */
     #modebar-host{
@@ -1206,6 +1233,7 @@ body.combined-mode #combined-menu-btn{
   <div id="modebar-host"><div id="modebar-tip"></div></div>
   <div id="readout">Lat/Lon: -- | Value: --</div>
   <div id="feedback-float">
+    <span id="feedback-drag-handle" title="Drag feedback button" aria-label="Drag feedback button">⋮</span>
     <button id="feedback-toggle" title="Send feedback" aria-label="Send feedback">
       <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
         <path d="M5 5.5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-7l-4.5 3v-3H5a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
@@ -1226,6 +1254,7 @@ body.combined-mode #combined-menu-btn{
   <div id="thermal-hover-tip"></div>
   <div id="combined-overlay"></div>
   <div id="captain-tools" role="toolbar" aria-label="Captain tools">
+    <span class="captain-drag-handle" title="Drag Captain tools" aria-label="Drag Captain tools"></span>
     <button id="captain-fs-btn" class="captain-tool-btn" title="Fullscreen">
       <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
         <rect x="2" y="2" width="14" height="14" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linejoin="round"/>
@@ -8718,7 +8747,9 @@ async function thermalLoadData() {
   if (thermalFrontState.loading) return;
   if (thermalFrontState.initialized && thermalFrontState.loadedRegion === REGION_ID) return;
   thermalFrontState.loading = true;
-  if (toolbarStatus) toolbarStatus.textContent = "Loading thermal fronts...";
+  // Thermal fronts load in the background; do not replace the shared toolbar
+  // with a redundant status sentence on every product page.
+  if (toolbarStatus) toolbarStatus.textContent = "";
   try {
     const idx = await loadIndex();
     const fbv = idx.frames || idx.framesByVar || idx.frames_by_var || {};
@@ -9744,82 +9775,8 @@ async function loadCaptainBriefing() {
   const floatEl = document.getElementById('feedback-float');
   const toggleBtn = document.getElementById('feedback-toggle');
   const panel = document.getElementById('feedback-panel');
-  let dragState = null;
-  let suppressNextClick = false;
-
-  function applyFeedbackPosition(pos) {
-    if (!floatEl || !pos) return;
-    const box = visualViewportBox();
-    const rect = floatEl.getBoundingClientRect();
-    const width = rect.width || 48;
-    const height = rect.height || 48;
-    const x = Math.max(box.left + 8, Math.min(box.left + box.width - width - 8, Number(pos.x)));
-    const y = Math.max(box.top + 8, Math.min(box.top + box.height - height - 8, Number(pos.y)));
-    floatEl.style.left = x + 'px';
-    floatEl.style.top = y + 'px';
-    floatEl.style.right = 'auto';
-    floatEl.style.bottom = 'auto';
-    floatEl.style.alignItems = 'flex-start';
-  }
-
-  function loadFeedbackPosition() {
-    try { return JSON.parse(localStorage.getItem('mobile_feedback_pos') || 'null'); }
-    catch (_) { return null; }
-  }
-
-  function saveFeedbackPosition() {
-    if (!floatEl) return;
-    const rect = floatEl.getBoundingClientRect();
-    localStorage.setItem('mobile_feedback_pos', JSON.stringify({ x: rect.left, y: rect.top }));
-  }
-
-  const savedFeedbackPosition = loadFeedbackPosition();
-  if (savedFeedbackPosition) applyFeedbackPosition(savedFeedbackPosition);
-  requestAnimationFrame(syncFloatingViewportUi);
-
-  if (toggleBtn && floatEl) {
-    toggleBtn.addEventListener('pointerdown', (e) => {
-      if (!isMobileDevice()) return;
-      const rect = floatEl.getBoundingClientRect();
-      dragState = {
-        pointerId: e.pointerId,
-        startX: e.clientX,
-        startY: e.clientY,
-        left: rect.left,
-        top: rect.top,
-        moved: false
-      };
-      toggleBtn.setPointerCapture?.(e.pointerId);
-    });
-
-    toggleBtn.addEventListener('pointermove', (e) => {
-      if (!dragState || dragState.pointerId !== e.pointerId) return;
-      const dx = e.clientX - dragState.startX;
-      const dy = e.clientY - dragState.startY;
-      if (Math.hypot(dx, dy) > 4) dragState.moved = true;
-      if (!dragState.moved) return;
-      e.preventDefault();
-      applyFeedbackPosition({ x: dragState.left + dx, y: dragState.top + dy });
-    });
-
-    function finishDrag(e) {
-      if (!dragState || dragState.pointerId !== e.pointerId) return;
-      suppressNextClick = dragState.moved;
-      if (dragState.moved) saveFeedbackPosition();
-      syncFloatingViewportUi();
-      dragState = null;
-    }
-    toggleBtn.addEventListener('pointerup', finishDrag);
-    toggleBtn.addEventListener('pointercancel', finishDrag);
-  }
-
   if (toggleBtn && panel) {
     toggleBtn.addEventListener('click', (e) => {
-      if (suppressNextClick) {
-        suppressNextClick = false;
-        e.preventDefault();
-        return;
-      }
       panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
     });
   }
@@ -10475,17 +10432,29 @@ document.getElementById('captain-save-btn')?.addEventListener('click', (e) => {
 });
 
 document.getElementById('captain-fs-btn')?.addEventListener('click', () => {
-  const fullscreenEl = document.fullscreenElement || document.webkitFullscreenElement || document.querySelector('#map') || document.documentElement;
-  const target = document.fullscreenElement ? null : fullscreenEl;
-  if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-    if (fullscreenEl.requestFullscreen) fullscreenEl.requestFullscreen();
-    else if (fullscreenEl.webkitRequestFullscreen) fullscreenEl.webkitRequestFullscreen();
-    else if (fullscreenEl.webkitEnterFullscreen) fullscreenEl.webkitEnterFullscreen();
-  } else {
-    if (document.exitFullscreen) document.exitFullscreen();
+  const nativeActive = !!(document.fullscreenElement || document.webkitFullscreenElement || document.webkitIsFullScreen);
+  const appActive = document.body.classList.contains('fishedge-app-fullscreen');
+  if (nativeActive || appActive) {
+    if (document.exitFullscreen) document.exitFullscreen().catch?.(() => {});
     else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
     else if (document.webkitCancelFullScreen) document.webkitCancelFullScreen();
+    document.body.classList.remove('fishedge-app-fullscreen');
+    updateFsIcon();
+    return;
   }
+  // iOS Safari does not expose the Fullscreen API for ordinary DOM elements.
+  // Use the native API where available, with a viewport-filling app mode as a
+  // reliable fallback on mobile browsers.
+  const request = document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen;
+  if (request) {
+    try {
+      const result = request.call(document.documentElement);
+      if (result?.catch) result.catch(() => document.body.classList.add('fishedge-app-fullscreen'));
+    } catch (_) { document.body.classList.add('fishedge-app-fullscreen'); }
+  } else {
+    document.body.classList.add('fishedge-app-fullscreen');
+  }
+  updateFsIcon();
 });
 
 document.getElementById('captain-underwater-tool')?.addEventListener('click', () => {
@@ -10510,7 +10479,7 @@ window.addEventListener('fishedge-underwater-visibility', (event) => {
 function updateFsIcon() {
   const btn = document.getElementById('captain-fs-btn');
   if (!btn) return;
-  const isFs = !!(document.fullscreenElement || document.webkitIsFullScreen);
+  const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement || document.webkitIsFullScreen || document.body.classList.contains('fishedge-app-fullscreen'));
   btn.innerHTML = isFs
     ? `<svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
          <line x1="1" y1="1" x2="6" y2="6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
@@ -10528,6 +10497,7 @@ function updateFsIcon() {
 }
 document.addEventListener('fullscreenchange', updateFsIcon);
 document.addEventListener('webkitfullscreenchange', updateFsIcon);
+window.addEventListener('resize', updateFsIcon);
 
 document.addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
@@ -10617,8 +10587,8 @@ function installDraggable(target, handle, storageKey, ignoreSelector) {
   }, true);
 }
 
-installDraggable(document.getElementById("captain-tools"), document.getElementById("captain-tools"), "fishedge_captain_tools_position", "button");
-installDraggable(document.getElementById("feedback-float"), document.getElementById("feedback-toggle"), "fishedge_feedback_position", null);
+installDraggable(document.getElementById("captain-tools"), document.querySelector("#captain-tools .captain-drag-handle"), "fishedge_captain_tools_position", null);
+installDraggable(document.getElementById("feedback-float"), document.getElementById("feedback-drag-handle"), "fishedge_feedback_position", null);
 </script>
 <!-- rebuilt:captains-dashboard-readout-v2-$(date +%s) -->
 </body>

@@ -1,8 +1,7 @@
-// fishing-grounds.js — FishEdge permanent basemap feature labels
-// Renders IHO-IOC GEBCO Gazetteer undersea feature names (canyons, seamounts,
-// knolls, banks) as a permanent part of the captain's-dashboard basemap.
-// No toggle, no toolbar icon — these are geographic context, like city labels.
-// Source: IHO-IOC GEBCO Gazetteer of Undersea Feature Names via ArcGIS REST.
+// fishing-grounds.js — FishEdge toggleable undersea-feature labels.
+// The current authoritative source is BOEM's US Submarine Canyons service.
+// Labels are placed at polygon centroids, not at an average of all vertices;
+// averaging vertices can put a long/concave canyon label in the wrong water.
 // Layer zIndex is low so the grounds sit with the basemap context, beneath
 // SST / CHL / thermal-fronts overlays.
 
@@ -13,8 +12,11 @@
   var SERVICE_ROOT =
     'https://services.arcgis.com/bDAhvQYMG4WL8O5o/arcgis/rest/services/' +
     'US_Submarine_Canyons/FeatureServer/';
+  var GEBCO_ROOT =
+    'https://services2.arcgis.com/Uq9r85Potqm3MfRV/arcgis/rest/services/' +
+    'Undersea_Features/FeatureServer/0/query';
   var ATTRIBUTION =
-    'Permanent canyon systems: BOEM US Submarine Canyons';
+    'Underwater structures: BOEM canyons + GEBCO undersea features';
   var CACHE_TTL_MS = 6 * 60 * 60 * 1000;
   var FETCH_TIMEOUT_MS = 12000;
   var BBOX_PAD = 0.05;
@@ -61,18 +63,51 @@
     return REGION_BBOXES[region] || null;
   }
 
-  function collectCoords(value, out) {
-    if (!Array.isArray(value)) return;
-    if (value.length >= 2 && typeof value[0] === 'number' && typeof value[1] === 'number') {
-      out.push(value);
-      return;
+  function ringCentroid(ring) {
+    if (!Array.isArray(ring) || ring.length < 3) return null;
+    var twiceArea = 0, cx = 0, cy = 0;
+    for (var i = 0; i < ring.length - 1; i++) {
+      var a = ring[i], b = ring[i + 1];
+      var cross = a[0] * b[1] - b[0] * a[1];
+      twiceArea += cross;
+      cx += (a[0] + b[0]) * cross;
+      cy += (a[1] + b[1]) * cross;
     }
-    value.forEach(function (v) { collectCoords(v, out); });
+    if (Math.abs(twiceArea) < 1e-12) return null;
+    return { area: Math.abs(twiceArea) / 2, point: [cx / (3 * twiceArea), cy / (3 * twiceArea)] };
+  }
+
+  function polygonCentroid(polygon) {
+    if (!Array.isArray(polygon) || !polygon.length) return null;
+    // The outer ring determines the geographic label location. Holes are not
+    // relevant to a named canyon's label anchor.
+    return ringCentroid(polygon[0]);
   }
 
   function featurePoint(feature) {
+    var geometry = feature.geometry || {};
+    if (feature.centroid && Array.isArray(feature.centroid.coordinates)) return feature.centroid.coordinates;
+    var candidates = [];
+    if (geometry.type === 'Polygon') {
+      var polygon = polygonCentroid(geometry.coordinates);
+      if (polygon) candidates.push(polygon);
+    } else if (geometry.type === 'MultiPolygon') {
+      (geometry.coordinates || []).forEach(function (poly) {
+        var candidate = polygonCentroid(poly);
+        if (candidate) candidates.push(candidate);
+      });
+    }
+    if (candidates.length) {
+      candidates.sort(function (a, b) { return b.area - a.area; });
+      return candidates[0].point;
+    }
+    // Defensive fallback for a future point/line service.
     var coords = [];
-    collectCoords(feature.geometry && feature.geometry.coordinates, coords);
+    (function collect(value) {
+      if (!Array.isArray(value)) return;
+      if (value.length >= 2 && typeof value[0] === 'number' && typeof value[1] === 'number') { coords.push(value); return; }
+      value.forEach(collect);
+    })(geometry.coordinates);
     if (!coords.length) return null;
     var lon = 0, lat = 0;
     coords.forEach(function (c) { lon += c[0]; lat += c[1]; });
@@ -89,6 +124,7 @@
       outFields: 'Name,Region,Sys_Can,DepthMin_m,DepthMax_m,Length_Km',
       f: 'geojson',
       returnGeometry: 'true',
+      returnCentroid: 'true',
       resultRecordCount: String(MAX_FEATURES),
       returnExceededLimitFeatures: 'false',
     });
@@ -126,6 +162,59 @@
     }).finally(function () { state.inflight.delete(key); });
     state.inflight.set(key, promise);
     return promise;
+  }
+
+  function gebcoType(code) {
+    var map = { CNYU: 'Canyon', SHSU: 'Shoal', RISU: 'Ridge', TERU: 'Terrace',
+      PLNU: 'Plain', SHVU: 'Shelf valley', SPUR: 'Spur', SEAU: 'Seamount',
+      BANK: 'Bank', REEF: 'Reef' };
+    return map[code] || code || 'Undersea feature';
+  }
+
+  function fetchGebco(bbox) {
+    var key = 'gebco:' + bboxKey(bbox);
+    var cached = state.cache.get(key);
+    if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) return Promise.resolve(cached.features);
+    if (state.inflight.has(key)) return state.inflight.get(key);
+    var params = new URLSearchParams({
+      where: '1=1', geometry: bbox.join(','), geometryType: 'esriGeometryEnvelope',
+      inSR: '4326', spatialRel: 'esriSpatialRelIntersects',
+      outFields: 'UF_NAME,DSG,CENT_LAT,CENT_LONG', returnGeometry: 'false',
+      resultRecordCount: '2000', f: 'json'
+    });
+    var ctrl = new AbortController();
+    var timeout = setTimeout(function () { ctrl.abort(); }, FETCH_TIMEOUT_MS);
+    var promise = fetch(GEBCO_ROOT + '?' + params.toString(), { signal: ctrl.signal })
+      .then(function (r) { if (!r.ok) throw new Error('GEBCO HTTP ' + r.status); return r.json(); })
+      .then(function (j) {
+        if (j.error) throw new Error(j.error.message || 'GEBCO query error');
+        return (j.features || []).map(function (f) {
+          var p = f.attributes || {};
+          var lon = Number(p.CENT_LONG), lat = Number(p.CENT_LAT);
+          if (!Number.isFinite(lon) || !Number.isFinite(lat) || !p.UF_NAME) return null;
+          return { point: [lon, lat], name: p.UF_NAME, type: gebcoType(p.DSG), source: 'GEBCO' };
+        }).filter(Boolean);
+      })
+      .then(function (features) { state.cache.set(key, { features: features, fetchedAt: Date.now() }); return features; })
+      .catch(function (err) { logErr('GEBCO fetch failed', err && err.message ? err.message : err); return []; })
+      .finally(function () { clearTimeout(timeout); state.inflight.delete(key); });
+    state.inflight.set(key, promise);
+    return promise;
+  }
+
+  function mergeFeatures(boem, gebco) {
+    var merged = boem.slice();
+    gebco.forEach(function (item) {
+      var duplicate = merged.some(function (existing) {
+        var nameA = String(existing.name || '').toLowerCase();
+        var nameB = String(item.name || '').toLowerCase();
+        var nameMatch = nameA === nameB || nameB.indexOf(nameA) === 0 || nameA.indexOf(nameB) === 0;
+        var dx = existing.point[0] - item.point[0], dy = existing.point[1] - item.point[1];
+        return nameMatch && Math.sqrt(dx * dx + dy * dy) < 0.6;
+      });
+      if (!duplicate) merged.push(item);
+    });
+    return merged;
   }
 
   function styleFor(feature) {
@@ -170,12 +259,13 @@
       // Never let a broad/temporarily-unfitted map viewport turn a regional
       // dashboard into a worldwide feature-name layer.
       var bbox = selectedRegionBbox() || paddedBbox(extent);
-      fetchGrounds(bbox).then(function (items) {
+      Promise.all([fetchGrounds(bbox), fetchGebco(bbox)]).then(function (sets) {
+        var items = mergeFeatures(sets[0], sets[1]);
         source.clear();
         source.addFeatures(items.map(function (item) {
           var f = new ol.Feature({ geometry: new ol.geom.Point(ol.proj.fromLonLat(item.point)),
             name: item.name, type: item.type, region: item.region,
-            system: item.system, source: SOURCE_LABEL });
+            system: item.system, source: item.source || SOURCE_LABEL });
           return f;
         }));
         layer.setVisible(state.visible);
