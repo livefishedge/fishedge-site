@@ -737,7 +737,6 @@
     #captain-tools{ display:flex; }
     body.combined-mode #captain-tools{ top:8px; }
     body.mobile-device #captain-tools{ top:calc(46px + env(safe-area-inset-top, 0px)); }
-    body.mobile-device #captain-dist-panel{ top:92px !important; max-width:calc(100vw - 24px); box-sizing:border-box; }
     body.mobile-device #captain-fs-btn{ display:none !important; }
     .captain-tool-btn{
       width:30px; height:30px;
@@ -783,7 +782,7 @@
       font-size:12px;
       font-weight:700;
     }
-    #captain-dist-panel.visible, #captain-pts-panel.visible{ display:block !important; }
+    #captain-pts-panel.visible{ display:block !important; }
     #combined-readout{
       display:none;
       position:fixed;
@@ -1309,15 +1308,6 @@
         <rect x="2" y="2" width="14" height="14" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linejoin="round"/>
       </svg>
     </button>
-    <button id="captain-dist-tool" class="captain-tool-btn" title="Measure distance (M)" data-tool="dist">
-      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <line x1="3" y1="10" x2="17" y2="10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-        <polyline points="7,6 3,10 7,14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-        <polyline points="13,6 17,10 13,14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-        <line x1="7" y1="7" x2="7" y2="13" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-        <line x1="13" y1="7" x2="13" y2="13" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-      </svg>
-    </button>
     <button id="captain-add-tool" class="captain-tool-btn" title="Add waypoint (A)" data-tool="add">
       <svg width="18" height="18" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
         <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2" fill="none"/>
@@ -1335,14 +1325,6 @@
   <div id="captain-pts-panel" style="display:none;position:fixed;top:80px;left:8px;z-index:1150;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;width:280px;max-height:320px;overflow-y:auto;font-size:12px;color:var(--fg);">
     <div id="captain-pts-title" style="font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:0.6px;color:#7a8fa8;margin-bottom:8px;">My Waypoints</div>
     <div id="captain-pts-list"></div>
-  </div>
-  <div id="captain-dist-panel" style="display:none;position:fixed;top:96px;left:8px;z-index:1150;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-size:12px;color:var(--fg);min-width:200px;">
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:0.6px;color:#7a8fa8;margin-bottom:8px;">
-      <span>Distance</span>
-      <button id="captain-dist-exit" type="button" title="Exit distance measurement" style="border:1px solid #4d7dff;border-radius:5px;background:#1d4f91;color:#fff;padding:3px 7px;font-size:11px;font-weight:700;cursor:pointer;">Exit</button>
-    </div>
-    <div id="captain-dist-list"></div>
-    <div id="captain-dist-total" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-weight:700;color:var(--fg);"></div>
   </div>
   <div id="combined-controls">
     <div class="combined-section">
@@ -9408,29 +9390,6 @@ function plotConfig() {
           }
         }
       },
-      {
-        name: "Measure Distance",
-        title: "Measure distance between two points",
-        icon: Plotly.Icons.drawline, // Built-in diagonal line icon
-        click: () => {
-          // Toggle Mode
-          if (measureMode === "off") {
-            measureMode = "start";
-            markerMode = "off"; // Turn off other modes
-            plotDiv.classList.add("measure-mode");
-            plotDiv.classList.remove("crosshair-mode", "remove-mode");
-            measurePoints = []; // Reset previous measurement
-            setReadout("Measure Mode: Click START point");
-          } else {
-            measureMode = "off";
-            plotDiv.classList.remove("measure-mode");
-            measurePoints = [];
-            setReadout("");
-          }
-          // Refresh to clear/show lines
-          showFrame();
-        }
-      },
     ]
   };
 }
@@ -10515,15 +10474,14 @@ function installCaptainToolHandler(map) {
   };
   _captainMapClickHandler = (ev) => {
     // On single-product pages this handler exists only to service the
-    // distance/waypoint tools. Ordinary clicks remain with product readouts.
-    const toolsActive = captainDistTool.active || captainAddTool.active;
+    // waypoint tool. Ordinary clicks remain with product readouts.
+    const toolsActive = captainAddTool.active;
     if (currentVar !== "combined" && !toolsActive) return;
     if (!ev.coordinate) return;
     // Combined map is EPSG:3857; transform to 4326 before treating as lon/lat.
     const xy4326 = ol.proj.transform(ev.coordinate, "EPSG:3857", "EPSG:4326");
     const lon = xy4326[0];
     const lat = xy4326[1];
-    if (captainDistTool.active) { addDistPoint(lon, lat, map); return; }
     if (captainAddTool.active) { addWaypoint(lon, lat, map); return; }
     // ── Feature readout (Captain's Dashboard click → bottom-right box) ──
     // Priority: bathy contour line > thermal front gradient > UV arrow > raster
@@ -10603,18 +10561,6 @@ function combinedFrontClickInfo(map, coord, pixel) {
 
 // ── Button wiring ───────────────────────────────────────────────────────
 
-document.getElementById('captain-dist-tool')?.addEventListener('click', () => {
-  const map = activeCaptainToolMap();
-  if (!map) return;
-  if (captainDistTool.active) { deactivateDistTool(); }
-  else { activateDistTool(map); }
-});
-
-document.getElementById('captain-dist-exit')?.addEventListener('click', (e) => {
-  e.stopPropagation();
-  deactivateDistTool();
-});
-
 document.getElementById('captain-add-tool')?.addEventListener('click', () => {
   const map = activeCaptainToolMap();
   if (!map) return;
@@ -10675,21 +10621,15 @@ document.addEventListener('keydown', (e) => {
   const map = activeCaptainToolMap();
   if (!map) return;
   if (e.key === 'Escape') {
-    if (captainDistTool.active) deactivateDistTool();
     if (captainAddTool.active) toggleAddTool(map);
     return;
   }
-  if (e.key === 'm' || e.key === 'M') {
-    if (captainDistTool.active) deactivateDistTool();
-    else activateDistTool(map);
-  } else if (e.key === 'a' || e.key === 'A') {
+  if (e.key === 'a' || e.key === 'A') {
     toggleAddTool(map);
   } else if (e.key === 'Escape') {
-    deactivateDistTool();
     captainAddTool.active = false;
     document.getElementById('captain-add-tool')?.classList.remove('active');
     document.getElementById('captain-pts-panel')?.classList.remove('visible');
-    document.getElementById('captain-dist-panel')?.classList.remove('visible');
     closeSaveMenu();
   } else if ((e.key === 's' || e.key === 'S') && !e.metaKey && !e.ctrlKey) {
     if (captainAddTool.points.length) showSaveMenu();
