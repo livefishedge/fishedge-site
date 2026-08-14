@@ -30,6 +30,7 @@
     cache: new Map(),
     inflight: new Map(),
     attributionEl: null,
+    visible: false,
   };
 
   function log() {
@@ -162,7 +163,7 @@
       style: styleFor,
     });
     map.addLayer(layer);
-    layer.setVisible(true);
+    layer.setVisible(state.visible);
     state.layers.set(map, layer);
     function refresh() {
       var extent = map.getView().calculateExtent(map.getSize() || [800, 600]);
@@ -177,7 +178,8 @@
             system: item.system, source: SOURCE_LABEL });
           return f;
         }));
-        log('refreshed', items.length, 'permanent grounds');
+        layer.setVisible(state.visible);
+        log('refreshed', items.length, 'underwater structures');
       });
     }
     map.on('moveend', refresh);
@@ -208,11 +210,31 @@
     state.attributionEl = card;
   }
 
+  function hideAttribution() {
+    if (!state.attributionEl) return;
+    state.attributionEl.remove();
+    state.attributionEl = null;
+  }
+
+  function setVisible(visible) {
+    state.visible = Boolean(visible);
+    state.layers.forEach(function (layer) { layer.setVisible(state.visible); });
+    if (state.visible) showAttribution(); else hideAttribution();
+    window.dispatchEvent(new CustomEvent('fishedge-underwater-visibility', {
+      detail: { visible: state.visible }
+    }));
+    return state.visible;
+  }
+
   function init() {
     if (window.__fishing_grounds_loaded) return;
     window.__fishing_grounds_loaded = true;
     if (typeof ol === 'undefined') return;
-    showAttribution();
+    window.fishedgeUnderwater = {
+      setVisible: setVisible,
+      toggle: function () { return setVisible(!state.visible); },
+      isVisible: function () { return state.visible; }
+    };
     var tick = 0;
     scoutMaps();
     var interval = setInterval(function () {

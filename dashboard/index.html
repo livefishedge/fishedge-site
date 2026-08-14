@@ -647,9 +647,9 @@ body.combined-mode #combined-menu-btn{
     .ol-viewport{ background:#d2b48c; }
     /* Captain tools palette — horizontal row, upper-left */
     #captain-tools{
-      display:none;
+      display:flex;
       position:fixed;
-      top:8px; left:8px;
+      top:calc(46px + env(safe-area-inset-top, 0px)); left:8px;
       z-index:1150;
       background:var(--panel);
       border:1px solid var(--border);
@@ -660,7 +660,7 @@ body.combined-mode #combined-menu-btn{
       box-shadow:0 4px 16px rgba(0,0,0,0.4);
       align-items:center;
     }
-    body.combined-mode #captain-tools{ display:flex; }
+    body.combined-mode #captain-tools{ top:8px; }
     .captain-tool-btn{
       width:30px; height:30px;
       min-width:30px;
@@ -1213,6 +1213,13 @@ body.combined-mode #combined-menu-btn{
     <button id="captain-fs-btn" class="captain-tool-btn" title="Fullscreen">
       <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
         <rect x="2" y="2" width="14" height="14" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linejoin="round"/>
+      </svg>
+    </button>
+    <button id="captain-underwater-tool" class="captain-tool-btn" title="Show underwater structures" aria-label="Show underwater structures" aria-pressed="false">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M3 9c2.2 0 2.2 2 4.4 2s2.2-2 4.4-2 2.2 2 4.4 2 2.2-2 4.4-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+        <path d="M3 14c2.2 0 2.2 2 4.4 2s2.2-2 4.4-2 2.2 2 4.4 2 2.2-2 4.4-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+        <path d="M6 20h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
       </svg>
     </button>
     <button id="captain-add-tool" class="captain-tool-btn" title="Add waypoint (A)" data-tool="add">
@@ -10280,6 +10287,24 @@ document.getElementById('captain-fs-btn')?.addEventListener('click', () => {
     else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
     else if (document.webkitCancelFullScreen) document.webkitCancelFullScreen();
   }
+});
+
+document.getElementById('captain-underwater-tool')?.addEventListener('click', () => {
+  const visible = window.fishedgeUnderwater?.toggle?.();
+  const btn = document.getElementById('captain-underwater-tool');
+  if (!btn || typeof visible !== 'boolean') return;
+  btn.classList.toggle('active', visible);
+  btn.setAttribute('aria-pressed', String(visible));
+  btn.title = visible ? 'Hide underwater structures' : 'Show underwater structures';
+});
+
+window.addEventListener('fishedge-underwater-visibility', (event) => {
+  const visible = Boolean(event.detail?.visible);
+  const btn = document.getElementById('captain-underwater-tool');
+  if (!btn) return;
+  btn.classList.toggle('active', visible);
+  btn.setAttribute('aria-pressed', String(visible));
+  btn.title = visible ? 'Hide underwater structures' : 'Show underwater structures';
 });
 
 // Fullscreen icon toggle
