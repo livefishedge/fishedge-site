@@ -141,6 +141,7 @@
       overflow:hidden;
       position:relative;
     }
+    #feedback-toggle svg{ width:22px; height:22px; display:block; }
     #feedback-toggle::before{
       content:"";
       width:18px;
@@ -162,6 +163,7 @@
       margin-left:-8px;
       background:#2d7d46;
     }
+    #feedback-toggle::before, #feedback-toggle::after{ display:none; }
     #feedback-toggle:hover{ background:#3a9d5c; }
     #feedback-toggle:hover::after{ background:#3a9d5c; }
     #temp-unit-toggle{
@@ -1204,7 +1206,14 @@ body.combined-mode #combined-menu-btn{
   <div id="modebar-host"><div id="modebar-tip"></div></div>
   <div id="readout">Lat/Lon: -- | Value: --</div>
   <div id="feedback-float">
-    <button id="feedback-toggle" title="Send feedback">&#9993;</button>
+    <button id="feedback-toggle" title="Send feedback" aria-label="Send feedback">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M5 5.5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-7l-4.5 3v-3H5a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+        <circle cx="8" cy="11.5" r="1" fill="currentColor"/>
+        <circle cx="12" cy="11.5" r="1" fill="currentColor"/>
+        <circle cx="16" cy="11.5" r="1" fill="currentColor"/>
+      </svg>
+    </button>
     <div id="feedback-panel" style="display:none;">
       <input type="text" id="feedbackInput" placeholder="Questions / comments..." />
       <button id="feedbackSubmit">Send</button>
@@ -8893,6 +8902,7 @@ async function setCurrentVar(v, keepTime = true, keepRange = true) {
   syncThermalFrontsVisibility();
 
   if (frames.length || currentVar === "thermal_fronts") await showFrame();
+  if (currentVar === "combined" && toolbarStatus) toolbarStatus.textContent = "";
   else return;
 }
 
