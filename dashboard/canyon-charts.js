@@ -274,7 +274,13 @@
     layer.setVisible(state.visible);
     state.layers.set(map, layer);
     function refresh() {
-      var extent = map.getView().calculateExtent(map.getSize() || [800, 600]);
+      var view = map.getView();
+      // Combined mode attaches this layer while the OL view is still being
+      // fitted. OpenLayers throws if calculateExtent() runs before a center
+      // exists; defer until the first move/resize event instead of aborting
+      // the dashboard renderer.
+      if (!view || !view.getCenter()) return;
+      var extent = view.calculateExtent(map.getSize() || [800, 600]);
       // Never let a broad/temporarily-unfitted map viewport turn a regional
       // dashboard into a worldwide feature-name layer.
       var bbox = selectedRegionBbox() || paddedBbox(extent);
