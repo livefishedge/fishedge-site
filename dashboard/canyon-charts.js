@@ -22,6 +22,9 @@
     'https://mdgeodata.md.gov/imap/rest/services/Biota/MD_Finfish/FeatureServer/10/query';
   var MD_REEF_ROOT =
     'https://mdgeodata.md.gov/imap/rest/services/Biota/MD_Finfish/FeatureServer/9/query';
+  var ATLANTIC_FISHING_ATLAS_ROOT =
+    'https://gis.boem.gov/arcgis/rest/services/AtlanticFishGuide/' +
+    'Atlantic_Coast_Fishing_Atlas/MapServer/2/query';
   var ATTRIBUTION =
     'Underwater structures: NJ DEP + MD DNR + BOEM/GEBCO';
   var CACHE_TTL_MS = 6 * 60 * 60 * 1000;
@@ -214,7 +217,7 @@
         return (j.features || []).map(function (f) {
           var point = featurePoint(f);
           var p = f.attributes || {};
-          var name = p.Name || p.name;
+          var name = p.Name || p.name || p.NAME;
           if (!point || !name || !pointInBbox(point, bbox)) return null;
           var geometry = f.geometry && Array.isArray(f.geometry.rings)
             ? { type: 'Polygon', coordinates: f.geometry.rings } : null;
@@ -243,11 +246,17 @@
     if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) return Promise.resolve(cached.features);
     if (state.inflight.has(key)) return state.inflight.get(key);
     var promise = Promise.all([
-      fetchNjLocal(bbox),
-      fetchArcGISLocal(MD_FISHING_ROOT, bbox, 'Fishing ground'),
-      fetchArcGISLocal(MD_REEF_ROOT, bbox, 'Artificial reef')
+      fetchNjLocal(bbox).catch(function (err) { logErr('NJ source failed', err); return []; }),
+      fetchArcGISLocal(MD_FISHING_ROOT, bbox, 'Fishing ground').catch(function (err) { logErr('MD grounds failed', err); return []; }),
+      fetchArcGISLocal(MD_REEF_ROOT, bbox, 'Artificial reef').catch(function (err) { logErr('MD reefs failed', err); return []; }),
+      fetchArcGISLocal(ATLANTIC_FISHING_ATLAS_ROOT, bbox, 'Fishing ground').then(function (features) {
+        return features.map(function (item) {
+          item.source = 'BOEM Atlantic Fishing Atlas';
+          return item;
+        });
+      }).catch(function (err) { logErr('Atlantic Fishing Atlas failed', err); return []; })
     ]).then(function (sets) {
-      var features = sets[0].concat(sets[1], sets[2]);
+      var features = sets[0].concat(sets[1], sets[2], sets[3]);
       state.cache.set(key, { features: features, fetchedAt: Date.now() });
       return features;
     }).catch(function (err) {
@@ -293,7 +302,17 @@
     // Local NJ/MD records are the captain-facing authority. Add global
     // BOEM/GEBCO records only when no local record occupies the same named
     // location, so a global duplicate cannot hide the local one.
-    var merged = local.slice();
+    var merged = [];
+    local.forEach(function (item) {
+      var duplicate = merged.some(function (existing) {
+        var sameName = String(existing.name || '').toLowerCase() === String(item.name || '').toLowerCase();
+        var near = existing.point && item.point &&
+          Math.abs(existing.point[0] - item.point[0]) < 0.02 &&
+          Math.abs(existing.point[1] - item.point[1]) < 0.02;
+        return sameName && near;
+      });
+      if (!duplicate) merged.push(item);
+    });
     function duplicateOf(item, allowPrefix) {
       return merged.some(function (existing) {
         var nameA = String(existing.name || '').toLowerCase();
