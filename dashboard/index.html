@@ -593,10 +593,10 @@
     @media (max-width:720px){
       /* Mobile: move feedback button to top-right, away from bottom map gestures. */
       body.mobile-device #feedback-float{
-        bottom: calc(12px + env(safe-area-inset-bottom, 0px)) !important;
-        top: auto !important;
-        left: calc(12px + env(safe-area-inset-left, 0px)) !important;
-        right: auto !important;
+        bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+        top: auto;
+        left: calc(12px + env(safe-area-inset-left, 0px));
+        right: auto;
         z-index: 1300 !important;
       }
       #toolbar{ gap:6px; padding-right:58px; }
@@ -1315,7 +1315,6 @@ body.combined-mode #combined-menu-btn{
       <a href="account.html" style="color:var(--accent2);font-size:12px;font-weight:700;text-decoration:none;letter-spacing:0.05em;">MY ACCOUNT</a>
     </div>
     <div class="combined-section">
-      <div class="combined-section-title">Product</div>
       <select id="combined-product-select">
         <option value="combined">Captain's Dashboard</option>
         <option value="chl">Chlorophyll</option>
@@ -5088,9 +5087,21 @@ function depthMaxInExtent(bd, extent, sx, sy) {
 }
 
 function generateContourLevels(maxDepth) {
-  const std = [50, 100, 200, 500, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000];
-  if (maxDepth < 200) return [50, 100, 200].filter(l => l <= maxDepth + 200);
-  return std.filter(l => l <= maxDepth + 200);
+  if (!Number.isFinite(maxDepth) || maxDepth <= 0) return [];
+  const factor = depthUnit === "ft" ? 3.28084 : depthUnit === "fathom" ? 0.546806649 : 1;
+  const maxDisplay = maxDepth * factor;
+  const stepDisplay = Math.max(5, Math.round((maxDisplay / 14) / 5) * 5);
+  const levels = [];
+  for (let displayLevel = stepDisplay; displayLevel <= maxDisplay + stepDisplay * 0.25; displayLevel += stepDisplay) {
+    levels.push(displayLevel / factor);
+  }
+  return levels;
+}
+
+function formatContourLevel(meters) {
+  const factor = depthUnit === "ft" ? 3.28084 : depthUnit === "fathom" ? 0.546806649 : 1;
+  const rounded = Math.round((Number(meters) * factor) / 5) * 5;
+  return `${rounded} ${depthUnitLabel()}`;
 }
 
 function extractContourSegments(bd, level, sx, sy, extent) {
@@ -6077,7 +6088,7 @@ function updateCombinedBathyLegend(levels) {
   el.innerHTML = `
     <div class="combined-legend-row">
       <span class="combined-bathy-swatch"></span>
-      <span>Levels (${depthUnitLabel()}): ${levels.map(v => formatDepth(v).replace(/\s+(fm|ft|m)$/, "")).join(", ")}</span>
+      <span>Levels: ${levels.map(formatContourLevel).join(", ")}</span>
     </div>
   `;
 }
@@ -6099,9 +6110,15 @@ function depthMaxInExtent(bd, extent, sx, sy) {
 }
 
 function generateContourLevels(maxDepth) {
-  const std = [50, 100, 200, 500, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000];
-  if (maxDepth < 200) return [50, 100, 200].filter(l => l <= maxDepth + 200);
-  return std.filter(l => l <= maxDepth + 200);
+  if (!Number.isFinite(maxDepth) || maxDepth <= 0) return [];
+  const factor = depthUnit === "ft" ? 3.28084 : depthUnit === "fathom" ? 0.546806649 : 1;
+  const maxDisplay = maxDepth * factor;
+  const stepDisplay = Math.max(5, Math.round((maxDisplay / 14) / 5) * 5);
+  const levels = [];
+  for (let displayLevel = stepDisplay; displayLevel <= maxDisplay + stepDisplay * 0.25; displayLevel += stepDisplay) {
+    levels.push(displayLevel / factor);
+  }
+  return levels;
 }
 
 function extractContourSegments(bd, level, sx, sy, extent) {
@@ -6862,6 +6879,10 @@ async function rebuildCombinedUvLayer(map, { hoursMode = "latest" } = {}) {
     window._combinedUvLayer = null;
   }
   if (window._combinedHeightLayer && map) {
+    for (const overlay of window._combinedHeightLayer.__uvZeroLabelOverlays || []) {
+      try { map.removeOverlay(overlay); } catch (_) {}
+      if (overlay.__angleListener && ol?.Observable?.unByKey) ol.Observable.unByKey(overlay.__angleListener);
+    }
     try { map.removeLayer(window._combinedHeightLayer); } catch (_) {}
     window._combinedHeightLayer = null;
   }
@@ -6894,13 +6915,11 @@ async function rebuildCombinedUvLayer(map, { hoursMode = "latest" } = {}) {
     const grid = await loadGridForVar("uv", data);
     window._combinedUvGrid = grid;
     window._combinedUvData = data;
-    const heightCanvas = makeMobileRasterCanvas("uv", grid, data);
-    const heightExtent = frameExtentFromGrid(grid);
-    const heightSource = canvasToOlSource(heightCanvas, heightExtent);
-    const heightLayer = new ol.layer.Image({ source: heightSource, zIndex: 10 });
+    // Surface Height is contour-only. Currents remain a separate arrow layer.
+    const heightLayer = buildUvContourLayer(data, grid, map);
     const heightCheck = document.getElementById("chk-combined-height");
-    heightLayer.setVisible(heightCheck ? heightCheck.checked : true);
-    if (map) {
+    if (heightLayer) heightLayer.setVisible(heightCheck ? heightCheck.checked : true);
+    if (heightLayer && map) {
       map.addLayer(heightLayer);
       window._combinedHeightLayer = heightLayer;
     }
@@ -10754,6 +10773,7 @@ function installDraggable(target, handle, storageKey, ignoreSelector) {
     drag = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, left: rect.left, top: rect.top };
     moved = false;
     target.dataset.dragging = "1";
+    event.preventDefault();
     event.stopPropagation();
   };
   const move = (event) => {
@@ -10799,7 +10819,7 @@ function installDraggable(target, handle, storageKey, ignoreSelector) {
   }, true);
 }
 
-installDraggable(document.getElementById("captain-tools"), document.querySelector("#captain-tools .captain-drag-handle"), "fishedge_captain_tools_position", null);
+installDraggable(document.getElementById("captain-tools"), document.getElementById("captain-tools"), "fishedge_captain_tools_position", "button");
 installDraggable(document.getElementById("feedback-float"), document.getElementById("feedback-toggle"), "fishedge_feedback_position", null);
 </script>
 <!-- rebuilt:captains-dashboard-readout-v2-$(date +%s) -->
