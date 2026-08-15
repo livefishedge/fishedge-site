@@ -663,9 +663,9 @@
     body.thermal-fronts-mode #hamburger-cbar,
     body.thermal-fronts-mode .hamburger-range-block{ display:none !important; }
     /* Combined mode: hide single-product slider/progress, show sidebar */
-body.combined-mode #combined-menu-btn{
+    body.combined-mode #combined-menu-btn{
       top:8px !important; right:8px !important; left:auto !important;
-      z-index:1200 !important;
+      z-index:2201 !important;
       display:flex !important;
       border-left:1px solid var(--border);
       border-right:none;
@@ -724,6 +724,8 @@ body.combined-mode #combined-menu-btn{
       align-items:center;
     }
     body.combined-mode #captain-tools{ top:8px; }
+    body.combined-mode #captain-tools,
+    body.fishedge-app-fullscreen #combined-menu-btn{ z-index:2200 !important; }
     .captain-tool-btn{
       width:30px; height:30px;
       min-width:30px;
@@ -1762,6 +1764,7 @@ async function initializeData() {
     if (currentVar === "thermal_fronts" || framesByVar[currentVar]?.length) await showFrame();
     else { }
     if (currentVar === "combined") document.body.classList.add("combined-mode");
+    if (typeof syncDashboardChrome === "function") syncDashboardChrome();
   } catch (e) {
     console.error("initializeData failed:", e);
   }
@@ -3029,6 +3032,37 @@ const combinedControls = document.getElementById("combined-controls");
 const combinedOverlay = document.getElementById("combined-overlay");
 const combinedRegionSelect = document.getElementById("combined-region-select");
 const combinedProductSelect = document.getElementById("combined-product-select");
+const dashboardChrome = {
+  toolbar: document.getElementById("toolbar"),
+  hamburger: document.getElementById("hamburger-btn"),
+  combinedMenu: combinedMenuBtn,
+  captainTools: document.getElementById("captain-tools"),
+  host: document.getElementById("fishedge-locate-host")
+};
+function syncDashboardChrome() {
+  const combined = currentVar === "combined" || document.body.classList.contains("combined-mode");
+  // Keep the control chrome explicit. CSS still provides the layout, but
+  // these inline values prevent an async product switch or auth callback
+  // from leaving the map visible with its controls hidden.
+  if (dashboardChrome.combinedMenu) {
+    dashboardChrome.combinedMenu.style.display = combined ? "flex" : "none";
+    dashboardChrome.combinedMenu.style.visibility = "visible";
+  }
+  if (dashboardChrome.hamburger) {
+    dashboardChrome.hamburger.style.display = combined ? "none" : "block";
+    dashboardChrome.hamburger.style.visibility = "visible";
+  }
+  if (dashboardChrome.toolbar) {
+    dashboardChrome.toolbar.style.display = combined ? "none" : "flex";
+    dashboardChrome.toolbar.style.visibility = "visible";
+  }
+  if (dashboardChrome.captainTools) {
+    dashboardChrome.captainTools.style.display = "flex";
+    dashboardChrome.captainTools.style.visibility = "visible";
+  }
+  if (dashboardChrome.host) dashboardChrome.host.style.display = "none";
+}
+syncDashboardChrome();
 if (combinedProductSelect) {
   combinedProductSelect.value = currentVar;
   combinedProductSelect.addEventListener("change", async () => {
@@ -9192,6 +9226,7 @@ async function setCurrentVar(v, keepTime = true, keepRange = true) {
 
   document.body.classList.toggle("combined-mode", v === "combined");
   document.body.classList.toggle("thermal-fronts-mode", v === "thermal_fronts");
+  if (typeof syncDashboardChrome === "function") syncDashboardChrome();
 
   const frames = framesByVar[currentVar] || [];
   const times = frameTimesByVar[currentVar] || [];
@@ -9997,6 +10032,7 @@ async function loadCaptainBriefing() {
     else { }
     // Apply combined-mode body class at startup if already on combined
     if (currentVar === "combined") document.body.classList.add("combined-mode");
+    if (typeof syncDashboardChrome === "function") syncDashboardChrome();
   } catch (e) {
     console.error("Init failed:", e);
   }
