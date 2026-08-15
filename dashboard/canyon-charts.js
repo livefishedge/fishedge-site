@@ -1,5 +1,6 @@
 // fishing-grounds.js — FishEdge toggleable undersea-feature labels.
-// The current authoritative source is BOEM's US Submarine Canyons service.
+// The layer merges federal undersea features with local NJ/MD fishing-ground
+// and reef datasets so the map uses the names captains actually use.
 // Labels are placed at polygon centroids, not at an average of all vertices;
 // averaging vertices can put a long/concave canyon label in the wrong water.
 // Layer zIndex is above raster products so labels remain visible when the
@@ -8,15 +9,21 @@
 (function () {
   'use strict';
 
-  var SOURCE_LABEL = 'BOEM US Submarine Canyons';
+  var SOURCE_LABEL = 'Local fishing grounds + BOEM/GEBCO';
   var SERVICE_ROOT =
     'https://services.arcgis.com/bDAhvQYMG4WL8O5o/arcgis/rest/services/' +
     'US_Submarine_Canyons/FeatureServer/';
   var GEBCO_ROOT =
     'https://services2.arcgis.com/Uq9r85Potqm3MfRV/arcgis/rest/services/' +
     'Undersea_Features/FeatureServer/0/query';
+  var NJ_GROUNDS_URL =
+    'https://www.shore-guide.com/data/downloads/nj-fishing-grounds.geojson';
+  var MD_FISHING_ROOT =
+    'https://mdgeodata.md.gov/imap/rest/services/Biota/MD_Finfish/FeatureServer/10/query';
+  var MD_REEF_ROOT =
+    'https://mdgeodata.md.gov/imap/rest/services/Biota/MD_Finfish/FeatureServer/9/query';
   var ATTRIBUTION =
-    'Underwater structures: BOEM canyons + GEBCO undersea features';
+    'Underwater structures: NJ DEP + MD DNR + BOEM/GEBCO';
   var CACHE_TTL_MS = 6 * 60 * 60 * 1000;
   var FETCH_TIMEOUT_MS = 12000;
   var BBOX_PAD = 0.05;
@@ -186,6 +193,67 @@
     return map[code] || code || 'Undersea feature';
   }
 
+  function pointInBbox(point, bbox) {
+    return point && point[0] >= bbox[0] && point[0] <= bbox[2] &&
+      point[1] >= bbox[1] && point[1] <= bbox[3];
+  }
+
+  function fetchArcGISLocal(url, bbox, type) {
+    var params = new URLSearchParams({
+      where: '1=1', geometry: bbox.join(','),
+      geometryType: 'esriGeometryEnvelope', inSR: '4326', outSR: '4326',
+      spatialRel: 'esriSpatialRelIntersects', outFields: '*',
+      returnGeometry: 'true', resultRecordCount: '2000', f: 'json'
+    });
+    return fetch(url + '?' + params.toString())
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function (j) {
+        if (j.error) throw new Error(j.error.message || 'Maryland query error');
+        return (j.features || []).map(function (f) {
+          var point = featurePoint(f);
+          var p = f.attributes || {};
+          var name = p.Name || p.name;
+          if (!point || !name || !pointInBbox(point, bbox)) return null;
+          return { point: point, name: name, type: type, source: 'Maryland DNR' };
+        }).filter(Boolean);
+      });
+  }
+
+  function fetchNjLocal(bbox) {
+    return fetch(NJ_GROUNDS_URL)
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function (j) {
+        return (j.features || []).map(function (f) {
+          var point = featurePoint(f);
+          var p = f.properties || {};
+          if (!point || !p.name || !pointInBbox(point, bbox)) return null;
+          return { point: point, name: p.name, type: 'Fishing ground',
+            region: p.region, system: p.profileType, source: 'NJ DEP / Shore Guide' };
+        }).filter(Boolean);
+      });
+  }
+
+  function fetchLocalGrounds(bbox) {
+    var key = 'local:' + bboxKey(bbox);
+    var cached = state.cache.get(key);
+    if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) return Promise.resolve(cached.features);
+    if (state.inflight.has(key)) return state.inflight.get(key);
+    var promise = Promise.all([
+      fetchNjLocal(bbox),
+      fetchArcGISLocal(MD_FISHING_ROOT, bbox, 'Fishing ground'),
+      fetchArcGISLocal(MD_REEF_ROOT, bbox, 'Artificial reef')
+    ]).then(function (sets) {
+      var features = sets[0].concat(sets[1], sets[2]);
+      state.cache.set(key, { features: features, fetchedAt: Date.now() });
+      return features;
+    }).catch(function (err) {
+      logErr('local fishing-ground fetch failed', err && err.message ? err.message : err);
+      return [];
+    }).finally(function () { state.inflight.delete(key); });
+    state.inflight.set(key, promise);
+    return promise;
+  }
+
   function fetchGebco(bbox) {
     var key = 'gebco:' + bboxKey(bbox);
     var cached = state.cache.get(key);
@@ -217,7 +285,7 @@
     return promise;
   }
 
-  function mergeFeatures(boem, gebco) {
+  function mergeFeatures(boem, gebco, local) {
     // Prefer the gazetteer anchor for a named feature; BOEM's polygon
     // centroid is retained only when GEBCO has no matching name.
     var merged = gebco.slice();
@@ -230,6 +298,18 @@
         // gazetteer name ("Norfolk Canyon"). Treat those as the same named
         // feature even when the polygon centroid and gazetteer anchor differ.
         return nameMatch;
+      });
+      if (!duplicate) merged.push(item);
+    });
+    // Local datasets contain repeated names for distinct polygons. Keep those
+    // grounds, but suppress only near-identical duplicate anchors.
+    local.forEach(function (item) {
+      var duplicate = merged.some(function (existing) {
+        var sameName = String(existing.name || '').toLowerCase() === String(item.name || '').toLowerCase();
+        var near = existing.point && item.point &&
+          Math.abs(existing.point[0] - item.point[0]) < 0.02 &&
+          Math.abs(existing.point[1] - item.point[1]) < 0.02;
+        return sameName && near;
       });
       if (!duplicate) merged.push(item);
     });
@@ -284,8 +364,8 @@
       // Never let a broad/temporarily-unfitted map viewport turn a regional
       // dashboard into a worldwide feature-name layer.
       var bbox = selectedRegionBbox() || paddedBbox(extent);
-      Promise.all([fetchGrounds(bbox), fetchGebco(bbox)]).then(function (sets) {
-        var items = mergeFeatures(sets[0], sets[1]);
+      Promise.all([fetchGrounds(bbox), fetchGebco(bbox), fetchLocalGrounds(bbox)]).then(function (sets) {
+        var items = mergeFeatures(sets[0], sets[1], sets[2]);
         source.clear();
         source.addFeatures(items.map(function (item) {
           var f = new ol.Feature({ geometry: new ol.geom.Point(ol.proj.fromLonLat(item.point)),
