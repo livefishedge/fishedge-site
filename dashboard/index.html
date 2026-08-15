@@ -549,18 +549,23 @@
 
     /* Hamburger button and menu panel */
     #hamburger-btn{
-      position:fixed; top:8px; right:8px; z-index:1000;
-      width:48px; height:48px; border:2px solid rgba(255,255,255,0.72); border-radius:8px;
-      background:rgba(9,74,132,0.96); color:#fff; font-size:26px; font-weight:900; cursor:pointer;
+      position:fixed; top:52px; right:8px; z-index:2201;
+      width:44px; height:44px; border:1px solid rgba(255,255,255,0.42); border-radius:8px;
+      background:rgba(5,11,16,0.92); color:#fff; cursor:pointer;
       box-shadow:0 4px 16px rgba(0,0,0,0.62);
-      padding:0;
+      padding:0; display:flex; align-items:center; justify-content:center; overflow:hidden;
+    }
+    #hamburger-btn img, #combined-menu-btn img{
+      display:block; width:180px; max-width:none; height:auto; flex:none; pointer-events:none;
     }
     #menu-panel{
-      position:fixed; top:62px; right:8px; z-index:1001; width:min(280px, calc(100vw - 16px));
+      position:fixed; top:104px; right:8px; z-index:2200;
+      width:clamp(280px, 82vw, 360px); max-width:calc(100vw - 16px); min-width:280px;
       display:none; flex-direction:column; gap:10px; padding:12px;
       background:rgba(5,11,16,0.94); border:1px solid rgba(255,255,255,0.22); border-radius:8px;
       box-shadow:0 12px 30px rgba(0,0,0,0.45); backdrop-filter:blur(8px);
-      box-sizing:border-box; height:min(640px, calc(100dvh - 74px)); overflow:auto;
+      box-sizing:border-box; height:min(640px, calc(100dvh - 116px)); overflow:auto;
+      transform:none !important; zoom:1;
     }
     #menu-panel.open{ display:flex; }
     #menu-panel label{ display:flex; flex-direction:column; gap:5px; font-size:12px; font-weight:800; color:#9fb0c3; }
@@ -616,6 +621,7 @@
 
     @media (max-width:720px){
       /* Mobile: move feedback button to top-right, away from bottom map gestures. */
+      #hamburger-btn{ top:76px; right:6px; }
       body.mobile-device #feedback-float{
         bottom: calc(12px + env(safe-area-inset-bottom, 0px));
         top: auto;
@@ -627,8 +633,9 @@
       #nav-bar{ order:1; flex-basis:100%; }
       #toolbar-status{ order:2; flex:1 1 100%; white-space:normal; }
       #menu-panel{
-        top:58px; right:6px; width:min(360px, calc(100vw - 12px));
-        height:min(680px, calc(100dvh - 66px)); padding:10px; gap:8px;
+        top:76px; right:6px; width:clamp(280px, calc(100vw - 12px), 360px);
+        max-width:calc(100vw - 12px); min-width:280px;
+        height:min(680px, calc(100dvh - 84px)); padding:10px; gap:8px;
       }
       #menu-panel .hamburger-range-block{
         display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr);
@@ -664,7 +671,7 @@
     body.thermal-fronts-mode .hamburger-range-block{ display:none !important; }
     /* Combined mode: hide single-product slider/progress, show sidebar */
     body.combined-mode #combined-menu-btn{
-      top:8px !important; right:8px !important; left:auto !important;
+      top:52px !important; right:8px !important; left:auto !important;
       z-index:2201 !important;
       display:flex !important;
       border-left:1px solid var(--border);
@@ -782,6 +789,8 @@
     }
     #captain-pts-panel.collapsed > div:first-child{ margin-bottom:0 !important; }
     #captain-pts-panel.collapsed #captain-pts-list{ display:none; }
+    #captain-pts-drag-handle{ cursor:grab; touch-action:none; user-select:none; }
+    #captain-pts-panel[data-dragging="1"] #captain-pts-drag-handle{ cursor:grabbing; }
     #combined-readout{
       display:none;
       position:fixed;
@@ -804,14 +813,14 @@
       display:none;
       position:fixed;
       top:44px; right:0; bottom:0;
-      width:min(340px, calc(100vw - 8px));
+      width:clamp(280px, 82vw, 360px); max-width:calc(100vw - 8px); min-width:280px;
       z-index:1110;
       background:var(--panel);
       border-left:1px solid var(--border);
       padding:16px 14px;
       gap:12px;
       overflow-y:auto;
-      flex-direction:column;
+      flex-direction:column; box-sizing:border-box; transform-origin:top right; zoom:1;
     }
     body.combined-mode #combined-controls{ display:flex; transform:translateX(100%); transition:transform 0.25s ease; }
     body.combined-mode #combined-controls.open{ transform:translateX(0) !important; }
@@ -1294,7 +1303,9 @@
       <button id="feedbackSubmit">Send</button>
     </div>
   </div>
-  <button id="hamburger-btn" aria-label="Open product menu">☰</button>
+  <button id="hamburger-btn" aria-label="Open product menu">
+    <img src="../fishedge-logo-transparent.png" alt="FishEdge menu">
+  </button>
   <div id="map"></div>
   <div id="combined-readout">—, —</div>
   <div id="combined-hover-tip"></div>
@@ -1316,13 +1327,6 @@
         <line x1="13" y1="7" x2="13" y2="13" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
       </svg>
     </button>
-    <button id="captain-underwater-tool" class="captain-tool-btn" title="Show underwater structures" aria-label="Show underwater structures" aria-pressed="false">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-        <path d="M3 9c2.2 0 2.2 2 4.4 2s2.2-2 4.4-2 2.2 2 4.4 2 2.2-2 4.4-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-        <path d="M3 14c2.2 0 2.2 2 4.4 2s2.2-2 4.4-2 2.2 2 4.4 2 2.2-2 4.4-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-        <path d="M6 20h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-      </svg>
-    </button>
     <button id="captain-add-tool" class="captain-tool-btn" title="Add waypoint (A)" data-tool="add">
       <svg width="18" height="18" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
         <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2" fill="none"/>
@@ -1335,7 +1339,7 @@
     </button>
   </div>
   <div id="captain-pts-panel" style="display:none;position:fixed;top:80px;left:8px;z-index:1150;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;width:280px;max-height:320px;overflow-y:auto;font-size:12px;color:var(--fg);">
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;">
+    <div id="captain-pts-drag-handle" style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;">
       <div id="captain-pts-title" style="font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:0.6px;color:#7a8fa8;">My Waypoints</div>
       <button id="captain-save-btn" title="Save waypoints">Save Waypoints</button>
     </div>
@@ -1435,7 +1439,7 @@
         <button id="combined-height-unit-toggle" class="combined-unit-button" type="button">ft</button>
       </div>
       <label class="combined-toggle">
-        <input type="checkbox" id="chk-combined-fishing">
+        <input type="checkbox" id="chk-combined-fishing" checked>
         <span class="box"></span>
         <span class="combined-dot dot-bathy"></span>
         <span>Fishing Grounds</span>
@@ -1461,10 +1465,8 @@
     </div>
     <div id="combined-home-link"><a href="/">HOME</a></div>
   </div>
-  <button id="combined-menu-btn" aria-label="Toggle sidebar" style="display:none;position:fixed;top:8px;right:8px;z-index:40;width:44px;height:44px;background:var(--panel);border:none;border-left:1px solid var(--border);cursor:pointer;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:0;">
-    <span style="display:block;width:18px;height:2px;background:var(--fg);border-radius:2px;"></span>
-    <span style="display:block;width:18px;height:2px;background:var(--fg);border-radius:2px;"></span>
-    <span style="display:block;width:18px;height:2px;background:var(--fg);border-radius:2px;"></span>
+  <button id="combined-menu-btn" aria-label="Open product menu" style="display:none;position:fixed;top:52px;right:8px;z-index:40;width:44px;height:44px;background:var(--panel);border:none;border-left:1px solid var(--border);cursor:pointer;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:0;">
+    <img src="../fishedge-logo-transparent.png" alt="FishEdge menu">
   </button>
 
   <div id="briefing-panel" aria-live="polite" style="display:none">
@@ -5825,6 +5827,11 @@ async function renderCombinedMode() {
   window._combinedMap = map;
   window._combinedMapRef = map;
   window.fishedgeUnderwater?.attachMap?.(map);
+  // Fishing grounds are a primary Captain's Dashboard layer. Keep them on
+  // by default while still allowing the user to turn them off in the menu.
+  window.fishedgeUnderwater?.setVisible?.(true);
+  const fishingToggle = document.getElementById("chk-combined-fishing");
+  if (fishingToggle) fishingToggle.checked = true;
   attachMapToUnifiedTarget(map);
   installCaptainToolHandler(map);
   if (captainAddTool.points.length) renderPtsLayer(map);
@@ -11020,6 +11027,7 @@ function installDraggable(target, handle, storageKey, ignoreSelector) {
 
 installDraggable(document.getElementById("captain-tools"), document.getElementById("captain-tools"), "fishedge_captain_tools_position", "button");
 installDraggable(document.getElementById("feedback-float"), document.getElementById("feedback-toggle"), "fishedge_feedback_position", null);
+installDraggable(document.getElementById("captain-pts-panel"), document.getElementById("captain-pts-drag-handle"), "fishedge_waypoints_position", "button, a, input, select");
 </script>
 <!-- rebuilt:captains-dashboard-readout-v2-$(date +%s) -->
 </body>
