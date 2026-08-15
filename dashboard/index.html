@@ -43,7 +43,7 @@
 
   <style>
     :root{ --bg:#050b10; --fg:#e0e6ee; --panel:rgba(5,11,16,0.90); --border:#1b2836; }
-    html,body{ height:100%; margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,-apple-system,"Segoe UI",sans-serif; overflow:hidden; }
+    html,body{ height:100%; margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,-apple-system,"Segoe UI",sans-serif; overflow:hidden; -webkit-text-size-adjust:100%; }
 
     /* ======= Toolbar (fixed top bar - replaces #controls) ======= */
     #toolbar{
@@ -98,7 +98,9 @@
     #all-day-toggle{ display:flex; align-items:center; gap:6px; white-space:nowrap; font-size:13px; font-weight:800; }
     #all-day-cb{ width:15px; height:15px; accent-color:#d84bff; }
     #toolbar-status{ color:#9fb0c3; font-size:12px; font-weight:700; white-space:nowrap; }
-    #captain-tools, #feedback-float{ touch-action:none; user-select:none; }
+    #toolbar, #feedback-float, #hamburger-btn, #combined-menu-btn,
+    #captain-tools, #menu-panel, #combined-controls, #captain-pts-panel,
+    #captain-dist-panel{ touch-action:none; user-select:none; -webkit-user-select:none; }
     .captain-drag-handle{
       width:18px; height:30px; flex:0 0 18px; cursor:grab;
       display:flex; align-items:center; justify-content:center;
@@ -549,9 +551,9 @@
 
     /* Hamburger button and menu panel */
     #hamburger-btn{
-      position:fixed; top:8px; right:8px; z-index:2201;
-      width:48px; height:48px; border:2px solid rgba(255,255,255,0.72); border-radius:8px;
-      background:rgba(9,74,132,0.96); color:#fff; font-size:26px; font-weight:900; cursor:pointer;
+      position:fixed; top:6px; right:6px; z-index:2201;
+      width:36px; height:36px; border:2px solid rgba(255,255,255,0.72); border-radius:7px;
+      background:rgba(9,74,132,0.96); color:#fff; font-size:21px; font-weight:900; cursor:pointer;
       box-shadow:0 4px 16px rgba(0,0,0,0.62);
       padding:0;
     }
@@ -562,7 +564,7 @@
       background:rgba(5,11,16,0.94); border:1px solid rgba(255,255,255,0.22); border-radius:8px;
       box-shadow:0 12px 30px rgba(0,0,0,0.45); backdrop-filter:blur(8px);
       box-sizing:border-box; height:min(640px, calc(100dvh - 74px)); overflow:auto;
-      touch-action:pan-y; overscroll-behavior:contain; -webkit-text-size-adjust:100%;
+      touch-action:pan-y !important; overscroll-behavior:contain; -webkit-text-size-adjust:100%; zoom:1 !important;
     }
     #menu-panel.open{ display:flex; }
     #menu-panel label{ display:flex; flex-direction:column; gap:5px; font-size:12px; font-weight:800; color:#9fb0c3; }
@@ -618,7 +620,7 @@
 
     @media (max-width:720px){
       /* Mobile: move feedback button to top-right, away from bottom map gestures. */
-      #hamburger-btn{ top:8px; right:6px; }
+      #hamburger-btn{ top:6px; right:6px; width:36px; height:36px; }
       body.mobile-device #feedback-float{
         bottom: calc(12px + env(safe-area-inset-bottom, 0px));
         top: auto;
@@ -668,9 +670,12 @@
     body.thermal-fronts-mode .hamburger-range-block{ display:none !important; }
     /* Combined mode: hide single-product slider/progress, show sidebar */
     body.combined-mode #combined-menu-btn{
-      top:8px !important; right:8px !important; left:auto !important;
+      top:6px !important; right:6px !important; left:auto !important;
+      width:36px !important; height:36px !important;
       z-index:2201 !important;
       display:flex !important;
+      background:rgba(9,74,132,0.96) !important;
+      border:2px solid rgba(255,255,255,0.72) !important;
       border-left:1px solid var(--border);
       border-right:none;
       border-radius:8px;
@@ -822,7 +827,7 @@
       gap:12px;
       overflow-y:auto;
       flex-direction:column; box-sizing:border-box; transform-origin:top right; zoom:1;
-      touch-action:pan-y; overscroll-behavior:contain; -webkit-text-size-adjust:100%;
+      touch-action:pan-y !important; overscroll-behavior:contain; -webkit-text-size-adjust:100%; zoom:1 !important;
     }
     body.combined-mode #combined-controls{ display:flex; transform:translateX(100%); transition:transform 0.25s ease; }
     body.combined-mode #combined-controls.open{ transform:translateX(0) !important; }
@@ -1348,7 +1353,7 @@
   <div id="captain-dist-panel" style="display:none;position:fixed;top:96px;left:8px;z-index:1150;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-size:12px;color:var(--fg);min-width:280px;width:280px;max-height:320px;overflow-y:auto;">
     <div id="captain-dist-drag-handle" style="display:flex;align-items:center;justify-content:space-between;gap:16px;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:0.6px;color:#7a8fa8;margin-bottom:8px;">
       <span>Distance</span>
-      <button id="captain-dist-exit" type="button" title="Exit distance measurement" style="border:1px solid #4d7dff;border-radius:5px;background:#1d4f91;color:#fff;padding:3px 7px;font-size:11px;font-weight:700;cursor:pointer;">Exit</button>
+      <button id="captain-dist-exit" type="button" title="Save distance measurements" style="border:1px solid #4d7dff;border-radius:5px;background:#1d4f91;color:#fff;padding:3px 7px;font-size:11px;font-weight:700;cursor:pointer;">Save</button>
     </div>
     <div id="captain-dist-list"></div>
     <div id="captain-dist-total" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-weight:700;color:var(--fg);"></div>
@@ -3051,15 +3056,15 @@ function syncDashboardChrome() {
   if (dashboardChrome.combinedMenu) {
     dashboardChrome.combinedMenu.style.display = combined ? "flex" : "none";
     dashboardChrome.combinedMenu.style.visibility = "visible";
-    dashboardChrome.combinedMenu.style.top = "8px";
-    dashboardChrome.combinedMenu.style.right = "8px";
+    dashboardChrome.combinedMenu.style.top = "6px";
+    dashboardChrome.combinedMenu.style.right = "6px";
     dashboardChrome.combinedMenu.style.left = "auto";
   }
   if (dashboardChrome.hamburger) {
     dashboardChrome.hamburger.style.display = combined ? "none" : "block";
     dashboardChrome.hamburger.style.visibility = "visible";
-    dashboardChrome.hamburger.style.top = "8px";
-    dashboardChrome.hamburger.style.right = "8px";
+    dashboardChrome.hamburger.style.top = "6px";
+    dashboardChrome.hamburger.style.right = "6px";
     dashboardChrome.hamburger.style.left = "auto";
   }
   if (dashboardChrome.toolbar) {
@@ -10262,6 +10267,26 @@ function deactivateDistTool() {
   updateDistPanel();
 }
 
+function saveDistMeasurement() {
+  if (!captainDistTool.points.length) return;
+  const pairs = [];
+  for (let i = 0; i + 1 < captainDistTool.points.length; i += 2) {
+    pairs.push({
+      start: captainDistTool.points[i],
+      end: captainDistTool.points[i + 1],
+      km: getDistanceKm(captainDistTool.points[i], captainDistTool.points[i + 1])
+    });
+  }
+  try {
+    localStorage.setItem('fishedge_last_distance_measurement', JSON.stringify({ pairs, savedAt: Date.now() }));
+  } catch (_) {}
+  captainDistTool.active = false;
+  document.getElementById('captain-dist-tool')?.classList.remove('active');
+  document.getElementById('captain-dist-tool')?.setAttribute('aria-pressed', 'false');
+  captainDistTool.mapRef?.getTargetElement()?.style.setProperty('cursor', 'crosshair');
+  document.getElementById('captain-dist-panel')?.classList.add('collapsed');
+}
+
 function clearDistLayer() {
   if (captainDistTool.lineLayer && captainDistTool.mapRef) {
     captainDistTool.mapRef.removeLayer(captainDistTool.lineLayer);
@@ -10850,7 +10875,7 @@ document.getElementById('captain-dist-tool')?.addEventListener('click', () => {
 
 document.getElementById('captain-dist-exit')?.addEventListener('click', (e) => {
   e.stopPropagation();
-  deactivateDistTool();
+  saveDistMeasurement();
 });
 
 document.getElementById('captain-add-tool')?.addEventListener('click', () => {
