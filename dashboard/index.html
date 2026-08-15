@@ -37,7 +37,7 @@
   <!-- Auth + Analytics -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-init.js?v=20260806c"></script>
-  <script src="canyon-charts.js?v=20260815e-virginia-atlas"></script>
+  <script src="canyon-charts.js?v=20260815f-name-normalization"></script>
   <script src="https://cdn.jsdelivr.net/npm/posthog-js@1.200.0/dist/array.js"></script>
 
 
@@ -1344,7 +1344,6 @@ body.combined-mode #combined-menu-btn{
       </select>
     </div>
     <div class="combined-section">
-      <div class="combined-section-title">Layers</div>
       <label class="combined-toggle">
         <input type="checkbox" id="chk-combined-chl" checked>
         <span class="box"></span>
@@ -1371,10 +1370,9 @@ body.combined-mode #combined-menu-btn{
         <option value="48">Last 48 hours</option>
       </select>
       <div id="combined-sst-units" style="margin:0 0 4px 0;display:flex;flex-direction:column;gap:5px;">
-        <div style="font-size:11px;color:#9fb0c3;">Units</div>
         <div class="combined-mode-row" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
-          <button id="combined-sst-mode-c" class="active" type="button">°C</button>
           <button id="combined-sst-mode-f" type="button">°F</button>
+          <button id="combined-sst-mode-c" class="active" type="button">°C</button>
         </div>
       </div>
       <div id="combined-sst-scan-time" style="font-size:11px;color:#ff8c00;margin-left:28px;margin-bottom:8px;"></div>
@@ -1395,14 +1393,13 @@ body.combined-mode #combined-menu-btn{
       </select>
       <div id="combined-thermal-scan-time" style="font-size:11px;color:#ff6666;margin-left:28px;margin-bottom:4px;"></div>
       <div id="combined-thermal-units" style="margin:0 0 8px 0;display:flex;flex-direction:column;gap:5px;">
-        <div style="font-size:11px;color:#9fb0c3;">Units</div>
         <div class="combined-mode-row" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
-          <button id="combined-thermal-mode-c" class="active" type="button">°C</button>
           <button id="combined-thermal-mode-f" type="button">°F</button>
+          <button id="combined-thermal-mode-c" class="active" type="button">°C</button>
         </div>
         <div class="combined-mode-row" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
-          <button id="combined-thermal-mode-km" class="active" type="button">km</button>
           <button id="combined-thermal-mode-nm" type="button">nm</button>
+          <button id="combined-thermal-mode-km" class="active" type="button">km</button>
         </div>
       </div>
       <label class="combined-toggle">
@@ -1427,7 +1424,6 @@ body.combined-mode #combined-menu-btn{
         <span>Surface Height</span>
       </label>
       <div id="combined-height-units" style="margin:6px 0 8px 28px;display:flex;flex-direction:column;gap:5px;">
-        <div style="font-size:11px;color:#9fb0c3;">Height units</div>
         <div class="combined-mode-row" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
           <button id="combined-height-mode-ft" type="button">ft</button>
           <button id="combined-height-mode-m" type="button">m</button>
@@ -1452,7 +1448,6 @@ body.combined-mode #combined-menu-btn{
       </label>
       <div id="combined-bathy-legend" class="combined-inline-legend"></div>
       <div id="combined-bathy-units" style="margin:8px 0 0 0;display:flex;flex-direction:column;gap:5px;">
-        <div style="font-size:11px;color:#9fb0c3;">Depth units</div>
         <div class="combined-mode-row" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;">
           <button id="combined-bathy-mode-fathom" type="button">fathom</button>
           <button id="combined-bathy-mode-ft" type="button">ft</button>

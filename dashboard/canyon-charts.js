@@ -298,39 +298,68 @@
     return promise;
   }
 
-  function mergeFeatures(boem, gebco, local) {
-    // Local NJ/MD records are the captain-facing authority. Add global
-    // BOEM/GEBCO records only when no local record occupies the same named
-    // location, so a global duplicate cannot hide the local one.
-    var merged = [];
-    local.forEach(function (item) {
-      var duplicate = merged.some(function (existing) {
-        var sameName = String(existing.name || '').toLowerCase() === String(item.name || '').toLowerCase();
-        var near = existing.point && item.point &&
-          Math.abs(existing.point[0] - item.point[0]) < 0.02 &&
-          Math.abs(existing.point[1] - item.point[1]) < 0.02;
-        return sameName && near;
-      });
-      if (!duplicate) merged.push(item);
-    });
-    function duplicateOf(item, allowPrefix) {
-      return merged.some(function (existing) {
-        var nameA = String(existing.name || '').toLowerCase();
-        var nameB = String(item.name || '').toLowerCase();
-        var nameMatch = nameA === nameB || (allowPrefix &&
-          (nameB.indexOf(nameA) === 0 || nameA.indexOf(nameB) === 0));
-        // BOEM uses short names ("Norfolk") while GEBCO uses the full
-        // gazetteer name ("Norfolk Canyon"). Treat those as the same named
-        // feature even when the polygon centroid and gazetteer anchor differ.
-        var near = existing.point && item.point &&
-          Math.abs(existing.point[0] - item.point[0]) < 0.02 &&
-          Math.abs(existing.point[1] - item.point[1]) < 0.02;
-        return nameMatch && near;
-      });
+  function canonicalName(raw) {
+    var name = String(raw || '').trim();
+    var key = name.toLowerCase().replace(/[’']/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+    var aliases = {
+      'norfolk': 'Norfolk Canyon',
+      'norfolk canyon': 'Norfolk Canyon',
+      'norfork canyon': 'Norfolk Canyon',
+      'baltimore': 'Baltimore Canyon',
+      'baltimore canyon': 'Baltimore Canyon',
+      'wilmington': 'Wilmington Canyon',
+      'wilmington canyon': 'Wilmington Canyon',
+      'hudson': 'Hudson Canyon',
+      'hudson canyon': 'Hudson Canyon',
+      'poormans canyon': "Poor Man's Canyon",
+      'poor mans canyon': "Poor Man's Canyon",
+      'cigar or little bimini': 'The Cigar',
+      'the cigar': 'The Cigar',
+      '21 mile little hill or lump': '21 Mile Hill',
+      '21 mile hill': '21 Mile Hill',
+      '3 mile 10 mile hill or lump': '3 Mile Hill',
+      '3 mile hill': '3 Mile Hill'
+    };
+    return aliases[key] || name;
+  }
+
+  function mergeGeometry(a, b) {
+    if (!a) return b;
+    if (!b) return a;
+    if (a.type === 'Polygon' && b.type === 'Polygon') {
+      return { type: 'MultiPolygon', coordinates: [a.coordinates, b.coordinates] };
     }
-    gebco.forEach(function (item) { if (!duplicateOf(item, false)) merged.push(item); });
-    boem.forEach(function (item) { if (!duplicateOf(item, true)) merged.push(item); });
+    if (a.type === 'MultiPolygon' && b.type === 'Polygon') {
+      return { type: 'MultiPolygon', coordinates: a.coordinates.concat([b.coordinates]) };
+    }
+    if (a.type === 'Polygon' && b.type === 'MultiPolygon') {
+      return { type: 'MultiPolygon', coordinates: [a.coordinates].concat(b.coordinates) };
+    }
+    if (a.type === 'MultiPolygon' && b.type === 'MultiPolygon') {
+      return { type: 'MultiPolygon', coordinates: a.coordinates.concat(b.coordinates) };
+    }
+    return a;
+  }
+
+  function mergeNamedFeatures(features) {
+    var merged = [];
+    features.forEach(function (item) {
+      var displayName = canonicalName(item.name);
+      var existing = merged.find(function (candidate) { return candidate.name === displayName; });
+      if (!existing) {
+        merged.push(Object.assign({}, item, { name: displayName }));
+      } else {
+        existing.geometry = mergeGeometry(existing.geometry, item.geometry);
+      }
+    });
     return merged;
+  }
+
+  function mergeFeatures(boem, gebco, local) {
+    // Local NJ/MD/Atlantic records own the region. Global BOEM/GEBCO records
+    // are used only when no local records are available at all.
+    var localMerged = mergeNamedFeatures(local);
+    return localMerged.length ? localMerged : mergeNamedFeatures(gebco.concat(boem));
   }
 
   function styleFor(feature) {
