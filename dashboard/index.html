@@ -1400,6 +1400,14 @@ body.combined-mode #combined-menu-btn{
         <span>Bathymetry</span>
       </label>
       <div id="combined-bathy-legend" class="combined-inline-legend"></div>
+      <div id="combined-bathy-units" style="margin:8px 0 0 0;display:flex;flex-direction:column;gap:5px;">
+        <div style="font-size:11px;color:#9fb0c3;">Depth units</div>
+        <div class="combined-mode-row" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;">
+          <button id="combined-bathy-mode-fathom" type="button">fathom</button>
+          <button id="combined-bathy-mode-ft" type="button">ft</button>
+          <button id="combined-bathy-mode-m" type="button">m</button>
+        </div>
+      </div>
     </div>
   </div>
   <button id="combined-menu-btn" aria-label="Toggle sidebar" style="display:none;position:fixed;top:8px;right:8px;z-index:40;width:44px;height:44px;background:var(--panel);border:none;border-left:1px solid var(--border);cursor:pointer;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:0;">
@@ -1895,11 +1903,20 @@ function nmToKmDistance(nm) { return nm * 1.852; }
 const MS_TO_KT = 1.94384;
 function msToKt(ms) { return ms * MS_TO_KT; }
 function mToFathom(m) { return m * 0.546806649; }
-let depthUnit = localStorage.getItem("depth_unit") === "m" ? "m" : "fathom";
+let depthUnit = ["fathom", "ft", "m"].includes(localStorage.getItem("depth_unit"))
+  ? localStorage.getItem("depth_unit") : "fathom";
+function mToFeet(m) { return m * 3.28084; }
+function depthUnitLabel() { return depthUnit === "fathom" ? "fm" : depthUnit; }
 function formatDepth(meters) {
   if (meters === null || meters === undefined) return "";
   if (depthUnit === "fathom") return `${mToFathom(meters).toFixed(1)} fm`;
-  return `${meters.toFixed(0)}m`;
+  if (depthUnit === "ft") return `${mToFeet(meters).toFixed(0)} ft`;
+  return `${meters.toFixed(0)} m`;
+}
+function unitLabelForVar(varKey) {
+  if (varKey === "sst" || varKey === "thermal_fronts" || varKey === "sst_front") return tempUnitLabel();
+  if (varKey === "bathy") return depthUnitLabel();
+  return DEFAULT_RANGES[varKey]?.unit || "";
 }
 function formatArrowSpeed(ms) {
   if (!Number.isFinite(ms)) return "";
@@ -2500,7 +2517,7 @@ function renderDesktopReadout(lon, lat, pixel) {
   if (currentVar === "bathy" && pixel && desktopMapState.bathyContourLayer) {
     const contourDepth = bathyContourDepthAtPixel(desktopMapState.map, pixel);
     if (contourDepth !== null) {
-      setReadout(`${base}, ${contourDepth}m (contour)`);
+      setReadout(`${base}, ${formatDepth(contourDepth)} (contour)`);
       return;
     }
   }
@@ -3189,6 +3206,23 @@ if (thermalDistUnit === "nm") {
   combinedThermalModeKmBtn?.classList.add("active");
   combinedThermalModeNmBtn?.classList.remove("active");
 }
+const combinedBathyModeFathomBtn = document.getElementById("combined-bathy-mode-fathom");
+const combinedBathyModeFtBtn = document.getElementById("combined-bathy-mode-ft");
+const combinedBathyModeMBtn = document.getElementById("combined-bathy-mode-m");
+function setDepthUnit(u) {
+  if (!["fathom", "ft", "m"].includes(u)) return;
+  depthUnit = u;
+  localStorage.setItem("depth_unit", depthUnit);
+  combinedBathyModeFathomBtn?.classList.toggle("active", u === "fathom");
+  combinedBathyModeFtBtn?.classList.toggle("active", u === "ft");
+  combinedBathyModeMBtn?.classList.toggle("active", u === "m");
+  updateCombinedBathyLegend(window._combinedBathyLevels || []);
+  if (currentVar === "bathy" || currentVar === "combined") showFrame();
+}
+combinedBathyModeFathomBtn?.addEventListener("click", () => setDepthUnit("fathom"));
+combinedBathyModeFtBtn?.addEventListener("click", () => setDepthUnit("ft"));
+combinedBathyModeMBtn?.addEventListener("click", () => setDepthUnit("m"));
+setDepthUnit(depthUnit);
 /* Marker state */
 let markers = [];
 let markerMode = "off"; // "off" | "add" | "remove"
@@ -3806,7 +3840,7 @@ function attachRelayoutListenerOnce() {
 
 /* ========================= COLORBAR PLACEMENT ========================= */
 function colorbarFor(varKey) {
-  const unit = varKey === "sst" ? tempUnitLabel() : (DEFAULT_RANGES[varKey]?.unit || "");
+  const unit = unitLabelForVar(varKey);
   const portrait = isPortrait();
 
   if (portrait) {
@@ -3832,7 +3866,7 @@ function colorbarFor(varKey) {
 async function renderFooterColorbarToDiv(targetDiv, varKey) {
   if (!targetDiv) return;
 
-  const unit = varKey === "sst" ? tempUnitLabel() : (DEFAULT_RANGES[varKey]?.unit || "");
+  const unit = unitLabelForVar(varKey);
   // Keep the title outside Plotly's SVG as well. The live OL map hides the
   // Plotly map, and Plotly can clip a horizontal colorbar title at small
   // mobile widths; this explicit label is always visible in the product menu.
@@ -4235,7 +4269,7 @@ function buildFrontLines(gridInfo, dataObj, varKey) {
       }
       const grad = props.gradient_per_km ?? null;
       const gradC = grad !== null ? grad * (tempUnit === 'F' ? 9/5 : 1) : null;
-      const gradUnit = `°${tempUnitLabel()}/km`;
+      const gradUnit = `${tempUnitLabel()}/km`;
       const lenKm = props.length_km ?? null;
       const textVal = gradC != null ? `${gradC.toFixed(3)} ${gradUnit}` : '';
       const customEntry = {
@@ -4247,7 +4281,7 @@ function buildFrontLines(gridInfo, dataObj, varKey) {
       };
       lineX.push(lon);
       lineY.push(lat);
-      text.push(textVal + (lenKm != null ? `<br>${lenKm.toFixed(1)} km` : ''));
+      text.push(textVal + (lenKm != null ? `<br>${formatDist(lenKm)}` : ''));
       custom.push(customEntry);
       prev = [lon, lat];
     }
@@ -5253,7 +5287,7 @@ function renderMobileReadoutFromLonLat(lon, lat, pixel) {
   if (pixel && mobileMapState.bathyContourLayer && currentVar === "bathy") {
     const contourDepth = bathyContourDepthAtPixel(mobileMapState.map, pixel);
     if (contourDepth !== null) {
-      setReadout(`${base}, ${contourDepth}m (contour)`);
+      setReadout(`${base}, ${formatDepth(contourDepth)} (contour)`);
       return;
     }
   }
@@ -5266,9 +5300,9 @@ function renderMobileReadoutFromLonLat(lon, lat, pixel) {
     setReadout(base);
     return;
   }
-  const unit = DEFAULT_RANGES[currentVar]?.unit || "";
+  const unit = unitLabelForVar(currentVar);
   if (currentVar === "sst") setReadout(`${base}, ${formatSstValue(val)}`);
-  else if (currentVar === "bathy") setReadout(`${base}, ${val.toFixed(0)}${unit}`);
+  else if (currentVar === "bathy") setReadout(`${base}, ${formatDepth(val)}`);
   else if (currentVar === "uv") setReadout(formatUvReadout(base, mobileMapState.currentGridInfo, mobileMapState.currentDataObj, lon, lat, mobileMapState.map, null, val));
   else setReadout(`${base} ${formatChlValue(val)}`);
 }
@@ -5865,7 +5899,7 @@ async function renderCombinedMode() {
       Number.isFinite(feature.get("depth")) ? feature : null
     ), { hitTolerance: 6 });
     if (bathyFeature && hoverTip) {
-      hoverTip.textContent = `${bathyFeature.get("depth")}m`;
+      hoverTip.textContent = formatDepth(bathyFeature.get("depth"));
       hoverTip.style.left = `${ev.originalEvent.clientX}px`;
       hoverTip.style.top = `${ev.originalEvent.clientY}px`;
       hoverTip.style.display = "block";
@@ -5997,7 +6031,7 @@ function updateCombinedBathyLegend(levels) {
   el.innerHTML = `
     <div class="combined-legend-row">
       <span class="combined-bathy-swatch"></span>
-      <span>Levels (m): ${levels.map(v => `${v}`).join(", ")}</span>
+      <span>Levels (${depthUnitLabel()}): ${levels.map(v => formatDepth(v).replace(/\s+(fm|ft|m)$/, "")).join(", ")}</span>
     </div>
   `;
 }
@@ -7424,7 +7458,7 @@ function renderReadoutFromPoint(p) {
   const unit = DEFAULT_RANGES[currentVar]?.unit || "";
 
   if (currentVar === "sst") setReadout(`${base}, ${formatSstValue(val)}`);
-  else if (currentVar === "bathy") setReadout(`${base}, ${val.toFixed(0)}${unit}`);
+  else if (currentVar === "bathy") setReadout(`${base}, ${formatDepth(val)}`);
   else if (currentVar === "uv") setReadout(formatUvReadout(base, desktopMapState.currentGridInfo, desktopMapState.currentDataObj, lon, lat, desktopMapState.map, null, val));
   else setReadout(`${base} ${formatChlValue(val)}`);
 }
@@ -8285,8 +8319,8 @@ function thermalRenderReadout(coord, pixel) {
   if (Number.isFinite(gradient)) {
     const gradC = gradient * (tempUnit === "F" ? 9 / 5 : 1);
     const gradDisplay = thermalDistUnit === "nm"
-      ? `${kmToNm(gradC).toFixed(3)} °${tempUnit}/nm`
-      : `${gradC.toFixed(3)} °${tempUnit}/km`;
+      ? `${kmToNm(gradC).toFixed(3)} ${tempUnitLabel()}/nm`
+      : `${gradC.toFixed(3)} ${tempUnitLabel()}/km`;
     const parts = [gradDisplay];
     if (deltaSst && Number.isFinite(deltaSst.value)) {
       const deltaVal = tempUnit === "F" ? deltaSst.value * 9 / 5 : deltaSst.value;
@@ -8732,8 +8766,8 @@ function thermalUpdateLegendAndStatus() {
       sourceText = `${totalHourly} hourly frames across ${shownDays} days`;
     }
     const stats = thermalDailyStats();
-    const unitLabel = thermalDistUnit === "nm" ? "°C/nm" : "°C/km";
-    const sstLabel = tempUnit === "F" ? "°F" : "°C";
+    const unitLabel = `${tempUnitLabel()}/${thermalDistUnit}`;
+    const sstLabel = tempUnitLabel();
     let statsText = ` - ${sourceText}`;
     if (stats && shownDays > 0) {
       if (stats.meanGrad !== null) {
@@ -10020,13 +10054,13 @@ function updateDistPanel() {
     if (i > 0) {
       const d = getDistanceKm(captainDistTool.points[i - 1], p);
       running += d;
-      list.innerHTML += `<div style="color:#7a8fa8;margin-bottom:2px;">Pt ${i}: ${p.lat.toFixed(4)}, ${p.lon.toFixed(4)} &nbsp;<b style="color:var(--fg);">${d.toFixed(1)} km</b></div>`;
+    list.innerHTML += `<div style="color:#7a8fa8;margin-bottom:2px;">Pt ${i}: ${p.lat.toFixed(4)}, ${p.lon.toFixed(4)} &nbsp;<b style="color:var(--fg);">${formatDist(d)}</b></div>`;
     } else {
       list.innerHTML += `<div style="color:#7a8fa8;margin-bottom:2px;">Pt ${i}: ${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}</div>`;
     }
   });
   if (total) total.textContent = captainDistTool.points.length >= 2
-    ? `Total: ${running.toFixed(2)} km / ${(running / 1.852).toFixed(2)} nm` : '';
+    ? `Total: ${formatDist(running)}` : '';
 }
 
 function renderDistLayer(map) {
@@ -10129,7 +10163,7 @@ function waypointsToKML(pts) {
   const wpts = pts.map((p, i) => {
     const desc = [
       p.chl !== null ? `CHL: ${p.chl.toFixed(2)} mg/m³` : '',
-      p.sst !== null ? `SST: ${p.sst.toFixed(1)} °C` : '',
+      p.sst !== null ? `SST: ${formatSstValue(p.sst)}` : '',
       p.freshness !== null ? `Fresh: ${p.freshness}h ago` : ''
     ].filter(Boolean).join('<br/>');
     return `  <Placemark>
@@ -10319,7 +10353,7 @@ function updatePtsPanel() {
   }
   list.innerHTML = captainAddTool.points.map((p, i) => {
     const chlStr = p.chl !== null ? `${p.chl.toFixed(2)} mg/m³` : '—';
-    const sstStr = p.sst !== null ? `${p.sst.toFixed(1)} °C` : '—';
+    const sstStr = p.sst !== null ? formatSstValue(p.sst) : '—';
     return `<div style="margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid rgba(255,255,255,0.07);">
       <div style="display:flex;justify-content:space-between;align-items:center;">
         <b style="color:#4d7dff;">${i + 1}. ${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}</b>
@@ -10329,6 +10363,15 @@ function updatePtsPanel() {
     </div>`;
   }).join('');
 }
+
+// The list is useful while choosing points, but it should not permanently
+// cover the map. Tapping its empty/list area stows it without exiting add
+// mode; the Add Waypoint tool remains active until explicitly toggled off.
+document.getElementById('captain-pts-panel')?.addEventListener('click', event => {
+  if (!captainAddTool.active) return;
+  if (event.target.closest('button, a, input, select')) return;
+  document.getElementById('captain-pts-panel')?.classList.remove('visible');
+});
 
 function renderPtsLayer(map) {
   if (!map) return;
@@ -10435,7 +10478,7 @@ function installCaptainToolHandler(map) {
       const d = feature.get("depth");
       if (Number.isFinite(d)) found = d;
     }, { hitTolerance: 6 });
-    if (found !== null) { capSetReadout(`${base}, ${found}m (contour)`); return; }
+    if (found !== null) { capSetReadout(`${base}, ${formatDepth(found)} (contour)`); return; }
 
     // 2. Thermal front gradient + ΔSST (from front hover points)
     const frontInfo = combinedFrontClickInfo(map, ev.coordinate, pixel);
@@ -10488,8 +10531,8 @@ function combinedFrontClickInfo(map, coord, pixel) {
   if (gradVals.length) {
     const avg = gradVals.reduce((a, b) => a + b, 0) / gradVals.length;
     const displayGrad = thermalDistUnit === "nm" ? kmToNm(avg * (tempUnit === "F" ? 9 / 5 : 1)) : avg * (tempUnit === "F" ? 9 / 5 : 1);
-    const unit = tempUnit + (thermalDistUnit === "nm" ? "/nm" : "/km");
-    parts.push(`${displayGrad.toFixed(3)} °${unit}`);
+    const unit = tempUnitLabel() + (thermalDistUnit === "nm" ? "/nm" : "/km");
+    parts.push(`${displayGrad.toFixed(3)} ${unit}`);
   }
   if (sstVals.length) {
     const avg = sstVals.reduce((a, b) => a + b, 0) / sstVals.length;
