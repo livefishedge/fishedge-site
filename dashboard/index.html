@@ -1941,6 +1941,7 @@ let userRanges = {
   thermal_fronts: { ...DEFAULT_RANGES.thermal_fronts },
   combined: { ...DEFAULT_RANGES.combined }
 };
+let sstRangeWasManuallySet = false;
 
 let tempUnit = localStorage.getItem("sst_temp_unit") === "C" ? "C" : "F";
 let thermalDistUnit = localStorage.getItem("thermal_dist_unit") === "km" ? "km" : "nm";
@@ -1999,6 +2000,35 @@ function formatReadoutCoords(lon, lat) {
 }
 function sstTickText(values) {
   return values.map(v => tempUnit === "F" ? String(Math.round(cToF(v))) : String(v));
+}
+
+function syncSstRangeToData(dataObj) {
+  if (sstRangeWasManuallySet) return;
+  const grid = dataObj?.sst || dataObj?.z || dataObj?.data;
+  if (!Array.isArray(grid)) return;
+  const values = [];
+  for (const row of grid) {
+    if (!Array.isArray(row)) continue;
+    for (const raw of row) {
+      const value = Number(raw);
+      if (Number.isFinite(value) && value > -20 && value < 60) values.push(value);
+    }
+  }
+  if (values.length < 2) return;
+  let rawMin = Infinity, rawMax = -Infinity;
+  for (const value of values) {
+    if (value < rawMin) rawMin = value;
+    if (value > rawMax) rawMax = value;
+  }
+  const observedMin = Math.floor(rawMin * 10) / 10;
+  const observedMax = Math.ceil(rawMax * 10) / 10;
+  if (!(observedMax > observedMin)) return;
+  userRanges.sst.vmin = observedMin;
+  userRanges.sst.vmax = observedMax;
+  if (currentVar === "sst") {
+    if (hVmin) hVmin.value = observedMin;
+    if (hVmax) hVmax.value = observedMax;
+  }
 }
 
 /* CHL colorscale (algae-ish) */
@@ -2693,6 +2723,7 @@ async function renderDesktopFrame(frameMeta) {
     dataObj = await fetchFrameData(currentVar, frameMeta);
     gridInfo = await loadGridForVar(currentVar, dataObj);
   }
+  if (currentVar === "sst") syncSstRangeToData(dataObj);
   desktopMapState.currentGridInfo = gridInfo;
   desktopMapState.currentDataObj = dataObj;
 
@@ -2966,6 +2997,7 @@ if (hApply) {
     if (!userRanges[currentVar]) userRanges[currentVar] = { ...DEFAULT_RANGES[currentVar] };
     userRanges[currentVar].vmin = vmin;
     userRanges[currentVar].vmax = vmax;
+    if (currentVar === "sst") sstRangeWasManuallySet = true;
     showFrame();
     hamburgerPanel?.classList.remove("open");
   });
@@ -2973,6 +3005,7 @@ if (hApply) {
 if (hReset) {
   hReset.addEventListener("click", () => {
     userRanges[currentVar] = { ...DEFAULT_RANGES[currentVar] };
+    if (currentVar === "sst") sstRangeWasManuallySet = false;
     const def = DEFAULT_RANGES[currentVar];
     if (hVmin) hVmin.value = def.vmin;
     if (hVmax) hVmax.value = def.vmax;
@@ -3756,6 +3789,11 @@ function fmtCompactLocalDateTime(dt) {
     hour: "2-digit", minute: "2-digit", hour12: false
   });
 }
+function fmtPortraitDaytimeLocal(dt) {
+  return dt.toLocaleString(undefined, {
+    month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit", hour12: false
+  });
+}
 function fmtDaytimeLocal(msOrDate, includeYear = true) {
   const dt = msOrDate instanceof Date ? msOrDate : new Date(msOrDate);
   return dt.toLocaleString(undefined, {
@@ -3774,14 +3812,14 @@ function timeOnlyLabel(varKey, frameMeta) {
   if (varKey === "bathy") return ""; /* EMPTY for bathy */
   if (frameMeta?.time_iso) {
     const dt = new Date(frameMeta.time_iso);
-    if (!isNaN(dt.getTime())) return varKey === "chl" && isMobileDevice() ? fmtCompactLocalDateTime(dt) : fmtLocalDateTime(dt);
+    if (!isNaN(dt.getTime())) return isPortrait() ? fmtPortraitDaytimeLocal(dt) : fmtLocalDateTime(dt);
   }
   if (frameMeta?.label) return String(frameMeta.label);
   const path = framePathOf(frameMeta);
   const filename = String(path).split("/").pop() || "";
-  if (varKey === "chl") { const dt = parseChlUtcFromName(filename); return dt ? (isMobileDevice() ? fmtCompactLocalDateTime(dt) : fmtLocalDateTime(dt)) : ""; }
-  if (varKey === "sst") { const dt = parseSstUtcFromName(filename); return dt ? fmtLocalDateTime(dt) : ""; }
-  if (varKey === "chl_front" || varKey === "sst_front") { const dt = parseFrontUtcFromName(filename); return dt ? fmtLocalDateTime(dt) : ""; }
+  if (varKey === "chl") { const dt = parseChlUtcFromName(filename); return dt ? (isPortrait() ? fmtPortraitDaytimeLocal(dt) : fmtLocalDateTime(dt)) : ""; }
+  if (varKey === "sst") { const dt = parseSstUtcFromName(filename); return dt ? (isPortrait() ? fmtPortraitDaytimeLocal(dt) : fmtLocalDateTime(dt)) : ""; }
+  if (varKey === "chl_front" || varKey === "sst_front") { const dt = parseFrontUtcFromName(filename); return dt ? (isPortrait() ? fmtPortraitDaytimeLocal(dt) : fmtLocalDateTime(dt)) : ""; }
   if (varKey === "uv")  { const dt = parseUvDateFromName(filename);  return dt ? fmtLocalDate(dt) : ""; }
   return "";
 }
@@ -7388,6 +7426,7 @@ async function renderMobileFrame(frameMeta) {
     dataObj = await fetchFrameData(currentVar, frameMeta);
     gridInfo = await loadGridForVar(currentVar, dataObj);
   }
+  if (currentVar === "sst") syncSstRangeToData(dataObj);
   mobileMapState.currentGridInfo = gridInfo;
   mobileMapState.currentDataObj = dataObj;
 
@@ -7714,12 +7753,9 @@ function thermalFrameTimeLabel(ms) {
   // Bug fix 2026-08-02: was hardcoding timeZone: "UTC" and appending " UTC",
   // which forced thermal-fronts-mode labels to UTC regardless of user's tz.
   // Now uses browser local time (same convention as fmtLocalDateTime).
-  return new Date(ms).toLocaleString(undefined, {
-    month: "numeric",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: false
+  const dt = new Date(ms);
+  return isPortrait() ? fmtPortraitDaytimeLocal(dt) : dt.toLocaleString(undefined, {
+    month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit", hour12: false
   });
 }
 
