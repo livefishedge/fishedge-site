@@ -2,18 +2,25 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Captain's Dashboard</title>
-  <!-- 2026-08-02: force Pages redeploy after locate-me DOM-ready mount repair. -->
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@10.4.0/ol.css">
 
   <script src="https://cdn.plot.ly/plotly-2.34.0.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/ol@10.4.0/dist/ol.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/ol-mapbox-style@13.4.1/dist/olms.js"></script>
+  <script src="drawMobileUvArrowsLite.js?v=20260517-arrows2"></script>
+  <!-- Auth + Analytics -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-init.js?v=20260806c"></script>
+  <script src="https://cdn.jsdelivr.net/npm/posthog-js@1.200.0/dist/array.js"></script>
 <script>
-/* Instrumentation shim for locate-me.js (same pattern as the dashboard).
-   The viewer's map state is module-scoped, not on window. Patch the
-   OL Map constructor to track every created instance globally. */
+/* Instrumentation shim for locate-me.js. The dashboard declares
+   mobileMapState / desktopMapState as local `let` variables in its
+   IIFE scope, never publishing them to window. This patches the
+   window.ol.Map constructor to track every created map instance in
+   window.__fishedgeMaps so locate-me.js can find them. */
 (function instrumentOlMap() {
   if (typeof window === 'undefined') return;
   if (!window.ol || !window.ol.Map) {
@@ -26,19 +33,17 @@
     (window.__fishedgeMaps = window.__fishedgeMaps || []).push(map);
     return map;
   }
-  try { Object.keys(OrigMap).forEach(function (k) { TrackedMap[k] = OrigMap[k]; }); } catch (_) {}
+  // Preserve static methods/props (OL has things like ol.Map.EMPTY)
+  try {
+    Object.keys(OrigMap).forEach(function (k) { TrackedMap[k] = OrigMap[k]; });
+  } catch (_) {}
+  // Preserve prototype
   TrackedMap.prototype = OrigMap.prototype;
   window.ol.Map = TrackedMap;
+  console.info('[fishedge-locate] ol.Map instrumented; tracking map instances');
 })();
 </script>
-<script src="fish-locate.js?v=20260807-domready"></script>
-  <script src="https://cdn.jsdelivr.net/npm/ol-mapbox-style@13.4.1/dist/olms.js"></script>
-  <script src="drawMobileUvArrowsLite.js?v=20260517-arrows2"></script>
-  <!-- Auth + Analytics -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="supabase-init.js?v=20260806c"></script>
-  <script src="canyon-charts.js?v=20260814f-structure-layer"></script>
-  <script src="https://cdn.jsdelivr.net/npm/posthog-js@1.200.0/dist/array.js"></script>
+<script src="locate-me.js?v=20260806c"></script>
 
 
   <style>
@@ -48,7 +53,7 @@
     /* ======= Toolbar (fixed top bar - replaces #controls) ======= */
     #toolbar{
       position:fixed; top:0; left:0; right:0; z-index:940;
-      display:flex; align-items:center; gap:6px; flex-wrap:wrap;
+      display:flex; align-items:center; gap:6px; flex-wrap:nowrap;
       padding:4px 70px 4px 8px; background:var(--panel); border-bottom:1px solid var(--border);
       backdrop-filter:blur(6px);
     }
@@ -60,8 +65,9 @@
     #toolbar button{ padding:0 10px; cursor:pointer; }
     #toolbar button.active{ background:#1d4f91; border-color:#4d7dff; }
     #region-select{ padding:0 8px; min-width:130px; }
-    #nav-bar{ display:flex; align-items:center; gap:6px; flex:1 1 340px; min-width:260px; }
-    #prev-btn, #next-btn, #play-btn{ min-width:32px; padding:0 6px; font-size:16px; font-weight:900; }
+    #nav-bar{ display:flex; align-items:center; gap:6px; flex:1 1 auto; min-width:0; }
+    #prev-btn, #next-btn, #play-btn{ min-width:44px; min-height:44px; padding:0 12px; font-size:16px; font-weight:900; }
+    #toolbar a, #toolbar button, #toolbar select{ min-height:44px; }
     #frame-slider{ flex:1; min-width:120px; max-width:520px; accent-color:#d84bff; background:transparent; -webkit-appearance:none; appearance:none; }
     #frame-slider::-webkit-slider-runnable-track{
       height:6px; border-radius:3px;
@@ -97,31 +103,41 @@
     }
     #all-day-toggle{ display:flex; align-items:center; gap:6px; white-space:nowrap; font-size:13px; font-weight:800; }
     #all-day-cb{ width:15px; height:15px; accent-color:#d84bff; }
-    #toolbar-status{ color:#9fb0c3; font-size:12px; font-weight:700; white-space:nowrap; }
-    #captain-tools, #feedback-float{ touch-action:none; user-select:none; }
-    .captain-drag-handle{
-      width:18px; height:30px; flex:0 0 18px; cursor:grab;
+    /* Status used to expand into a verbose extra row (for example,
+       "13/14 hourly frames ... showing 14"). Keep it out of the map UI. */
+    #toolbar-status{ display:none !important; }
+    #fishedge-locate-wrap{ flex:0 0 auto; margin-left:auto; }
+    #captain-tools #fishedge-locate-wrap{ margin-left:0; }
+    #fishedge-locate-btn svg, #captain-locate-btn svg{ display:block; width:22px; height:22px; }
+    /* #toolbar button is intentionally generic, but its selector is more
+       specific than .captain-tool-btn. Reassert the Captain Dashboard
+       compass treatment for the product-page copy so it cannot become a
+       solid blue toolbar button. */
+    #toolbar #fishedge-locate-btn{
+      width:30px; min-width:30px; height:30px; min-height:30px;
+      padding:0; border:1px solid transparent; border-radius:6px;
+      background:transparent; color:var(--fg);
       display:flex; align-items:center; justify-content:center;
-      border-radius:5px; color:#8fa3b8; opacity:.8;
-      touch-action:none;
+      font-size:0;
     }
-    .captain-drag-handle:active{ cursor:grabbing; }
-    .captain-drag-handle::before{
-      content:"⋮"; font-size:22px; line-height:1; font-weight:900;
+    #toolbar #fishedge-locate-btn:hover{
+      background:rgba(255,255,255,0.08);
+      border-color:rgba(255,255,255,0.2);
     }
-    @media (max-width:720px){
-      #map .ol-zoom{ display:none !important; }
-      body.no-native-fullscreen #captain-fs-btn{ display:none !important; }
-    }
-    body.fishedge-app-fullscreen{ overflow:hidden !important; }
-    body.fishedge-app-fullscreen #map,
-    body.fishedge-app-fullscreen #plot{
-      position:fixed !important; inset:0 !important; width:100vw !important;
-      height:100dvh !important; z-index:2000 !important;
-    }
-    body.fishedge-app-fullscreen #captain-tools,
-    body.fishedge-app-fullscreen #hamburger-btn,
-    body.fishedge-app-fullscreen #feedback-float{ z-index:2150 !important; }
+    /* Product pages already expose Locate Me in the toolbar.  The fixed
+       host otherwise creates a second compass beside the hamburger. Keep
+       the fixed surface for the combined Captain dashboard, where the
+       toolbar is not the product-page control surface. */
+    body:not(.combined-mode) #fishedge-locate-host{ display:none !important; }
+    /* Do not flash the previous product while its replacement is loading. */
+    body.product-switching #plot,
+    body.product-switching #map{ visibility:hidden !important; }
+    /* The toolbar Locate Me button (fishedge-locate-btn) and the Captain
+       Dashboard locate button (captain-locate-btn) both render the same
+       compass SVG via locate-me.js, so the compact-toolbar copy stays
+       visible on every page. Only the legacy ::before glyph is hidden so
+       the toolbar copy shows the same compass icon as the Captain
+       Dashboard (no mixed crosshair + compass). */
 
     /* Modebar host: NEW CSS for floating inside the plot at upper-left */
     #modebar-host{
@@ -137,61 +153,87 @@
       position:fixed;
       bottom:24px;
       right:24px;
-      z-index:500;
+      z-index:1100;
       display:flex;
-      flex-direction:column;
+      flex-direction:column-reverse;   /* panel pops UP, not DOWN — Mike 2026-07-26 17:09 */
       align-items:flex-end;
       gap:6px;
     }
     #feedback-toggle{
+      /* Labeled pill button — bigger and impossible to miss on a busy map.
+         Old 48x48 pure-icon circle was getting lost on the dashboard. */
       background:#2d7d46;
       color:#fff;
-      border:none;
-      border-radius:50%;
-      width:48px;
-      height:48px;
-      aspect-ratio:1 / 1;
-      padding:0;
-      font-size:0;
+      border:0;
+      border-radius:24px;
+      padding:10px 16px 10px 12px;
+      height:auto;
+      min-height:48px;
+      font-size:13px;
+      font-weight:800;
+      letter-spacing:0.02em;
       line-height:1;
       cursor:pointer;
-      box-shadow:0 2px 12px rgba(0,0,0,.5);
-      display:flex;
+      box-shadow:0 4px 16px rgba(45,125,70,.55), 0 1px 3px rgba(0,0,0,.4);
+      display:inline-flex;
       align-items:center;
-      justify-content:center;
+      gap:8px;
       flex:0 0 auto;
-      box-sizing:border-box;
-      overflow:hidden;
-      position:relative;
-      touch-action:none;
-      -webkit-user-select:none;
-      user-select:none;
+      transition: background 0.15s ease, transform 0.1s ease;
     }
-    #feedback-toggle svg{ width:22px; height:22px; display:block; }
-    #feedback-toggle::before{
-      content:"";
+    #feedback-toggle:hover{ background:#3a9d5c; transform: translateY(-1px); }
+    #feedback-toggle:active{ transform: translateY(0); }
+    #feedback-toggle:focus-visible{ outline:2px solid #fde047; outline-offset:2px; }
+    #feedback-toggle .fb-icon{
       width:18px;
       height:14px;
       border:2px solid currentColor;
       border-radius:4px;
       box-sizing:border-box;
       display:block;
+      position:relative;
     }
-    #feedback-toggle::after{
+    #feedback-toggle .fb-icon::after{
       content:"";
       position:absolute;
+      right:-2px;
+      bottom:-3px;
       width:7px;
       height:7px;
       border-right:2px solid currentColor;
       border-bottom:2px solid currentColor;
       transform:rotate(45deg);
-      margin-top:13px;
-      margin-left:-8px;
-      background:#2d7d46;
     }
-    #feedback-toggle::before, #feedback-toggle::after{ display:none; }
-    #feedback-toggle:hover{ background:#3a9d5c; }
-    #feedback-toggle:hover::after{ background:#3a9d5c; }
+    #feedback-toggle .fb-label{
+      font: inherit;
+      color: inherit;
+      white-space: nowrap;
+    }
+
+    /* Home link — sits inside #menu-panel below My Account. Visible in every
+       view because #hamburger-btn is now always visible (the combined-mode
+       display:none on #hamburger-btn was removed so the menu is reachable
+       from every dashboard view). */
+    #menu-panel .home-link{
+      display:block;
+      text-align:center;
+      padding:8px 0;
+      color:var(--fg);
+      font-size:12px;
+      font-weight:800;
+      letter-spacing:0.05em;
+      text-decoration:none;
+      border:1px solid var(--border);
+      border-radius:6px;
+      background:rgba(12,23,35,0.6);
+      transition: border-color 0.15s ease, background 0.15s ease;
+    }
+    #menu-panel .home-link:hover{
+      border-color:#2dd4bf;
+      background:rgba(26,127,122,0.25);
+      color:#fff;
+      text-decoration:none;
+    }
     #temp-unit-toggle{
       display:none;
       min-width:44px;
@@ -556,7 +598,7 @@
       padding:0;
     }
     #menu-panel{
-      position:fixed; top:62px; right:8px; z-index:1001; width:min(280px, calc(100vw - 16px));
+      position:fixed; top:62px; right:8px; z-index:1001; width:min(320px, calc(100vw - 16px));
       display:none; flex-direction:column; gap:10px; padding:12px;
       background:rgba(5,11,16,0.94); border:1px solid rgba(255,255,255,0.22); border-radius:8px;
       box-shadow:0 12px 30px rgba(0,0,0,0.45); backdrop-filter:blur(8px);
@@ -568,61 +610,50 @@
       min-height:38px; border:1px solid #273649; border-radius:8px; background:#0c1723;
       color:var(--fg); font-size:14px; font-weight:800; padding:0 10px; box-sizing:border-box;
     }
-    #menu-panel #hamburger-product-select{
-      min-height:46px;
-      background:#12345a;
-      border:2px solid #4d9cff;
-      color:#fff;
-      font-size:16px;
-      font-weight:900;
-      letter-spacing:.01em;
-      box-shadow:0 0 0 2px rgba(77,156,255,.14);
-    }
-    #menu-panel #hamburger-product-select option{
-      background:#12345a;
-      color:#dff0ff;
-      font-size:16px;
-      font-weight:900;
-    }
     #menu-panel button.active{ background:#1d4f91; border-color:#4d7dff; }
     #menu-panel .mode-row{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
     #menu-panel #all-day-toggle{ flex-direction:row; align-items:center; justify-content:flex-start; color:var(--fg); }
-    #hamburger-cbar{ width:100%; height:82px; overflow:hidden; align-self:center; }
-    #hamburger-cbar::before{
-      content:attr(data-title); display:block; height:14px; line-height:14px;
-      text-align:center; color:#e0e6ee; font:700 11px/12px Arial,sans-serif;
-      letter-spacing:.01em;
-    }
-    #hamburger-cbar svg{ display:block; width:100%; max-width:100%; height:68px; }
+    #hamburger-cbar{ width:100%; height:68px; overflow:hidden; }
+    #hamburger-cbar svg{ display:block; max-width:100%; height:68px; }
     #all-day-cb{ width:15px; height:15px; accent-color:#d84bff; }
 
     @media (max-width:720px){
+      /* Keep every layer's time controls in one compact touch row. */
+      #toolbar{
+        gap:4px;
+        padding-left:calc(6px + env(safe-area-inset-left, 0px));
+        padding-right:calc(52px + env(safe-area-inset-right, 0px));
+        padding-top:calc(3px + env(safe-area-inset-top, 0px));
+        padding-bottom:3px;
+      }
+      #nav-bar{ order:0; flex:1 1 auto; flex-basis:auto; gap:4px; min-width:0; }
+      #prev-btn, #next-btn{ min-width:32px; min-height:36px; padding:0 5px; font-size:15px; }
+      #play-btn{ min-width:42px; min-height:36px; padding:0 6px !important; font-size:12px !important; }
+      #frame-slider{ flex:1 1 auto; min-width:44px; width:auto; max-width:none; }
+      #frame-label{ display:none !important; }
+      #fishedge-locate-wrap{ margin-left:0; }
+      #fishedge-locate-wrap > button{ width:38px; min-width:38px; min-height:36px; padding:0; font-size:0; }
+      #fishedge-locate-wrap > button::before{ content:none; display:none; }
+      #fishedge-locate-button-status{ display:none; }
       /* Mobile: move feedback button to top-right, away from bottom map gestures. */
       body.mobile-device #feedback-float{
-        bottom: calc(12px + env(safe-area-inset-bottom, 0px));
-        top: auto;
-        left: calc(12px + env(safe-area-inset-left, 0px));
-        right: auto;
+        bottom: calc(12px + env(safe-area-inset-bottom, 0px)) !important;
+        top: auto !important;
+        left: calc(12px + env(safe-area-inset-left, 0px)) !important;
+        right: auto !important;
         z-index: 1300 !important;
       }
-      #toolbar{ gap:6px; padding-right:58px; }
-      #nav-bar{ order:1; flex-basis:100%; }
-      #toolbar-status{ order:2; flex:1 1 100%; white-space:normal; }
-      #menu-panel{
-        top:58px; right:6px; width:min(360px, calc(100vw - 12px));
-        max-height:calc(100dvh - 66px); padding:10px; gap:8px;
-      }
-      #menu-panel .hamburger-range-block{
-        display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr);
-        gap:7px; align-items:center;
-      }
-      #menu-panel .hamburger-range-block .range-name,
-      #menu-panel .hamburger-range-block .range-actions{ grid-column:1 / -1; }
-      #menu-panel .hamburger-range-block input{ width:100%; min-width:0; }
-      #menu-panel .range-actions{ display:grid; grid-template-columns:1fr 1fr; gap:7px; }
-      #hamburger-cbar{ width:100%; height:82px; }
-      #hamburger-cbar svg{ width:100%; height:66px; }
+      #menu-panel{ top:58px; right:8px; }
     }
+
+    /* Respect user motion preferences */
+    @media (prefers-reduced-motion: reduce){
+      *,*::before,*::after{ animation-duration:0.01ms !important; animation-iteration-count:1 !important; transition-duration:0.01ms !important; }
+    }
+
+    /* Visible focus rings for keyboard users */
+    :focus-visible{ outline:2px solid #1aa9ff; outline-offset:2px; border-radius:4px; }
+    #feedback-float:focus-visible{ outline-offset:4px; }
 
     /* Plot: full viewport */
     #plot{ height: 100dvh; min-height: 200px; }
@@ -644,25 +675,23 @@
     body.thermal-fronts-mode #nav-bar{ display:flex !important; }
     body.thermal-fronts-mode #hamburger-cbar,
     body.thermal-fronts-mode .hamburger-range-block{ display:none !important; }
-    /* Combined mode: hide single-product slider/progress, show sidebar */
-body.combined-mode #combined-menu-btn{
-      top:8px !important; right:8px !important; left:auto !important;
-      z-index:1200 !important;
-      display:flex !important;
-      border-left:1px solid var(--border);
-      border-right:none;
-      border-radius:8px;
-      box-shadow:0 2px 10px rgba(0,0,0,0.25);
-    }
-    body.combined-mode #combined-menu-btn span{ display:block; width:18px; height:2px; background:var(--fg); border-radius:2px; }
+
     body.combined-mode #nav-bar{ display:none !important; }
     body.combined-mode #toolbar{ display:none !important; }
-    body.combined-mode #hamburger-btn{ display:none !important; }
+    /* Captain's Dashboard uses #combined-controls (sidebar); #hamburger-btn
+       (universal hamburger) toggles it.  Visible in every view.
+       z-index:1200 keeps the toggle reachable when the sidebar is open
+       (sidebar is z-index:1110). */
+    body.combined-mode #hamburger-btn{ display:flex !important; z-index:1200 !important; justify-content:center; align-items:center; }
     body.combined-mode #plot{ display:none !important; }
     body.combined-mode #map{ display:block !important; position:absolute; top:0; left:0; right:0; bottom:0; z-index:1000; width:100%; height:100%; cursor:crosshair; }
     body.combined-mode #combined-readout{ display:block !important; }
     body.combined-mode #readout{ display:none !important; }
     body:not(.combined-mode) #combined-readout{ display:none !important; }
+    /* When the sidebar is open, hide the bottom-right readout so it doesn't
+       sit on top of the sidebar (z-index 1120 vs sidebar's 1110) and block
+       the My Account button. */
+    body.combined-mode:has(#combined-controls.open) #combined-readout{ display:none !important; }
     body.combined-mode #status{ display:none !important; }
 
     body.combined-mode .combined-mode-row button{
@@ -692,9 +721,9 @@ body.combined-mode #combined-menu-btn{
     .ol-viewport{ background:#d2b48c; }
     /* Captain tools palette — horizontal row, upper-left */
     #captain-tools{
-      display:flex;
+      display:none;
       position:fixed;
-      top:calc(46px + env(safe-area-inset-top, 0px)); left:8px;
+      top:56px; left:8px;
       z-index:1150;
       background:var(--panel);
       border:1px solid var(--border);
@@ -705,7 +734,11 @@ body.combined-mode #combined-menu-btn{
       box-shadow:0 4px 16px rgba(0,0,0,0.4);
       align-items:center;
     }
+    #captain-tools{ display:flex; }
     body.combined-mode #captain-tools{ top:8px; }
+    body.mobile-device #captain-tools{ top:calc(46px + env(safe-area-inset-top, 0px)); }
+    body.mobile-device #captain-dist-panel{ top:92px !important; max-width:calc(100vw - 24px); box-sizing:border-box; }
+    body.mobile-device #captain-fs-btn{ display:none !important; }
     .captain-tool-btn{
       width:30px; height:30px;
       min-width:30px;
@@ -735,28 +768,22 @@ body.combined-mode #combined-menu-btn{
       line-height:1;
     }
     #captain-fs-btn:hover{ background:rgba(255,255,255,0.08); border-color:rgba(255,255,255,0.2); }
-    /* One locate control lives in the shared Captain tools row. The locate
-       script also creates a legacy fixed host; keep that host functional but
-       invisible so it cannot duplicate the compass over the hamburger. */
-    #fishedge-locate-host,
-    #fishedge-locate-wrap{ display:none !important; }
-    #captain-dist-panel.visible, #captain-pts-panel.visible{ display:block !important; }
     #captain-save-btn{
       display:none;
+      position:fixed;
+      top:44px; left:8px;
+      z-index:1150;
       background:#1d4f91;
       border:1px solid #4d7dff;
-      border-radius:6px;
+      border-radius:8px;
       color:#fff;
-      padding:2px 8px;
+      padding:0 10px;
+      height:28px;
       cursor:pointer;
-      font-size:10px;
+      font-size:12px;
       font-weight:700;
-      text-transform:uppercase;
-      letter-spacing:0.6px;
-      white-space:nowrap;
     }
-    #captain-save-btn:hover{ background:#2a5fb0; }
-    #captain-pts-panel.visible{ display:block !important; }
+    #captain-dist-panel.visible, #captain-pts-panel.visible{ display:block !important; }
     #combined-readout{
       display:none;
       position:fixed;
@@ -792,6 +819,20 @@ body.combined-mode #combined-menu-btn{
     body.combined-mode #combined-controls.open{ transform:translateX(0) !important; }
     body.combined-mode #combined-overlay{ display:none; }
     .combined-section{ display:flex; flex-direction:column; gap:8px; }
+    .combined-home-link{
+      display:block;
+      margin-top:10px;
+      padding:7px 8px;
+      border:1px solid var(--border);
+      border-radius:6px;
+      color:var(--fg);
+      font-size:12px;
+      font-weight:800;
+      letter-spacing:0.04em;
+      text-decoration:none;
+      background:rgba(12,23,35,0.6);
+    }
+    .combined-home-link:hover{ border-color:#2dd4bf; background:rgba(26,127,122,0.25); color:#fff; }
     .combined-section-title{
       font-size:11px;
       font-weight:700;
@@ -1038,12 +1079,9 @@ body.combined-mode #combined-menu-btn{
     }
     #hamburger-btn{ z-index:1000; }
   </style>
-
-<!-- locate-me cache-buster: 20260806 (force CDN revalidate after 47412bc01e stuck) -->
 </head>
 <body>
-<!-- host for fishedge-locate-me button (rendered by /locate-me.js) -->
-<div id="fishedge-locate-host" style="position:fixed;top:8px;right:8px;z-index:1100;"></div>
+  <a href="#main-content" class="skip-link" style="position:absolute;top:-100px;left:16px;z-index:9999;background:#1aa9ff;color:#061824;padding:12px 18px;border-radius:6px;font-weight:700;font-size:14px;text-decoration:none;transition:top 0.15s ease" onfocus="this.style.top='12px'" onblur="this.style.top='-100px'">Skip to map</a>
   <!-- Global error overlay: catches 'The string did not match the expected
        pattern' and any other uncaught errors on iOS Safari. Shows the
        actual error message + stack in a fixed div at the top of the page
@@ -1110,11 +1148,14 @@ body.combined-mode #combined-menu-btn{
 
     function setAccountLinkVisible(visible) {
       function apply() {
-        const el = document.getElementById('account-link-wrap');
-        if (el) el.hidden = !visible;
+        // Both combined-mode (Captain's Dashboard) and the per-product hamburger
+        // menu (#menu-panel) need the account link visible independently — flip both.
+        document.querySelectorAll('#account-link-wrap').forEach(function (el) {
+          el.hidden = !visible;
+        });
       }
       apply();
-      if (!document.getElementById('account-link-wrap')) {
+      if (!document.querySelector('#account-link-wrap')) {
         document.addEventListener('DOMContentLoaded', apply, { once: true });
       }
     }
@@ -1236,7 +1277,7 @@ body.combined-mode #combined-menu-btn{
     <span id="nav-bar">
       <button id="prev-btn" type="button" title="Previous frame" aria-label="Previous frame">&#8592;</button>
       <input id="frame-slider" type="range" min="0" max="0" step="1" value="0" aria-label="Frame progress" />
-      <button id="play-btn" type="button" title="Play" aria-label="Play" style="min-width:32px;font-size:16px;font-weight:900;">▶</button>
+      <button id="play-btn" type="button" title="Play/Pause" style="min-width:52px;font-size:13px;font-weight:900;">Play</button>
       <button id="next-btn" type="button" title="Next frame" aria-label="Next frame">&#8594;</button>
       <span id="frame-label"></span>
     </span>
@@ -1245,16 +1286,11 @@ body.combined-mode #combined-menu-btn{
 
   <div id="mobile-time-badge"></div>
   <div id="plot"></div>
-  <div id="modebar-host"><div id="modebar-tip"></div></div>
   <div id="readout">Lat/Lon: -- | Value: --</div>
   <div id="feedback-float">
     <button id="feedback-toggle" title="Send feedback" aria-label="Send feedback">
-      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-        <path d="M5 5.5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-7l-4.5 3v-3H5a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
-        <circle cx="8" cy="11.5" r="1" fill="currentColor"/>
-        <circle cx="12" cy="11.5" r="1" fill="currentColor"/>
-        <circle cx="16" cy="11.5" r="1" fill="currentColor"/>
-      </svg>
+      <span class="fb-icon" aria-hidden="true"></span>
+      <span class="fb-label">Feedback</span>
     </button>
     <div id="feedback-panel" style="display:none;">
       <input type="text" id="feedbackInput" placeholder="Questions / comments..." />
@@ -1268,26 +1304,18 @@ body.combined-mode #combined-menu-btn{
   <div id="thermal-hover-tip"></div>
   <div id="combined-overlay"></div>
   <div id="captain-tools" role="toolbar" aria-label="Captain tools">
-    <span class="captain-drag-handle" title="Drag Captain tools" aria-label="Drag Captain tools"></span>
     <button id="captain-fs-btn" class="captain-tool-btn" title="Fullscreen">
       <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
         <rect x="2" y="2" width="14" height="14" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linejoin="round"/>
       </svg>
     </button>
-    <button id="captain-dist-tool" class="captain-tool-btn" title="Measure distance (M)" data-tool="dist" aria-label="Measure distance">
-      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <button id="captain-dist-tool" class="captain-tool-btn" title="Measure distance (M)" data-tool="dist">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
         <line x1="3" y1="10" x2="17" y2="10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
         <polyline points="7,6 3,10 7,14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
         <polyline points="13,6 17,10 13,14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
         <line x1="7" y1="7" x2="7" y2="13" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
         <line x1="13" y1="7" x2="13" y2="13" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-      </svg>
-    </button>
-    <button id="captain-underwater-tool" class="captain-tool-btn" title="Show underwater structures" aria-label="Show underwater structures" aria-pressed="false">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-        <path d="M3 9c2.2 0 2.2 2 4.4 2s2.2-2 4.4-2 2.2 2 4.4 2 2.2-2 4.4-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-        <path d="M3 14c2.2 0 2.2 2 4.4 2s2.2-2 4.4-2 2.2 2 4.4 2 2.2-2 4.4-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-        <path d="M6 20h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
       </svg>
     </button>
     <button id="captain-add-tool" class="captain-tool-btn" title="Add waypoint (A)" data-tool="add">
@@ -1301,11 +1329,11 @@ body.combined-mode #combined-menu-btn{
       </svg>
     </button>
   </div>
+  <button id="captain-save-btn" title="Save waypoints" style="display:none;align-items:center;gap:8px;position:fixed;left:8px;top:44px;z-index:1150;background:#1d4f91;border:1px solid #4d7dff;border-radius:8px;color:#fff;padding:0 8px 0 10px;height:28px;cursor:pointer;font-size:12px;font-weight:700;">
+    <span>Save Waypoints</span><span id="captain-save-dismiss" role="button" aria-label="Hide save waypoints" title="Hide" style="font-size:16px;line-height:1;opacity:.8;">×</span>
+  </button>
   <div id="captain-pts-panel" style="display:none;position:fixed;top:80px;left:8px;z-index:1150;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;width:280px;max-height:320px;overflow-y:auto;font-size:12px;color:var(--fg);">
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;">
-      <div id="captain-pts-title" style="font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:0.6px;color:#7a8fa8;">My Waypoints</div>
-      <button id="captain-save-btn" title="Save waypoints">Save Waypoints</button>
-    </div>
+    <div id="captain-pts-title" style="font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:0.6px;color:#7a8fa8;margin-bottom:8px;">My Waypoints</div>
     <div id="captain-pts-list"></div>
   </div>
   <div id="captain-dist-panel" style="display:none;position:fixed;top:96px;left:8px;z-index:1150;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-size:12px;color:var(--fg);min-width:200px;">
@@ -1317,16 +1345,14 @@ body.combined-mode #combined-menu-btn{
     <div id="captain-dist-total" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-weight:700;color:var(--fg);"></div>
   </div>
   <div id="combined-controls">
-    <div style="text-align:center;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--border);">
-      <a href="account.html" style="color:var(--accent2);font-size:12px;font-weight:700;text-decoration:none;letter-spacing:0.05em;">MY ACCOUNT</a>
-    </div>
     <div class="combined-section">
+      <div class="combined-section-title">Product</div>
       <select id="combined-product-select">
         <option value="combined">Captain's Dashboard</option>
         <option value="chl">Chlorophyll</option>
         <option value="sst">Temperature</option>
         <option value="thermal_fronts">Thermal Fronts</option>
-        <option value="uv">Currents/Height</option>
+        <option value="uv">Currents</option>
         <option value="bathy">Bathymetry</option>
       </select>
     </div>
@@ -1360,8 +1386,8 @@ body.combined-mode #combined-menu-btn{
       <div id="combined-sst-units" style="margin:0 0 4px 0;display:flex;flex-direction:column;gap:5px;">
         <div style="font-size:11px;color:#9fb0c3;">Units</div>
         <div class="combined-mode-row" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
-          <button id="combined-sst-mode-c" class="active" type="button">°C</button>
-          <button id="combined-sst-mode-f" type="button">°F</button>
+          <button id="combined-sst-mode-c" type="button">°C</button>
+          <button id="combined-sst-mode-f" class="active" type="button">°F</button>
         </div>
       </div>
       <div id="combined-sst-scan-time" style="font-size:11px;color:#ff8c00;margin-left:28px;margin-bottom:8px;"></div>
@@ -1384,12 +1410,12 @@ body.combined-mode #combined-menu-btn{
       <div id="combined-thermal-units" style="margin:0 0 8px 0;display:flex;flex-direction:column;gap:5px;">
         <div style="font-size:11px;color:#9fb0c3;">Units</div>
         <div class="combined-mode-row" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
-          <button id="combined-thermal-mode-c" class="active" type="button">°C</button>
-          <button id="combined-thermal-mode-f" type="button">°F</button>
+          <button id="combined-thermal-mode-c" type="button">°C</button>
+          <button id="combined-thermal-mode-f" class="active" type="button">°F</button>
         </div>
         <div class="combined-mode-row" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
-          <button id="combined-thermal-mode-km" class="active" type="button">km</button>
-          <button id="combined-thermal-mode-nm" type="button">nm</button>
+          <button id="combined-thermal-mode-km" type="button">km</button>
+          <button id="combined-thermal-mode-nm" class="active" type="button">nm</button>
         </div>
       </div>
       <label class="combined-toggle">
@@ -1407,19 +1433,14 @@ body.combined-mode #combined-menu-btn{
         <option value="48">Last 48 hours</option>
       </select>
       <div id="combined-uv-scan-time" style="font-size:11px;color:#9fb0c3;margin-left:28px;margin-bottom:8px;"></div>
-      <label class="combined-toggle">
-        <input type="checkbox" id="chk-combined-height" checked>
-        <span class="box"></span>
-        <span class="combined-dot dot-uv"></span>
-        <span>Surface Height</span>
-      </label>
-      <div id="combined-height-units" style="margin:6px 0 8px 28px;display:flex;flex-direction:column;gap:5px;">
-        <div style="font-size:11px;color:#9fb0c3;">Height units</div>
-        <div class="combined-mode-row" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
-          <button id="combined-height-mode-ft" type="button">ft</button>
-          <button id="combined-height-mode-m" type="button">m</button>
+        <div class="combined-legend-row">
+          <svg width="60" height="20" viewBox="0 0 60 20" style="flex-shrink:0;background:#fff;border-radius:4px;">
+            <line x1="2" y1="10" x2="54" y2="10" stroke="rgba(0,0,0,0.85)" stroke-width="2.5" stroke-linecap="round"/>
+            <polyline points="54,10 46,5" stroke="rgba(0,0,0,0.85)" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+            <polyline points="54,10 46,15" stroke="rgba(0,0,0,0.85)" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+          </svg>
+          <span style="font-weight:800;color:rgba(255,255,255,0.9);">0.5 m/s</span>
         </div>
-      </div>
       </div>
       <label class="combined-toggle">
         <input type="checkbox" id="chk-combined-bathy" checked>
@@ -1428,21 +1449,18 @@ body.combined-mode #combined-menu-btn{
         <span>Bathymetry</span>
       </label>
       <div id="combined-bathy-legend" class="combined-inline-legend"></div>
-      <div id="combined-bathy-units" style="margin:8px 0 0 0;display:flex;flex-direction:column;gap:5px;">
-        <div style="font-size:11px;color:#9fb0c3;">Depth units</div>
-        <div class="combined-mode-row" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;">
-          <button id="combined-bathy-mode-fathom" type="button">fathom</button>
-          <button id="combined-bathy-mode-ft" type="button">ft</button>
-          <button id="combined-bathy-mode-m" type="button">m</button>
-        </div>
+    <div class="combined-footer" style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border);">
+      <div style="text-align:center;margin-bottom:8px;">
+        <a class="combined-home-link" href="https://fishedge.live/" target="_top" rel="noopener" title="Back to FishEdge home" style="display:block;padding:8px 0;color:var(--fg);font-size:12px;font-weight:800;letter-spacing:0.05em;text-decoration:none;border:1px solid var(--border);border-radius:6px;background:rgba(12,23,35,0.6);">Home</a>
+      </div>
+      <div style="text-align:center;" id="account-link-wrap">
+        <a href="account.html" style="color:var(--accent2);font-size:12px;font-weight:700;text-decoration:none;letter-spacing:0.05em;">My Account</a>
       </div>
     </div>
   </div>
-  <button id="combined-menu-btn" aria-label="Toggle sidebar" style="display:none;position:fixed;top:8px;right:8px;z-index:40;width:44px;height:44px;background:var(--panel);border:none;border-left:1px solid var(--border);cursor:pointer;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:0;">
-    <span style="display:block;width:18px;height:2px;background:var(--fg);border-radius:2px;"></span>
-    <span style="display:block;width:18px;height:2px;background:var(--fg);border-radius:2px;"></span>
-    <span style="display:block;width:18px;height:2px;background:var(--fg);border-radius:2px;"></span>
-  </button>
+    
+  </div>
+
 
   <div id="briefing-panel" aria-live="polite" style="display:none">
     <h2>Captain Briefing</h2>
@@ -1454,13 +1472,13 @@ body.combined-mode #combined-menu-btn{
   </div>
 
   <div id="menu-panel">
-      <label id="hamburger-product-label">
+      <label>Product
         <select id="hamburger-product-select">
           <option value="combined">Captain's Dashboard</option>
           <option value="chl">Chlorophyll</option>
           <option value="sst">Temperature</option>
           <option value="thermal_fronts">Thermal Fronts</option>
-          <option value="uv">Currents/Height</option>
+          <option value="uv">Currents</option>
           <option value="bathy">Bathymetry</option>
         </select>
       </label>
@@ -1490,12 +1508,12 @@ body.combined-mode #combined-menu-btn{
           <button id="thermal-mode-daily" type="button">Daily</button>
         </div>
         <div class="mode-row" style="margin-top:4px;">
-          <button id="thermal-mode-c" class="active" type="button">°C</button>
-          <button id="thermal-mode-f" type="button">°F</button>
+          <button id="thermal-mode-c" type="button">°C</button>
+          <button id="thermal-mode-f" class="active" type="button">°F</button>
         </div>
         <div class="mode-row" style="margin-top:4px;">
-          <button id="thermal-mode-km" class="active" type="button">km</button>
-          <button id="thermal-mode-nm" type="button">nm</button>
+          <button id="thermal-mode-km" type="button">km</button>
+          <button id="thermal-mode-nm" class="active" type="button">nm</button>
         </div>
       </div>
       <div class="hamburger-range-block">
@@ -1508,15 +1526,18 @@ body.combined-mode #combined-menu-btn{
         </div>
       </div>
       <div id="hamburger-cbar"></div>
-      <div style="text-align:center;margin-top:14px;" id="account-link-wrap" hidden>
-        <a href="account.html" style="color:var(--accent2);font-size:12px;font-weight:700;text-decoration:none;letter-spacing:0.05em;">MY ACCOUNT</a>
+      <div class="home-link-wrap" style="text-align:center;margin-top:14px;">
+        <a class="home-link" href="https://fishedge.live/" target="_top" rel="noopener" title="Back to FishEdge home">Home</a>
+      </div>
+      <div style="text-align:center;margin-top:8px;" id="account-link-wrap">
+        <a href="account.html" style="color:var(--accent2);font-size:12px;font-weight:700;text-decoration:none;letter-spacing:0.05em;">My Account</a>
       </div>
     </div>
 
 
 <script>
 /* ========================= CONFIG ========================= */
-const CTO_TEST_LABEL = "hello pages rebuild"; // 2026-08-13 zero-label overlay verification
+const CTO_TEST_LABEL = "hello pages rebuild";
 const CTO_THERMAL_BUILD = "2026-06-16T11-33Z-v10-zoomfix-v2"; // bumps on each push
 // Captain's Dashboard ("combined" mode) build fingerprint. Mike,
 // 2026-06-13 14:01 ET: "the captain's dashboard in index.html needs
@@ -1680,12 +1701,12 @@ function setActiveRegion(regionId, regionMeta) {
   BATHY_JSON_URL = `https://data.fishedge.live/${regionId}/${bathyPath}`;
   // Invalidate layer caches on region switch so old data doesn't bleed through
   if (prevRegion !== regionId) {
+    regionRevision += 1;
     window._bathyData = null;
     window._bathyLayer = null;
     window._bathyContourSource = null;
     window._combinedBathyLayer = null;
     window._combinedUvLayer = null;
-    window._combinedHeightLayer = null;
     gridCache.__bathy_json = null; // invalidate stale bathy cache for new region
     // Drop OL land layers so the next render rebuilds them with the new region's
     // bathy. Without this, ensureMobileLandLayer / ensureDesktopLandLayer early-return
@@ -1712,6 +1733,38 @@ function setActiveRegion(regionId, regionMeta) {
         desktopMapState.landLayerBBox = null;
         desktopMapState.landLayerURL = null;
       }
+      if (mobileMapState && mobileMapState.placeLayer) {
+        if (mobileMapState.map) mobileMapState.map.removeLayer(mobileMapState.placeLayer);
+        mobileMapState.placeLayer = null;
+        mobileMapState.placeLayerRegion = null;
+      }
+      if (desktopMapState && desktopMapState.placeLayer) {
+        if (desktopMapState.map) desktopMapState.map.removeLayer(desktopMapState.placeLayer);
+        desktopMapState.placeLayer = null;
+        desktopMapState.placeLayerRegion = null;
+      }
+      // USEC MD bug fix: invalidate thermal-front state on region switch so
+      // the old frontLayer (built from the previous region's index.json +
+      // frame fetches) cannot survive the switch and paint stale data over
+      // the new region's map. thermalFrontState is a `let` declared further
+      // down — guard with typeof so the boot-time call (which runs before
+      // the let is reached) never trips a TDZ ReferenceError.
+      if (typeof thermalFrontState !== 'undefined' && thermalFrontState) {
+        thermalFrontState.loading = false;
+        thermalFrontState.initialized = false;
+        thermalFrontState.loadedRegion = null;
+        thermalFrontState.loadedFull = false;
+        thermalFrontState.frameData = [];
+        if (thermalFrontState.frontLayer && thermalFrontState.map) {
+          thermalFrontState.map.removeLayer(thermalFrontState.frontLayer);
+        }
+        thermalFrontState.frontLayer = null;
+        if (thermalFrontState.cursorLayer && thermalFrontState.map) {
+          thermalFrontState.map.removeLayer(thermalFrontState.cursorLayer);
+        }
+        thermalFrontState.cursorLayer = null;
+        thermalFrontState.cursorFeature = null;
+      }
     } catch (_) { /* TDZ-safe: ignore on first-boot edge case */ }
   }
 }
@@ -1737,6 +1790,9 @@ async function initializeData() {
     syncTimeControls();
     syncArrowLegend();
     syncControlsHeight();
+    // Thermal Fronts is derived from sst_front and therefore has no normal
+    // framesByVar entry. It still needs its dedicated renderer on direct
+    // ?var=thermal_fronts loads.
     if (currentVar === "thermal_fronts" || framesByVar[currentVar]?.length) await showFrame();
     else { }
     if (currentVar === "combined") document.body.classList.add("combined-mode");
@@ -1857,7 +1913,7 @@ window.__applyAuthRegion = function(profiles, granted, session, userId) {
 const VAR_LABELS = {
   chl:"Chlorophyll", sst:"Temperature",
   chl_front:"CHL Fronts", sst_front:"SST Fronts",
-  uv:"Currents/Height",
+  uv:"Currents",
   bathy:"Bathymetry",
   thermal_fronts:"Thermal Fronts",
   combined:"Captain's Dashboard"
@@ -1871,40 +1927,12 @@ const VAR_TO_GRID = {
   combined: null
 };
 
-// UV/ADT source values are metres; the product presents height in feet.
-const UV_M_TO_FT = 3.28084;
-const UV_ARROW_MIN_SPEED = 0.035;
-const UV_ARROW_MAX_SPEED = 1.2;
-const UV_ARROW_MIN_LENGTH_CELLS = 0.95;
-const UV_ARROW_MAX_LENGTH_CELLS = 2.8;
-const UV_ARROW_REFERENCE_SPEED = 1.0;
-
-function uvArrowLengthCells(speed) {
-  const scaled = Math.min(Math.max(Number(speed) || 0, 0), UV_ARROW_MAX_SPEED) / UV_ARROW_MAX_SPEED;
-  return UV_ARROW_MIN_LENGTH_CELLS + (UV_ARROW_MAX_LENGTH_CELLS - UV_ARROW_MIN_LENGTH_CELLS) * scaled;
-}
-
-function uvContourLevels(vmin = userRanges?.uv?.vmin ?? -1, vmax = userRanges?.uv?.vmax ?? 5) {
-  const levels = [];
-  const first = Math.ceil((Number(vmin) - 1e-9) / 0.2);
-  const last = Math.floor((Number(vmax) + 1e-9) / 0.2);
-  for (let n = first; n <= last; n++) levels.push(Number((n * 0.2).toFixed(1)));
-  // Zero is a semantic reference line, not a range-dependent contour.
-  if (!levels.includes(0)) levels.push(0);
-  levels.sort((a, b) => a - b);
-  return levels;
-}
-
-function uvContourIsMajor(level) {
-  return Number(level) === 0 || (Math.round(Math.abs(Number(level)) / 0.2) % 5 === 0);
-}
-
 const DEFAULT_RANGES = {
   chl:   { vmin: 0.02, vmax: 10.0, unit: "mg/m3" },
   sst:   { vmin: 23.0, vmax: 28.0, unit: "°C" },
   chl_front: { vmin: 1.0, vmax: 3.0, unit: "fold/km" },
   sst_front: { vmin: 0.0, vmax: 1.0, unit: "°C/km" },
-  uv:    { vmin: -1.0, vmax: 5.0, unit: "Height (ft)" }, /* ADT/SSH is stored in metres and displayed in feet. */
+  uv:    { vmin: 0.0,  vmax: 1.6,  unit: "m" }, /* ADT/SSH range: actual data 0.005-1.625m */
   bathy: { vmin: 0.0,  vmax: 3000.0, unit: "m" },
   thermal_fronts: { vmin: 0.0, vmax: 1.0, unit: "°C/km" },
   combined: { vmin: 0.0, vmax: 1.0, unit: "" }
@@ -1923,38 +1951,27 @@ let userRanges = {
 
 let tempUnit = localStorage.getItem("sst_temp_unit") === "C" ? "C" : "F";
 let thermalDistUnit = localStorage.getItem("thermal_dist_unit") === "km" ? "km" : "nm";
-let heightUnit = localStorage.getItem("surface_height_unit") === "m" ? "m" : "ft";
 // cToF: converts absolute Celsius temperature to Fahrenheit (used for point values)
 function cToF(c) { return c * 9 / 5 + 32; }
 // kmToNm: converts kilometers to nautical miles (1 nm ≈ 1.852 km, so km → nm divides)
 function kmToNm(km) { return km * 1.852; }
+
 function kmToNmDistance(km) { return km / 1.852; }
 function nmToKmDistance(nm) { return nm * 1.852; }
 const MS_TO_KT = 1.94384;
 function msToKt(ms) { return ms * MS_TO_KT; }
 function mToFathom(m) { return m * 0.546806649; }
-function heightUnitLabel() { return heightUnit === "m" ? "m" : "ft"; }
-function metersToHeight(meters) { return heightUnit === "m" ? Number(meters) : Number(meters) * UV_M_TO_FT; }
-let depthUnit = ["fathom", "ft", "m"].includes(localStorage.getItem("depth_unit"))
-  ? localStorage.getItem("depth_unit") : "fathom";
-function mToFeet(m) { return m * 3.28084; }
-function depthUnitLabel() { return depthUnit === "fathom" ? "fm" : depthUnit; }
+let depthUnit = localStorage.getItem("depth_unit") === "m" ? "m" : "fathom";
 function formatDepth(meters) {
   if (meters === null || meters === undefined) return "";
   if (depthUnit === "fathom") return `${mToFathom(meters).toFixed(1)} fm`;
-  if (depthUnit === "ft") return `${mToFeet(meters).toFixed(0)} ft`;
-  return `${meters.toFixed(0)} m`;
-}
-function unitLabelForVar(varKey) {
-  if (varKey === "sst" || varKey === "thermal_fronts" || varKey === "sst_front") return tempUnitLabel();
-  if (varKey === "bathy") return depthUnitLabel();
-  if (varKey === "uv") return `Height (${heightUnitLabel()})`;
-  return DEFAULT_RANGES[varKey]?.unit || "";
+  return `${meters.toFixed(0)}m`;
 }
 function formatArrowSpeed(ms) {
   if (!Number.isFinite(ms)) return "";
   return `${msToKt(ms).toFixed(2)} kt`;
 }
+
 function formatDist(km) {
   if (km === null || km === undefined) return "";
   if (thermalDistUnit === "nm") return `${kmToNm(km).toFixed(1)} nm`;
@@ -1967,8 +1984,7 @@ function formatSigValue(value, digits) {
   return Number(value.toPrecision(digits)).toString();
 }
 function formatChlValue(value) { return `${value.toFixed(2)} mg/m3`; }
-function formatSshValue(value) { return `${metersToHeight(value).toFixed(2)} ${heightUnitLabel()}`; }
-function formatSshFeet(value) { return `${Number(value).toFixed(2)} ${heightUnitLabel()}`; }
+function formatSshValue(value) { return `${value.toFixed(3)}m`; }
 function formatSstValue(celsius) {
   const value = tempUnit === "F" ? cToF(celsius) : celsius;
   return `${formatSigValue(value, 4)}${tempUnitLabel()}`;
@@ -2048,9 +2064,12 @@ const gridCache = {};
 let _readoutHooked = false;
 let _relayoutHooked = false;
 
-let viewState = { hasRange:false, xRange:null, yRange:null, centerLonLat:null, zoom:null, rotation:0 };
-let viewportRestoreSerial = 0;
-let viewportRestoreLock = null;
+let viewState = {
+  hasRange:false, xRange:null, yRange:null,
+  center4326:null, resolution:null
+};
+let pendingViewRange = null;
+let regionRevision = 0;
 function viewportFromParams(params = QUERY_PARAMS) {
   const x0 = Number(params.get("x0"));
   const x1 = Number(params.get("x1"));
@@ -2133,19 +2152,13 @@ function currentViewportRanges() {
       ? { xRange: viewState.xRange, yRange: viewState.yRange }
       : null);
 }
-function currentLiveViewState() {
+function captureCurrentViewState() {
   let map = null;
   if (currentVar === "combined") map = window._combinedMap;
   else if (currentVar === "thermal_fronts") map = thermalFrontState.map;
-  else map = isMobileMapMode() ? (mobileMapState.map || desktopMapState.map) : (desktopMapState.map || mobileMapState.map);
-  if (!map || !map.getView) return null;
-  const view = map.getView();
-  const center = view.getCenter();
-  const zoom = view.getZoom();
-  if (!center || !Number.isFinite(zoom)) return null;
-  const code = view.getProjection().getCode();
-  const lonLat = code === "EPSG:4326" ? center : ol.proj.transform(center, code, "EPSG:4326");
-  return { centerLonLat: lonLat, zoom, rotation: Number(view.getRotation?.() || 0) };
+  else map = mobileMapState.map || desktopMapState.map;
+  if (map) syncViewStateFromOlMap(map);
+  return currentViewportRanges();
 }
 function appendViewportParams(url) {
   const vp = currentViewportRanges();
@@ -2161,49 +2174,64 @@ function appendViewportParams(url) {
   return url;
 }
 function syncViewStateFromOlMap(map) {
-  if (viewportRestoreLock && performance.now() < viewportRestoreLock.until) return;
+  if (pendingViewRange) return;
   const vp = mapViewportRanges(map);
   if (!vp) return;
   viewState.hasRange = true;
   viewState.xRange = vp.xRange;
   viewState.yRange = vp.yRange;
-  const live = currentLiveViewStateForMap(map);
-  if (live) Object.assign(viewState, live);
-}
-function currentLiveViewStateForMap(map) {
-  if (!map || !map.getView) return null;
-  const view = map.getView(), center = view.getCenter(), zoom = view.getZoom();
-  if (!center || !Number.isFinite(zoom)) return null;
-  const code = view.getProjection().getCode();
-  return { centerLonLat: code === "EPSG:4326" ? center : ol.proj.transform(center, code, "EPSG:4326"), zoom, rotation: Number(view.getRotation?.() || 0) };
+  const view = map.getView();
+  const center = view.getCenter?.();
+  const projection = view.getProjection?.().getCode?.();
+  if (center && center.length >= 2 && projection) {
+    viewState.center4326 = projection === 'EPSG:4326'
+      ? [center[0], center[1]]
+      : ol.proj.transform(center, projection, 'EPSG:4326');
+    viewState.resolution = Number(view.getResolution?.());
+  }
 }
 function syncProductSelectors() {
   if (hamburgerProductSelect) hamburgerProductSelect.value = currentVar;
   if (combinedProductSelect) combinedProductSelect.value = currentVar;
 }
-function applyViewStateToOlMap(map, fallbackExtent) {
+function applyViewStateToOlMap(map, fallbackExtent, preferredRange = null) {
   if (!map) return;
   const size = map.getSize();
   if (!size || size[0] <= 0 || size[1] <= 0) return;
   const view = map.getView();
   const viewProjCode = view.getProjection().getCode();
-  // Preserve the geographic rectangle, not just OL zoom/center. The combined
-  // and single-product maps can have different viewport dimensions; replaying
-  // the same zoom number changes the visible field of view.
-  if (viewState.hasRange && viewState.xRange && viewState.yRange) {
-    const extent4326 = [viewState.xRange[0], viewState.yRange[0], viewState.xRange[1], viewState.yRange[1]];
-    const extent = viewProjCode === 'EPSG:4326' ? extent4326 : ol.proj.transformExtent(extent4326, 'EPSG:4326', viewProjCode);
-    view.fit(extent, { size, nearest: true, duration: 0 });
-    if (Number.isFinite(viewState.rotation)) view.setRotation(viewState.rotation);
+  // Prefer extent-based preservation over center+resolution. setCenter +
+  // setResolution does NOT account for target/map dimension differences —
+  // the same resolution on a 1200x800 vs 800x600 map shows different
+  // geographic areas, which is the "jumpy" behavior Mike reported when
+  // switching between layers. view.fit(extent) adjusts zoom automatically
+  // so the same geographic area is shown regardless of map size.
+  const restoreRange = preferredRange || pendingViewRange;
+  if (restoreRange?.xRange && restoreRange?.yRange) {
+    const extent4326 = [restoreRange.xRange[0], restoreRange.yRange[0], restoreRange.xRange[1], restoreRange.yRange[1]];
+    const extent = viewProjCode === 'EPSG:4326'
+      ? extent4326
+      : ol.proj.transformExtent(extent4326, 'EPSG:4326', viewProjCode);
+    view.fit(extent, { size, padding: [0,0,0,0], nearest: true });
+    if (restoreRange === pendingViewRange) pendingViewRange = null;
     return;
   }
-  if (Array.isArray(viewState.centerLonLat) && viewState.centerLonLat.length === 2 && Number.isFinite(viewState.zoom)) {
+  if (viewState.hasRange && viewState.xRange && viewState.yRange) {
+    const extent4326 = [viewState.xRange[0], viewState.yRange[0], viewState.xRange[1], viewState.yRange[1]];
+    const extent = viewProjCode === 'EPSG:4326'
+      ? extent4326
+      : ol.proj.transformExtent(extent4326, 'EPSG:4326', viewProjCode);
+    view.fit(extent, { size, padding: [0,0,0,0], nearest: true });
+    return;
+  }
+  // Fall back to center+resolution only when no extent is saved (e.g. on
+  // very first render before syncViewStateFromOlMap has captured anything).
+  if (viewState.center4326 && Number.isFinite(viewState.resolution)) {
     const center = viewProjCode === 'EPSG:4326'
-      ? viewState.centerLonLat
-      : ol.proj.transform(viewState.centerLonLat, 'EPSG:4326', viewProjCode);
+      ? viewState.center4326
+      : ol.proj.transform(viewState.center4326, 'EPSG:4326', viewProjCode);
     view.setCenter(center);
-    view.setZoom(viewState.zoom);
-    if (Number.isFinite(viewState.rotation)) view.setRotation(viewState.rotation);
+    view.setResolution(viewState.resolution);
     return;
   }
   // null = "preserve whatever view state is already set" — but only if the view has a center
@@ -2226,34 +2254,6 @@ function applyViewStateToOlMap(map, fallbackExtent) {
   const extent = viewProjCode === 'EPSG:4326' ? extent4326 : ol.proj.transformExtent(extent4326, 'EPSG:4326', viewProjCode);
   view.fit(extent, { size, nearest: true });
 }
-
-function scheduleViewportRestore(token = viewportRestoreLock?.token) {
-  if (!viewState.hasRange) return;
-  const restore = () => {
-    if (token !== viewportRestoreSerial) return;
-    let map = null;
-    if (currentVar === "combined") map = window._combinedMap;
-    else if (currentVar === "thermal_fronts") map = thermalFrontState.map;
-    else map = isMobileMapMode() ? mobileMapState.map : desktopMapState.map;
-    if (!map) return;
-    map.updateSize();
-    applyViewStateToOlMap(map, null);
-  };
-  const release = () => {
-    if (!viewportRestoreLock || viewportRestoreLock.token !== token) return;
-    restore();
-    viewportRestoreLock = null;
-    if (currentVar === "combined" && window._combinedMap) syncViewStateFromOlMap(window._combinedMap);
-    else if (currentVar === "thermal_fronts" && thermalFrontState.map) syncViewStateFromOlMap(thermalFrontState.map);
-    else if (desktopMapState.map || mobileMapState.map) syncViewStateFromOlMap(desktopMapState.map || mobileMapState.map);
-  };
-  requestAnimationFrame(() => {
-    restore();
-    requestAnimationFrame(restore);
-  });
-  setTimeout(restore, 250);
-  setTimeout(release, 650);
-}
 applyInitialViewportParams();
 let landTrace = null;
 let showChlFrontOverlay = false;
@@ -2272,8 +2272,8 @@ let mobileMapState = {
   bathyContourLayerBBox: null,    // bbox the contour layer was last built for
   bathyContourLayerURL: null,     // bathy URL the contour layer was last built for
   arrowLayer: null,
-  uvContourLayer: null,
   placeLayer: null,
+  placeLayerRegion: null,
   cursorLayer: null,
   cursorFeature: null,
   currentGridInfo: null,
@@ -2288,8 +2288,8 @@ let desktopMapState = {
   landLayerBBox: null,    // bbox the current land canvas was built for
   landLayerURL: null,     // bathy URL the current land canvas was built for
   placeLayer: null,
+  placeLayerRegion: null,
   arrowLayer: null,
-  uvContourLayer: null,
   bathyContourLayer: null,
   currentGridInfo: null,
   currentDataObj: null,
@@ -2311,6 +2311,7 @@ let thermalFrontState = {
   initialized: false,
   loading: false,
   loadedRegion: null,
+  loadedFull: false,
   // v4.1: Set of date strings (YYYY-MM-DD) the user has selected for
   // the "All days this period" overlay in daily mode. Empty set after
   // a "None" preset. Default behavior: on first build of dailyFrames
@@ -2415,6 +2416,7 @@ async function initDesktopMapIfNeeded() {
   }
   if (desktopMapState.map) {
     attachMapToUnifiedTarget(desktopMapState.map);
+    installCaptainToolHandler(desktopMapState.map);
     return desktopMapState.map;
   }
   const target = getUnifiedMapTarget();
@@ -2458,7 +2460,7 @@ async function initDesktopMapIfNeeded() {
     interactions: desktopInteractions
   });
   desktopMapState.map.on("moveend", () => syncViewStateFromOlMap(desktopMapState.map));
-  window.fishedgeUnderwater?.attachMap?.(desktopMapState.map);
+  installCaptainToolHandler(desktopMapState.map);
   installOlGestureZoomFallback(desktopMapState.map, target);
   // Add the OFM two-layer vector basemap (water below, land above). This
   // replaces the previous bathy-derived land mask as the desktop single-
@@ -2495,43 +2497,6 @@ function sampleRasterValueAt(varKey, gridInfo, dataObj, lon, lat) {
   return { value, row, col };
 }
 
-// Fill small missing patches from nearby valid vectors. Large contiguous null
-// regions remain null (normally land/coastal mask), so ocean gaps are closed
-// without inventing a current field across the shoreline.
-function uvVectorAt(u, v, row, col) {
-  const directU = Number(u?.[row]?.[col]);
-  const directV = Number(v?.[row]?.[col]);
-  if (Number.isFinite(directU) && Number.isFinite(directV)) return [directU, directV];
-  const neighbors = [];
-  for (let dj = -2; dj <= 2; dj++) for (let di = -2; di <= 2; di++) {
-    if (!di && !dj) continue;
-    const uu = Number(u?.[row + dj]?.[col + di]);
-    const vv = Number(v?.[row + dj]?.[col + di]);
-    if (Number.isFinite(uu) && Number.isFinite(vv)) neighbors.push([uu, vv]);
-  }
-  if (neighbors.length < 8) return null;
-  return [
-    neighbors.reduce((sum, pair) => sum + pair[0], 0) / neighbors.length,
-    neighbors.reduce((sum, pair) => sum + pair[1], 0) / neighbors.length
-  ];
-}
-
-function formatUvReadout(base, gridInfo, dataObj, lon, lat, map, pixel, fallbackHeightFt = null) {
-  const sample = sampleRasterValueAt("uv", gridInfo, dataObj, lon, lat);
-  const d = (dataObj && dataObj.data && !Array.isArray(dataObj.data)) ? dataObj.data : dataObj;
-  let speed = null;
-  let heightFt = sample?.value ?? fallbackHeightFt;
-  if (sample) {
-    const vector = uvVectorAt(d?.u, d?.v, sample.row, sample.col);
-    if (vector) speed = Math.hypot(vector[0], vector[1]);
-  }
-  if (speed === null && map && pixel) speed = uvArrowSpeedAtPixel(map, pixel);
-  const parts = [];
-  if (Number.isFinite(speed)) parts.push(`${speed.toFixed(2)} m/s`);
-  if (Number.isFinite(heightFt)) parts.push(`${Number(heightFt).toFixed(2)} ${heightUnitLabel()}`);
-  return parts.length ? `${base}, ${parts.join(", ")}` : base;
-}
-
 function renderDesktopReadout(lon, lat, pixel) {
   // The desktop non-combined map's view is EPSG:3857 (Web Mercator), so
   // ev.coordinate from pointermove/click is in meters. The readout text
@@ -2550,10 +2515,6 @@ function renderDesktopReadout(lon, lat, pixel) {
   const gridInfo = desktopMapState.currentGridInfo;
   const dataObj = desktopMapState.currentDataObj;
   const base = formatReadoutCoords(lon, lat);
-  if (currentVar === "uv") {
-    setReadout(formatUvReadout(base, gridInfo, dataObj, lon, lat, desktopMapState.map, pixel));
-    return;
-  }
   // Bathy contour-line priority: if the click pixel is on (or near) a purple
   // bathy contour feature, show that contour's level instead of the raster
   // depth at the click pixel. The raster value at the exact line is rarely
@@ -2565,6 +2526,13 @@ function renderDesktopReadout(lon, lat, pixel) {
     const contourDepth = bathyContourDepthAtPixel(desktopMapState.map, pixel);
     if (contourDepth !== null) {
       setReadout(`${base}, ${formatDepth(contourDepth)} (contour)`);
+      return;
+    }
+  }
+  if (currentVar === "uv" && pixel && desktopMapState.arrowLayer) {
+    const arrowSpeed = uvArrowSpeedAtPixel(desktopMapState.map, pixel);
+    if (arrowSpeed !== null) {
+      setReadout(`${base}, ${formatArrowSpeed(arrowSpeed)} (arrow)`);
       return;
     }
   }
@@ -2646,7 +2614,6 @@ async function renderDesktopFrame(frameMeta) {
     if (loadDiv) loadDiv.remove();
     return false;
   }
-  installCaptainToolHandler(map);
 
   // Combined: render all layers simultaneously as a snapshot
   if (currentVar === "combined") {
@@ -2672,18 +2639,39 @@ async function renderDesktopFrame(frameMeta) {
   desktopMapState.currentGridInfo = gridInfo;
   desktopMapState.currentDataObj = dataObj;
 
-  // Build raster canvas. Skip toBlob/createObjectURL/ImageStatic — those
-  // throw "The string did not match the expected pattern" on iOS Safari for
-  // large sparse rasters. canvasToOlSource uses ol.source.ImageCanvas which
-  // never parses a URL string.
+  // Build raster canvas
   const canvas = makeMobileRasterCanvas(currentVar, gridInfo, dataObj);
+  let url;
+  try {
+    // toBlob + createObjectURL avoids the iOS Safari 'The string did not
+    // match the expected pattern' error that toDataURL throws for some
+    // large/sparse-canvas combinations. Affects S3 OLCI sparse frames
+    // and any other large frame on iOS mobile Safari.
+    url = await new Promise((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        if (blob) resolve(URL.createObjectURL(blob));
+        else reject(new Error("canvas.toBlob returned null"));
+      }, "image/png");
+    });
+  } catch (e) {
+    console.error("[OL] canvas.toBlob failed for", currentVar, frameMeta?.id || frameMeta?.json_path, e);
+    throw e;
+  }
+  console.log("[OL] canvas encoded via toBlob, url:", url?.slice(0, 30));
+  if (!url) throw new Error("Could not encode desktop raster");
+
   const extent = frameExtentFromGrid(gridInfo);
   console.log("[OL] extent:", extent);
   let source;
   try {
-    source = canvasToOlSource(canvas, extent);
+    source = new ol.source.ImageStatic({
+      url,
+      imageExtent: extent,
+      projection: "EPSG:4326",
+      interpolate: false
+    });
   } catch (e) {
-    console.error("[OL] canvasToOlSource failed for", currentVar, frameMeta?.id || frameMeta?.json_path, "extent:", extent, e);
+    console.error("[OL] new ol.source.ImageStatic failed for", currentVar, frameMeta?.id || frameMeta?.json_path, "url:", url?.slice(0, 30), e);
     throw e;
   }
   source.on("imageloaderror", () => {
@@ -2707,12 +2695,6 @@ async function renderDesktopFrame(frameMeta) {
   if (currentVar === "uv") {
     desktopMapState.arrowLayer = buildMobileUvArrowLayer(dataObj, gridInfo);
     if (desktopMapState.arrowLayer) map.addLayer(desktopMapState.arrowLayer);
-    clearUvContourLayer(desktopMapState);
-    desktopMapState.uvContourLayer = buildUvContourLayer(dataObj, gridInfo, map);
-    desktopMapState.uvZeroLabelOverlays = desktopMapState.uvContourLayer?.__uvZeroLabelOverlays || [];
-    if (desktopMapState.uvContourLayer) map.addLayer(desktopMapState.uvContourLayer);
-  } else {
-    clearUvContourLayer(desktopMapState);
   }
   if (desktopMapState.arrowLayer) desktopMapState.arrowLayer.setVisible(currentVar === "uv");
   if (thermalFrontState.frontLayer) thermalFrontState.frontLayer.setVisible(false);
@@ -2728,7 +2710,6 @@ async function renderDesktopFrame(frameMeta) {
   if (mapDivEl) {
     attachMapToUnifiedTarget(map);
   }
-  if (captainAddTool.points.length) renderPtsLayer(map);
 
   // Ensure desktop land layer is present (persists across product switches)
   if (landTrace && desktopMapState.landLayer) {
@@ -2851,7 +2832,7 @@ function syncFloatingViewportUi() {
   }
   // On mobile, CSS takes over (top-right via @media); skip JS clamping.
   const feedback = document.getElementById("feedback-float");
-  if (feedback && !isMobileDevice() && feedback.dataset.dragging !== "1") clampRectToVisualViewport(feedback, { margin: 8 });
+  if (feedback && !isMobileDevice()) clampRectToVisualViewport(feedback, { margin: 8 });
 }
 
 if (window.visualViewport) {
@@ -2874,9 +2855,8 @@ function resetViewportToWidthFit() {
   viewState.hasRange = false;
   viewState.xRange = null;
   viewState.yRange = null;
-  viewState.centerLonLat = null;
-  viewState.zoom = null;
-  viewState.rotation = 0;
+  viewState.center4326 = null;
+  viewState.resolution = null;
   if (mobileMapState.map) {
     const extent = mobileMapState.currentGridInfo ? frameExtentFromGrid(mobileMapState.currentGridInfo) : BBOX;
     mobileMapState.map.updateSize();
@@ -2899,12 +2879,23 @@ const hReset = document.getElementById("hamburger-reset");
 if (hamburgerToggle && hamburgerPanel) {
   hamburgerToggle.addEventListener("click", (e) => {
     e.stopPropagation();
-    hamburgerPanel.classList.toggle("open");
+    // Universal hamburger: in Captain's Dashboard (combined-mode) toggles
+    // #combined-controls (the right-side sidebar).  In every other product
+    // view it toggles #menu-panel (the per-product dropdown).
+    var isCombined = document.body.classList.contains("combined-mode");
+    var target = isCombined ? document.getElementById("combined-controls") : hamburgerPanel;
+    if (target) target.classList.toggle("open");
+    else hamburgerPanel.classList.toggle("open");
   });
   // Close when tapping outside
   document.addEventListener("click", (e) => {
     if (!hamburgerPanel.contains(e.target) && !hamburgerToggle.contains(e.target)) {
       hamburgerPanel.classList.remove("open");
+    }
+    var cc = document.getElementById("combined-controls");
+    if (cc && cc.classList.contains("open") && !cc.contains(e.target)
+        && !hamburgerToggle.contains(e.target)) {
+      cc.classList.remove("open");
     }
   });
 }
@@ -3014,7 +3005,6 @@ if (combinedRegionSelect) {
 const chkChl = document.getElementById("chk-combined-chl");
 const chkSst = document.getElementById("chk-combined-sst");
 const chkUv = document.getElementById("chk-combined-uv");
-const chkHeight = document.getElementById("chk-combined-height");
 const chkBathy = document.getElementById("chk-combined-bathy");
 const chkFront = document.getElementById("chk-combined-front");
 if (chkChl) chkChl.addEventListener("change", async e => {
@@ -3110,8 +3100,15 @@ if (sstHoursSelect) {
     }
     const renderData = { ...base.data, z: composite, sst: composite, data: composite, nx, ny, bbox: base.data?.bbox };
     const canvas = makeMobileRasterCanvas("sst", base.grid, renderData);
-    const source = canvasToOlSource(canvas, frameExtentFromGrid(base.grid));
-    const layer = new ol.layer.Image({ source, zIndex: 9 });
+    const url = canvas.toDataURL("image/png");
+    if (!url || !url.startsWith("data:image/png")) { if (sstScanTimeDiv) sstScanTimeDiv.textContent = "Render failed"; return; }
+    const layer = new ol.layer.Image({
+      source: new ol.source.ImageStatic({
+        url, imageExtent: frameExtentFromGrid(base.grid),
+        projection: "EPSG:4326", interpolate: false
+      }),
+      zIndex: 9
+    });
     const chk = document.getElementById("chk-combined-sst");
     layer.setVisible(chk ? chk.checked : false);
     window._combinedMap.addLayer(layer);
@@ -3122,7 +3119,7 @@ if (sstHoursSelect) {
     const meanTime = epochTimes.length ? epochTimes.reduce((a, b) => a + b, 0) / epochTimes.length : null;
     window._combinedSstScanTime = meanTime;
     if (sstScanTimeDiv) sstScanTimeDiv.textContent = meanTime
-      ? fmtDaytimeLocal(meanTime)
+      ? new Date(meanTime).toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
       : "";
   });
 }
@@ -3144,9 +3141,6 @@ if (chkBathy) chkBathy.addEventListener("change", e => {
   if (window._combinedBathyLayer) window._combinedBathyLayer.setVisible(e.target.checked);
   const legend = document.getElementById("combined-bathy-legend");
   if (legend) legend.style.display = e.target.checked ? "" : "none";
-});
-if (chkHeight) chkHeight.addEventListener("change", e => {
-  if (window._combinedHeightLayer) window._combinedHeightLayer.setVisible(e.target.checked);
 });
 if (chkFront) chkFront.addEventListener("change", e => {
   if (window._combinedFrontDensityLayer) window._combinedFrontDensityLayer.setVisible(e.target.checked);
@@ -3257,36 +3251,6 @@ if (thermalDistUnit === "nm") {
   combinedThermalModeKmBtn?.classList.add("active");
   combinedThermalModeNmBtn?.classList.remove("active");
 }
-const combinedBathyModeFathomBtn = document.getElementById("combined-bathy-mode-fathom");
-const combinedBathyModeFtBtn = document.getElementById("combined-bathy-mode-ft");
-const combinedBathyModeMBtn = document.getElementById("combined-bathy-mode-m");
-const combinedHeightModeFtBtn = document.getElementById("combined-height-mode-ft");
-const combinedHeightModeMBtn = document.getElementById("combined-height-mode-m");
-function setHeightUnit(u, refresh = true) {
-  if (!["ft", "m"].includes(u)) return;
-  heightUnit = u;
-  localStorage.setItem("surface_height_unit", heightUnit);
-  combinedHeightModeFtBtn?.classList.toggle("active", u === "ft");
-  combinedHeightModeMBtn?.classList.toggle("active", u === "m");
-  if (refresh && (currentVar === "uv" || currentVar === "combined")) showFrame();
-}
-combinedHeightModeFtBtn?.addEventListener("click", () => setHeightUnit("ft"));
-combinedHeightModeMBtn?.addEventListener("click", () => setHeightUnit("m"));
-setHeightUnit(heightUnit, false);
-function setDepthUnit(u, refresh = true) {
-  if (!["fathom", "ft", "m"].includes(u)) return;
-  depthUnit = u;
-  localStorage.setItem("depth_unit", depthUnit);
-  combinedBathyModeFathomBtn?.classList.toggle("active", u === "fathom");
-  combinedBathyModeFtBtn?.classList.toggle("active", u === "ft");
-  combinedBathyModeMBtn?.classList.toggle("active", u === "m");
-  updateCombinedBathyLegend(window._combinedBathyLevels || []);
-  if (refresh && (currentVar === "bathy" || currentVar === "combined")) showFrame();
-}
-combinedBathyModeFathomBtn?.addEventListener("click", () => setDepthUnit("fathom"));
-combinedBathyModeFtBtn?.addEventListener("click", () => setDepthUnit("ft"));
-combinedBathyModeMBtn?.addEventListener("click", () => setDepthUnit("m"));
-setDepthUnit(depthUnit, false);
 /* Marker state */
 let markers = [];
 let markerMode = "off"; // "off" | "add" | "remove"
@@ -3304,8 +3268,7 @@ let markerTrace = {
 };
 
 
-/* Place labels: major coastal cities only. Permanent offshore fishing
- * grounds (canyons/seamounts) are provided by canyon-charts.js. */
+/* Place labels: major coastal cities + fishing ports */
 const PLACE_LABELS = [
   // Mid-Atlantic cities
   {type:"city", name:"New York", lon:-74.0060, lat:40.7128},
@@ -3320,6 +3283,97 @@ const PLACE_LABELS = [
   {type:"city", name:"Myrtle Beach", lon:-78.8867, lat:33.6891},
   {type:"city", name:"Charleston", lon:-79.9311, lat:32.7765},
   {type:"city", name:"Savannah", lon:-81.0998, lat:32.0809},
+  // Fishing ports - Long Island
+  {type:"port", name:"Montauk", lon:-71.9448, lat:41.0359},
+  {type:"port", name:"Shinnecock Inlet", lon:-72.4751, lat:40.8524},
+  {type:"port", name:"Moriches Inlet", lon:-72.7742, lat:40.7684},
+  {type:"port", name:"Fire Island Inlet", lon:-73.2600, lat:40.6340},
+  {type:"port", name:"Jones Inlet", lon:-73.4700, lat:40.5569},
+  {type:"port", name:"Rockaway Inlet", lon:-73.8300, lat:40.5750},
+  // Fishing ports - New Jersey
+  {type:"port", name:"Manasquan Inlet", lon:-74.0458, lat:40.1068},
+  {type:"port", name:"Point Pleasant Canal", lon:-74.0700, lat:40.0800},
+  {type:"port", name:"Barnegat Light", lon:-74.1065, lat:39.7576},
+  {type:"port", name:"Little Egg Harbor Inlet", lon:-74.2658, lat:39.5920},
+  {type:"port", name:"Atlantic City", lon:-74.4229, lat:39.3643},
+  {type:"port", name:"Cape May", lon:-74.9060, lat:38.9351},
+  {type:"port", name:"Cape Henlopen", lon:-75.1100, lat:38.7900},
+  // Fishing ports - Delaware / Maryland
+  {type:"port", name:"Indian River Inlet", lon:-75.0654, lat:38.6145},
+  {type:"port", name:"Ocean City MD", lon:-75.0849, lat:38.3365},
+  {type:"port", name:"Assateague Inlet", lon:-75.1200, lat:38.2000},
+  {type:"port", name:"Chincoteague Inlet", lon:-75.3488, lat:37.9360},
+  // Fishing ports - Virginia
+  {type:"port", name:"Wachapreague", lon:-75.6896, lat:37.6057},
+  {type:"port", name:"Little Creek", lon:-76.1342, lat:36.9435},
+  {type:"port", name:"Rudee Inlet", lon:-76.1380, lat:36.8329},
+  {type:"port", name:"Oceana", lon:-76.1786, lat:36.8179},
+  {type:"port", name:"Willoughby Bay", lon:-76.1000, lat:36.9800},
+  {type:"port", name:"Norfolk", lon:-76.2859, lat:36.8508},
+  // Fishing ports - NC Outer Banks
+  {type:"port", name:"Oregon Inlet", lon:-75.5488, lat:35.7957},
+  {type:"port", name:"Hatteras", lon:-75.6902, lat:35.2196},
+  {type:"port", name:"Ocracoke Inlet", lon:-75.9500, lat:35.0800},
+  // Fishing ports - Albemarle Sound
+  {type:"port", name:"Stumpy Point", lon:-75.9541, lat:35.7167},
+  {type:"port", name:"Manns Harbor", lon:-75.8230, lat:35.9060},
+  {type:"port", name:"Engelhard", lon:-76.0075, lat:35.5957},
+  {type:"port", name:"Belhaven", lon:-76.6245, lat:35.5446},
+  // Fishing ports - Neuse River / Pamlico
+  {type:"port", name:"New Bern", lon:-77.0444, lat:35.1085},
+  {type:"port", name:"Oriental", lon:-76.7008, lat:35.0265},
+  {type:"port", name:"Minnesott Beach", lon:-76.4700, lat:34.9900},
+  {type:"port", name:"Washington NC", lon:-77.0520, lat:35.5466},
+  {type:"port", name:"Chocowinity", lon:-77.1000, lat:35.5100},
+  {type:"port", name:"Blounts Creek", lon:-76.9400, lat:35.3900},
+  // Fishing ports - Morehead City / Beaufort
+  {type:"port", name:"Morehead City", lon:-76.7260, lat:34.7229},
+  {type:"port", name:"Beaufort NC", lon:-76.6638, lat:34.7182},
+  {type:"port", name:"Harkers Island", lon:-76.5500, lat:34.6900},
+  {type:"port", name:"Davis", lon:-76.4600, lat:34.7700},
+  {type:"port", name:"Smyrna", lon:-76.5300, lat:34.7700},
+  {type:"port", name:"Cedar Point", lon:-76.4400, lat:34.5300},
+  {type:"port", name:"Cape Lookout", lon:-76.5247, lat:34.5994},
+  // Fishing ports - New River
+  {type:"port", name:"Jacksonville NC", lon:-77.4300, lat:34.7500},
+  {type:"port", name:"Swansboro", lon:-77.5400, lat:34.6800},
+  // Fishing ports - Cape Fear
+  {type:"port", name:"Wrightsville Beach", lon:-77.7950, lat:34.2085},
+  {type:"port", name:"Carolina Beach", lon:-77.9300, lat:34.0350},
+  {type:"port", name:"Kure Beach", lon:-77.9100, lat:33.9900},
+  {type:"port", name:"Southport", lon:-78.0200, lat:33.9200},
+  // Fishing ports - Winyah Bay / Georgetown
+  {type:"port", name:"Winyah Bay", lon:-79.2650, lat:33.3500},
+  {type:"port", name:"Georgetown", lon:-79.2945, lat:33.3768},
+  {type:"port", name:"Pawleys Island", lon:-79.1300, lat:33.4400},
+  {type:"port", name:"Murrells Inlet", lon:-79.5500, lat:33.5300},
+  {type:"port", name:"Garden City", lon:-79.5600, lat:33.5700},
+  // Fishing ports - Charleston area
+  {type:"port", name:"Charleston", lon:-79.9311, lat:32.7765},
+  {type:"port", name:"Mount Pleasant", lon:-79.8634, lat:32.7900},
+  {type:"port", name:"Isle of Palms", lon:-79.7800, lat:32.8000},
+  {type:"port", name:"Sullivans Island", lon:-79.8400, lat:32.7600},
+  {type:"port", name:"Kiawah Island", lon:-80.0500, lat:32.6200},
+  {type:"port", name:"Seabrook Island", lon:-80.1000, lat:32.5800},
+  {type:"port", name:"Edisto Island", lon:-80.4000, lat:32.5000},
+  {type:"port", name:"Bluffton", lon:-80.8600, lat:32.2400},
+  // Fishing ports - Savannah / Hilton Head
+  {type:"port", name:"Savannah", lon:-81.0998, lat:32.0809},
+  {type:"port", name:"Tybee Island", lon:-80.9900, lat:32.0000},
+  {type:"port", name:"Hilton Head Island", lon:-80.7600, lat:32.1600},
+  {type:"port", name:"Port Royal", lon:-80.7000, lat:32.2300},
+  {type:"port", name:"Parris Island", lon:-80.6900, lat:32.3400},
+  // Fishing ports - Georgia coast
+  {type:"port", name:"Sapelo Island", lon:-81.2800, lat:31.5700},
+  {type:"port", name:"St. Simons Island", lon:-81.4000, lat:31.1600},
+  {type:"port", name:"Brunswick", lon:-81.4950, lat:31.2600},
+  {type:"port", name:"St. Marys", lon:-81.5500, lat:30.7200},
+  {type:"port", name:"Cumberland Island", lon:-81.4600, lat:30.7700},
+  // Fishing ports - Florida upga
+  {type:"port", name:"Fernandina Beach", lon:-81.4700, lat:30.6700},
+  {type:"port", name:"Jacksonville", lon:-81.6300, lat:30.3300},
+  {type:"port", name:"St. Augustine", lon:-81.3100, lat:29.9000},
+// Mid-Atlantic cities
 ];   
 
 function placeInRegion(p) {
@@ -3709,26 +3763,13 @@ function parseUvDateFromName(filename) {
 
 function fmtLocalDateTime(dt) {
   return dt.toLocaleString(undefined, {
-    year:"numeric", month:"numeric", day:"numeric",
-    hour:"numeric", minute:"2-digit",
+    year:"numeric", month:"2-digit", day:"2-digit",
+    hour:"2-digit", minute:"2-digit",
     hour12:false
   });
 }
-function fmtCompactLocalDateTime(dt) {
-  return dt.toLocaleString(undefined, {
-    year: undefined, month: "numeric", day: "numeric",
-    hour: "2-digit", minute: "2-digit", hour12: false
-  });
-}
-function fmtDaytimeLocal(msOrDate, includeYear = true) {
-  const dt = msOrDate instanceof Date ? msOrDate : new Date(msOrDate);
-  return dt.toLocaleString(undefined, {
-    ...(includeYear ? { year: "numeric" } : {}),
-    month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit", hour12: false
-  });
-}
 function fmtLocalDate(dt) {
-  return dt.toLocaleDateString(undefined, { year:"numeric", month:"numeric", day:"numeric" });
+  return dt.toLocaleDateString(undefined, { year:"numeric", month:"2-digit", day:"2-digit" });
 }
 
 function framePathOf(f){ return String(f?.json_path || f?.path || f?.file || f?.url || f?.json || ""); }
@@ -3738,12 +3779,12 @@ function timeOnlyLabel(varKey, frameMeta) {
   if (varKey === "bathy") return ""; /* EMPTY for bathy */
   if (frameMeta?.time_iso) {
     const dt = new Date(frameMeta.time_iso);
-    if (!isNaN(dt.getTime())) return varKey === "chl" && isMobileDevice() ? fmtCompactLocalDateTime(dt) : fmtLocalDateTime(dt);
+    if (!isNaN(dt.getTime())) return fmtLocalDateTime(dt);
   }
   if (frameMeta?.label) return String(frameMeta.label);
   const path = framePathOf(frameMeta);
   const filename = String(path).split("/").pop() || "";
-  if (varKey === "chl") { const dt = parseChlUtcFromName(filename); return dt ? (isMobileDevice() ? fmtCompactLocalDateTime(dt) : fmtLocalDateTime(dt)) : ""; }
+  if (varKey === "chl") { const dt = parseChlUtcFromName(filename); return dt ? fmtLocalDateTime(dt) : ""; }
   if (varKey === "sst") { const dt = parseSstUtcFromName(filename); return dt ? fmtLocalDateTime(dt) : ""; }
   if (varKey === "chl_front" || varKey === "sst_front") { const dt = parseFrontUtcFromName(filename); return dt ? fmtLocalDateTime(dt) : ""; }
   if (varKey === "uv")  { const dt = parseUvDateFromName(filename);  return dt ? fmtLocalDate(dt) : ""; }
@@ -3904,7 +3945,7 @@ function attachRelayoutListenerOnce() {
 
 /* ========================= COLORBAR PLACEMENT ========================= */
 function colorbarFor(varKey) {
-  const unit = unitLabelForVar(varKey);
+  const unit = varKey === "sst" ? tempUnitLabel() : (DEFAULT_RANGES[varKey]?.unit || "");
   const portrait = isPortrait();
 
   if (portrait) {
@@ -3930,11 +3971,7 @@ function colorbarFor(varKey) {
 async function renderFooterColorbarToDiv(targetDiv, varKey) {
   if (!targetDiv) return;
 
-  const unit = unitLabelForVar(varKey);
-  // Keep the title outside Plotly's SVG as well. The live OL map hides the
-  // Plotly map, and Plotly can clip a horizontal colorbar title at small
-  // mobile widths; this explicit label is always visible in the product menu.
-  targetDiv.dataset.title = unit;
+  const unit = varKey === "sst" ? tempUnitLabel() : (DEFAULT_RANGES[varKey]?.unit || "");
   // CRITICAL: fall back to DEFAULT_RANGES when userRanges[varKey] is missing
   // or has invalid vmin/vmax. Without this, NaN tickvals / constant arrays
   // trigger Plotly "axis scaling" errors during doAutoRange.
@@ -3984,10 +4021,6 @@ async function renderFooterColorbarToDiv(targetDiv, varKey) {
   } else if (varKey === "uv") {
     chosenScale = UV_SCALE;
     cValues = [cmin, cmax];
-    /* Height is displayed in feet; contours use 0.2-ft spacing. */
-    tickmode = "array";
-    tickvals = [-1.0, -0.2, 0.6, 1.4, 2.2, 3.0, 3.8, 4.6, 5.0];
-    ticktext = tickvals.map(v => v.toFixed(1));
   } else if (varKey === "bathy") {
     chosenScale = BATHY_SCALE;
     cValues = [cmin, cmax];
@@ -4020,30 +4053,25 @@ async function renderFooterColorbarToDiv(targetDiv, varKey) {
       colorscale: chosenScale,
       showscale: true,
       colorbar: {
-        // The compact title is rendered by #hamburger-cbar::before. Keeping
-        // Plotly's title empty prevents a second title floating above it.
-        title: { text: "", side: "top" },
+        title: { text: unit, side: "top" },
         orientation: "h",
         x: 0.5, xanchor: "center",
         y: 0.5, yanchor: "middle",
-        len: 0.92, thickness: 14,
+        len: 1.0, thickness: 14,
         tickmode, tickvals, ticktext,
         ticks: "outside", ticklen: 4, tickwidth: 1,
-        nticks: tickvals ? tickvals.length : undefined,
-        tickfont: { color: "#e0e6ee", size: varKey === "uv" ? 10 : 11 },
-        titlefont: { color: "#e0e6ee", size: 11, family: "Arial" }
+        tickfont: { color: "#e0e6ee", size: 11 },
+        titlefont: { color: "#e0e6ee", size: 11 }
       }
     }
   };
 
   const layout = {
-    margin: { l: 4, r: 4, t: 0, b: 0 },
+    margin: { l: 0, r: 0, t: 0, b: 0 },
     paper_bgcolor: "rgba(0,0,0,0)",
     plot_bgcolor: "rgba(0,0,0,0)",
     xaxis: { visible: false },
-    yaxis: { visible: false },
-    width: Math.max(280, Math.min(330, targetDiv.clientWidth || 330)),
-    height: 68
+    yaxis: { visible: false }
   };
 
   await Plotly.newPlot(targetDiv, [trace], layout, { displayModeBar: false, responsive: true });
@@ -4197,54 +4225,19 @@ function buildUv(gridInfo, dataObj) {
   // Use the UV range, which is now configured for ADT (Sea Surface Height)
   const vmin = userRanges.uv.vmin;
   const vmax = userRanges.uv.vmax;
-  const contourLevelsForPlot = uvContourLevels(vmin, vmax);
-
-  // ADT is stored in metres; render the product in feet end-to-end.
-  const adtFeet = adt.map(row => row.map(v => metersToHeight(v)));
 
   const bg = {
     type:"heatmap",
     x:xAxis, y:yAxis,
-    z:adtFeet,
-    customdata:adtFeet,
+    z:adt,
+    customdata:adt,
     hoverinfo:"none",
     showscale:false,
     zauto:false, zmin:vmin, zmax:vmax,
     colorscale: UV_SCALE,
-    // Colorbar uses the 'uv' key; title comes from DEFAULT_RANGES.uv.unit ("Height (ft)")
+    // Colorbar uses the 'uv' key which now has the unit 'm'
     colorbar: colorbarFor("uv"),
     zsmooth:false
-    /* heatmap.contours removed — replaced by a separate type:"contour" trace
-       below. The heatmap contours property wasn't rendering reliably across
-       browser cache + Cloudflare edge scenarios; a dedicated contour trace is
-       the bulletproof way to draw labeled contour lines on a Plotly heatmap. */
-  };
-
-  /* ADT contour overlay as a SEPARATE Plotly trace — 0.2 ft intervals.
-     The "0" level contour is the deep frontal location and is explicitly
-     labeled. The OpenLayers path applies the 2px-every-fifth hierarchy. */
-  const contourLines = {
-    type: "contour",
-    x: xAxis,
-    y: yAxis,
-    z: adtFeet,
-    showscale: false,
-    hoverinfo: "none",
-    xaxis: "x",
-    yaxis: "y",
-    contours: {
-      start: contourLevelsForPlot[0],
-      end:   contourLevelsForPlot[contourLevelsForPlot.length - 1],
-      size:  0.2,                  /* 0.2 ft intervals */
-      coloring: "lines",           /* lines only, no fill */
-      showlabels: true,
-      labelfont: { size: 10, color: "#0c1723", family: "Arial Black" }
-    },
-    line: {                         /* explicit line color/width (not via contours.color which Plotly 2.34 can ignore) */
-      color: "rgba(30,30,30,0.95)",
-      width: 1,
-      smoothing: 0
-    }
   };
 
   // UV values are m/s, while the plot axes are lon/lat degrees. Render the
@@ -4259,19 +4252,23 @@ function buildUv(gridInfo, dataObj) {
   const headAngle = (24 * Math.PI) / 180;
 
   const step = Math.max(3, Math.floor(Math.sqrt(nx * ny) / 18));
+  const maxSpeed = 1.2;
+  const minSpeed = 0.035;
+  const minLen = 0.75 * cell;
+  const maxLen = 2.25 * cell;
 
   for (let j=0;j<ny;j+=step){
     const lat0 = yAxis[j];
     for (let i=0;i<nx;i+=step){
       const lon0 = xAxis[i];
-      const vector = uvVectorAt(u, v, j, i);
-      const uu = vector?.[0], vv = vector?.[1];
+      const uu = u[j][i], vv = v[j][i];
       const sp = Math.hypot(uu, vv);
 
       if (!isFinite(uu) || !isFinite(vv) || !isFinite(sp)) continue;
-      if (sp < UV_ARROW_MIN_SPEED) continue;
+      if (sp < minSpeed) continue;
 
-      const len = uvArrowLengthCells(sp) * cell;
+      const scaled = Math.min(sp, maxSpeed) / maxSpeed;
+      const len = minLen + (maxLen - minLen) * scaled;
       const lon1 = lon0 + (uu / sp) * len;
       const lat1 = lat0 + (vv / sp) * len;
 
@@ -4306,7 +4303,7 @@ function buildUv(gridInfo, dataObj) {
     showlegend:false
   };
 
-  return { data:[bg, contourLines, arrows], layout: stableLayout() };
+  return { data:[bg, arrows], layout: stableLayout() };
 }
 
 function buildFrontLines(gridInfo, dataObj, varKey) {
@@ -4333,7 +4330,7 @@ function buildFrontLines(gridInfo, dataObj, varKey) {
       }
       const grad = props.gradient_per_km ?? null;
       const gradC = grad !== null ? grad * (tempUnit === 'F' ? 9/5 : 1) : null;
-      const gradUnit = `${tempUnitLabel()}/km`;
+      const gradUnit = `°${tempUnitLabel()}/km`;
       const lenKm = props.length_km ?? null;
       const textVal = gradC != null ? `${gradC.toFixed(3)} ${gradUnit}` : '';
       const customEntry = {
@@ -4345,7 +4342,7 @@ function buildFrontLines(gridInfo, dataObj, varKey) {
       };
       lineX.push(lon);
       lineY.push(lat);
-      text.push(textVal + (lenKm != null ? `<br>${formatDist(lenKm)}` : ''));
+      text.push(textVal + (lenKm != null ? `<br>${lenKm.toFixed(1)} km` : ''));
       custom.push(customEntry);
       prev = [lon, lat];
     }
@@ -4516,8 +4513,7 @@ function mobileZForVar(varKey, dataObj) {
   if (varKey === "sst") return dataObj.sst || dataObj.z || dataObj.data;
   if (varKey === "uv") {
     const d = (dataObj && dataObj.data && !Array.isArray(dataObj.data)) ? dataObj.data : dataObj;
-    const adt = d?.adt || dataObj?.meta?.grid?.adt || d?.z;
-    return is2D(adt) ? adt.map(row => row.map(v => metersToHeight(v))) : adt;
+    return d?.adt || dataObj?.meta?.grid?.adt || d?.z;
   }
   if (varKey === "bathy") return dataObj.depth;
   return null;
@@ -4529,51 +4525,6 @@ function isMobileMissingValue(varKey, rawValue, numericValue) {
   if (Math.abs(numericValue) >= 1e20) return true;
   if ((varKey === "chl" || varKey === "sst") && numericValue <= 0) return true;
   return false;
-}
-
-// Draw ADT isolines into the same canvas used by the live OpenLayers raster
-// path.  The Plotly contour trace is not used when OL owns #map, so keeping
-// this in the canvas path is what makes contours appear on desktop and mobile.
-function drawUvContours(ctx, z, nx, ny, xFlip, yFlip) {
-  const levels = uvContourLevels();
-  const toCanvas = (x, y) => [xFlip ? (nx - 1 - x) : x, yFlip ? (ny - 1 - y) : y];
-  const edgePoint = (a, b, va, vb, level) => {
-    const den = vb - va;
-    const t = Math.abs(den) < 1e-12 ? 0.5 : (level - va) / den;
-    return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
-  };
-  ctx.save();
-  ctx.lineJoin = "round";
-  ctx.lineCap = "round";
-  for (let levelIndex = 0; levelIndex < levels.length; levelIndex++) {
-    const level = levels[levelIndex];
-    ctx.beginPath();
-    for (let j = 0; j < ny - 1; j++) {
-      for (let i = 0; i < nx - 1; i++) {
-        const raw = [z[j]?.[i], z[j]?.[i + 1], z[j + 1]?.[i + 1], z[j + 1]?.[i]];
-        const nums = raw.map(Number);
-        if (raw.some((v, k) => isMobileMissingValue("uv", v, nums[k]))) continue;
-        const [va, vb, vc, vd] = nums;
-        const p0 = [i, j], p1 = [i + 1, j], p2 = [i + 1, j + 1], p3 = [i, j + 1];
-        const hits = [];
-        if ((va < level) !== (vb < level)) hits.push(edgePoint(p0, p1, va, vb, level));
-        if ((vb < level) !== (vc < level)) hits.push(edgePoint(p1, p2, vb, vc, level));
-        if ((vc < level) !== (vd < level)) hits.push(edgePoint(p2, p3, vc, vd, level));
-        if ((vd < level) !== (va < level)) hits.push(edgePoint(p3, p0, vd, va, level));
-        for (let k = 0; k + 1 < hits.length; k += 2) {
-          const a = toCanvas(hits[k][0], hits[k][1]);
-          const b = toCanvas(hits[k + 1][0], hits[k + 1][1]);
-          ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]);
-        }
-      }
-    }
-    ctx.strokeStyle = "rgba(35,35,35,0.94)";
-    // One 2px major line every five 0.2-ft contours; the other lines are 1px.
-    ctx.lineWidth = uvContourIsMajor(level) ? 2 : 1;
-    ctx.strokeStyle = level === 0 ? "#000000" : "rgba(35,35,35,0.94)";
-    ctx.stroke();
-  }
-  ctx.restore();
 }
 
 function clearMobileUvArrowLayer(map) {
@@ -4599,8 +4550,7 @@ function drawMobileUvArrows(ctx, dataObj, z, xAxis, yAxis, xAscending, yAscendin
   if (!is2D(u) || !is2D(v)) return;
   const ny = z.length;
   const nx = z[0].length;
-  // Keep arrows readable but substantially denser on the map.
-  const step = Math.max(2, Math.floor(Math.sqrt(nx * ny) / 48));
+  const step = Math.max(3, Math.floor(Math.sqrt(nx * ny) / 36));
   const sx = ctx.canvas.width / Math.max(1, nx - 1);
   const sy = ctx.canvas.height / Math.max(1, ny - 1);
 
@@ -4619,9 +4569,8 @@ function drawMobileUvArrows(ctx, dataObj, z, xAxis, yAxis, xAscending, yAscendin
     const srcJ = yFlip ? (ny - 1 - row) : row;
     for (let col = 0; col < nx; col += step) {
       const srcI = xAscending ? col : (nx - 1 - col);
-      const vector = uvVectorAt(u, v, srcJ, srcI);
-      const uu = vector?.[0];
-      const vv = vector?.[1];
+      const uu = u[srcJ]?.[srcI];
+      const vv = v[srcJ]?.[srcI];
       if (!isFinite(uu) || !isFinite(vv)) continue;
       const x = col * sx;
       const y = row * sy;
@@ -4664,9 +4613,11 @@ function buildMobileUvArrowLayer(dataObj, gridInfo) {
   const dxg = Math.abs(xAxis[1] - xAxis[0]);
   const dyg = Math.abs(yAxis[1] - yAxis[0]);
   const cell = Math.min(dxg, dyg);
-  // Sample more of the native current grid; the previous step made the
-  // direction field look sparse on both desktop and mobile.
-  const step = Math.max(2, Math.floor(Math.sqrt(nx * ny) / 48));
+  const step = Math.max(4, Math.floor(Math.sqrt(nx * ny) / 36));
+  const maxSpeed = 1.2;
+  const minSpeed = 0.035;
+  const minLen = 0.95 * cell;
+  const maxLen = 2.80 * cell;
   const headAngle = Math.PI / 6;
   const features = [];
 
@@ -4674,13 +4625,13 @@ function buildMobileUvArrowLayer(dataObj, gridInfo) {
     const lat0 = yAxis[j];
     for (let i = 0; i < nx; i += step) {
       const lon0 = xAxis[i];
-      const vector = uvVectorAt(u, v, j, i);
-      const uu = vector?.[0];
-      const vv = vector?.[1];
+      const uu = u[j]?.[i];
+      const vv = v[j]?.[i];
       const sp = Math.hypot(uu, vv);
-      if (!isFinite(uu) || !isFinite(vv) || !isFinite(sp) || sp < UV_ARROW_MIN_SPEED) continue;
+      if (!isFinite(uu) || !isFinite(vv) || !isFinite(sp) || sp < minSpeed) continue;
 
-      const len = uvArrowLengthCells(sp) * cell;
+      const scaled = Math.min(sp, maxSpeed) / maxSpeed;
+      const len = minLen + (maxLen - minLen) * scaled;
       const lon1 = lon0 + (uu / sp) * len;
       const lat1 = lat0 + (vv / sp) * len;
       const theta = Math.atan2(lat1 - lat0, lon1 - lon0);
@@ -4693,8 +4644,7 @@ function buildMobileUvArrowLayer(dataObj, gridInfo) {
         lon1 + headLen * Math.cos(theta + Math.PI + headAngle),
         lat1 + headLen * Math.sin(theta + Math.PI + headAngle)
       ];
-        features.push(new ol.Feature({
-        speed: sp,
+      features.push(new ol.Feature({
         geometry: new ol.geom.MultiLineString([
           [toMapProjection([lon0, lat0]), toMapProjection([lon1, lat1])],
           [toMapProjection([lon1, lat1]), toMapProjection(left)],
@@ -4707,8 +4657,7 @@ function buildMobileUvArrowLayer(dataObj, gridInfo) {
   const source = new ol.source.Vector({ features, projection: "EPSG:4326" });
   return new ol.layer.Vector({
     source,
-    // Land mask is z20; keep currents below it so arrows stop at the coast.
-    zIndex: 15,
+    zIndex: 25,
     updateWhileAnimating: true,
     updateWhileInteracting: true,
     style: new ol.style.Style({
@@ -4720,119 +4669,6 @@ function buildMobileUvArrowLayer(dataObj, gridInfo) {
       })
     })
   });
-}
-
-function clearUvContourLayer(state) {
-  if (state?.map && state.uvContourLayer) state.map.removeLayer(state.uvContourLayer);
-  if (state?.map && state.uvZeroLabelOverlay) state.map.removeOverlay(state.uvZeroLabelOverlay);
-  for (const overlay of state?.uvZeroLabelOverlays || []) {
-    if (state.map) state.map.removeOverlay(overlay);
-    if (overlay.__angleListener && ol?.Observable?.unByKey) ol.Observable.unByKey(overlay.__angleListener);
-  }
-  if (state?.uvZeroLabelOverlay?.__angleListener && ol?.Observable?.unByKey) {
-    ol.Observable.unByKey(state.uvZeroLabelOverlay.__angleListener);
-  }
-  if (state) state.uvZeroLabelOverlay = null;
-  if (state) state.uvZeroLabelOverlays = [];
-  if (state) state.uvContourLayer = null;
-}
-
-// Render ADT contours as OL vectors so width is measured in screen pixels,
-// not low-resolution raster pixels. This is the authoritative Currents/Height path.
-function buildUvContourLayer(dataObj, gridInfo, map) {
-  const d = (dataObj?.data && !Array.isArray(dataObj.data)) ? dataObj.data : dataObj;
-  const zMeters = d?.adt || d?.z;
-  const z = is2D(zMeters) ? zMeters.map(row => row.map(v => metersToHeight(v))) : zMeters;
-  const xs = gridInfo?.xAxis || [], ys = gridInfo?.yAxis || [];
-  if (!is2D(z) || xs.length < 2 || ys.length < 2) return null;
-  const features = [];
-  const levels = uvContourLevels();
-  for (let levelIndex = 0; levelIndex < levels.length; levelIndex++) {
-    const ft = levels[levelIndex];
-    const levelFeatures = [];
-    for (let j = 0; j < ys.length - 1; j++) for (let i = 0; i < xs.length - 1; i++) {
-      const raw = [z[j]?.[i], z[j]?.[i + 1], z[j + 1]?.[i + 1], z[j + 1]?.[i]].map(Number);
-      if (raw.some(v => !Number.isFinite(v))) continue;
-      const val = raw;
-      const p = [[xs[i],ys[j]],[xs[i+1],ys[j]],[xs[i+1],ys[j+1]],[xs[i],ys[j+1]]];
-      const hits = [];
-      for (const [a,b] of [[0,1],[1,2],[2,3],[3,0]]) {
-        if ((val[a] < ft) !== (val[b] < ft)) {
-          const t = (ft - val[a]) / (val[b] - val[a]);
-          hits.push([p[a][0] + (p[b][0]-p[a][0])*t, p[a][1] + (p[b][1]-p[a][1])*t]);
-        }
-      }
-      for (let k = 0; k + 1 < hits.length; k += 2) {
-        levelFeatures.push(new ol.Feature({
-          geometry: new ol.geom.LineString(hits.slice(k,k+2).map(pt => toMapProjection(pt))),
-          contourLevel: ft,
-          major: uvContourIsMajor(ft)
-        }));
-      }
-    }
-    // Put plain labels directly on the zero contour. Marching-squares emits
-    // short segments, so select midpoint candidates in screen space: this
-    // yields one label per visible contour branch and additional labels on
-    // long branches without stacking labels on adjacent cells.
-    if (ft === 0 && levelFeatures.length) {
-      const labelOverlays = [];
-      if (map) {
-        const candidates = levelFeatures.map(feature => {
-          const geometry = feature.getGeometry();
-          const coordinate = geometry.getCoordinateAt(0.5);
-          const p0 = map.getPixelFromCoordinate(geometry.getCoordinates()[0]);
-          const p1 = map.getPixelFromCoordinate(geometry.getCoordinates()[1]);
-          return { geometry, coordinate, pixel: map.getPixelFromCoordinate(coordinate), angle: Math.atan2(p1[1]-p0[1], p1[0]-p0[0]) * 180 / Math.PI };
-        }).filter(candidate => candidate.pixel && Number.isFinite(candidate.pixel[0]) && Number.isFinite(candidate.pixel[1]));
-        candidates.sort((a, b) => a.pixel[1] - b.pixel[1] || a.pixel[0] - b.pixel[0]);
-        const chosen = [];
-        for (const candidate of candidates) {
-          if (chosen.every(other => Math.hypot(candidate.pixel[0]-other.pixel[0], candidate.pixel[1]-other.pixel[1]) >= 90)) {
-            chosen.push(candidate);
-          }
-        }
-        for (const candidate of chosen) {
-          const labelEl = document.createElement("div");
-          const labelText = document.createElement("span");
-          labelText.textContent = "0";
-          labelEl.appendChild(labelText);
-          labelEl.setAttribute("aria-label", "zero foot contour");
-          labelEl.style.cssText = "pointer-events:none;width:0;height:0;overflow:visible;";
-          labelText.style.cssText = "display:block;color:#111820;font:700 13px/1 Arial,sans-serif;white-space:nowrap;transform-origin:50% 50%;transform:translate(-50%,-50%);text-shadow:-1px -1px 0 rgba(255,255,255,.95),1px -1px 0 rgba(255,255,255,.95),-1px 1px 0 rgba(255,255,255,.95),1px 1px 0 rgba(255,255,255,.95);";
-          const overlay = new ol.Overlay({ element: labelEl, positioning: "center-center", stopEvent: false, offset: [0, 0] });
-          overlay.setPosition(candidate.coordinate);
-          map.addOverlay(overlay);
-          const updateLabelAngle = () => {
-            const coords = candidate.geometry.getCoordinates();
-            const p0 = map.getPixelFromCoordinate(coords[0]);
-            const p1 = map.getPixelFromCoordinate(coords[1]);
-            if (!p0 || !p1) return;
-            let angle = Math.atan2(p1[1] - p0[1], p1[0] - p0[0]) * 180 / Math.PI;
-            if (angle > 90 || angle < -90) angle += 180;
-            labelText.style.transform = `translate(-50%,-50%) rotate(${angle.toFixed(1)}deg)`;
-          };
-          updateLabelAngle();
-          overlay.__angleListener = map.on("moveend", updateLabelAngle);
-          labelOverlays.push(overlay);
-        }
-        features._uvZeroLabelOverlays = labelOverlays;
-      }
-    }
-    features.push(...levelFeatures);
-  }
-  const layer = new ol.layer.Vector({
-    // Land mask is z20; keep contours below it so they cannot paint on land.
-    source: new ol.source.Vector({ features }), zIndex: 16,
-    updateWhileAnimating: true, updateWhileInteracting: true,
-    style: feature => new ol.style.Style({ stroke: new ol.style.Stroke({
-        color: feature.get("contourLevel") === 0 ? "#000000" : "rgba(25,25,25,0.96)",
-        width: feature.get("contourLevel") === 0 || feature.get("major") ? 2 : 1,
-        lineDash: feature.get("contourLevel") !== 0 && feature.get("major") ? [4, 3] : undefined,
-        lineCap: "round", lineJoin: "round"
-      }) })
-  });
-  layer.__uvZeroLabelOverlays = features._uvZeroLabelOverlays || [];
-  return layer;
 }
 
 // Draw a line using direct pixel manipulation (Bresenham-inspired)
@@ -4894,46 +4730,6 @@ function drawLinePixels(imgData, x0, y0, x1, y1, color, imgWidth, lineWidth) {
   }
 }
 
-// canvasToOlSource(canvas, imageExtent): wrap a canvas in an
-// ol.source.ImageCanvas so we never round-trip through canvas.toDataURL,
-// canvas.toBlob, URL.createObjectURL, or new ol.source.ImageStatic.
-//
-// Background: iOS Safari's CSS/JS URL parser throws
-// "The string did not match the expected pattern" when fed very large or
-// malformed data: or blob: URLs (confirmed via curl/grep on Safari's own
-// response). That is the root cause of the "Mobile OL error:
-// The string did not match the expected pattern" alert on iPhone.
-// ol.source.ImageCanvas receives a callback that returns a canvas for each
-// tile draw — it never parses a URL string, so the failure mode goes away.
-function canvasToOlSource(canvas, imageExtent) {
-  if (!canvas) throw new Error("canvasToOlSource: missing canvas");
-  if (!Array.isArray(imageExtent) || imageExtent.length !== 4 ||
-      !imageExtent.every(Number.isFinite) ||
-      imageExtent[2] <= imageExtent[0] || imageExtent[3] <= imageExtent[1]) {
-    throw new Error("canvasToOlSource: invalid extent " + JSON.stringify(imageExtent));
-  }
-  return new ol.source.ImageCanvas({
-    projection: "EPSG:4326",
-    ratio: 1,
-    interpolate: false,
-    canvasFunction: function(requestedExtent, resolution, pixelRatio, size) {
-      const out = document.createElement("canvas");
-      out.width = Math.max(1, Math.ceil(size[0]));
-      out.height = Math.max(1, Math.ceil(size[1]));
-      const ctx = out.getContext("2d", { willReadFrequently: false });
-      ctx.clearRect(0, 0, out.width, out.height);
-      const dx = (imageExtent[0] - requestedExtent[0]) / resolution * pixelRatio;
-      const dy = (requestedExtent[3] - imageExtent[3]) / resolution * pixelRatio;
-      const dw = (imageExtent[2] - imageExtent[0]) / resolution * pixelRatio;
-      const dh = (imageExtent[3] - imageExtent[1]) / resolution * pixelRatio;
-      if ([dx, dy, dw, dh].every(Number.isFinite) && dw > 0 && dh > 0) {
-        ctx.drawImage(canvas, dx, dy, dw, dh);
-      }
-      return out;
-    }
-  });
-}
-
 function makeMobileLandCanvas(bathy) {
   const z = bathy.depth;
   if (!is2D(z)) return null;
@@ -4970,6 +4766,8 @@ function makeMobileLandCanvas(bathy) {
 
 async function ensureDesktopLandLayer(map) {
   if (!map) return;
+  const requestRevision = regionRevision;
+  const requestUrl = BATHY_JSON_URL;
   // Region-switch safety: if the cached landLayer was built for a different
   // bbox or bathy URL, tear it down so it gets rebuilt against the new region.
   const curBBox = BBOX.join(",");
@@ -4980,19 +4778,27 @@ async function ensureDesktopLandLayer(map) {
     desktopMapState.landLayerURL = null;
   }
   if (desktopMapState.landLayer) return;
-  const bathy = await loadBathymetryJson(BATHY_JSON_URL);
+  const bathy = await loadBathymetryJson(requestUrl);
+  if (requestRevision !== regionRevision || requestUrl !== BATHY_JSON_URL) return;
   const canvas = makeMobileLandCanvas(bathy);
   if (!canvas) return;
   const extent = frameExtentFromGrid({ xAxis: bathy.xAxis, yAxis: bathy.yAxis });
-  const source = canvasToOlSource(canvas, extent);
+  const source = new ol.source.ImageStatic({
+    url: canvas.toDataURL("image/png"),
+    imageExtent: extent,
+    projection: "EPSG:4326",
+    interpolate: false
+  });
   desktopMapState.landLayer = new ol.layer.Image({ source, zIndex: 20 });
   desktopMapState.landLayerBBox = curBBox;
-  desktopMapState.landLayerURL = BATHY_JSON_URL;
+  desktopMapState.landLayerURL = requestUrl;
   map.addLayer(desktopMapState.landLayer);
 }
 
 async function ensureDesktopPlaceLayer(map) {
-  if (!map || desktopMapState.placeLayer) return;
+  if (!map) return;
+  if (desktopMapState.placeLayer && desktopMapState.placeLayerRegion === REGION_ID) return;
+  if (desktopMapState.placeLayer) map.removeLayer(desktopMapState.placeLayer);
   const features = PLACE_LABELS
     .filter(placeInRegion)
     .map(p => new ol.Feature({
@@ -5009,6 +4815,7 @@ async function ensureDesktopPlaceLayer(map) {
   });
   if (desktopMapState.placeLayer) map.removeLayer(desktopMapState.placeLayer);
   desktopMapState.placeLayer = layer;
+  desktopMapState.placeLayerRegion = REGION_ID;
   map.addLayer(layer);
 }
 
@@ -5107,22 +4914,9 @@ function depthMaxInExtent(bd, extent, sx, sy) {
 }
 
 function generateContourLevels(maxDepth) {
-  if (!Number.isFinite(maxDepth) || maxDepth <= 0) return [];
-  const factor = depthUnit === "ft" ? 3.28084 : depthUnit === "fathom" ? 0.546806649 : 1;
-  const maxDisplay = maxDepth * factor;
-  // Use the same irregular-but-regularly-spaced fishing-depth pattern in
-  // every unit system: 25, 50, 100, 200, 500, ... . For very shallow
-  // extents, retain useful 5/10/20-unit contours instead of returning none.
-  const standard = [25, 50, 100, 200, 500, 1000, 2000, 5000, 10000];
-  const shallow = [5, 10, 20];
-  const levels = maxDisplay < 25 ? shallow : standard;
-  return levels.filter(level => level <= maxDisplay + 1e-9).map(level => level / factor);
-}
-
-function formatContourLevel(meters) {
-  const factor = depthUnit === "ft" ? 3.28084 : depthUnit === "fathom" ? 0.546806649 : 1;
-  const rounded = Math.round((Number(meters) * factor) / 5) * 5;
-  return `${rounded} ${depthUnitLabel()}`;
+  const std = [50, 100, 200, 500, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000];
+  if (maxDepth < 200) return [50, 100, 200].filter(l => l <= maxDepth + 200);
+  return std.filter(l => l <= maxDepth + 200);
 }
 
 function extractContourSegments(bd, level, sx, sy, extent) {
@@ -5177,6 +4971,8 @@ function extractContourSegments(bd, level, sx, sy, extent) {
 
 async function ensureMobileLandLayer(map) {
   if (!map) return;
+  const requestRevision = regionRevision;
+  const requestUrl = BATHY_JSON_URL;
   // Region-switch safety: rebuild land canvas when BBOX or bathy URL changed
   // (Friday's gridCache.__bathy_json fix cleared the contour data cache but left
   // the OL ImageStatic land layer pinned to the previous region's beige canvas).
@@ -5188,14 +4984,20 @@ async function ensureMobileLandLayer(map) {
     mobileMapState.landLayerURL = null;
   }
   if (mobileMapState.landLayer) return;
-  const bathy = await loadBathymetryJson(BATHY_JSON_URL);
+  const bathy = await loadBathymetryJson(requestUrl);
+  if (requestRevision !== regionRevision || requestUrl !== BATHY_JSON_URL) return;
   const canvas = makeMobileLandCanvas(bathy);
   if (!canvas) return;
   const extent = frameExtentFromGrid({ xAxis: bathy.xAxis, yAxis: bathy.yAxis });
-  const source = canvasToOlSource(canvas, extent);
+  const source = new ol.source.ImageStatic({
+    url: canvas.toDataURL("image/png"),
+    imageExtent: extent,
+    projection: "EPSG:4326",
+    interpolate: false
+  });
   mobileMapState.landLayer = new ol.layer.Image({ source, zIndex: 20 });
   mobileMapState.landLayerBBox = curBBox;
-  mobileMapState.landLayerURL = BATHY_JSON_URL;
+  mobileMapState.landLayerURL = requestUrl;
   map.addLayer(mobileMapState.landLayer);
 }
 
@@ -5277,6 +5079,8 @@ function mobilePlaceStyle(feature) {
 }
 
 function ensureMobilePlaceLayer(map) {
+  if (mobileMapState.placeLayer && mobileMapState.placeLayerRegion === REGION_ID) return;
+  if (mobileMapState.placeLayer) map.removeLayer(mobileMapState.placeLayer);
   const features = PLACE_LABELS
     .filter(placeInRegion)
     .map(p => new ol.Feature({
@@ -5293,6 +5097,7 @@ function ensureMobilePlaceLayer(map) {
   });
   if (mobileMapState.placeLayer) map.removeLayer(mobileMapState.placeLayer);
   mobileMapState.placeLayer = layer;
+  mobileMapState.placeLayerRegion = REGION_ID;
   map.addLayer(layer);
 }
 
@@ -5310,8 +5115,8 @@ function ensureMobileCursorLayer(map) {
   mobileMapState.cursorFeature.setStyle(new ol.style.Style({
     image: new ol.style.Circle({
       radius: 3,
-      fill: new ol.style.Fill({ color: "rgba(255,255,255,0.45)" }),
-      stroke: new ol.style.Stroke({ color: "rgba(0,0,0,0.55)", width: 1 })
+      fill: new ol.style.Fill({ color: 'rgba(255,255,255,0.45)' }),
+      stroke: new ol.style.Stroke({ color: 'rgba(0,0,0,0.55)', width: 1 })
     })
   }));
   mobileMapState.cursorLayer = new ol.layer.Vector({
@@ -5353,10 +5158,6 @@ function renderMobileReadout(lon, lat) {
 function renderMobileReadoutFromLonLat(lon, lat, pixel) {
   if (!isFinite(lon) || !isFinite(lat)) return;
   const base = formatReadoutCoords(lon, lat);
-  if (currentVar === "uv") {
-    setReadout(formatUvReadout(base, mobileMapState.currentGridInfo, mobileMapState.currentDataObj, lon, lat, mobileMapState.map, pixel));
-    return;
-  }
   // Feature priority (mirror of desktop + combined):
   //   - bathy contour (depth) — requires mobile bathy contour layer to exist
   //   - UV arrow (current speed) — the arrows carry a per-arrow speed
@@ -5365,6 +5166,13 @@ function renderMobileReadoutFromLonLat(lon, lat, pixel) {
     const contourDepth = bathyContourDepthAtPixel(mobileMapState.map, pixel);
     if (contourDepth !== null) {
       setReadout(`${base}, ${formatDepth(contourDepth)} (contour)`);
+      return;
+    }
+  }
+  if (pixel && mobileMapState.arrowLayer && currentVar === "uv") {
+    const arrowSpeed = uvArrowSpeedAtPixel(mobileMapState.map, pixel);
+    if (arrowSpeed !== null) {
+      setReadout(`${base}, ${formatArrowSpeed(arrowSpeed)} (arrow)`);
       return;
     }
   }
@@ -5377,10 +5185,10 @@ function renderMobileReadoutFromLonLat(lon, lat, pixel) {
     setReadout(base);
     return;
   }
-  const unit = unitLabelForVar(currentVar);
+  const unit = DEFAULT_RANGES[currentVar]?.unit || "";
   if (currentVar === "sst") setReadout(`${base}, ${formatSstValue(val)}`);
-  else if (currentVar === "bathy") setReadout(`${base}, ${formatDepth(val)}`);
-  else if (currentVar === "uv") setReadout(formatUvReadout(base, mobileMapState.currentGridInfo, mobileMapState.currentDataObj, lon, lat, mobileMapState.map, null, val));
+  else if (currentVar === "bathy") setReadout(`${base}, ${val.toFixed(0)}${unit}`);
+  else if (currentVar === "uv") setReadout(`${base}, SSH ${formatSshValue(val)}`);
   else setReadout(`${base} ${formatChlValue(val)}`);
 }
 
@@ -5416,8 +5224,13 @@ function installMobileReadoutOnce(map) {
     updateMobileCursor(xy3857[0], xy3857[1]);
     renderMobileReadoutFromLonLat(xy4326[0], xy4326[1], ev.pixel);
   }
-  map.on("pointermove", handle);
-  map.on("click", handle);
+  // Root-cause fix for "marker disappears after zoom/click" on mobile:
+  // the previous code bound both `pointermove` (which fires continuously
+  // during pinch-zoom and pan) and `click` (unreliable on touch). Using
+  // OpenLayers' `singleclick` alone — touch-safe selection, fires only
+  // on a completed tap/click with no drag — keeps the marker pinned to
+  // the last selected point through any subsequent zoom or pan.
+  map.on("singleclick", handle);
 }
 
 function makeMobileRasterCanvas(varKey, gridInfo, dataObj) {
@@ -5507,6 +5320,7 @@ function initMobileMapIfNeeded() {
   if (!target || !window.ol) return null;
   if (mobileMapState.map) {
     attachMapToUnifiedTarget(mobileMapState.map);
+    installCaptainToolHandler(mobileMapState.map);
     return mobileMapState.map;
   }
   // View projection is EPSG:3857 (Web Mercator) to match the OpenFreeMap
@@ -5546,7 +5360,7 @@ function initMobileMapIfNeeded() {
     interactions: mobileInteractions
   });
   mobileMapState.map.on("moveend", () => syncViewStateFromOlMap(mobileMapState.map));
-  window.fishedgeUnderwater?.attachMap?.(mobileMapState.map);
+  installCaptainToolHandler(mobileMapState.map);
   installOlGestureZoomFallback(mobileMapState.map, target);
   // Add the OFM two-layer vector basemap so the mobile single-product pages
   // match the combined dashboard's look.
@@ -5696,12 +5510,11 @@ async function renderCombinedMode() {
     try { window._combinedMap.dispose(); } catch (_) {}
     window._combinedMap.setTarget(undefined);
     window._combinedMap = null; // null BEFORE building new — so subsequent calls see a clean slate
-    window._combinedLandLayer = null;
+    window._combinedMapRef = null;
     window._combinedChlLayer = null;
     window._combinedSstLayer = null;
     window._combinedBathyLayer = null;
     window._combinedUvLayer = null;
-    window._combinedHeightLayer = null;
     window._combinedFrontDensityLayer = null;
     window._combinedFrontLineLayer = null;
     console.log("[combined] CLEANUP: all combined state cleared");
@@ -5730,10 +5543,8 @@ async function renderCombinedMode() {
   });
   window._combinedMap = map;
   window._combinedMapRef = map;
-  window.fishedgeUnderwater?.attachMap?.(map);
   attachMapToUnifiedTarget(map);
   installCaptainToolHandler(map);
-  if (captainAddTool.points.length) renderPtsLayer(map);
   map.on("moveend", () => syncViewStateFromOlMap(map));
   console.log("[combined] OL map created, target:", !!map.getTargetElement(), "size:", map.getSize());
   const cv0 = map.getTargetElement()?.querySelector("canvas");
@@ -5798,24 +5609,40 @@ async function renderCombinedMode() {
     window._combinedChlData = data;
     window._combinedChlGrid = grid;
     const canvas = makeMobileRasterCanvas("chl", grid, data);
-    const extent = frameExtentFromGrid(grid);
-    let src;
+    let url;
     try {
-      // canvasToOlSource uses ol.source.ImageCanvas which avoids the
-      // iOS Safari "The string did not match the expected pattern" error
-      // that toBlob/createObjectURL/ImageStatic would throw here.
-      src = canvasToOlSource(canvas, extent);
+      // toBlob + createObjectURL avoids the iOS Safari 'The string did not
+      // match the expected pattern' error that toDataURL throws for some
+      // large/sparse-canvas combinations (specifically S3 OLCI sparse
+      // frames on the captain's mobile dashboard).
+      url = await new Promise((resolve, reject) => {
+        canvas.toBlob((blob) => {
+          if (blob) resolve(URL.createObjectURL(blob));
+          else reject(new Error("canvas.toBlob returned null"));
+        }, "image/png");
+      });
     } catch (e) {
-      console.error("[OL chl] canvasToOlSource failed", frame?.id || frame?.json_path, e);
+      console.error("[OL chl] canvas.toBlob failed", frame?.id || frame?.json_path, e);
       return;
     }
-    const layer = new ol.layer.Image({ source: src, zIndex: 10 });
-    map.addLayer(layer);
-    window._combinedChlLayer = layer;
+    if (url) {
+      const extent = frameExtentFromGrid(grid);
+      let src;
+      try {
+        src = new ol.source.ImageStatic({ url, imageExtent: extent, projection: "EPSG:4326", interpolate: false });
+      } catch (e) {
+        console.error("[OL chl] ImageStatic source failed, url:", url?.slice(0, 30), frame?.id || frame?.json_path, e);
+        try { URL.revokeObjectURL(url); } catch (_) {}
+        return;
+      }
+      const layer = new ol.layer.Image({ source: src, zIndex: 10 });
+      map.addLayer(layer);
+      window._combinedChlLayer = layer;
+    }
     const chlT = epochMsForFrame("chl", frame);
     window._combinedChlScanTime = chlT;
     if (chlScanTimeDiv) chlScanTimeDiv.textContent = chlT
-      ? fmtDaytimeLocal(chlT)
+      ? new Date(chlT).toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
       : "";
   } else {
     if (chlScanTimeDiv) chlScanTimeDiv.textContent = "";
@@ -5880,18 +5707,21 @@ async function renderCombinedMode() {
         }
         const renderData = { ...base.data, z: composite, sst: composite, data: composite, nx, ny, bbox: base.data?.bbox };
         const canvas = makeMobileRasterCanvas("sst", base.grid, renderData);
-        const extent = frameExtentFromGrid(base.grid);
-        const src = canvasToOlSource(canvas, extent);
-        const layer = new ol.layer.Image({ source: src, zIndex: 9 });
-        layer.setVisible(false);
-        map.addLayer(layer);
-        window._combinedSstLayer = layer;
-        window._combinedSstData = renderData;
-        window._combinedSstGrid = base.grid;
+        const url = canvas.toDataURL("image/png");
+        if (url && url.startsWith("data:image/png")) {
+          const extent = frameExtentFromGrid(base.grid);
+          const src = new ol.source.ImageStatic({ url, imageExtent: extent, projection: "EPSG:4326", interpolate: false });
+          const layer = new ol.layer.Image({ source: src, zIndex: 9 });
+          layer.setVisible(false);
+          map.addLayer(layer);
+          window._combinedSstLayer = layer;
+          window._combinedSstData = renderData;
+          window._combinedSstGrid = base.grid;
+        }
         const epochTimes = compositeFrames.map(item => epochMsForFrame("sst", item.frame)).filter(t => t);
         const meanTime = epochTimes.length ? epochTimes.reduce((a, b) => a + b, 0) / epochTimes.length : null;
         if (sstScanTimeDiv) sstScanTimeDiv.textContent = meanTime
-          ? fmtDaytimeLocal(meanTime)
+          ? new Date(meanTime).toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
           : "";
       }
     }
@@ -5902,22 +5732,6 @@ async function renderCombinedMode() {
   // ── Layer: Bathymetry contours ───────────────────────────────────────
   const bathyData = await loadBathymetryJson(BATHY_JSON_URL);
   const bathyGridInfo = { xAxis: bathyData.xAxis, yAxis: bathyData.yAxis, nx: bathyData.xAxis.length, ny: bathyData.yAxis.length };
-  // The OFM foreground keeps land labels/lines above data but intentionally
-  // omits land fills. Add the bathymetry-derived opaque mask here so contour
-  // lines and rasters cannot paint over land in the combined dashboard.
-  try {
-    const combinedLandCanvas = makeMobileLandCanvas(bathyData);
-    if (combinedLandCanvas) {
-      const combinedLandSource = canvasToOlSource(combinedLandCanvas, frameExtentFromGrid({ xAxis: bathyData.xAxis, yAxis: bathyData.yAxis }));
-      const combinedLandLayer = new ol.layer.Image({ source: combinedLandSource, zIndex: 20 });
-      map.addLayer(combinedLandLayer);
-      window._combinedLandLayer = combinedLandLayer;
-    }
-  } catch (landMaskError) {
-    // A land-mask rendering failure must never prevent product layers from
-    // loading; the OFM land foreground remains available as a fallback.
-    console.warn("[combined] land mask unavailable; continuing with data layers", landMaskError);
-  }
   const bathyLayer = buildBathyContourLayer(bathyData, bathyGridInfo, map);
   if (bathyLayer) { map.addLayer(bathyLayer); window._combinedBathyLayer = bathyLayer; }
 
@@ -5928,7 +5742,7 @@ async function renderCombinedMode() {
   await rebuildCombinedUvLayer(map, { hoursMode: uvHoursSel?.value || "latest" });
 
   // ── Layer: Thermal fronts — fixed-pixel point symbols
-  await thermalLoadData();
+  await thermalLoadData({ full: false });
   const thermalItems = thermalFrontState.frameData.length
     ? [thermalFrontState.frameData[thermalFrontState.frameData.length - 1]]
     : [];
@@ -5996,7 +5810,7 @@ async function renderCombinedMode() {
       Number.isFinite(feature.get("depth")) ? feature : null
     ), { hitTolerance: 6 });
     if (bathyFeature && hoverTip) {
-      hoverTip.textContent = formatDepth(bathyFeature.get("depth"));
+      hoverTip.textContent = `${bathyFeature.get("depth")}m`;
       hoverTip.style.left = `${ev.originalEvent.clientX}px`;
       hoverTip.style.top = `${ev.originalEvent.clientY}px`;
       hoverTip.style.display = "block";
@@ -6128,7 +5942,7 @@ function updateCombinedBathyLegend(levels) {
   el.innerHTML = `
     <div class="combined-legend-row">
       <span class="combined-bathy-swatch"></span>
-      <span>Levels: ${levels.map(formatContourLevel).join(", ")}</span>
+      <span>Levels (m): ${levels.map(v => `${v}`).join(", ")}</span>
     </div>
   `;
 }
@@ -6150,13 +5964,9 @@ function depthMaxInExtent(bd, extent, sx, sy) {
 }
 
 function generateContourLevels(maxDepth) {
-  if (!Number.isFinite(maxDepth) || maxDepth <= 0) return [];
-  const factor = depthUnit === "ft" ? 3.28084 : depthUnit === "fathom" ? 0.546806649 : 1;
-  const maxDisplay = maxDepth * factor;
-  const standard = [25, 50, 100, 200, 500, 1000, 2000, 5000, 10000];
-  const shallow = [5, 10, 20];
-  const levels = maxDisplay < 25 ? shallow : standard;
-  return levels.filter(level => level <= maxDisplay + 1e-9).map(level => level / factor);
+  const std = [50, 100, 200, 500, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000];
+  if (maxDepth < 200) return [50, 100, 200].filter(l => l <= maxDepth + 200);
+  return std.filter(l => l <= maxDepth + 200);
 }
 
 function extractContourSegments(bd, level, sx, sy, extent) {
@@ -6218,17 +6028,21 @@ function buildDesktopUvArrowLayer(data, grid) {
   const dxg = Math.abs((xAxis[1] ?? xAxis[0]) - xAxis[0]) || 0.01;
   const dyg = Math.abs((yAxis[1] ?? yAxis[0]) - yAxis[0]) || 0.01;
   const cell = Math.min(dxg, dyg);
+  const minSpeed = 0.035;
+  const maxSpeed = 1.2;
+  const minLen = 0.95 * cell;
+  const maxLen = 2.8 * cell;
   for (let row = 0; row < ny; row += step) {
     for (let col = 0; col < nx; col += step) {
-      const vector = uvVectorAt(uvData.u, uvData.v, row, col);
-      const u = vector?.[0];
-      const v = vector?.[1];
+      const u = uvData.u?.[row]?.[col];
+      const v = uvData.v?.[row]?.[col];
       if (!Number.isFinite(u) || !Number.isFinite(v)) continue;
       const spd = Math.sqrt(u * u + v * v);
-      if (spd < UV_ARROW_MIN_SPEED || spd > 3) continue;
+      if (spd < minSpeed || spd > 3) continue;
       const lon = xAxis[col];
       const lat = yAxis[row];
-      const arrowLen = uvArrowLengthCells(spd) * cell;
+      const scaled = Math.min(spd, maxSpeed) / maxSpeed;
+      const arrowLen = minLen + (maxLen - minLen) * scaled;
       const geom = buildArrowGeometry(lon, lat, u, v, arrowLen, cell);
       if (geom) features.push(new ol.Feature({ geometry: geom, speed: spd }));
     }
@@ -6388,15 +6202,37 @@ async function buildChlCompositeLayer(map, hoursOrOpts) {
   }
 
   const canvas = makeMobileRasterCanvas("chl", base.grid, renderData);
+  let url;
+  try {
+    // toBlob + createObjectURL avoids the iOS Safari 'The string did not
+    // match the expected pattern' error that toDataURL throws for some
+    // large/sparse-canvas combinations. Return a Promise<{layer, ...}>
+    // wrapping the blob URL.
+    url = await new Promise((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        if (blob) resolve(URL.createObjectURL(blob));
+        else reject(new Error("canvas.toBlob returned null"));
+      }, "image/png");
+    });
+  } catch (e) {
+    console.error("[OL composite] canvas.toBlob failed", e);
+    return {};
+  }
+  if (!url) return {};
   let layer;
   try {
-    // canvasToOlSource uses ol.source.ImageCanvas — Safari-safe, no URL parsing.
     layer = new ol.layer.Image({
-      source: canvasToOlSource(canvas, frameExtentFromGrid(base.grid)),
+      source: new ol.source.ImageStatic({
+        url,
+        imageExtent: frameExtentFromGrid(base.grid),
+        projection: "EPSG:4326",
+        interpolate: false
+      }),
       zIndex: 10
     });
   } catch (e) {
-    console.error("[OL composite] canvasToOlSource failed", e);
+    console.error("[OL composite] ImageStatic source failed, url:", url?.slice(0, 30), e);
+    try { URL.revokeObjectURL(url); } catch (_) {}
     return {};
   }
   const epochTimes = selected.map(item => epochMsForFrame("chl", item.frame)).filter(t => t);
@@ -6407,7 +6243,9 @@ async function buildChlCompositeLayer(map, hoursOrOpts) {
     // Single-frame: that frame's time, no averaging.
     const t = epochTimes[0];
     window._combinedChlScanTime = t;
-    scanTime = fmtDaytimeLocal(t);
+    scanTime = new Date(t).toLocaleString(undefined, {
+      year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
+    });
   } else {
     const earliest = Math.min.apply(null, epochTimes);
     const latest = Math.max.apply(null, epochTimes);
@@ -6417,14 +6255,18 @@ async function buildChlCompositeLayer(map, hoursOrOpts) {
       // so the pre-chip dropdown path is byte-for-byte unchanged.
       const meanTime = epochTimes.reduce((a, b) => a + b, 0) / epochTimes.length;
       window._combinedChlScanTime = meanTime;
-      scanTime = fmtDaytimeLocal(meanTime);
+      scanTime = new Date(meanTime).toLocaleString(undefined, {
+        year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
+      });
     } else {
       // "auto" / chip-driven: describe the actual data shown.
       // Median of K frames: <earliest> - <latest>. The label claims
       // a range, not a single time, because the displayed pixel
       // values are a per-pixel median across those frames.
       window._combinedChlScanTime = latest;
-      const fmt = ms => fmtDaytimeLocal(ms);
+      const fmt = ms => new Date(ms).toLocaleString(undefined, {
+        year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
+      });
       scanTime = `Median of ${epochTimes.length} frames: ${fmt(earliest)} – ${fmt(latest)}`;
     }
   }
@@ -6779,12 +6621,15 @@ async function combinedChlRenderSelected() {
       if (!is2D(z)) { if (chlScanTimeDiv) chlScanTimeDiv.textContent = "Frame has no 2D data"; return; }
       const renderData = { ...data, z, chl: z, data: z, nx: z[0]?.length || 0, ny: z.length, bbox: data?.bbox };
       const canvas = makeMobileRasterCanvas("chl", grid, renderData);
-      if (s.opSeq !== mySeq) return;
+      const url = await new Promise((resolve, reject) => {
+        canvas.toBlob((blob) => blob ? resolve(URL.createObjectURL(blob)) : reject(new Error("toBlob null")), "image/png");
+      });
+      if (s.opSeq !== mySeq) { try { URL.revokeObjectURL(url); } catch (_) {} return; }
       if (window._combinedChlLayer && window._combinedMap) {
         try { window._combinedMap.removeLayer(window._combinedChlLayer); } catch (_) {}
       }
       const layer = new ol.layer.Image({
-        source: canvasToOlSource(canvas, frameExtentFromGrid(grid)),
+        source: new ol.source.ImageStatic({ url, imageExtent: frameExtentFromGrid(grid), projection: "EPSG:4326", interpolate: false }),
         zIndex: 10
       });
       const chk = document.getElementById("chk-combined-chl");
@@ -6796,7 +6641,9 @@ async function combinedChlRenderSelected() {
       const t = combinedChlFrameTimeMs(frame);
       window._combinedChlScanTime = t || null;
       if (chlScanTimeDiv && t) {
-        chlScanTimeDiv.textContent = fmtDaytimeLocal(t);
+        chlScanTimeDiv.textContent = new Date(t).toLocaleString(undefined, {
+          year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
+        });
       }
     } catch (err) {
       console.error("[CHL chip] single-frame render failed", err);
@@ -6916,14 +6763,6 @@ async function rebuildCombinedUvLayer(map, { hoursMode = "latest" } = {}) {
     try { map.removeLayer(window._combinedUvLayer); } catch (_) {}
     window._combinedUvLayer = null;
   }
-  if (window._combinedHeightLayer && map) {
-    for (const overlay of window._combinedHeightLayer.__uvZeroLabelOverlays || []) {
-      try { map.removeOverlay(overlay); } catch (_) {}
-      if (overlay.__angleListener && ol?.Observable?.unByKey) ol.Observable.unByKey(overlay.__angleListener);
-    }
-    try { map.removeLayer(window._combinedHeightLayer); } catch (_) {}
-    window._combinedHeightLayer = null;
-  }
   window._combinedUvData = null;
   window._combinedUvGrid = null;
   if (!uvFrames.length) {
@@ -6953,14 +6792,6 @@ async function rebuildCombinedUvLayer(map, { hoursMode = "latest" } = {}) {
     const grid = await loadGridForVar("uv", data);
     window._combinedUvGrid = grid;
     window._combinedUvData = data;
-    // Surface Height is contour-only. Currents remain a separate arrow layer.
-    const heightLayer = buildUvContourLayer(data, grid, map);
-    const heightCheck = document.getElementById("chk-combined-height");
-    if (heightLayer) heightLayer.setVisible(heightCheck ? heightCheck.checked : true);
-    if (heightLayer && map) {
-      map.addLayer(heightLayer);
-      window._combinedHeightLayer = heightLayer;
-    }
     const arrowLayer = buildDesktopUvArrowLayer(data, grid);
     if (arrowLayer && map) {
       const chk = document.getElementById("chk-combined-uv");
@@ -6971,7 +6802,9 @@ async function rebuildCombinedUvLayer(map, { hoursMode = "latest" } = {}) {
     const uvT = epochMsForFrame("uv", frame);
     if (uvScanTimeDiv) {
       if (uvT) {
-        const fmt = fmtDaytimeLocal(uvT);
+        const fmt = new Date(uvT).toLocaleString(undefined, {
+          year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
+        });
         uvScanTimeDiv.textContent = hoursMode === "latest"
           ? fmt
           : `Latest in last ${hoursMode} hours: ${fmt}`;
@@ -7019,7 +6852,9 @@ function buildThermalHoursComposite(map, hours) {
   // Scan time: mid-point timestamp in local format
   const tSorted = frontItems.map(i => i.t).filter(Boolean).sort((a, b) => a - b);
   const scanTime = tSorted.length > 0
-      ? fmtDaytimeLocal(tSorted[Math.floor(tSorted.length / 2)])
+    ? new Date(tSorted[Math.floor(tSorted.length / 2)]).toLocaleString(undefined, {
+        year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
+      })
     : "";
 
   // ImageStatic overlay. This avoids thousands of separate vector symbols and
@@ -7081,7 +6916,12 @@ function buildThermalHoursComposite(map, hours) {
   }
 
   const extent = [west, north - ny * cellDeg, west + nx * cellDeg, north];
-  const source = canvasToOlSource(canvas, extent);
+  const source = new ol.source.ImageStatic({
+    url: canvas.toDataURL("image/png"),
+    imageExtent: extent,
+    projection: "EPSG:4326",
+    interpolate: false
+  });
   const densityLayer = new ol.layer.Image({ source, zIndex: 30, opacity: 0.90 });
 
   console.log("[thermal] frontDensityCells=" + nonzero + " hours=" + hours + " frames=" + frontItems.length);
@@ -7092,7 +6932,7 @@ function buildThermalHoursComposite(map, hours) {
 function combinedNearestFrontHover(map, coord, pixel) {
   const points = window._combinedFrontHoverPoints || [];
   if (!map || !coord || !pixel || !points.length) return null;
-  // Zoom-independent hit radius — Haversine in km rather than the old
+  // Zoom-independent hit radius — use Haversine in km rather than the old
   // 14-px screen-pixel radius that became effectively zero-area at high zoom.
   // Clicking near (not exactly on) a front line still counts.
   const nearby = [];
@@ -7146,7 +6986,7 @@ async function buildUvCompositeLayer(map, count) {
   }).filter(Boolean).sort((a, b) => a - b);
   const midTime = frameTimes.length > 0 ? frameTimes[Math.floor(frameTimes.length / 2)] : null;
   const scanTime = midTime
-    ? fmtDaytimeLocal(midTime)
+    ? new Date(midTime).toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
     : "";
 
   if (!valid.length) return { scanTime };
@@ -7184,17 +7024,19 @@ async function buildUvCompositeLayer(map, count) {
   const dyg = Math.abs((yAxis[1] ?? yAxis[0]) - yAxis[0]) || 0.01;
   const cell = Math.min(dxg, dyg);
   const step = Math.max(3, Math.floor(Math.sqrt(nx * ny) / 36));
+  const minSpeed = 0.035, maxSpeed = 1.2;
+  const minLen = 0.95 * cell, maxLen = 2.8 * cell;
   const features = [];
   for (let row = 0; row < ny; row += step) {
     for (let col = 0; col < nx; col += step) {
-      const vector = uvVectorAt(uMedian, vMedian, row, col);
-      const u = vector?.[0];
-      const v = vector?.[1];
+      const u = uMedian[row]?.[col];
+      const v = vMedian[row]?.[col];
       if (!Number.isFinite(u) || !Number.isFinite(v)) continue;
       const spd = Math.sqrt(u * u + v * v);
-      if (spd < UV_ARROW_MIN_SPEED || spd > 3) continue;
+      if (spd < minSpeed || spd > 3) continue;
       const lon = xAxis[col], lat = yAxis[row];
-      const arrowLen = uvArrowLengthCells(spd) * cell;
+      const scaled = Math.min(spd, maxSpeed) / maxSpeed;
+      const arrowLen = minLen + (maxLen - minLen) * scaled;
       const geom = buildArrowGeometry(lon, lat, u, v, arrowLen, cell);
       if (geom) features.push(new ol.Feature({ geometry: geom, speed: spd }));
     }
@@ -7355,26 +7197,40 @@ async function renderMobileFrame(frameMeta) {
   mobileMapState.currentGridInfo = gridInfo;
   mobileMapState.currentDataObj = dataObj;
 
-  // Defensive: currentVar can flip to a multi-layer value (e.g. 'combined')
-  // during the async fetch above, AFTER the early-return at the top of
-  // this function ran. The mobile raster canvas only handles single-variable
-  // 2-D rasters, so bail out cleanly for any non-raster view.
-  if (currentVar !== "chl" && currentVar !== "sst" && currentVar !== "uv" && currentVar !== "bathy") {
-    console.info("[OL mobile] renderMobileFrame: skipping — currentVar=" + currentVar + " has no 2-D mobile raster");
-    document.body.classList.remove("mobile-map-ready");
-    return false;
-  }
-
   const canvas = makeMobileRasterCanvas(currentVar, gridInfo, dataObj);
+  // toBlob + createObjectURL: try first; fall back to toDataURL on iOS Safari
+  // (the 2026-05 note saying 'data URLs are more reliable' was for the
+  // static basemap raster; the dynamic chl/sst canvases are different).
+  let url;
+  try {
+    url = await new Promise((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        if (blob) resolve(URL.createObjectURL(blob));
+        else reject(new Error("canvas.toBlob returned null"));
+      }, "image/png");
+    });
+  } catch (e) {
+    console.error("[OL mobile] toBlob failed, falling back to toDataURL", e);
+    try { url = canvas.toDataURL("image/png"); } catch (e2) {
+      console.error("[OL mobile] toDataURL also failed", e2);
+      throw new Error("Could not encode mobile raster (both toBlob and toDataURL failed)");
+    }
+  }
+  if (!url) throw new Error("Could not encode mobile raster (empty url)");
   const extent = frameExtentFromGrid(gridInfo);
   let source;
   try {
-    // Skip toBlob/toDataURL/ImageStatic entirely — they can throw on iOS Safari.
-    // canvasToOlSource uses ol.source.ImageCanvas which never round-trips
-    // through the URL parser.
-    source = canvasToOlSource(canvas, extent);
+    source = new ol.source.ImageStatic({
+      url,
+      imageExtent: extent,
+      projection: "EPSG:4326",
+      interpolate: false
+    });
   } catch (e) {
-    console.error("[OL mobile] canvasToOlSource failed, extent:", extent, e);
+    console.error("[OL mobile] new ol.source.ImageStatic failed, url:", url?.slice(0, 40), "len:", url?.length, "extent:", extent, e);
+    if (url && url.startsWith("blob:")) {
+      try { URL.revokeObjectURL(url); } catch (_) {}
+    }
     throw e;
   }
   source.on("imageloaderror", () => {
@@ -7383,10 +7239,10 @@ async function renderMobileFrame(frameMeta) {
     document.body.classList.remove("mobile-map-ready");
     showFrame();
   });
-  // (legacy blob-URL cleanup removed: renderMobileFrame() now uses
-  //  ol.source.ImageCanvas (see b13739edcc2), which never round-trips through
-  //  a blob URL, so imageUrl is never assigned and `url` is undefined here.
-  //  Previously raised: ReferenceError: Can't find variable: url.)
+  if (mobileMapState.imageUrl && mobileMapState.imageUrl.startsWith("blob:")) {
+    URL.revokeObjectURL(mobileMapState.imageUrl);
+  }
+  mobileMapState.imageUrl = url;
   if (mobileMapState.imageLayer) {
     mobileMapState.imageLayer.setSource(source);
   } else {
@@ -7397,12 +7253,6 @@ async function renderMobileFrame(frameMeta) {
   if (currentVar === "uv") {
     mobileMapState.arrowLayer = buildMobileUvArrowLayer(dataObj, gridInfo);
     if (mobileMapState.arrowLayer) map.addLayer(mobileMapState.arrowLayer);
-    clearUvContourLayer(mobileMapState);
-    mobileMapState.uvContourLayer = buildUvContourLayer(dataObj, gridInfo, map);
-    mobileMapState.uvZeroLabelOverlays = mobileMapState.uvContourLayer?.__uvZeroLabelOverlays || [];
-    if (mobileMapState.uvContourLayer) map.addLayer(mobileMapState.uvContourLayer);
-  } else {
-    clearUvContourLayer(mobileMapState);
   }
   await ensureMobileLandLayer(map);
   ensureMobilePlaceLayer(map);
@@ -7410,9 +7260,7 @@ async function renderMobileFrame(frameMeta) {
     await ensureMobileBathyContourLayer(map, dataObj, gridInfo);
   }
   installMobileReadoutOnce(map);
-  installCaptainToolHandler(map);
   map.updateSize();
-  if (captainAddTool.points.length) renderPtsLayer(map);
 
   const regionKey = `${REGION_ID}:${currentVar}`;
   if (mobileMapState.fittedRegion !== regionKey) {
@@ -7575,8 +7423,8 @@ function renderReadoutFromPoint(p) {
   const unit = DEFAULT_RANGES[currentVar]?.unit || "";
 
   if (currentVar === "sst") setReadout(`${base}, ${formatSstValue(val)}`);
-  else if (currentVar === "bathy") setReadout(`${base}, ${formatDepth(val)}`);
-  else if (currentVar === "uv") setReadout(formatUvReadout(base, desktopMapState.currentGridInfo, desktopMapState.currentDataObj, lon, lat, desktopMapState.map, null, val));
+  else if (currentVar === "bathy") setReadout(`${base}, ${val.toFixed(0)}${unit}`);
+  else if (currentVar === "uv") setReadout(`${base}, SSH ${formatSshValue(val)}`);
   else setReadout(`${base} ${formatChlValue(val)}`);
 }
 
@@ -7616,7 +7464,7 @@ function syncRangeInputsToVar() {
   if (!userRanges[currentVar]) userRanges[currentVar] = { ...DEFAULT_RANGES[currentVar] };
   if (hVmin) hVmin.value = userRanges[currentVar].vmin;
   if (hVmax) hVmax.value = userRanges[currentVar].vmax;
-  if (hTitle) hTitle.textContent = currentVar === "uv" ? "Height" : (VAR_LABELS[currentVar] || currentVar);
+  if (hTitle) hTitle.textContent = VAR_LABELS[currentVar] || currentVar;
   syncProductSelectors();
   if (hamburgerRegionSelect) hamburgerRegionSelect.value = REGION_ID;
   updateTempUnitUI();
@@ -7679,9 +7527,9 @@ function thermalFrameTimeLabel(ms) {
   // which forced thermal-fronts-mode labels to UTC regardless of user's tz.
   // Now uses browser local time (same convention as fmtLocalDateTime).
   return new Date(ms).toLocaleString(undefined, {
-    month: "numeric",
-    day: "numeric",
-    hour: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
     minute: "2-digit",
     hour12: false
   });
@@ -7843,7 +7691,7 @@ function thermalCurrentFrameTime() {
 }
 
 function thermalClosestFrameIndex(items, targetMs) {
-  if (!items.length || !Number.isFinite(targetMs)) return Math.max(0, items.length - 1);
+  if (!items.length || !Number.isFinite(targetMs)) return 0;
   let bestIdx = 0;
   let bestDist = Infinity;
   for (let i = 0; i < items.length; i++) {
@@ -7894,9 +7742,8 @@ function thermalDeltaSstForFeature(props, index) {
     const exact = Number(deltaMap[index]);
     return Number.isFinite(exact) && exact > 0 ? { label: "ΔSST", value: exact } : null;
   }
-  // Do not fall back to strength_median/strength_max. Those are detector
-  // window contrasts, not the per-point cross-front ΔSST metric. Mixing them
-  // creates a false historical discontinuity when old frames are present.
+  // Do not mix detector-window strength with the per-point cross-front
+  // metric. Frames without delta_sst_map have no valid ΔSST readout.
   return null;
 }
 
@@ -8121,10 +7968,11 @@ function thermalFeatureStyle(feature, resolution, map) {
 // date of the points." Renders a small floating tip with a colored
 // dot (matches the point's rainbow color) + the date/hour label.
 // Readouts must be anchored to an actual visible front, not a nearby blank
-// area. Two km tolerates line/cell-center rendering differences while
-// preventing a blank click from borrowing another front's metric.
-const MAX_THERMAL_HIT_DISTANCE_KM = 2;
-const MAX_THERMAL_DAILY_HIT_DISTANCE_KM = 2;
+// area. Five km tolerates line/cell-center rendering differences while
+// remaining close enough to reject genuinely blank-water clicks. The
+// readout source is still restricted to the active frame/day below.
+const MAX_THERMAL_HIT_DISTANCE_KM = 5;
+const MAX_THERMAL_DAILY_HIT_DISTANCE_KM = 5;
 
 // Snap-to-segment proximity for thermal fronts. Unlike
 // thermalNearestGradient (which finds the closest vertex), this
@@ -8140,11 +7988,6 @@ function thermalNearestFrontHit(coord) {
   let bestPoint = null;
   let bestGrad = null;
   let bestDelta = null;
-  // Also track nearest valid (non-null gradient) separately for fallback.
-  let validDist = Infinity;
-  let validPoint = null;
-  let validGrad = null;
-  let validDelta = null;
   const toRad = Math.PI / 180;
   const R = 6371;
   for (const item of thermalReadoutFrontItems()) {
@@ -8153,6 +7996,13 @@ function thermalNearestFrontHit(coord) {
       const coords = feature?.geometry?.coordinates || [];
       const props = feature?.properties || {};
       if (!Array.isArray(coords) || coords.length < 1) continue;
+      // Pre-compute feature-level scalar fallbacks. Per-vertex arrays
+      // (gradient_map / delta_sst_map) are sparse in production data —
+      // many features emit them as all-null arrays. Without these
+      // fallbacks, clicking on such a front yields a hit but no
+      // readout, which is the user-visible bug.
+      const scalarGrad = Number.isFinite(props.gradient_per_km) ? props.gradient_per_km : null;
+      const scalarDelta = Number.isFinite(props.strength_median) ? { label: 'ΔSST', value: props.strength_median } : null;
       for (let i = 0; i < coords.length; i++) {
         const a = coords[i];
         if (!Array.isArray(a) || a.length < 2) continue;
@@ -8170,6 +8020,9 @@ function thermalNearestFrontHit(coord) {
             const bLon = Number(b[0]);
             const bLat = Number(b[1]);
             if (Number.isFinite(bLon) && Number.isFinite(bLat)) {
+              // Equirectangular projection (km) for the segment test.
+              // Accurate enough at the bbox scale; the Haversine
+              // refinement catches any pathological case.
               const meanLat = (aLat + bLat) * 0.5 * toRad;
               const cosLat = Math.cos(meanLat);
               const ax = aLon * toRad * R * cosLat;
@@ -8196,6 +8049,7 @@ function thermalNearestFrontHit(coord) {
         }
         const grad = thermalGradientForFeaturePoint(props, i);
         const delta = thermalDeltaSstForFeature(props, i);
+        // Interpolate gradient + ΔSST if hit was on the segment interior.
         let useGrad = grad, useDelta = delta;
         if (candSegT > 0 && candSegT < 1 && i + 1 < coords.length) {
           const nextG = thermalGradientForFeaturePoint(props, i + 1);
@@ -8207,26 +8061,24 @@ function thermalNearestFrontHit(coord) {
             useDelta = { label: delta.label, value: delta.value + (nextD.value - delta.value) * candSegT };
           }
         }
+        // Scalar fallback: if both vertex and segment-interpolated values
+        // are null, use the feature's overall metrics. This is the
+        // difference between "click on a front → readout" and "click on
+        // a front → nothing".
+        if (!Number.isFinite(useGrad) && scalarGrad !== null) useGrad = scalarGrad;
+        if ((!useDelta || !Number.isFinite(useDelta.value)) && scalarDelta) useDelta = scalarDelta;
         if (candDist < bestDist) {
           bestDist = candDist;
           bestPoint = [candLon, candLat];
           bestGrad = useGrad;
           bestDelta = useDelta;
         }
-        if (Number.isFinite(useGrad)) {
-          if (candDist < validDist) {
-            validDist = candDist;
-            validPoint = [candLon, candLat];
-            validGrad = useGrad;
-            validDelta = useDelta;
-          }
-        }
       }
     }
   }
-  if (validGrad !== null) {
-    return { dist: validDist, gradient: validGrad, point: validPoint, deltaSst: validDelta };
-  }
+  // Snap to the nearest geometry, not the nearest vertex that happens to
+  // have a complete metric payload. A missing gradient must not move the
+  // cursor to a different, farther-away vertex.
   return { dist: bestDist, gradient: bestGrad, point: bestPoint, deltaSst: bestDelta };
 }
 
@@ -8287,18 +8139,21 @@ function thermalFrontHoverTip(coord, pixel) {
 
 function thermalEnsureCursorLayer(map) {
   if (!map || thermalFrontState.cursorLayer) return;
+  // The thermal map view is EPSG:3857. Keep the cursor geometry in the
+  // map projection, just like the Captain Dashboard cursor and all other
+  // manually-created vector features in this file.
   thermalFrontState.cursorFeature = new ol.Feature({
     geometry: new ol.geom.Point(toMapProjection([(BBOX[0] + BBOX[2]) / 2, (BBOX[1] + BBOX[3]) / 2]))
   });
   thermalFrontState.cursorFeature.setStyle(new ol.style.Style({
     image: new ol.style.Circle({
       radius: 3,
-      fill: new ol.style.Fill({ color: "rgba(255,255,255,0.45)" }),
-      stroke: new ol.style.Stroke({ color: "rgba(0,0,0,0.55)", width: 1 })
+      fill: new ol.style.Fill({ color: 'rgba(255,255,255,0.45)' }),
+      stroke: new ol.style.Stroke({ color: 'rgba(0,0,0,0.55)', width: 1 })
     })
   }));
   thermalFrontState.cursorLayer = new ol.layer.Vector({
-    source: new ol.source.Vector({ features: [thermalFrontState.cursorFeature], projection: "EPSG:4326" }),
+    source: new ol.source.Vector({ features: [thermalFrontState.cursorFeature] }),
     zIndex: 60
   });
   map.addLayer(thermalFrontState.cursorLayer);
@@ -8372,6 +8227,7 @@ function thermalRadiusMean(coord) {
   const RADIUS_KM = 5;
   const gradVals = [], sstVals = [];
   let nearestFrontKm = Infinity;
+  let nearestPoint = null;
   for (const item of thermalReadoutFrontItems()) {
     const features = Array.isArray(item.data?.features) ? item.data.features : [];
     for (const feature of features) {
@@ -8384,7 +8240,10 @@ function thermalRadiusMean(coord) {
         const ptLat = Number(pt[1]);
         if (!Number.isFinite(ptLon) || !Number.isFinite(ptLat)) continue;
         const d = thermalHaversineKm([coord[0], coord[1]], [ptLon, ptLat]);
-        nearestFrontKm = Math.min(nearestFrontKm, d);
+        if (d < nearestFrontKm) {
+          nearestFrontKm = d;
+          nearestPoint = [ptLon, ptLat];
+        }
         if (d > RADIUS_KM) continue;
         const g = thermalGradientForFeaturePoint(props, i);
         if (g !== null && Number.isFinite(g)) gradVals.push(g);
@@ -8394,10 +8253,13 @@ function thermalRadiusMean(coord) {
     }
   }
   if (nearestFrontKm > MAX_THERMAL_DAILY_HIT_DISTANCE_KM) return null;
-  if (!gradVals.length && !sstVals.length) return null;
+  // Keep the snap even when this particular vertex has no valid metric;
+  // otherwise the cursor can remain at the click or jump to another point.
   return {
     gradient: gradVals.length ? gradVals.reduce((a, b) => a + b, 0) / gradVals.length : null,
-    deltaSst: sstVals.length ? { label: "ΔSST", value: sstVals.reduce((a, b) => a + b, 0) / sstVals.length } : null
+    deltaSst: sstVals.length ? { label: "ΔSST", value: sstVals.reduce((a, b) => a + b, 0) / sstVals.length } : null,
+    point: nearestPoint,
+    dist: nearestFrontKm
   };
 }
 
@@ -8415,31 +8277,42 @@ function thermalRenderReadout(coord, pixel) {
   if (thermalFrontState.mode === "daily") {
     // Daily mode: compute 5km-radius mean of gradient and SST delta across all front points within 5km
     const mean = thermalRadiusMean(coord);
-    if (mean) { gradient = mean.gradient; deltaSst = mean.deltaSst; }
+    if (mean) {
+      gradient = mean.gradient;
+      deltaSst = mean.deltaSst;
+      if (mean.point) {
+        cursorCoord = mean.point;
+        readoutCoord = mean.point;
+      }
+    }
   } else {
     // Animation mode: snap to the nearest point on any front line segment
-    // (not just the nearest vertex) with a zoom-independent 8 km hit radius.
+    // (not just the nearest vertex) with a zoom-independent 5 km hit radius.
     // Clicking between two vertices on the same line still snaps to it.
     const hit = thermalNearestFrontHit(coord);
-    if (pixel && hit.point && Number.isFinite(hit.gradient) && hit.dist <= MAX_THERMAL_HIT_DISTANCE_KM) {
+    if (pixel && hit.point && hit.dist <= MAX_THERMAL_HIT_DISTANCE_KM) {
       cursorCoord = hit.point;
       readoutCoord = hit.point;
       gradient = hit.gradient;
       deltaSst = hit.deltaSst;
     }
   }
-  if (thermalFrontState.cursorFeature && cursorCoord) {
-    // Cursor layer is EPSG:3857; cursorCoord is lon/lat.
+  if (thermalFrontState.cursorFeature) {
     thermalFrontState.cursorFeature.getGeometry().setCoordinates(toMapProjection(cursorCoord));
   }
   const base = formatReadoutCoords(readoutCoord[0], readoutCoord[1]);
-  if (Number.isFinite(gradient)) {
-    const gradC = gradient * (tempUnit === "F" ? 9 / 5 : 1);
-    const gradDisplay = thermalDistUnit === "nm"
-      ? `${kmToNm(gradC).toFixed(3)} ${tempUnitLabel()}/nm`
-      : `${gradC.toFixed(3)} ${tempUnitLabel()}/km`;
-    const parts = [gradDisplay];
-    if (deltaSst && Number.isFinite(deltaSst.value)) {
+  const hasGradient = Number.isFinite(gradient);
+  const hasDeltaSst = deltaSst && Number.isFinite(deltaSst.value);
+  if (hasGradient || hasDeltaSst) {
+    const parts = [];
+    if (hasGradient) {
+      const gradC = gradient * (tempUnit === "F" ? 9 / 5 : 1);
+      const gradDisplay = thermalDistUnit === "nm"
+        ? `${kmToNm(gradC).toFixed(3)} °${tempUnit}/nm`
+        : `${gradC.toFixed(3)} °${tempUnit}/km`;
+      parts.push(gradDisplay);
+    }
+    if (hasDeltaSst) {
       const deltaVal = tempUnit === "F" ? deltaSst.value * 9 / 5 : deltaSst.value;
       parts.push(`${deltaSst.label} ${deltaVal.toFixed(2)} ${tempUnitLabel()}`);
     }
@@ -8459,8 +8332,6 @@ async function thermalInitMap() {
   if (desktopMapState.placeLayer) desktopMapState.placeLayer.setVisible(true);
   await ensureDesktopLandLayer(map);
   await ensureDesktopPlaceLayer(map);
-  installCaptainToolHandler(map);
-  if (captainAddTool.points.length) renderPtsLayer(map);
   thermalEnsureCursorLayer(map);
   if (thermalFrontState.cursorLayer) thermalFrontState.cursorLayer.setVisible(true);
   if (!map.__thermalReadoutInstalled) {
@@ -8474,7 +8345,13 @@ async function thermalInitMap() {
       const xy4326 = ol.proj.transform(ev.coordinate, "EPSG:3857", "EPSG:4326");
       return { coord: xy4326, pixel: ev.pixel };
     };
-    map.on("pointermove", ev => {
+    // Same root-cause fix as installMobileReadoutOnce: bind to `singleclick`
+    // only. `pointermove` fires continuously during pinch-zoom and pan on
+    // mobile, which moves the cursor off the selected front point; `click`
+    // is unreliable on touch. `singleclick` fires only on a completed
+    // tap/click with no drag, pinning the marker and readout to the
+    // selected front through any subsequent zoom or pan.
+    map.on("singleclick", ev => {
       if (currentVar === "thermal_fronts") {
         const x = to4326(ev);
         if (!x) return;
@@ -8482,13 +8359,11 @@ async function thermalInitMap() {
         thermalFrontHoverTip(x.coord, x.pixel);
       }
     });
-    map.on("click", ev => {
-      if (currentVar === "thermal_fronts") {
-        const x = to4326(ev);
-        if (!x) return;
-        thermalRenderReadout(x.coord, x.pixel);
-        thermalFrontHoverTip(x.coord, x.pixel);
-      }
+    map.on("pointermove", ev => {
+      if (currentVar !== "thermal_fronts") return;
+      const x = to4326(ev);
+      if (!x) return;
+      thermalRenderReadout(x.coord, x.pixel);
     });
   }
   return map;
@@ -8507,9 +8382,9 @@ function thermalDailyStats() {
       for (let i = 0; i < coords.length; i++) {
         const g = thermalGradientForFeaturePoint(props, i);
         if (g !== null && Number.isFinite(g)) gradVals.push(g);
-        const ds = thermalDeltaSstForFeature(props, i);
-        if (ds && Number.isFinite(ds.value)) sstVals.push(ds.value);
       }
+      const ds = thermalDeltaSstForFeature(props, i);
+      if (ds && Number.isFinite(ds.value)) sstVals.push(ds.value);
     }
   }
   if (!gradVals.length && !sstVals.length) return null;
@@ -8883,8 +8758,8 @@ function thermalUpdateLegendAndStatus() {
       sourceText = `${totalHourly} hourly frames across ${shownDays} days`;
     }
     const stats = thermalDailyStats();
-    const unitLabel = `${tempUnitLabel()}/${thermalDistUnit}`;
-    const sstLabel = tempUnitLabel();
+    const unitLabel = thermalDistUnit === "nm" ? "°C/nm" : "°C/km";
+    const sstLabel = tempUnit === "F" ? "°F" : "°C";
     let statsText = ` - ${sourceText}`;
     if (stats && shownDays > 0) {
       if (stats.meanGrad !== null) {
@@ -8957,27 +8832,36 @@ function thermalSetFrame(idx) {
   renderThermalFrontsNative();
 }
 
-async function thermalLoadData() {
+async function thermalLoadData(options = {}) {
+  const full = options.full !== false;
   if (thermalFrontState.loading) return;
-  if (thermalFrontState.initialized && thermalFrontState.loadedRegion === REGION_ID) return;
+  if (thermalFrontState.initialized && thermalFrontState.loadedRegion === REGION_ID &&
+      (!full || thermalFrontState.loadedFull)) return;
   thermalFrontState.loading = true;
-  // Thermal fronts load in the background; do not replace the shared toolbar
-  // with a redundant status sentence on every product page.
-  if (toolbarStatus) toolbarStatus.textContent = "";
+  const requestRevision = regionRevision;
+  const requestRegion = REGION_ID;
+  if (toolbarStatus) toolbarStatus.textContent = "Loading thermal fronts...";
   try {
     const idx = await loadIndex();
+    if (requestRevision !== regionRevision || requestRegion !== REGION_ID) return;
     const fbv = idx.frames || idx.framesByVar || idx.frames_by_var || {};
     const sourceFrames = (fbv.thermal_fronts && fbv.thermal_fronts.length) ? fbv.thermal_fronts : (fbv.sst_front || []);
-    thermalFrontState.frames = sourceFrames
+    const allFrames = sourceFrames
       .map(f => ({ ...f, t: epochMsForFrame("sst_front", f) ?? epochMsForFrame("thermal_fronts", f) }))
       .filter(f => Number.isFinite(f.t))
       .sort((a, b) => a.t - b.t);
-    const latest = thermalFrontState.frames.at(-1)?.t;
-    if (latest) thermalFrontState.frames = thermalFrontState.frames.filter(f => latest - f.t <= 21 * 864e5);
+    const latest = allFrames.at(-1)?.t;
+    const retainedFrames = latest
+      ? allFrames.filter(f => latest - f.t <= 21 * 864e5)
+      : allFrames;
+    thermalFrontState.frames = full
+      ? retainedFrames
+      : retainedFrames.filter(f => latest - f.t <= 72 * 3600000);
     thermalFrontState.frameData = await Promise.all(thermalFrontState.frames.map(async f => {
       const res = await fetch(framePathOf(f) + "?t=" + Date.now());
       return { meta: f, t: f.t, data: res.ok ? await res.json() : { features: [] } };
     }));
+    if (requestRevision !== regionRevision || requestRegion !== REGION_ID) return;
     thermalFrontState.frameData = thermalFrontState.frameData.filter(item => Array.isArray(item.data?.features) && item.data.features.length > 0);
     thermalBuildDailyFrames();
     const requestedMs = requestedTimeFromParams();
@@ -8990,9 +8874,10 @@ async function thermalLoadData() {
     thermalFrontState.frameIdx = thermalClosestFrameIndex(thermalActiveFrameList(), requestedMs);
     thermalFrontState.initialized = true;
     thermalFrontState.loadedRegion = REGION_ID;
+    thermalFrontState.loadedFull = full;
     window.__thermalFrontsState = thermalFrontState;
   } finally {
-    thermalFrontState.loading = false;
+    if (requestRevision === regionRevision) thermalFrontState.loading = false;
   }
 }
 
@@ -9001,42 +8886,20 @@ async function renderThermalFrontsNative() {
   document.body.classList.remove("mobile-map-ready");
   plotDiv.style.display = "block";
   const map = await thermalInitMap();
-  await thermalLoadData();
+  await thermalLoadData({ full: true });
   if (!thermalFrontState.frameData.length) {
     if (toolbarStatus) toolbarStatus.textContent = "No thermal-front frames available for this region.";
     return;
   }
-  const requestedViewport = viewportFromParams();
-  if (!map.__thermalInitialFitDone) {
-    map.updateSize();
-    // v4.16 switched the thermal-fronts map view to EPSG:3857 (Web Mercator)
-    // to match the OFM vector tile schema. The viewport extent and BBOX are
-    // still in EPSG:4326 (lat/lon) by viewer convention. OL's view.fit() does
-    // NOT auto-detect projection — passing a 4326 extent to a 3857 view
-    // causes the map to fit to a tiny region near (0, 0) at the equator,
-    // which leaves the entire US East Coast off-screen and produces
-    // near-zero readout values when the user moves the cursor. Transform
-    // the extent to 3857 before fitting.
-    const extent4326 = requestedViewport
-      ? [requestedViewport.xRange[0], requestedViewport.yRange[0], requestedViewport.xRange[1], requestedViewport.yRange[1]]
-      : BBOX.map(Number);
-    const viewProjCode = map.getView().getProjection().getCode();
-    const extentForFit = viewProjCode === "EPSG:4326"
-      ? extent4326
-      : ol.proj.transformExtent(extent4326, "EPSG:4326", viewProjCode);
-    map.getView().fit(extentForFit, {
-      size: map.getSize(),
-      padding: [58, 0, 0, 0],
-      nearest: true
-    });
-    map.__thermalInitialFitDone = true;
-  }
-  // Product switching may have captured an exact center/zoom. Restore it
-  // after the one-time regional fit; the shared post-render viewport restore
-  // also replays the geographic rectangle after asynchronous layer work.
-  if (Array.isArray(viewState.centerLonLat) && Number.isFinite(viewState.zoom)) {
-    applyViewStateToOlMap(map, null);
-  }
+  // Preserve the live viewport when entering thermal fronts from another
+  // product layer. URL viewport parameters still take precedence on a fresh
+  // page load; otherwise use the range captured by setCurrentVar().
+  // Thermal fronts shares the desktop map with product layers. Restore the
+  // exact transition extent after the target is measurable, using the same
+  // fit contract as every other layer. No thermal-only padding or one-time
+  // fit is allowed to change the geographic FOV on re-entry.
+  map.updateSize();
+  applyViewStateToOlMap(map, null, pendingViewRange);
   const list = thermalActiveFrameList();
   thermalFrontState.frameIdx = Math.max(0, Math.min(thermalFrontState.frameIdx, Math.max(0, list.length - 1)));
   thermalRenderFrontLayer();
@@ -9086,15 +8949,13 @@ async function addNearestFrontOverlay(fig, baseVar, baseFrameMeta) {
 }
 
 async function setCurrentVar(v, keepTime = true, keepRange = true) {
-  const switchToken = ++viewportRestoreSerial;
   const prevVar = currentVar;
   const prevFrames = framesByVar[prevVar] || [];
   const prevFrame = prevFrames[currentFrameIdx] || null;
   const prevT = (keepTime && prevFrame) ? epochMsForFrame(prevVar, prevFrame) : null;
 
   // Save the live OL/Plotly viewport before switching products.
-  const liveRange = keepRange ? currentViewportRanges() : null;
-  const liveView = keepRange ? currentLiveViewState() : null;
+  const liveRange = keepRange ? captureCurrentViewState() : null;
   const savedRange = liveRange
     ? { x: liveRange.xRange, y: liveRange.yRange }
     : ((keepRange && viewState.hasRange) ? { x: viewState.xRange, y: viewState.yRange } : null);
@@ -9106,7 +8967,7 @@ async function setCurrentVar(v, keepTime = true, keepRange = true) {
       try { window._combinedMap.dispose(); } catch (_) {}
       window._combinedMap.setTarget(undefined);
       window._combinedMap = null;
-      window._combinedLandLayer = null;
+      window._combinedMapRef = null;
     }
   }
 
@@ -9146,12 +9007,9 @@ async function setCurrentVar(v, keepTime = true, keepRange = true) {
     viewState.xRange = savedRange.x;
     viewState.yRange = savedRange.y;
     viewState.hasRange = true;
-  }
-  if (liveView) Object.assign(viewState, liveView);
-  if (savedRange || liveView) {
-    viewportRestoreLock = { token: switchToken, until: performance.now() + 650 };
+    pendingViewRange = { xRange: [...savedRange.x], yRange: [...savedRange.y] };
   } else {
-    viewportRestoreLock = null;
+    pendingViewRange = null;
   }
 
   syncRangeInputsToVar();
@@ -9161,11 +9019,9 @@ async function setCurrentVar(v, keepTime = true, keepRange = true) {
   syncFrontOverlayControls();
   syncThermalFrontsVisibility();
 
-  if (frames.length || currentVar === "thermal_fronts") {
-    await showFrame();
-    if (switchToken === viewportRestoreSerial) scheduleViewportRestore(switchToken);
-  }
-  if (currentVar === "combined" && toolbarStatus) toolbarStatus.textContent = "";
+  // Thermal Fronts loads its own sst_front-derived frame list inside the
+  // dedicated renderer; it is intentionally absent from framesByVar.
+  if (frames.length || currentVar === "thermal_fronts") await showFrame();
   else return;
 }
 
@@ -9185,9 +9041,7 @@ function stepFrame(delta) {
 function setPlaying(on) {
   if (on === playing) return;
   playing = on;
-  playBtn.textContent = playing ? "❚❚" : "▶";
-  playBtn.title = playing ? "Pause" : "Play";
-  playBtn.setAttribute("aria-label", playing ? "Pause" : "Play");
+  playBtn.textContent = playing ? "Pause" : "Play";
   if (playing) {
     if (playTimer) clearInterval(playTimer);
     playTimer = setInterval(() => stepFrame(+1), playIntervalMs);
@@ -9279,9 +9133,11 @@ function installRegionSelector(){
 
 /* ========================= LOADING ========================= */
 async function loadIndex() {
-  // 1. Fetch selected region index ONCE with a cache-buster
+  // 1. Fetch selected region index ONCE with conditional revalidation
   const indexUrl = REGIONS[REGION_ID]?.index || `index-${REGION_ID}.json`;
-  const res = await fetch(indexUrl + "?t=" + Date.now());
+  // Revalidate the manifest without a unique query string so conditional
+  // browser/CDN requests can return a fast 304 when it has not changed.
+  const res = await fetch(indexUrl, { cache: "no-cache" });
   if (!res.ok) throw new Error(`Failed to load ${indexUrl}`);
   const data = await res.json();
 
@@ -9467,7 +9323,10 @@ async function loadGridForVar(v, dataObj = null) {
 async function fetchFrameData(varKey, frameMeta) {
   const p = framePathOf(frameMeta);
   if (!p) throw new Error("Frame has no json path");
-  const res = await fetch(p + (p.includes('?') ? '&' : '?') + 't=' + Date.now());
+  // Frame paths are content-addressed by timestamp/product and are immutable
+  // once published. Do not append Date.now(): that defeated browser and R2
+  // edge caching and made every dashboard load download the same frames again.
+  const res = await fetch(p, { cache: "force-cache" });
   if (!res.ok) throw new Error(`Frame load failed: ${p}`);
   return await res.json();
 }
@@ -9552,14 +9411,15 @@ function plotConfig() {
       {
         name: "Measure Distance",
         title: "Measure distance between two points",
-        icon: Plotly.Icons.drawline,
+        icon: Plotly.Icons.drawline, // Built-in diagonal line icon
         click: () => {
+          // Toggle Mode
           if (measureMode === "off") {
             measureMode = "start";
-            markerMode = "off";
+            markerMode = "off"; // Turn off other modes
             plotDiv.classList.add("measure-mode");
             plotDiv.classList.remove("crosshair-mode", "remove-mode");
-            measurePoints = [];
+            measurePoints = []; // Reset previous measurement
             setReadout("Measure Mode: Click START point");
           } else {
             measureMode = "off";
@@ -9567,6 +9427,7 @@ function plotConfig() {
             measurePoints = [];
             setReadout("");
           }
+          // Refresh to clear/show lines
           showFrame();
         }
       },
@@ -9927,6 +9788,8 @@ async function loadCaptainBriefing() {
     const initialT = requestedTimeFromParams();
     const initialFrames = framesByVar[currentVar] || [];
     const initialTimes = frameTimesByVar[currentVar] || [];
+    // Product pages intentionally open on the oldest frame. A requested
+    // ?t= timestamp still overrides that default.
     currentFrameIdx = initialFrames.length && initialT !== null
       ? closestDaytimeIndex(currentVar, initialTimes, initialFrames, initialT)
       : 0;
@@ -10007,8 +9870,82 @@ async function loadCaptainBriefing() {
   const floatEl = document.getElementById('feedback-float');
   const toggleBtn = document.getElementById('feedback-toggle');
   const panel = document.getElementById('feedback-panel');
+  let dragState = null;
+  let suppressNextClick = false;
+
+  function applyFeedbackPosition(pos) {
+    if (!floatEl || !pos) return;
+    const box = visualViewportBox();
+    const rect = floatEl.getBoundingClientRect();
+    const width = rect.width || 48;
+    const height = rect.height || 48;
+    const x = Math.max(box.left + 8, Math.min(box.left + box.width - width - 8, Number(pos.x)));
+    const y = Math.max(box.top + 8, Math.min(box.top + box.height - height - 8, Number(pos.y)));
+    floatEl.style.left = x + 'px';
+    floatEl.style.top = y + 'px';
+    floatEl.style.right = 'auto';
+    floatEl.style.bottom = 'auto';
+    floatEl.style.alignItems = 'flex-start';
+  }
+
+  function loadFeedbackPosition() {
+    try { return JSON.parse(localStorage.getItem('mobile_feedback_pos') || 'null'); }
+    catch (_) { return null; }
+  }
+
+  function saveFeedbackPosition() {
+    if (!floatEl) return;
+    const rect = floatEl.getBoundingClientRect();
+    localStorage.setItem('mobile_feedback_pos', JSON.stringify({ x: rect.left, y: rect.top }));
+  }
+
+  const savedFeedbackPosition = loadFeedbackPosition();
+  if (savedFeedbackPosition) applyFeedbackPosition(savedFeedbackPosition);
+  requestAnimationFrame(syncFloatingViewportUi);
+
+  if (toggleBtn && floatEl) {
+    toggleBtn.addEventListener('pointerdown', (e) => {
+      if (!isMobileDevice()) return;
+      const rect = floatEl.getBoundingClientRect();
+      dragState = {
+        pointerId: e.pointerId,
+        startX: e.clientX,
+        startY: e.clientY,
+        left: rect.left,
+        top: rect.top,
+        moved: false
+      };
+      toggleBtn.setPointerCapture?.(e.pointerId);
+    });
+
+    toggleBtn.addEventListener('pointermove', (e) => {
+      if (!dragState || dragState.pointerId !== e.pointerId) return;
+      const dx = e.clientX - dragState.startX;
+      const dy = e.clientY - dragState.startY;
+      if (Math.hypot(dx, dy) > 4) dragState.moved = true;
+      if (!dragState.moved) return;
+      e.preventDefault();
+      applyFeedbackPosition({ x: dragState.left + dx, y: dragState.top + dy });
+    });
+
+    function finishDrag(e) {
+      if (!dragState || dragState.pointerId !== e.pointerId) return;
+      suppressNextClick = dragState.moved;
+      if (dragState.moved) saveFeedbackPosition();
+      syncFloatingViewportUi();
+      dragState = null;
+    }
+    toggleBtn.addEventListener('pointerup', finishDrag);
+    toggleBtn.addEventListener('pointercancel', finishDrag);
+  }
+
   if (toggleBtn && panel) {
     toggleBtn.addEventListener('click', (e) => {
+      if (suppressNextClick) {
+        suppressNextClick = false;
+        e.preventDefault();
+        return;
+      }
       panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
     });
   }
@@ -10120,107 +10057,6 @@ let captainAddTool = {
   mapRef: null
 };
 
-function activeCaptainToolMap() {
-  if (currentVar === "combined") return window._combinedMapRef || window._combinedMap || null;
-  if (isMobileMapMode()) return mobileMapState.map || desktopMapState.map || null;
-  return desktopMapState.map || mobileMapState.map || null;
-}
-
-function activateDistTool(map) {
-  if (!map) return;
-  if (captainAddTool.active) toggleAddTool(map);
-  captainDistTool.active = true;
-  captainDistTool.mapRef = map;
-  captainDistTool.points = [];
-  document.getElementById('captain-dist-tool')?.classList.add('active');
-  document.getElementById('captain-dist-tool')?.setAttribute('aria-pressed', 'true');
-  document.getElementById('captain-dist-panel')?.classList.add('visible');
-  updateDistPanel();
-  map.getTargetElement()?.style.setProperty('cursor', 'crosshair');
-}
-
-function deactivateDistTool() {
-  if (!captainDistTool.active) return;
-  captainDistTool.active = false;
-  clearDistLayer();
-  document.getElementById('captain-dist-tool')?.classList.remove('active');
-  document.getElementById('captain-dist-tool')?.setAttribute('aria-pressed', 'false');
-  document.getElementById('captain-dist-panel')?.classList.remove('visible');
-  const map = captainDistTool.mapRef;
-  if (map) map.getTargetElement()?.style.setProperty('cursor', 'crosshair');
-  captainDistTool.points = [];
-  updateDistPanel();
-}
-
-function clearDistLayer() {
-  if (captainDistTool.lineLayer && captainDistTool.mapRef) {
-    captainDistTool.mapRef.removeLayer(captainDistTool.lineLayer);
-    captainDistTool.lineLayer = null;
-  }
-}
-
-function getDistanceKm(p1, p2) {
-  const R = 6371;
-  const dLat = (p2.lat - p1.lat) * Math.PI / 180;
-  const dLon = (p2.lon - p1.lon) * Math.PI / 180;
-  const a = Math.sin(dLat / 2) ** 2 +
-    Math.cos(p1.lat * Math.PI / 180) * Math.cos(p2.lat * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
-function updateDistPanel() {
-  const list = document.getElementById('captain-dist-list');
-  const total = document.getElementById('captain-dist-total');
-  if (!list) return;
-  list.innerHTML = '';
-  let running = 0;
-  captainDistTool.points.forEach((p, i) => {
-    if (i > 0) {
-      const d = getDistanceKm(captainDistTool.points[i - 1], p);
-      running += d;
-    list.innerHTML += `<div style="color:#7a8fa8;margin-bottom:2px;">Pt ${i}: ${p.lat.toFixed(4)}, ${p.lon.toFixed(4)} &nbsp;<b style="color:var(--fg);">${formatDist(d)}</b></div>`;
-    } else {
-      list.innerHTML += `<div style="color:#7a8fa8;margin-bottom:2px;">Pt ${i}: ${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}</div>`;
-    }
-  });
-  if (total) total.textContent = captainDistTool.points.length >= 2
-    ? `Total: ${formatDist(running)}` : '';
-}
-
-function renderDistLayer(map) {
-  clearDistLayer();
-  if (captainDistTool.points.length < 1) return;
-  const projected = captainDistTool.points.map(p => toMapProjection([p.lon, p.lat]));
-  const features = [];
-  for (let i = 1; i < projected.length; i++) {
-    features.push(new ol.Feature({
-      geometry: new ol.geom.LineString([projected[i - 1], projected[i]])
-    }));
-  }
-  projected.forEach((xy, i) => features.push(new ol.Feature({
-    geometry: new ol.geom.Point(xy), label: String(i)
-  })));
-  const source = new ol.source.Vector({ features, wrapX: false });
-  const layer = new ol.layer.Vector({
-    source,
-    style: feature => feature.getGeometry().getType() === 'LineString'
-      ? new ol.style.Style({ stroke: new ol.style.Stroke({ color: '#ff9800', width: 2.5, lineDash: [6, 4] }) })
-      : new ol.style.Style({
-          image: new ol.style.Circle({ radius: 5, fill: new ol.style.Fill({ color: '#ff9800' }), stroke: new ol.style.Stroke({ color: '#fff', width: 1.5 }) }),
-          text: new ol.style.Text({ text: feature.get('label'), offsetY: -12, fill: new ol.style.Fill({ color: '#ff9800' }), font: 'bold 11px monospace', stroke: new ol.style.Stroke({ color: '#fff', width: 2 }) })
-        }),
-    zIndex: 50
-  });
-  map.addLayer(layer);
-  captainDistTool.lineLayer = layer;
-}
-
-function addDistPoint(lon, lat, map) {
-  captainDistTool.points.push({ lon, lat });
-  renderDistLayer(map);
-  updateDistPanel();
-}
-
 // ── Format writers ──────────────────────────────────────────────────────────
 
 function waypointsToGPX(pts) {
@@ -10287,7 +10123,7 @@ function waypointsToKML(pts) {
   const wpts = pts.map((p, i) => {
     const desc = [
       p.chl !== null ? `CHL: ${p.chl.toFixed(2)} mg/m³` : '',
-      p.sst !== null ? `SST: ${formatSstValue(p.sst)}` : '',
+      p.sst !== null ? `SST: ${p.sst.toFixed(1)} °C` : '',
       p.freshness !== null ? `Fresh: ${p.freshness}h ago` : ''
     ].filter(Boolean).join('<br/>');
     return `  <Placemark>
@@ -10375,11 +10211,7 @@ function showSaveMenu() {
   if (!captainAddTool.points.length) return;
   const menu = document.createElement('div');
   menu.id = 'captain-save-menu';
-  const saveBtn = document.getElementById('captain-save-btn');
-  const btnRect = saveBtn.getBoundingClientRect();
-  const menuWidth = 160;
-  const leftPos = Math.max(8, btnRect.right - menuWidth);
-  menu.style.cssText = `position:fixed;left:${leftPos}px;top:${btnRect.bottom + 4}px;z-index:1155;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:8px;width:${menuWidth}px;display:flex;flex-direction:column;gap:2px;box-shadow:0 4px 16px rgba(0,0,0,0.4);`;
+  menu.style.cssText = 'position:fixed;left:8px;top:80px;z-index:1155;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:8px;width:160px;display:flex;flex-direction:column;gap:2px;box-shadow:0 4px 16px rgba(0,0,0,0.4);';
   const formats = [
     { label: 'GPX (Chartplotter)', ext: 'gpx', fn: () => waypointsToGPX(captainAddTool.points) },
     { label: 'CSV (Spreadsheet)', ext: 'csv', fn: () => waypointsToCSV(captainAddTool.points) },
@@ -10430,10 +10262,120 @@ function applyLoadedWaypoints(pts) {
   captainAddTool.active = true;
   document.getElementById('captain-add-tool')?.classList.add('active');
   document.getElementById('captain-pts-panel')?.classList.add('visible');
-  const map = activeCaptainToolMap();
+  const map = window._combinedMapRef;
   if (map) renderPtsLayer(map);
   updatePtsPanel();
-  document.getElementById('captain-save-btn')?.style.setProperty('display', 'inline-block');
+  document.getElementById('captain-save-btn')?.style.setProperty('display', 'flex');
+}
+
+// ── Distance tool ────────────────────────────────────────────────────────
+
+function activateDistTool(map) {
+  if (captainAddTool.active) toggleAddTool(map);
+  captainDistTool.active = true;
+  captainDistTool.mapRef = map;
+  captainDistTool.points = [];
+  document.getElementById('captain-dist-tool')?.classList.add('active');
+  const button = document.getElementById('captain-dist-tool');
+  if (button) button.title = 'Exit distance measurement (or press Escape)';
+  document.getElementById('captain-dist-panel')?.classList.add('visible');
+  updateDistPanel();
+  map.getTargetElement().style.cursor = 'crosshair';
+}
+
+function deactivateDistTool() {
+  if (!captainDistTool.active) return;
+  captainDistTool.active = false;
+  clearDistLayer();
+  document.getElementById('captain-dist-tool')?.classList.remove('active');
+  const button = document.getElementById('captain-dist-tool');
+  if (button) button.title = 'Measure distance (M)';
+  document.getElementById('captain-dist-panel')?.classList.remove('visible');
+  const map = captainDistTool.mapRef;
+  if (map) map.getTargetElement().style.cursor = 'crosshair';
+  captainDistTool.points = [];
+  updateDistPanel();
+}
+
+function clearDistLayer() {
+  if (captainDistTool.lineLayer && captainDistTool.mapRef) {
+    captainDistTool.mapRef.removeLayer(captainDistTool.lineLayer);
+    captainDistTool.lineLayer = null;
+  }
+}
+
+function getDistanceKm(p1, p2) {
+  const R = 6371;
+  const dLat = (p2.lat - p1.lat) * Math.PI / 180;
+  const dLon = (p2.lon - p1.lon) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(p1.lat * Math.PI / 180) * Math.cos(p2.lat * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function updateDistPanel() {
+  const list = document.getElementById('captain-dist-list');
+  const total = document.getElementById('captain-dist-total');
+  if (!list) return;
+  list.innerHTML = '';
+  let running = 0;
+  for (let i = 0; i < captainDistTool.points.length; i++) {
+    const p = captainDistTool.points[i];
+    if (i > 0) {
+      const prev = captainDistTool.points[i - 1];
+      const d = getDistanceKm(prev, p);
+      running += d;
+      list.innerHTML += `<div style="color:#7a8fa8;margin-bottom:2px;">Pt ${i}: ${p.lat.toFixed(4)}, ${p.lon.toFixed(4)} &nbsp;<b style="color:var(--fg);">${d.toFixed(1)} km</b></div>`;
+    } else {
+      list.innerHTML += `<div style="color:#7a8fa8;margin-bottom:2px;">Pt ${i}: ${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}</div>`;
+    }
+  }
+  if (total) total.textContent = captainDistTool.points.length >= 2
+    ? `Total: ${running.toFixed(2)} km / ${(running / 1.852).toFixed(2)} nm` : '';
+}
+
+function renderDistLayer(map) {
+  if (captainDistTool.lineLayer) map.removeLayer(captainDistTool.lineLayer);
+  if (captainDistTool.points.length < 2) return;
+  const pts = captainDistTool.points.map(p => toMapProjection([p.lon, p.lat]));
+  const feats = [];
+  let running = 0;
+  for (let i = 1; i < pts.length; i++) {
+    const d = getDistanceKm(captainDistTool.points[i - 1], captainDistTool.points[i]);
+    running += d;
+    feats.push(new ol.Feature({
+      geometry: new ol.geom.LineString([pts[i - 1], pts[i]]),
+      segIdx: i
+    }));
+  }
+  const ptFeats = captainDistTool.points.map((p, i) => new ol.Feature({
+    geometry: new ol.geom.Point(toMapProjection([p.lon, p.lat])),
+    label: String(i)
+  }));
+  const src = new ol.source.Vector({ features: [...feats, ...ptFeats], wrapX: false, projection: "EPSG:4326" });
+  const layer = new ol.layer.Vector({
+    source: src,
+    style: feat => {
+      if (feat.getGeometry().getType() === 'LineString') {
+        return new ol.style.Style({
+          stroke: new ol.style.Stroke({ color: '#ff9800', width: 2.5, lineDash: [6, 4] })
+        });
+      }
+      return new ol.style.Style({
+        image: new ol.style.Circle({ radius: 5, fill: new ol.style.Fill({ color: '#ff9800' }), stroke: new ol.style.Stroke({ color: '#fff', width: 1.5 }) }),
+        text: new ol.style.Text({ text: feat.get('label'), offsetY: -12, fill: new ol.style.Fill({ color: '#ff9800' }), font: 'bold 11px monospace', stroke: new ol.style.Stroke({ color: '#fff', width: 2 }) })
+      });
+    },
+    zIndex: 50
+  });
+  map.addLayer(layer);
+  captainDistTool.lineLayer = layer;
+}
+
+function addDistPoint(lon, lat, map) {
+  captainDistTool.points.push({ lon, lat });
+  renderDistLayer(map);
+  updateDistPanel();
 }
 
 // ── Add waypoint tool ─────────────────────────────────────────────────
@@ -10445,6 +10387,7 @@ function toggleAddTool(map) {
     document.getElementById('captain-pts-panel')?.classList.remove('visible');
     map.getTargetElement().style.cursor = 'crosshair';
   } else {
+    if (captainDistTool.active) deactivateDistTool();
     captainAddTool.active = true;
     captainAddTool.mapRef = map;
     document.getElementById('captain-add-tool')?.classList.add('active');
@@ -10477,7 +10420,7 @@ function updatePtsPanel() {
   }
   list.innerHTML = captainAddTool.points.map((p, i) => {
     const chlStr = p.chl !== null ? `${p.chl.toFixed(2)} mg/m³` : '—';
-    const sstStr = p.sst !== null ? formatSstValue(p.sst) : '—';
+    const sstStr = p.sst !== null ? `${p.sst.toFixed(1)} °C` : '—';
     return `<div style="margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid rgba(255,255,255,0.07);">
       <div style="display:flex;justify-content:space-between;align-items:center;">
         <b style="color:#4d7dff;">${i + 1}. ${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}</b>
@@ -10488,29 +10431,8 @@ function updatePtsPanel() {
   }).join('');
 }
 
-// The list is useful while choosing points, but it should not permanently
-// cover the map. Tapping its empty/list area stows it without exiting add
-// mode; the Add Waypoint tool remains active until explicitly toggled off.
-document.getElementById('captain-pts-panel')?.addEventListener('click', event => {
-  if (!captainAddTool.active) return;
-  if (event.target.closest('button, a, input, select')) return;
-  document.getElementById('captain-pts-panel')?.classList.remove('visible');
-});
-
 function renderPtsLayer(map) {
-  if (!map) return;
-  // Re-home the same waypoint set whenever the active product map changes.
-  // The old implementation only remembered the layer's previous map, so the
-  // points disappeared when switching between Combined/CHL/SST/UV/Bathy.
-  if (captainAddTool.markerLayer && captainAddTool.mapRef && captainAddTool.mapRef !== map) {
-    try { captainAddTool.mapRef.removeLayer(captainAddTool.markerLayer); } catch (_) {}
-    captainAddTool.markerLayer = null;
-  }
-  if (captainAddTool.markerLayer) {
-    try { map.removeLayer(captainAddTool.markerLayer); } catch (_) {}
-    captainAddTool.markerLayer = null;
-  }
-  captainAddTool.mapRef = map;
+  if (captainAddTool.markerLayer) map.removeLayer(captainAddTool.markerLayer);
   if (captainAddTool.points.length === 0) return;
   const feats = captainAddTool.points.map((p, i) => {
     const f = new ol.Feature({ geometry: new ol.geom.Point(toMapProjection([p.lon, p.lat])), idx: i });
@@ -10537,7 +10459,7 @@ function addWaypoint(lon, lat, map) {
   captainAddTool.points.push({ lon, lat, chl, sst, freshness, ts: Date.now() });
   renderPtsLayer(map);
   updatePtsPanel();
-  document.getElementById('captain-save-btn')?.style.setProperty('display', 'inline-block');
+  document.getElementById('captain-save-btn')?.style.setProperty('display', 'flex');
 }
 
 window.removeWaypoint = function(idx) {
@@ -10553,6 +10475,21 @@ window.removeWaypoint = function(idx) {
 
 let _captainMapClickHandler = null;
 let _captainMapClickMap = null;
+
+function activeCaptainToolMap() {
+  if (typeof currentVar !== 'undefined' && currentVar === 'combined') {
+    return window._combinedMap && window._combinedMap.getTargetElement?.()
+      ? window._combinedMap
+      : null;
+  }
+  if (typeof currentVar !== 'undefined' && currentVar === 'thermal_fronts') {
+    return (typeof thermalFrontState !== 'undefined' && thermalFrontState.map) || null;
+  }
+  if (typeof IS_TOUCH !== 'undefined' && IS_TOUCH) {
+    return (typeof mobileMapState !== 'undefined' && mobileMapState.map) || null;
+  }
+  return (typeof desktopMapState !== 'undefined' && desktopMapState.map) || null;
+}
 
 function installCaptainToolHandler(map) {
   if (!map) return;
@@ -10577,15 +10514,13 @@ function installCaptainToolHandler(map) {
     }
   };
   _captainMapClickHandler = (ev) => {
-    // On single-product pages this handler exists only to service the waypoint tool.
-    const toolsActive = captainAddTool.active || captainDistTool.active;
+    // On single-product pages this handler exists only to service the
+    // distance/waypoint tools. Ordinary clicks remain with product readouts.
+    const toolsActive = captainDistTool.active || captainAddTool.active;
     if (currentVar !== "combined" && !toolsActive) return;
     if (!ev.coordinate) return;
     // Combined map is EPSG:3857; transform to 4326 before treating as lon/lat.
-    const projection = map.getView().getProjection().getCode();
-    const xy4326 = projection === "EPSG:4326"
-      ? ev.coordinate
-      : ol.proj.transform(ev.coordinate, projection, "EPSG:4326");
+    const xy4326 = ol.proj.transform(ev.coordinate, "EPSG:3857", "EPSG:4326");
     const lon = xy4326[0];
     const lat = xy4326[1];
     if (captainDistTool.active) { addDistPoint(lon, lat, map); return; }
@@ -10602,7 +10537,7 @@ function installCaptainToolHandler(map) {
       const d = feature.get("depth");
       if (Number.isFinite(d)) found = d;
     }, { hitTolerance: 6 });
-    if (found !== null) { capSetReadout(`${base}, ${formatDepth(found)} (contour)`); return; }
+    if (found !== null) { capSetReadout(`${base}, ${found}m (contour)`); return; }
 
     // 2. Thermal front gradient + ΔSST (from front hover points)
     const frontInfo = combinedFrontClickInfo(map, ev.coordinate, pixel);
@@ -10655,8 +10590,8 @@ function combinedFrontClickInfo(map, coord, pixel) {
   if (gradVals.length) {
     const avg = gradVals.reduce((a, b) => a + b, 0) / gradVals.length;
     const displayGrad = thermalDistUnit === "nm" ? kmToNm(avg * (tempUnit === "F" ? 9 / 5 : 1)) : avg * (tempUnit === "F" ? 9 / 5 : 1);
-    const unit = tempUnitLabel() + (thermalDistUnit === "nm" ? "/nm" : "/km");
-    parts.push(`${displayGrad.toFixed(3)} ${unit}`);
+    const unit = tempUnit + (thermalDistUnit === "nm" ? "/nm" : "/km");
+    parts.push(`${displayGrad.toFixed(3)} °${unit}`);
   }
   if (sstVals.length) {
     const avg = sstVals.reduce((a, b) => a + b, 0) / sstVals.length;
@@ -10671,8 +10606,8 @@ function combinedFrontClickInfo(map, coord, pixel) {
 document.getElementById('captain-dist-tool')?.addEventListener('click', () => {
   const map = activeCaptainToolMap();
   if (!map) return;
-  if (captainDistTool.active) deactivateDistTool();
-  else activateDistTool(map);
+  if (captainDistTool.active) { deactivateDistTool(); }
+  else { activateDistTool(map); }
 });
 
 document.getElementById('captain-dist-exit')?.addEventListener('click', (e) => {
@@ -10693,55 +10628,30 @@ document.getElementById('captain-save-btn')?.addEventListener('click', (e) => {
   showSaveMenu();
 });
 
+document.getElementById('captain-save-dismiss')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  document.getElementById('captain-save-btn')?.style.setProperty('display', 'none');
+});
+
 document.getElementById('captain-fs-btn')?.addEventListener('click', () => {
-  const nativeActive = !!(document.fullscreenElement || document.webkitFullscreenElement || document.webkitIsFullScreen);
-  const appActive = document.body.classList.contains('fishedge-app-fullscreen');
-  if (nativeActive || appActive) {
-    if (document.exitFullscreen) document.exitFullscreen().catch?.(() => {});
+  const fullscreenEl = document.fullscreenElement || document.webkitFullscreenElement || document.querySelector('#map') || document.documentElement;
+  const target = document.fullscreenElement ? null : fullscreenEl;
+  if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+    if (fullscreenEl.requestFullscreen) fullscreenEl.requestFullscreen();
+    else if (fullscreenEl.webkitRequestFullscreen) fullscreenEl.webkitRequestFullscreen();
+    else if (fullscreenEl.webkitEnterFullscreen) fullscreenEl.webkitEnterFullscreen();
+  } else {
+    if (document.exitFullscreen) document.exitFullscreen();
     else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
     else if (document.webkitCancelFullScreen) document.webkitCancelFullScreen();
-    document.body.classList.remove('fishedge-app-fullscreen');
-    updateFsIcon();
-    return;
   }
-  // iOS Safari does not expose the Fullscreen API for ordinary DOM elements.
-  // Use the native API where available, with a viewport-filling app mode as a
-  // reliable fallback on mobile browsers.
-  const request = document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen;
-  if (request) {
-    try {
-      const result = request.call(document.documentElement);
-      if (result?.catch) result.catch(() => document.body.classList.add('fishedge-app-fullscreen'));
-    } catch (_) { document.body.classList.add('fishedge-app-fullscreen'); }
-  } else {
-    document.body.classList.add('fishedge-app-fullscreen');
-  }
-  updateFsIcon();
-});
-
-document.getElementById('captain-underwater-tool')?.addEventListener('click', () => {
-  const visible = window.fishedgeUnderwater?.toggle?.();
-  const btn = document.getElementById('captain-underwater-tool');
-  if (!btn || typeof visible !== 'boolean') return;
-  btn.classList.toggle('active', visible);
-  btn.setAttribute('aria-pressed', String(visible));
-  btn.title = visible ? 'Hide underwater structures' : 'Show underwater structures';
-});
-
-window.addEventListener('fishedge-underwater-visibility', (event) => {
-  const visible = Boolean(event.detail?.visible);
-  const btn = document.getElementById('captain-underwater-tool');
-  if (!btn) return;
-  btn.classList.toggle('active', visible);
-  btn.setAttribute('aria-pressed', String(visible));
-  btn.title = visible ? 'Hide underwater structures' : 'Show underwater structures';
 });
 
 // Fullscreen icon toggle
 function updateFsIcon() {
   const btn = document.getElementById('captain-fs-btn');
   if (!btn) return;
-  const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement || document.webkitIsFullScreen || document.body.classList.contains('fishedge-app-fullscreen'));
+  const isFs = !!(document.fullscreenElement || document.webkitIsFullScreen);
   btn.innerHTML = isFs
     ? `<svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
          <line x1="1" y1="1" x2="6" y2="6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
@@ -10759,27 +10669,27 @@ function updateFsIcon() {
 }
 document.addEventListener('fullscreenchange', updateFsIcon);
 document.addEventListener('webkitfullscreenchange', updateFsIcon);
-window.addEventListener('resize', updateFsIcon);
-if (!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen)) {
-  // iOS Safari cannot fullscreen arbitrary DOM content. Hide the control
-  // there rather than presenting a button that cannot perform its promise.
-  document.body.classList.add('no-native-fullscreen');
-}
 
 document.addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
   const map = activeCaptainToolMap();
   if (!map) return;
+  if (e.key === 'Escape') {
+    if (captainDistTool.active) deactivateDistTool();
+    if (captainAddTool.active) toggleAddTool(map);
+    return;
+  }
   if (e.key === 'm' || e.key === 'M') {
     if (captainDistTool.active) deactivateDistTool();
     else activateDistTool(map);
   } else if (e.key === 'a' || e.key === 'A') {
     toggleAddTool(map);
   } else if (e.key === 'Escape') {
-    if (captainDistTool.active) deactivateDistTool();
+    deactivateDistTool();
     captainAddTool.active = false;
     document.getElementById('captain-add-tool')?.classList.remove('active');
     document.getElementById('captain-pts-panel')?.classList.remove('visible');
+    document.getElementById('captain-dist-panel')?.classList.remove('visible');
     closeSaveMenu();
   } else if ((e.key === 's' || e.key === 'S') && !e.metaKey && !e.ctrlKey) {
     if (captainAddTool.points.length) showSaveMenu();
@@ -10793,80 +10703,6 @@ function applyUrlWaypoints() {
   applyLoadedWaypoints(_urlWaypoints);
   _urlWaypoints = null;
 }
-
-// Keep the compact controls and feedback affordance usable on small screens.
-// A click still activates the control; a pointer movement turns it into a drag.
-function installDraggable(target, handle, storageKey, ignoreSelector) {
-  if (!target || !handle || target.dataset.draggableInstalled) return;
-  target.dataset.draggableInstalled = "1";
-  target.style.touchAction = "none";
-  handle.style.touchAction = "none";
-  let drag = null;
-  let moved = false;
-  try {
-    const saved = JSON.parse(localStorage.getItem(storageKey) || "null");
-    if (saved && Number.isFinite(saved.left) && Number.isFinite(saved.top)) {
-      target.style.left = `${saved.left}px`;
-      target.style.top = `${saved.top}px`;
-      target.style.right = "auto";
-      target.style.bottom = "auto";
-    }
-  } catch (_) {}
-  const begin = (event) => {
-    if (ignoreSelector && event.target.closest(ignoreSelector)) return;
-    const rect = target.getBoundingClientRect();
-    drag = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, left: rect.left, top: rect.top };
-    moved = false;
-    target.dataset.dragging = "1";
-    event.preventDefault();
-    event.stopPropagation();
-  };
-  const move = (event) => {
-    if (!drag || event.pointerId !== drag.pointerId) return;
-    const dx = event.clientX - drag.startX;
-    const dy = event.clientY - drag.startY;
-    if (!moved && Math.hypot(dx, dy) < 4) return;
-    moved = true;
-    const margin = 6;
-    const maxX = Math.max(margin, window.innerWidth - target.offsetWidth - margin);
-    const maxY = Math.max(margin, window.innerHeight - target.offsetHeight - margin);
-    const left = Math.max(margin, Math.min(maxX, drag.left + dx));
-    const top = Math.max(margin, Math.min(maxY, drag.top + dy));
-    target.style.left = `${left}px`;
-    target.style.top = `${top}px`;
-    target.style.right = "auto";
-    target.style.bottom = "auto";
-    if (moved) event.preventDefault();
-  };
-  const finish = (event) => {
-    if (!drag || event.pointerId !== drag.pointerId) return;
-    if (moved) {
-      try { localStorage.setItem(storageKey, JSON.stringify({ left: parseFloat(target.style.left), top: parseFloat(target.style.top) })); } catch (_) {}
-      target.dataset.dragSuppressClick = "1";
-      setTimeout(() => { delete target.dataset.dragSuppressClick; }, 0);
-    }
-    drag = null;
-    delete target.dataset.dragging;
-  };
-  // Listen on window so dragging continues when the pointer leaves the
-  // circular feedback button or a compact toolbar. Pointer capture is not
-  // consistently honored by mobile browsers and transformed elements.
-  handle.addEventListener("pointerdown", begin, { passive: false });
-  window.addEventListener("pointermove", move, { passive: false });
-  window.addEventListener("pointerup", finish, { passive: false });
-  window.addEventListener("pointercancel", finish, { passive: false });
-  handle.addEventListener("click", (event) => {
-    if (target.dataset.dragSuppressClick === "1") {
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      delete target.dataset.dragSuppressClick;
-    }
-  }, true);
-}
-
-installDraggable(document.getElementById("captain-tools"), document.getElementById("captain-tools"), "fishedge_captain_tools_position", "button");
-installDraggable(document.getElementById("feedback-float"), document.getElementById("feedback-toggle"), "fishedge_feedback_position", null);
 </script>
-<!-- rebuilt:captains-dashboard-readout-v2-$(date +%s) -->
 </body>
 </html>
