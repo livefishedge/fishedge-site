@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <title>Captain's Dashboard</title>
   <!-- 2026-08-02: force Pages redeploy after locate-me DOM-ready mount repair. -->
   <link rel="icon" href="data:,">
@@ -562,6 +562,7 @@
       background:rgba(5,11,16,0.94); border:1px solid rgba(255,255,255,0.22); border-radius:8px;
       box-shadow:0 12px 30px rgba(0,0,0,0.45); backdrop-filter:blur(8px);
       box-sizing:border-box; height:min(640px, calc(100dvh - 74px)); overflow:auto;
+      touch-action:pan-y; overscroll-behavior:contain; -webkit-text-size-adjust:100%;
     }
     #menu-panel.open{ display:flex; }
     #menu-panel label{ display:flex; flex-direction:column; gap:5px; font-size:12px; font-weight:800; color:#9fb0c3; }
@@ -786,6 +787,10 @@
     #captain-pts-panel.collapsed > div:first-child{ margin-bottom:0 !important; }
     #captain-pts-panel.collapsed #captain-pts-list{ display:none; }
     #captain-pts-drag-handle{ cursor:grab; touch-action:none; user-select:none; }
+    #captain-dist-panel.collapsed{ max-height:none; overflow:hidden; padding-top:7px; padding-bottom:7px; }
+    #captain-dist-panel.collapsed #captain-dist-list,
+    #captain-dist-panel.collapsed #captain-dist-total{ display:none; }
+    #captain-dist-drag-handle{ cursor:grab; touch-action:none; user-select:none; }
     #captain-pts-panel[data-dragging="1"] #captain-pts-drag-handle{ cursor:grabbing; }
     #combined-readout{
       display:none;
@@ -817,6 +822,7 @@
       gap:12px;
       overflow-y:auto;
       flex-direction:column; box-sizing:border-box; transform-origin:top right; zoom:1;
+      touch-action:pan-y; overscroll-behavior:contain; -webkit-text-size-adjust:100%;
     }
     body.combined-mode #combined-controls{ display:flex; transform:translateX(100%); transition:transform 0.25s ease; }
     body.combined-mode #combined-controls.open{ transform:translateX(0) !important; }
@@ -1339,8 +1345,8 @@
     </div>
     <div id="captain-pts-list"></div>
   </div>
-  <div id="captain-dist-panel" style="display:none;position:fixed;top:96px;left:8px;z-index:1150;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-size:12px;color:var(--fg);min-width:200px;">
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:0.6px;color:#7a8fa8;margin-bottom:8px;">
+  <div id="captain-dist-panel" style="display:none;position:fixed;top:96px;left:8px;z-index:1150;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-size:12px;color:var(--fg);min-width:280px;width:280px;max-height:320px;overflow-y:auto;">
+    <div id="captain-dist-drag-handle" style="display:flex;align-items:center;justify-content:space-between;gap:16px;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:0.6px;color:#7a8fa8;margin-bottom:8px;">
       <span>Distance</span>
       <button id="captain-dist-exit" type="button" title="Exit distance measurement" style="border:1px solid #4d7dff;border-radius:5px;background:#1d4f91;color:#fff;padding:3px 7px;font-size:11px;font-weight:700;cursor:pointer;">Exit</button>
     </div>
@@ -3045,10 +3051,16 @@ function syncDashboardChrome() {
   if (dashboardChrome.combinedMenu) {
     dashboardChrome.combinedMenu.style.display = combined ? "flex" : "none";
     dashboardChrome.combinedMenu.style.visibility = "visible";
+    dashboardChrome.combinedMenu.style.top = "8px";
+    dashboardChrome.combinedMenu.style.right = "8px";
+    dashboardChrome.combinedMenu.style.left = "auto";
   }
   if (dashboardChrome.hamburger) {
     dashboardChrome.hamburger.style.display = combined ? "none" : "block";
     dashboardChrome.hamburger.style.visibility = "visible";
+    dashboardChrome.hamburger.style.top = "8px";
+    dashboardChrome.hamburger.style.right = "8px";
+    dashboardChrome.hamburger.style.left = "auto";
   }
   if (dashboardChrome.toolbar) {
     dashboardChrome.toolbar.style.display = combined ? "none" : "flex";
@@ -10232,6 +10244,7 @@ function activateDistTool(map) {
   document.getElementById('captain-dist-tool')?.classList.add('active');
   document.getElementById('captain-dist-tool')?.setAttribute('aria-pressed', 'true');
   document.getElementById('captain-dist-panel')?.classList.add('visible');
+  document.getElementById('captain-dist-panel')?.classList.remove('collapsed');
   updateDistPanel();
   map.getTargetElement()?.style.setProperty('cursor', 'crosshair');
 }
@@ -10271,15 +10284,20 @@ function updateDistPanel() {
   if (!list) return;
   list.innerHTML = '';
   let running = 0;
-  captainDistTool.points.forEach((p, i) => {
-    if (i > 0) {
-      const d = getDistanceKm(captainDistTool.points[i - 1], p);
+  for (let i = 0; i < captainDistTool.points.length; i += 2) {
+    const p1 = captainDistTool.points[i];
+    const p2 = captainDistTool.points[i + 1];
+    const pair = Math.floor(i / 2) + 1;
+    list.innerHTML += `<div style="color:#7a8fa8;margin-bottom:4px;"><b style="color:var(--fg);">Pair ${pair}</b><br>Pt ${i + 1}: ${p1.lat.toFixed(4)}, ${p1.lon.toFixed(4)}`;
+    if (p2) {
+      const d = getDistanceKm(p1, p2);
       running += d;
-    list.innerHTML += `<div style="color:#7a8fa8;margin-bottom:2px;">Pt ${i}: ${p.lat.toFixed(4)}, ${p.lon.toFixed(4)} &nbsp;<b style="color:var(--fg);">${formatDist(d)}</b></div>`;
+      list.innerHTML += `<br>Pt ${i + 2}: ${p2.lat.toFixed(4)}, ${p2.lon.toFixed(4)} &nbsp;<b style="color:var(--fg);">${formatDist(d)}</b>`;
     } else {
-      list.innerHTML += `<div style="color:#7a8fa8;margin-bottom:2px;">Pt ${i}: ${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}</div>`;
+      list.innerHTML += ` <span style="color:#7a8fa8;">(waiting for second point)</span>`;
     }
-  });
+    list.innerHTML += `</div>`;
+  }
   if (total) total.textContent = captainDistTool.points.length >= 2
     ? `Total: ${formatDist(running)}` : '';
 }
@@ -10289,7 +10307,7 @@ function renderDistLayer(map) {
   if (captainDistTool.points.length < 1) return;
   const projected = captainDistTool.points.map(p => toMapProjection([p.lon, p.lat]));
   const features = [];
-  for (let i = 1; i < projected.length; i++) {
+  for (let i = 1; i < projected.length; i += 2) {
     features.push(new ol.Feature({
       geometry: new ol.geom.LineString([projected[i - 1], projected[i]])
     }));
@@ -10643,6 +10661,13 @@ document.getElementById('captain-pts-panel')?.addEventListener('click', event =>
   if (!captainAddTool.active) return;
   if (event.target.closest('button, a, input, select')) return;
   document.getElementById('captain-pts-panel')?.classList.toggle('collapsed');
+});
+
+// Distance results use the same compact/collapsible interaction as Waypoints.
+document.getElementById('captain-dist-panel')?.addEventListener('click', event => {
+  if (!captainDistTool.active) return;
+  if (event.target.closest('button, a, input, select')) return;
+  document.getElementById('captain-dist-panel')?.classList.toggle('collapsed');
 });
 
 function renderPtsLayer(map) {
@@ -11024,6 +11049,7 @@ function installDraggable(target, handle, storageKey, ignoreSelector) {
 installDraggable(document.getElementById("captain-tools"), document.getElementById("captain-tools"), "fishedge_captain_tools_position", "button");
 installDraggable(document.getElementById("feedback-float"), document.getElementById("feedback-toggle"), "fishedge_feedback_position", null);
 installDraggable(document.getElementById("captain-pts-panel"), document.getElementById("captain-pts-drag-handle"), "fishedge_waypoints_position", "button, a, input, select");
+installDraggable(document.getElementById("captain-dist-panel"), document.getElementById("captain-dist-drag-handle"), "fishedge_distance_position", "button, a, input, select");
 </script>
 <!-- rebuilt:captains-dashboard-readout-v2-$(date +%s) -->
 </body>
