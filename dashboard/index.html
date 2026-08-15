@@ -3086,15 +3086,52 @@ function syncDashboardChrome() {
       : "8px";
   }
   if (dashboardChrome.host) dashboardChrome.host.style.display = "none";
+  syncDashboardPanels();
+}
+function syncDashboardPanels() {
+  const tools = dashboardChrome.captainTools;
+  if (!tools) return;
+  const toolsRect = tools.getBoundingClientRect();
+  if (!toolsRect.width || !toolsRect.height) return;
+  const left = Math.max(6, Math.round(toolsRect.left));
+  const firstTop = Math.ceil(toolsRect.bottom + 4);
+  const points = document.getElementById("captain-pts-panel");
+  const distance = document.getElementById("captain-dist-panel");
+  if (points) {
+    points.style.left = `${left}px`;
+    points.style.right = "auto";
+    points.style.top = `${firstTop}px`;
+  }
+  if (distance) {
+    const pointsVisible = getComputedStyle(points).display !== "none";
+    const pointsBottom = pointsVisible
+      ? Math.ceil(points.getBoundingClientRect().bottom + 4)
+      : firstTop;
+    distance.style.left = `${left}px`;
+    distance.style.right = "auto";
+    distance.style.top = `${pointsBottom}px`;
+  }
 }
 syncDashboardChrome();
 if (typeof ResizeObserver === "function" && dashboardChrome.toolbar) {
   const chromeResizeObserver = new ResizeObserver(() => syncDashboardChrome());
   chromeResizeObserver.observe(dashboardChrome.toolbar);
+  if (dashboardChrome.captainTools) chromeResizeObserver.observe(dashboardChrome.captainTools);
+  const pointsPanel = document.getElementById("captain-pts-panel");
+  const distancePanel = document.getElementById("captain-dist-panel");
+  if (pointsPanel) chromeResizeObserver.observe(pointsPanel);
+  if (distancePanel) chromeResizeObserver.observe(distancePanel);
 }
 if (typeof MutationObserver === "function" && dashboardChrome.toolbar) {
   const chromeMutationObserver = new MutationObserver(() => syncDashboardChrome());
   chromeMutationObserver.observe(dashboardChrome.toolbar, { attributes: true, childList: true, subtree: true });
+}
+if (typeof MutationObserver === "function") {
+  const panelMutationObserver = new MutationObserver(() => syncDashboardPanels());
+  ["captain-pts-panel", "captain-dist-panel"].forEach(id => {
+    const panel = document.getElementById(id);
+    if (panel) panelMutationObserver.observe(panel, { attributes: true, attributeFilter: ["class"] });
+  });
 }
 window.addEventListener("resize", syncDashboardChrome);
 if (combinedProductSelect) {
@@ -10916,8 +10953,15 @@ function combinedFrontClickInfo(map, coord, pixel) {
 document.getElementById('captain-dist-tool')?.addEventListener('click', () => {
   const map = activeCaptainToolMap();
   if (!map) return;
-  if (captainDistTool.active) deactivateDistTool();
-  else activateDistTool(map);
+  const panel = document.getElementById('captain-dist-panel');
+  if (captainDistTool.active) {
+    deactivateDistTool();
+    panel?.classList.remove('visible');
+  } else {
+    activateDistTool(map);
+    panel?.classList.add('visible');
+  }
+  if (typeof syncDashboardPanels === 'function') syncDashboardPanels();
 });
 
 document.getElementById('captain-dist-exit')?.addEventListener('click', (e) => {
@@ -11122,6 +11166,7 @@ installDraggable(document.getElementById("captain-tools"), document.getElementBy
 installDraggable(document.getElementById("feedback-float"), document.getElementById("feedback-toggle"), "fishedge_feedback_position", null);
 installDraggable(document.getElementById("captain-pts-panel"), document.getElementById("captain-pts-drag-handle"), "fishedge_waypoints_position", "button, a, input, select");
 installDraggable(document.getElementById("captain-dist-panel"), document.getElementById("captain-dist-drag-handle"), "fishedge_distance_position", "button, a, input, select");
+if (typeof syncDashboardPanels === "function") syncDashboardPanels();
 </script>
 <!-- rebuilt:captains-dashboard-readout-v2-$(date +%s) -->
 </body>
