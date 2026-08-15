@@ -569,11 +569,11 @@
       color:var(--fg); font-size:14px; font-weight:800; padding:0 10px; box-sizing:border-box;
     }
     #menu-panel #hamburger-product-select{
-      min-height:46px;
+      min-height:54px;
       background:#12345a;
       border:2px solid #4d9cff;
       color:#fff;
-      font-size:16px;
+      font-size:22px;
       font-weight:900;
       letter-spacing:.01em;
       box-shadow:0 0 0 2px rgba(77,156,255,.14);
@@ -584,26 +584,20 @@
       font-size:16px;
       font-weight:900;
     }
-    #hamburger-product-title,
-    #combined-product-title{
-      display:block; margin:0; color:var(--product-color,#8ed0ff);
-      font-size:22px; line-height:1.05; font-weight:950; letter-spacing:-.025em;
+    #hamburger-product-select,
+    #combined-product-select{
+      color:#8ed0ff; font-size:22px; line-height:1.05; font-weight:950;
+      letter-spacing:-.025em; min-height:54px; padding:7px 12px;
     }
-    #hamburger-product-title::before,
-    #combined-product-title::before{
-      content:"CONTROL PANEL"; display:block; margin-bottom:5px;
-      color:#8ea4bb; font-size:10px; line-height:1; font-weight:850;
-      letter-spacing:.14em; text-transform:uppercase;
-    }
-    #hamburger-product-title[data-product="combined"],
-    #combined-product-title[data-product="combined"]{
+    #hamburger-product-select[data-product="combined"],
+    #combined-product-select[data-product="combined"]{
       color:#ffd166; font-size:24px; text-shadow:0 0 18px rgba(255,209,102,.18);
     }
-    #hamburger-product-title[data-product="chl"], #combined-product-title[data-product="chl"]{ color:#62e58a; }
-    #hamburger-product-title[data-product="sst"], #combined-product-title[data-product="sst"]{ color:#ff9d57; }
-    #hamburger-product-title[data-product="thermal_fronts"], #combined-product-title[data-product="thermal_fronts"]{ color:#ff6b8a; }
-    #hamburger-product-title[data-product="uv"], #combined-product-title[data-product="uv"]{ color:#8bd7ff; }
-    #hamburger-product-title[data-product="bathy"], #combined-product-title[data-product="bathy"]{ color:#c59bff; }
+    #hamburger-product-select[data-product="chl"], #combined-product-select[data-product="chl"]{ color:#62e58a; }
+    #hamburger-product-select[data-product="sst"], #combined-product-select[data-product="sst"]{ color:#ff9d57; }
+    #hamburger-product-select[data-product="thermal_fronts"], #combined-product-select[data-product="thermal_fronts"]{ color:#ff6b8a; }
+    #hamburger-product-select[data-product="uv"], #combined-product-select[data-product="uv"]{ color:#8bd7ff; }
+    #hamburger-product-select[data-product="bathy"], #combined-product-select[data-product="bathy"]{ color:#c59bff; }
     #account-link-wrap{ margin-top:auto !important; padding-top:12px; border-top:1px solid rgba(255,255,255,.18); }
     #account-link-wrap a, #combined-account-link a{ color:#ffd166 !important; font-size:13px !important; font-weight:900 !important; letter-spacing:.08em; }
     #menu-panel button.active{ background:#1d4f91; border-color:#4d7dff; }
@@ -701,7 +695,7 @@ body.combined-mode #combined-menu-btn{
     #combined-product-select{
       width:100%; padding:7px 10px; margin-bottom:4px;
       background:rgba(12,23,35,0.9); border:1px solid #2a3a50;
-      border-radius:6px; color:var(--fg); font-size:13px; cursor:pointer;
+      border-radius:6px; color:var(--fg); font-size:22px; font-weight:950; min-height:54px; cursor:pointer;
     }
 
     /* All OL viewports render land as uniform tan. The OFM water layer
@@ -1340,8 +1334,7 @@ body.combined-mode #combined-menu-btn{
   </div>
   <div id="combined-controls">
     <div class="combined-section">
-      <h1 id="combined-product-title" data-product="combined">Captain's Dashboard</h1>
-      <select id="combined-product-select">
+      <select id="combined-product-select" data-product="combined">
         <option value="combined">Captain's Dashboard</option>
         <option value="chl">Chlorophyll</option>
         <option value="sst">Temperature</option>
@@ -1478,8 +1471,7 @@ body.combined-mode #combined-menu-btn{
 
   <div id="menu-panel">
       <label id="hamburger-product-label">
-        <h1 id="hamburger-product-title" data-product="combined">Captain's Dashboard</h1>
-        <select id="hamburger-product-select">
+        <select id="hamburger-product-select" data-product="combined">
           <option value="combined">Captain's Dashboard</option>
           <option value="chl">Chlorophyll</option>
           <option value="sst">Temperature</option>
@@ -2204,20 +2196,9 @@ function currentLiveViewStateForMap(map) {
 function syncProductSelectors() {
   if (hamburgerProductSelect) hamburgerProductSelect.value = currentVar;
   if (combinedProductSelect) combinedProductSelect.value = currentVar;
-  const labels = {
-    combined: "Captain's Dashboard",
-    chl: "Chlorophyll",
-    sst: "Temperature",
-    thermal_fronts: "Thermal Fronts",
-    uv: "Currents / Height",
-    bathy: "Bathymetry"
-  };
-  [document.getElementById("hamburger-product-title"), document.getElementById("combined-product-title")]
+  [hamburgerProductSelect, combinedProductSelect]
     .filter(Boolean)
-    .forEach((el) => {
-      el.textContent = labels[currentVar] || "Captain's Dashboard";
-      el.dataset.product = currentVar;
-    });
+    .forEach((el) => { el.dataset.product = currentVar; });
 }
 function applyViewStateToOlMap(map, fallbackExtent) {
   if (!map) return;
