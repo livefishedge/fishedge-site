@@ -5905,12 +5905,18 @@ async function renderCombinedMode() {
   // The OFM foreground keeps land labels/lines above data but intentionally
   // omits land fills. Add the bathymetry-derived opaque mask here so contour
   // lines and rasters cannot paint over land in the combined dashboard.
-  const combinedLandCanvas = makeMobileLandCanvas(bathyData);
-  if (combinedLandCanvas) {
-    const combinedLandSource = canvasToOlSource(combinedLandCanvas, frameExtentFromGrid({ xAxis: bathyData.xAxis, yAxis: bathyData.yAxis }));
-    const combinedLandLayer = new ol.layer.Image({ source: combinedLandSource, zIndex: 20 });
-    map.addLayer(combinedLandLayer);
-    window._combinedLandLayer = combinedLandLayer;
+  try {
+    const combinedLandCanvas = makeMobileLandCanvas(bathyData);
+    if (combinedLandCanvas) {
+      const combinedLandSource = canvasToOlSource(combinedLandCanvas, frameExtentFromGrid({ xAxis: bathyData.xAxis, yAxis: bathyData.yAxis }));
+      const combinedLandLayer = new ol.layer.Image({ source: combinedLandSource, zIndex: 20 });
+      map.addLayer(combinedLandLayer);
+      window._combinedLandLayer = combinedLandLayer;
+    }
+  } catch (landMaskError) {
+    // A land-mask rendering failure must never prevent product layers from
+    // loading; the OFM land foreground remains available as a fallback.
+    console.warn("[combined] land mask unavailable; continuing with data layers", landMaskError);
   }
   const bathyLayer = buildBathyContourLayer(bathyData, bathyGridInfo, map);
   if (bathyLayer) { map.addLayer(bathyLayer); window._combinedBathyLayer = bathyLayer; }
