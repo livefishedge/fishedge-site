@@ -37,7 +37,7 @@
   <!-- Auth + Analytics -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-init.js?v=20260806c"></script>
-  <script src="canyon-charts.js?v=20260815b-local-grounds"></script>
+  <script src="canyon-charts.js?v=20260815c-fishing-polygons"></script>
   <script src="https://cdn.jsdelivr.net/npm/posthog-js@1.200.0/dist/array.js"></script>
 
 
@@ -1345,6 +1345,17 @@ body.combined-mode #combined-menu-btn{
     </div>
     <div class="combined-section">
       <div class="combined-section-title">Layers</div>
+      <label class="combined-toggle">
+        <input type="checkbox" id="chk-combined-fishing">
+        <span class="box"></span>
+        <span class="combined-dot dot-bathy"></span>
+        <span>Fishing Grounds</span>
+      </label>
+      <label class="combined-toggle" style="margin-left:28px;font-size:12px;color:#9fb0c3;">
+        <input type="checkbox" id="chk-combined-fishing-polygons" disabled>
+        <span class="box"></span>
+        <span>Show full polygons</span>
+      </label>
       <label class="combined-toggle">
         <input type="checkbox" id="chk-combined-chl" checked>
         <span class="box"></span>
@@ -3036,6 +3047,18 @@ const chkUv = document.getElementById("chk-combined-uv");
 const chkHeight = document.getElementById("chk-combined-height");
 const chkBathy = document.getElementById("chk-combined-bathy");
 const chkFront = document.getElementById("chk-combined-front");
+const chkFishing = document.getElementById("chk-combined-fishing");
+const chkFishingPolygons = document.getElementById("chk-combined-fishing-polygons");
+if (chkFishing) chkFishing.addEventListener("change", e => {
+  const visible = window.fishedgeUnderwater?.setVisible?.(e.target.checked);
+  if (typeof visible === "boolean" && chkFishingPolygons) {
+    chkFishingPolygons.disabled = !visible;
+    chkFishingPolygons.checked = visible ? Boolean(window.fishedgeUnderwater?.isFullPolygons?.()) : false;
+  }
+});
+if (chkFishingPolygons) chkFishingPolygons.addEventListener("change", e => {
+  window.fishedgeUnderwater?.setFullPolygons?.(e.target.checked);
+});
 if (chkChl) chkChl.addEventListener("change", async e => {
   const checked = e.target.checked;
   if (window._combinedChlLayer) window._combinedChlLayer.setVisible(checked);
@@ -10754,6 +10777,15 @@ window.addEventListener('fishedge-underwater-visibility', (event) => {
   btn.classList.toggle('active', visible);
   btn.setAttribute('aria-pressed', String(visible));
   btn.title = visible ? 'Hide underwater structures' : 'Show underwater structures';
+  const fishing = document.getElementById('chk-combined-fishing');
+  const polygons = document.getElementById('chk-combined-fishing-polygons');
+  if (fishing) fishing.checked = visible;
+  if (polygons) polygons.disabled = !visible;
+});
+
+window.addEventListener('fishedge-fishing-ground-polygons', (event) => {
+  const polygons = document.getElementById('chk-combined-fishing-polygons');
+  if (polygons) polygons.checked = Boolean(event.detail?.visible);
 });
 
 // Fullscreen icon toggle

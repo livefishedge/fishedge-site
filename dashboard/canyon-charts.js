@@ -39,10 +39,12 @@
 
   var state = {
     layers: new Map(),
+    items: new Map(),
     cache: new Map(),
     inflight: new Map(),
     attributionEl: null,
     visible: false,
+    showPolygons: false,
   };
 
   function log() {
@@ -214,7 +216,9 @@
           var p = f.attributes || {};
           var name = p.Name || p.name;
           if (!point || !name || !pointInBbox(point, bbox)) return null;
-          return { point: point, name: name, type: type, source: 'Maryland DNR' };
+          var geometry = f.geometry && Array.isArray(f.geometry.rings)
+            ? { type: 'Polygon', coordinates: f.geometry.rings } : null;
+          return { point: point, geometry: geometry, name: name, type: type, source: 'Maryland DNR' };
         }).filter(Boolean);
       });
   }
@@ -227,7 +231,7 @@
           var point = featurePoint(f);
           var p = f.properties || {};
           if (!point || !p.name || !pointInBbox(point, bbox)) return null;
-          return { point: point, name: p.name, type: 'Fishing ground',
+          return { point: point, geometry: f.geometry, name: p.name, type: 'Fishing ground',
             region: p.region, system: p.profileType, source: 'NJ DEP / Shore Guide' };
         }).filter(Boolean);
       });
@@ -286,40 +290,37 @@
   }
 
   function mergeFeatures(boem, gebco, local) {
-    // Prefer the gazetteer anchor for a named feature; BOEM's polygon
-    // centroid is retained only when GEBCO has no matching name.
-    var merged = gebco.slice();
-    boem.forEach(function (item) {
-      var duplicate = merged.some(function (existing) {
+    // Local NJ/MD records are the captain-facing authority. Add global
+    // BOEM/GEBCO records only when no local record occupies the same named
+    // location, so a global duplicate cannot hide the local one.
+    var merged = local.slice();
+    function duplicateOf(item, allowPrefix) {
+      return merged.some(function (existing) {
         var nameA = String(existing.name || '').toLowerCase();
         var nameB = String(item.name || '').toLowerCase();
-        var nameMatch = nameA === nameB || nameB.indexOf(nameA) === 0 || nameA.indexOf(nameB) === 0;
+        var nameMatch = nameA === nameB || (allowPrefix &&
+          (nameB.indexOf(nameA) === 0 || nameA.indexOf(nameB) === 0));
         // BOEM uses short names ("Norfolk") while GEBCO uses the full
         // gazetteer name ("Norfolk Canyon"). Treat those as the same named
         // feature even when the polygon centroid and gazetteer anchor differ.
-        return nameMatch;
-      });
-      if (!duplicate) merged.push(item);
-    });
-    // Local datasets contain repeated names for distinct polygons. Keep those
-    // grounds, but suppress only near-identical duplicate anchors.
-    local.forEach(function (item) {
-      var duplicate = merged.some(function (existing) {
-        var sameName = String(existing.name || '').toLowerCase() === String(item.name || '').toLowerCase();
         var near = existing.point && item.point &&
           Math.abs(existing.point[0] - item.point[0]) < 0.02 &&
           Math.abs(existing.point[1] - item.point[1]) < 0.02;
-        return sameName && near;
+        return nameMatch && near;
       });
-      if (!duplicate) merged.push(item);
-    });
+    }
+    gebco.forEach(function (item) { if (!duplicateOf(item, false)) merged.push(item); });
+    boem.forEach(function (item) { if (!duplicateOf(item, true)) merged.push(item); });
     return merged;
   }
 
   function styleFor(feature) {
     var type = feature.get('type');
     var canyon = type === 'Canyon';
+    var polygon = feature.getGeometry() && feature.getGeometry().getType() !== 'Point';
     return new ol.style.Style({
+      fill: polygon ? new ol.style.Fill({ color: canyon ? 'rgba(255,209,102,0.12)' : 'rgba(98,230,197,0.10)' }) : undefined,
+      stroke: polygon ? new ol.style.Stroke({ color: canyon ? '#ffd166' : '#62e6c5', width: 1.4 }) : undefined,
       image: new ol.style.RegularShape({
         points: canyon ? 3 : 5,
         radius: canyon ? 5 : 4,
@@ -353,6 +354,24 @@
     map.addLayer(layer);
     layer.setVisible(state.visible);
     state.layers.set(map, layer);
+    function render(items) {
+      source.clear();
+      source.addFeatures((items || []).map(function (item) {
+        var geometry = null;
+        if (state.showPolygons && item.geometry && typeof ol.format !== 'undefined') {
+          try {
+            geometry = new ol.format.GeoJSON().readGeometry(item.geometry, {
+              dataProjection: 'EPSG:4326', featureProjection: 'EPSG:3857'
+            });
+          } catch (err) { logErr('polygon geometry skipped', item.name, err); }
+        }
+        geometry = geometry || new ol.geom.Point(ol.proj.fromLonLat(item.point));
+        return new ol.Feature({ geometry: geometry, name: item.name, type: item.type,
+          region: item.region, system: item.system, source: item.source || SOURCE_LABEL });
+      }));
+      layer.setVisible(state.visible);
+    }
+    state.items.set(map, render);
     function refresh() {
       var view = map.getView();
       // Combined mode attaches this layer while the OL view is still being
@@ -366,14 +385,8 @@
       var bbox = selectedRegionBbox() || paddedBbox(extent);
       Promise.all([fetchGrounds(bbox), fetchGebco(bbox), fetchLocalGrounds(bbox)]).then(function (sets) {
         var items = mergeFeatures(sets[0], sets[1], sets[2]);
-        source.clear();
-        source.addFeatures(items.map(function (item) {
-          var f = new ol.Feature({ geometry: new ol.geom.Point(ol.proj.fromLonLat(item.point)),
-            name: item.name, type: item.type, region: item.region,
-            system: item.system, source: item.source || SOURCE_LABEL });
-          return f;
-        }));
-        layer.setVisible(state.visible);
+        state.items.set(map, function () { render(items); });
+        render(items);
         log('refreshed', items.length, 'underwater structures');
       });
     }
@@ -416,14 +429,25 @@
     return state.visible;
   }
 
+  function setFullPolygons(visible) {
+    state.showPolygons = Boolean(visible);
+    state.items.forEach(function (render) { render(); });
+    window.dispatchEvent(new CustomEvent('fishedge-fishing-ground-polygons', {
+      detail: { visible: state.showPolygons }
+    }));
+    return state.showPolygons;
+  }
+
   function init() {
     if (window.__fishing_grounds_loaded) return;
     window.__fishing_grounds_loaded = true;
     if (typeof ol === 'undefined') return;
     window.fishedgeUnderwater = {
       setVisible: setVisible,
+      setFullPolygons: setFullPolygons,
       toggle: function () { return setVisible(!state.visible); },
       isVisible: function () { return state.visible; },
+      isFullPolygons: function () { return state.showPolygons; },
       attachMap: attachToMap
     };
     var tick = 0;
