@@ -568,6 +568,16 @@
       min-height:38px; border:1px solid #273649; border-radius:8px; background:#0c1723;
       color:var(--fg); font-size:14px; font-weight:800; padding:0 10px; box-sizing:border-box;
     }
+    #menu-panel #hamburger-product-select{
+      min-height:46px;
+      background:#12345a;
+      border:2px solid #4d9cff;
+      color:#fff;
+      font-size:16px;
+      font-weight:900;
+      letter-spacing:.01em;
+      box-shadow:0 0 0 2px rgba(77,156,255,.14);
+    }
     #menu-panel button.active{ background:#1d4f91; border-color:#4d7dff; }
     #menu-panel .mode-row{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
     #menu-panel #all-day-toggle{ flex-direction:row; align-items:center; justify-content:flex-start; color:var(--fg); }
@@ -1381,7 +1391,7 @@ body.combined-mode #combined-menu-btn{
         <input type="checkbox" id="chk-combined-uv" checked>
         <span class="box"></span>
         <span class="combined-dot dot-uv"></span>
-        <span>Currents/Height</span>
+        <span>Currents</span>
       </label>
       <select id="combined-uv-hours" style="margin:6px 0 4px 28px;font-size:13px;">
         <option value="latest" selected>Latest</option>
@@ -1392,6 +1402,19 @@ body.combined-mode #combined-menu-btn{
         <option value="48">Last 48 hours</option>
       </select>
       <div id="combined-uv-scan-time" style="font-size:11px;color:#9fb0c3;margin-left:28px;margin-bottom:8px;"></div>
+      <label class="combined-toggle">
+        <input type="checkbox" id="chk-combined-height" checked>
+        <span class="box"></span>
+        <span class="combined-dot dot-uv"></span>
+        <span>Surface Height</span>
+      </label>
+      <div id="combined-height-units" style="margin:6px 0 8px 28px;display:flex;flex-direction:column;gap:5px;">
+        <div style="font-size:11px;color:#9fb0c3;">Height units</div>
+        <div class="combined-mode-row" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+          <button id="combined-height-mode-ft" type="button">ft</button>
+          <button id="combined-height-mode-m" type="button">m</button>
+        </div>
+      </div>
       </div>
       <label class="combined-toggle">
         <input type="checkbox" id="chk-combined-bathy" checked>
@@ -1426,7 +1449,7 @@ body.combined-mode #combined-menu-btn{
   </div>
 
   <div id="menu-panel">
-      <label>Product
+      <label id="hamburger-product-label">
         <select id="hamburger-product-select">
           <option value="combined">Captain's Dashboard</option>
           <option value="chl">Chlorophyll</option>
@@ -1657,6 +1680,7 @@ function setActiveRegion(regionId, regionMeta) {
     window._bathyContourSource = null;
     window._combinedBathyLayer = null;
     window._combinedUvLayer = null;
+    window._combinedHeightLayer = null;
     gridCache.__bathy_json = null; // invalidate stale bathy cache for new region
     // Drop OL land layers so the next render rebuilds them with the new region's
     // bathy. Without this, ensureMobileLandLayer / ensureDesktopLandLayer early-return
@@ -1894,6 +1918,7 @@ let userRanges = {
 
 let tempUnit = localStorage.getItem("sst_temp_unit") === "C" ? "C" : "F";
 let thermalDistUnit = localStorage.getItem("thermal_dist_unit") === "km" ? "km" : "nm";
+let heightUnit = localStorage.getItem("surface_height_unit") === "m" ? "m" : "ft";
 // cToF: converts absolute Celsius temperature to Fahrenheit (used for point values)
 function cToF(c) { return c * 9 / 5 + 32; }
 // kmToNm: converts kilometers to nautical miles (1 nm ≈ 1.852 km, so km → nm divides)
@@ -1903,6 +1928,8 @@ function nmToKmDistance(nm) { return nm * 1.852; }
 const MS_TO_KT = 1.94384;
 function msToKt(ms) { return ms * MS_TO_KT; }
 function mToFathom(m) { return m * 0.546806649; }
+function heightUnitLabel() { return heightUnit === "m" ? "m" : "ft"; }
+function metersToHeight(meters) { return heightUnit === "m" ? Number(meters) : Number(meters) * UV_M_TO_FT; }
 let depthUnit = ["fathom", "ft", "m"].includes(localStorage.getItem("depth_unit"))
   ? localStorage.getItem("depth_unit") : "fathom";
 function mToFeet(m) { return m * 3.28084; }
@@ -1916,6 +1943,7 @@ function formatDepth(meters) {
 function unitLabelForVar(varKey) {
   if (varKey === "sst" || varKey === "thermal_fronts" || varKey === "sst_front") return tempUnitLabel();
   if (varKey === "bathy") return depthUnitLabel();
+  if (varKey === "uv") return `Height (${heightUnitLabel()})`;
   return DEFAULT_RANGES[varKey]?.unit || "";
 }
 function formatArrowSpeed(ms) {
@@ -1934,8 +1962,8 @@ function formatSigValue(value, digits) {
   return Number(value.toPrecision(digits)).toString();
 }
 function formatChlValue(value) { return `${value.toFixed(2)} mg/m3`; }
-function formatSshValue(value) { return `${(value * UV_M_TO_FT).toFixed(2)} ft`; }
-function formatSshFeet(value) { return `${value.toFixed(2)} ft`; }
+function formatSshValue(value) { return `${metersToHeight(value).toFixed(2)} ${heightUnitLabel()}`; }
+function formatSshFeet(value) { return `${Number(value).toFixed(2)} ${heightUnitLabel()}`; }
 function formatSstValue(celsius) {
   const value = tempUnit === "F" ? cToF(celsius) : celsius;
   return `${formatSigValue(value, 4)}${tempUnitLabel()}`;
@@ -2481,7 +2509,7 @@ function formatUvReadout(base, gridInfo, dataObj, lon, lat, map, pixel, fallback
   if (speed === null && map && pixel) speed = uvArrowSpeedAtPixel(map, pixel);
   const parts = [];
   if (Number.isFinite(speed)) parts.push(`${speed.toFixed(2)} m/s`);
-  if (Number.isFinite(heightFt)) parts.push(`${Number(heightFt).toFixed(2)} ft`);
+  if (Number.isFinite(heightFt)) parts.push(`${Number(heightFt).toFixed(2)} ${heightUnitLabel()}`);
   return parts.length ? `${base}, ${parts.join(", ")}` : base;
 }
 
@@ -2804,7 +2832,7 @@ function syncFloatingViewportUi() {
   }
   // On mobile, CSS takes over (top-right via @media); skip JS clamping.
   const feedback = document.getElementById("feedback-float");
-  if (feedback && !isMobileDevice()) clampRectToVisualViewport(feedback, { margin: 8 });
+  if (feedback && !isMobileDevice() && feedback.dataset.dragging !== "1") clampRectToVisualViewport(feedback, { margin: 8 });
 }
 
 if (window.visualViewport) {
@@ -2967,6 +2995,7 @@ if (combinedRegionSelect) {
 const chkChl = document.getElementById("chk-combined-chl");
 const chkSst = document.getElementById("chk-combined-sst");
 const chkUv = document.getElementById("chk-combined-uv");
+const chkHeight = document.getElementById("chk-combined-height");
 const chkBathy = document.getElementById("chk-combined-bathy");
 const chkFront = document.getElementById("chk-combined-front");
 if (chkChl) chkChl.addEventListener("change", async e => {
@@ -3097,6 +3126,9 @@ if (chkBathy) chkBathy.addEventListener("change", e => {
   const legend = document.getElementById("combined-bathy-legend");
   if (legend) legend.style.display = e.target.checked ? "" : "none";
 });
+if (chkHeight) chkHeight.addEventListener("change", e => {
+  if (window._combinedHeightLayer) window._combinedHeightLayer.setVisible(e.target.checked);
+});
 if (chkFront) chkFront.addEventListener("change", e => {
   if (window._combinedFrontDensityLayer) window._combinedFrontDensityLayer.setVisible(e.target.checked);
   if (window._combinedFrontLineLayer) window._combinedFrontLineLayer.setVisible(e.target.checked);
@@ -3209,7 +3241,20 @@ if (thermalDistUnit === "nm") {
 const combinedBathyModeFathomBtn = document.getElementById("combined-bathy-mode-fathom");
 const combinedBathyModeFtBtn = document.getElementById("combined-bathy-mode-ft");
 const combinedBathyModeMBtn = document.getElementById("combined-bathy-mode-m");
-function setDepthUnit(u) {
+const combinedHeightModeFtBtn = document.getElementById("combined-height-mode-ft");
+const combinedHeightModeMBtn = document.getElementById("combined-height-mode-m");
+function setHeightUnit(u, refresh = true) {
+  if (!["ft", "m"].includes(u)) return;
+  heightUnit = u;
+  localStorage.setItem("surface_height_unit", heightUnit);
+  combinedHeightModeFtBtn?.classList.toggle("active", u === "ft");
+  combinedHeightModeMBtn?.classList.toggle("active", u === "m");
+  if (refresh && (currentVar === "uv" || currentVar === "combined")) showFrame();
+}
+combinedHeightModeFtBtn?.addEventListener("click", () => setHeightUnit("ft"));
+combinedHeightModeMBtn?.addEventListener("click", () => setHeightUnit("m"));
+setHeightUnit(heightUnit, false);
+function setDepthUnit(u, refresh = true) {
   if (!["fathom", "ft", "m"].includes(u)) return;
   depthUnit = u;
   localStorage.setItem("depth_unit", depthUnit);
@@ -3217,12 +3262,12 @@ function setDepthUnit(u) {
   combinedBathyModeFtBtn?.classList.toggle("active", u === "ft");
   combinedBathyModeMBtn?.classList.toggle("active", u === "m");
   updateCombinedBathyLegend(window._combinedBathyLevels || []);
-  if (currentVar === "bathy" || currentVar === "combined") showFrame();
+  if (refresh && (currentVar === "bathy" || currentVar === "combined")) showFrame();
 }
 combinedBathyModeFathomBtn?.addEventListener("click", () => setDepthUnit("fathom"));
 combinedBathyModeFtBtn?.addEventListener("click", () => setDepthUnit("ft"));
 combinedBathyModeMBtn?.addEventListener("click", () => setDepthUnit("m"));
-setDepthUnit(depthUnit);
+setDepthUnit(depthUnit, false);
 /* Marker state */
 let markers = [];
 let markerMode = "off"; // "off" | "add" | "remove"
@@ -4136,7 +4181,7 @@ function buildUv(gridInfo, dataObj) {
   const contourLevelsForPlot = uvContourLevels(vmin, vmax);
 
   // ADT is stored in metres; render the product in feet end-to-end.
-  const adtFeet = adt.map(row => row.map(v => Number(v) * UV_M_TO_FT));
+  const adtFeet = adt.map(row => row.map(v => metersToHeight(v)));
 
   const bg = {
     type:"heatmap",
@@ -4453,7 +4498,7 @@ function mobileZForVar(varKey, dataObj) {
   if (varKey === "uv") {
     const d = (dataObj && dataObj.data && !Array.isArray(dataObj.data)) ? dataObj.data : dataObj;
     const adt = d?.adt || dataObj?.meta?.grid?.adt || d?.z;
-    return is2D(adt) ? adt.map(row => row.map(v => Number(v) * UV_M_TO_FT)) : adt;
+    return is2D(adt) ? adt.map(row => row.map(v => metersToHeight(v))) : adt;
   }
   if (varKey === "bathy") return dataObj.depth;
   return null;
@@ -4678,7 +4723,7 @@ function clearUvContourLayer(state) {
 function buildUvContourLayer(dataObj, gridInfo, map) {
   const d = (dataObj?.data && !Array.isArray(dataObj.data)) ? dataObj.data : dataObj;
   const zMeters = d?.adt || d?.z;
-  const z = is2D(zMeters) ? zMeters.map(row => row.map(v => Number(v) * UV_M_TO_FT)) : zMeters;
+  const z = is2D(zMeters) ? zMeters.map(row => row.map(v => metersToHeight(v))) : zMeters;
   const xs = gridInfo?.xAxis || [], ys = gridInfo?.yAxis || [];
   if (!is2D(z) || xs.length < 2 || ys.length < 2) return null;
   const features = [];
@@ -5622,6 +5667,7 @@ async function renderCombinedMode() {
     window._combinedSstLayer = null;
     window._combinedBathyLayer = null;
     window._combinedUvLayer = null;
+    window._combinedHeightLayer = null;
     window._combinedFrontDensityLayer = null;
     window._combinedFrontLineLayer = null;
     console.log("[combined] CLEANUP: all combined state cleared");
@@ -6815,6 +6861,10 @@ async function rebuildCombinedUvLayer(map, { hoursMode = "latest" } = {}) {
     try { map.removeLayer(window._combinedUvLayer); } catch (_) {}
     window._combinedUvLayer = null;
   }
+  if (window._combinedHeightLayer && map) {
+    try { map.removeLayer(window._combinedHeightLayer); } catch (_) {}
+    window._combinedHeightLayer = null;
+  }
   window._combinedUvData = null;
   window._combinedUvGrid = null;
   if (!uvFrames.length) {
@@ -6844,6 +6894,16 @@ async function rebuildCombinedUvLayer(map, { hoursMode = "latest" } = {}) {
     const grid = await loadGridForVar("uv", data);
     window._combinedUvGrid = grid;
     window._combinedUvData = data;
+    const heightCanvas = makeMobileRasterCanvas("uv", grid, data);
+    const heightExtent = frameExtentFromGrid(grid);
+    const heightSource = canvasToOlSource(heightCanvas, heightExtent);
+    const heightLayer = new ol.layer.Image({ source: heightSource, zIndex: 10 });
+    const heightCheck = document.getElementById("chk-combined-height");
+    heightLayer.setVisible(heightCheck ? heightCheck.checked : true);
+    if (map) {
+      map.addLayer(heightLayer);
+      window._combinedHeightLayer = heightLayer;
+    }
     const arrowLayer = buildDesktopUvArrowLayer(data, grid);
     if (arrowLayer && map) {
       const chk = document.getElementById("chk-combined-uv");
@@ -10675,6 +10735,8 @@ function applyUrlWaypoints() {
 function installDraggable(target, handle, storageKey, ignoreSelector) {
   if (!target || !handle || target.dataset.draggableInstalled) return;
   target.dataset.draggableInstalled = "1";
+  target.style.touchAction = "none";
+  handle.style.touchAction = "none";
   let drag = null;
   let moved = false;
   try {
@@ -10691,6 +10753,7 @@ function installDraggable(target, handle, storageKey, ignoreSelector) {
     const rect = target.getBoundingClientRect();
     drag = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, left: rect.left, top: rect.top };
     moved = false;
+    target.dataset.dragging = "1";
     event.stopPropagation();
   };
   const move = (event) => {
@@ -10718,6 +10781,7 @@ function installDraggable(target, handle, storageKey, ignoreSelector) {
       setTimeout(() => { delete target.dataset.dragSuppressClick; }, 0);
     }
     drag = null;
+    delete target.dataset.dragging;
   };
   // Listen on window so dragging continues when the pointer leaves the
   // circular feedback button or a compact toolbar. Pointer capture is not
