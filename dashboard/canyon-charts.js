@@ -203,6 +203,12 @@
       point[1] >= bbox[1] && point[1] <= bbox[3];
   }
 
+  function intersectBboxes(a, b) {
+    var out = [Math.max(a[0], b[0]), Math.max(a[1], b[1]),
+      Math.min(a[2], b[2]), Math.min(a[3], b[3])];
+    return out[0] <= out[2] && out[1] <= out[3] ? out : null;
+  }
+
   function fetchArcGISLocal(url, bbox, type) {
     var params = new URLSearchParams({
       where: '1=1', geometry: bbox.join(','),
@@ -430,7 +436,11 @@
       var extent = view.calculateExtent(map.getSize() || [800, 600]);
       // Never let a broad/temporarily-unfitted map viewport turn a regional
       // dashboard into a worldwide feature-name layer.
-      var bbox = selectedRegionBbox() || paddedBbox(extent);
+      var viewportBbox = paddedBbox(extent);
+      var bbox = selectedRegionBbox()
+        ? intersectBboxes(viewportBbox, selectedRegionBbox())
+        : viewportBbox;
+      if (!bbox) return;
       Promise.all([fetchGrounds(bbox), fetchGebco(bbox), fetchLocalGrounds(bbox)]).then(function (sets) {
         // A usable local dataset owns the region. Federal/global sources are
         // fallback-only so duplicate or less-local labels do not reappear
@@ -438,6 +448,10 @@
         var items = sets[2].length
           ? mergeFeatures([], [], sets[2])
           : mergeFeatures(sets[0], sets[1], []);
+        // ArcGIS can return polygons that intersect the query envelope while
+        // their label centroid is outside it. Keep only labels in the actual
+        // padded viewport so zooming in also reduces rendering work.
+        items = items.filter(function (item) { return pointInBbox(item.point, bbox); });
         state.items.set(map, function () { render(items); });
         render(items);
         log('refreshed', items.length, 'underwater structures');

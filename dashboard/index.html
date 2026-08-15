@@ -37,7 +37,7 @@
   <!-- Auth + Analytics -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-init.js?v=20260806c"></script>
-  <script src="canyon-charts.js?v=20260815f-name-normalization"></script>
+  <script src="canyon-charts.js?v=20260815g-viewport-filter"></script>
   <script src="https://cdn.jsdelivr.net/npm/posthog-js@1.200.0/dist/array.js"></script>
 
 
@@ -773,6 +773,11 @@ body.combined-mode #combined-menu-btn{
     }
     #captain-save-btn:hover{ background:#2a5fb0; }
     #captain-pts-panel.visible{ display:block !important; }
+    #captain-pts-panel.collapsed{
+      width:280px; max-height:none; overflow:hidden; padding-top:7px; padding-bottom:7px;
+    }
+    #captain-pts-panel.collapsed > div:first-child{ margin-bottom:0 !important; }
+    #captain-pts-panel.collapsed #captain-pts-list{ display:none; }
     #combined-readout{
       display:none;
       position:fixed;
@@ -2026,9 +2031,19 @@ function syncSstRangeToData(dataObj) {
   userRanges.sst.vmin = observedMin;
   userRanges.sst.vmax = observedMax;
   if (currentVar === "sst") {
-    if (hVmin) hVmin.value = observedMin;
-    if (hVmax) hVmax.value = observedMax;
+    if (hVmin) hVmin.value = formatSstRangeInput(observedMin);
+    if (hVmax) hVmax.value = formatSstRangeInput(observedMax);
   }
+}
+
+function formatSstRangeInput(celsius) {
+  const value = tempUnit === "F" ? cToF(celsius) : celsius;
+  return Number(value.toFixed(1));
+}
+
+function parseSstRangeInput(value) {
+  const numeric = Number(value);
+  return tempUnit === "F" ? (numeric - 32) * 5 / 9 : numeric;
 }
 
 /* CHL colorscale (algae-ish) */
@@ -2991,8 +3006,8 @@ if (hamburgerProductSelect) {
 
 if (hApply) {
   hApply.addEventListener("click", () => {
-    const vmin = Number(hVmin?.value);
-    const vmax = Number(hVmax?.value);
+    const vmin = currentVar === "sst" ? parseSstRangeInput(hVmin?.value) : Number(hVmin?.value);
+    const vmax = currentVar === "sst" ? parseSstRangeInput(hVmax?.value) : Number(hVmax?.value);
     if (!isFinite(vmin) || !isFinite(vmax) || vmax <= vmin) return;
     if (!userRanges[currentVar]) userRanges[currentVar] = { ...DEFAULT_RANGES[currentVar] };
     userRanges[currentVar].vmin = vmin;
@@ -3007,8 +3022,8 @@ if (hReset) {
     userRanges[currentVar] = { ...DEFAULT_RANGES[currentVar] };
     if (currentVar === "sst") sstRangeWasManuallySet = false;
     const def = DEFAULT_RANGES[currentVar];
-    if (hVmin) hVmin.value = def.vmin;
-    if (hVmax) hVmax.value = def.vmax;
+    if (hVmin) hVmin.value = currentVar === "sst" ? formatSstRangeInput(def.vmin) : def.vmin;
+    if (hVmax) hVmax.value = currentVar === "sst" ? formatSstRangeInput(def.vmax) : def.vmax;
     showFrame();
   });
 }
@@ -3051,6 +3066,7 @@ if (tempUnitToggle) {
     tempUnit = tempUnit === "F" ? "C" : "F";
     localStorage.setItem("sst_temp_unit", tempUnit);
     if (currentVar === "sst") showFrame();
+    if (currentVar === "sst") syncRangeInputsToVar();
     updateTempUnitToggleLabel();
   });
 }
@@ -7689,8 +7705,8 @@ function syncRangeInputsToVar() {
   // CRITICAL: ensure userRanges[currentVar] exists before reading .vmin/.vmax.
   // If currentVar is unknown or got cleared, fall back to DEFAULT_RANGES.
   if (!userRanges[currentVar]) userRanges[currentVar] = { ...DEFAULT_RANGES[currentVar] };
-  if (hVmin) hVmin.value = userRanges[currentVar].vmin;
-  if (hVmax) hVmax.value = userRanges[currentVar].vmax;
+  if (hVmin) hVmin.value = currentVar === "sst" ? formatSstRangeInput(userRanges.sst.vmin) : userRanges[currentVar].vmin;
+  if (hVmax) hVmax.value = currentVar === "sst" ? formatSstRangeInput(userRanges.sst.vmax) : userRanges[currentVar].vmax;
   if (hTitle) hTitle.textContent = currentVar === "uv" ? "Height" : (VAR_LABELS[currentVar] || currentVar);
   syncProductSelectors();
   if (hamburgerRegionSelect) hamburgerRegionSelect.value = REGION_ID;
@@ -10301,8 +10317,12 @@ function waypointsToGPX(pts) {
     const name = `${i + 1}`;
     const desc = [
       p.chl !== null ? `CHL:${p.chl.toFixed(2)}mg/m3` : null,
-      p.sst !== null ? `SST:${p.sst.toFixed(1)}C` : null,
+      p.sst !== null ? `SST:${formatSstValue(p.sst)}` : null,
+      p.height !== null && p.height !== undefined ? `Height:${formatSshValue(p.height)}` : null,
+      p.depth !== null && p.depth !== undefined ? `Depth:${formatDepth(p.depth)}` : null,
+      p.speed !== null && p.speed !== undefined ? `Current:${p.speed.toFixed(2)}m/s @ ${p.direction?.toFixed(0) || "?"}deg` : null,
       p.freshness !== null ? `Fresh:${p.freshness}h` : null,
+      p.ts ? `Captured:${new Date(p.ts).toISOString()}` : null,
     ].filter(Boolean).join(' | ');
     return `  <wpt lat="${p.lat.toFixed(6)}" lon="${p.lon.toFixed(6)}">
     <name>${name}</name>
@@ -10324,12 +10344,16 @@ function waypointsToGPX(pts) {
 }
 
 function waypointsToCSV(pts) {
-  const rows = [['lat','lon','name','chl_mgm3','sst_c','freshness_h','timestamp']];
+  const rows = [['lat','lon','name','chl_mgm3','sst_display','height_display','depth_display','current_ms','current_direction_deg','freshness_h','timestamp']];
   pts.forEach((p, i) => {
     rows.push([
       p.lat.toFixed(6), p.lon.toFixed(6), String(i + 1),
       p.chl !== null ? p.chl.toFixed(3) : '',
-      p.sst !== null ? p.sst.toFixed(2) : '',
+      p.sst !== null ? formatSstValue(p.sst) : '',
+      p.height !== null && p.height !== undefined ? formatSshValue(p.height) : '',
+      p.depth !== null && p.depth !== undefined ? formatDepth(p.depth) : '',
+      p.speed !== null && p.speed !== undefined ? p.speed.toFixed(3) : '',
+      p.direction !== null && p.direction !== undefined ? p.direction.toFixed(1) : '',
       p.freshness !== null ? p.freshness : '',
       p.ts ? new Date(p.ts).toISOString() : ''
     ]);
@@ -10347,7 +10371,14 @@ function waypointsToGeoJSON(pts) {
       properties: {
         name: String(i + 1),
         chl_mgm3: p.chl,
-        sst_c: p.sst,
+        sst: p.sst,
+        sst_display: p.sst !== null ? formatSstValue(p.sst) : null,
+        height: p.height,
+        height_display: p.height !== null && p.height !== undefined ? formatSshValue(p.height) : null,
+        depth_m: p.depth,
+        depth_display: p.depth !== null && p.depth !== undefined ? formatDepth(p.depth) : null,
+        current_ms: p.speed,
+        current_direction_deg: p.direction,
         freshness_h: p.freshness,
         ts: p.ts ? new Date(p.ts).toISOString() : null
       }
@@ -10360,6 +10391,9 @@ function waypointsToKML(pts) {
     const desc = [
       p.chl !== null ? `CHL: ${p.chl.toFixed(2)} mg/m³` : '',
       p.sst !== null ? `SST: ${formatSstValue(p.sst)}` : '',
+      p.height !== null && p.height !== undefined ? `Height: ${formatSshValue(p.height)}` : '',
+      p.depth !== null && p.depth !== undefined ? `Depth: ${formatDepth(p.depth)}` : '',
+      p.speed !== null && p.speed !== undefined ? `Current: ${p.speed.toFixed(2)} m/s @ ${p.direction?.toFixed(0) || "?"}°` : '',
       p.freshness !== null ? `Fresh: ${p.freshness}h ago` : ''
     ].filter(Boolean).join('<br/>');
     return `  <Placemark>
@@ -10387,6 +10421,10 @@ function buildShareURL(pts) {
     l: p.lat.toFixed(5), L: p.lon.toFixed(5),
     c: p.chl !== null ? p.chl.toFixed(3) : '',
     s: p.sst !== null ? p.sst.toFixed(2) : '',
+    h: p.height !== null && p.height !== undefined ? p.height.toFixed(2) : '',
+    d: p.depth !== null && p.depth !== undefined ? p.depth.toFixed(1) : '',
+    u: p.speed !== null && p.speed !== undefined ? p.speed.toFixed(3) : '',
+    q: p.direction !== null && p.direction !== undefined ? p.direction.toFixed(1) : '',
     f: p.freshness !== null ? p.freshness : ''
   }));
   const json = JSON.stringify(minimal);
@@ -10409,6 +10447,10 @@ function loadWaypointsFromURL() {
       lat: parseFloat(p.l), lon: parseFloat(p.L),
       chl: p.c !== '' ? parseFloat(p.c) : null,
       sst: p.s !== '' ? parseFloat(p.s) : null,
+      height: p.h !== '' ? parseFloat(p.h) : null,
+      depth: p.d !== '' ? parseFloat(p.d) : null,
+      speed: p.u !== '' ? parseFloat(p.u) : null,
+      direction: p.q !== '' ? parseFloat(p.q) : null,
       freshness: p.f !== '' ? parseFloat(p.f) : null,
       ts: Date.now()
     }));
@@ -10534,10 +10576,28 @@ function clearAddLayer() {
 }
 
 function sampleAt(lon, lat) {
-  let chl = null, sst = null;
+  let chl = null, sst = null, height = null, speed = null, direction = null, depth = null;
   try { const v = sampleRasterValueAt('chl', window._combinedChlGrid, window._combinedChlData, lon, lat); if (v?.value !== undefined) chl = v.value; } catch (_) {}
   try { const v = sampleRasterValueAt('sst', window._combinedSstGrid, window._combinedSstData, lon, lat); if (v?.value !== undefined) sst = v.value; } catch (_) {}
-  return { chl, sst };
+  try {
+    const v = sampleRasterValueAt('uv', window._combinedUvGrid, window._combinedUvData, lon, lat);
+    if (v?.value !== undefined) {
+      height = v.value;
+      const d = window._combinedUvData?.data && !Array.isArray(window._combinedUvData.data)
+        ? window._combinedUvData.data : window._combinedUvData;
+      const vector = uvVectorAt(d?.u, d?.v, v.row, v.col);
+      if (vector) {
+        speed = Math.hypot(vector[0], vector[1]);
+        direction = (Math.atan2(vector[0], vector[1]) * 180 / Math.PI + 360) % 360;
+      }
+    }
+  } catch (_) {}
+  try {
+    const bd = window._bathyData;
+    const v = sampleRasterValueAt('bathy', bd && { xAxis: bd.xAxis, yAxis: bd.yAxis }, bd, lon, lat);
+    if (v?.value !== undefined) depth = v.value;
+  } catch (_) {}
+  return { chl, sst, height, speed, direction, depth };
 }
 
 function updatePtsPanel() {
@@ -10550,12 +10610,19 @@ function updatePtsPanel() {
   list.innerHTML = captainAddTool.points.map((p, i) => {
     const chlStr = p.chl !== null ? `${p.chl.toFixed(2)} mg/m³` : '—';
     const sstStr = p.sst !== null ? formatSstValue(p.sst) : '—';
+    const heightStr = p.height !== null && p.height !== undefined ? formatSshValue(p.height) : '—';
+    const speedStr = p.speed !== null && p.speed !== undefined ? `${p.speed.toFixed(2)} m/s` : '—';
+    const directionStr = p.direction !== null && p.direction !== undefined ? `${p.direction.toFixed(0)}°` : '—';
+    const depthStr = p.depth !== null && p.depth !== undefined ? formatDepth(p.depth) : '—';
+    const timeStr = p.ts ? fmtPortraitDaytimeLocal(new Date(p.ts)) : '—';
     return `<div style="margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid rgba(255,255,255,0.07);">
       <div style="display:flex;justify-content:space-between;align-items:center;">
         <b style="color:#4d7dff;">${i + 1}. ${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}</b>
         <button onclick="window.removeWaypoint(${i})" style="background:none;border:none;color:#7a8fa8;cursor:pointer;font-size:11px;padding:2px 4px;" title="Remove">✕</button>
       </div>
-      <div style="color:#9fb0c3;font-size:11px;">CHL ${chlStr} &nbsp;|&nbsp; SST ${sstStr}${p.freshness !== null ? ` &nbsp;|&nbsp; ${p.freshness}h ago` : ''}</div>
+      <div style="color:#9fb0c3;font-size:11px;line-height:1.5;">CHL ${chlStr} &nbsp;|&nbsp; SST ${sstStr}</div>
+      <div style="color:#9fb0c3;font-size:11px;line-height:1.5;">Height ${heightStr} &nbsp;|&nbsp; Current ${speedStr} @ ${directionStr}</div>
+      <div style="color:#9fb0c3;font-size:11px;line-height:1.5;">Depth ${depthStr}${p.freshness !== null ? ` &nbsp;|&nbsp; ${p.freshness}h ago` : ''} &nbsp;|&nbsp; ${timeStr}</div>
     </div>`;
   }).join('');
 }
@@ -10566,7 +10633,7 @@ function updatePtsPanel() {
 document.getElementById('captain-pts-panel')?.addEventListener('click', event => {
   if (!captainAddTool.active) return;
   if (event.target.closest('button, a, input, select')) return;
-  document.getElementById('captain-pts-panel')?.classList.remove('visible');
+  document.getElementById('captain-pts-panel')?.classList.toggle('collapsed');
 });
 
 function renderPtsLayer(map) {
@@ -10602,11 +10669,11 @@ function renderPtsLayer(map) {
 }
 
 function addWaypoint(lon, lat, map) {
-  const { chl, sst } = sampleAt(lon, lat);
+  const { chl, sst, height, speed, direction, depth } = sampleAt(lon, lat);
   const freshness = window._combinedChlScanTime
     ? ((Date.now() - new Date(window._combinedChlScanTime).getTime()) / 3600000).toFixed(1)
     : null;
-  captainAddTool.points.push({ lon, lat, chl, sst, freshness, ts: Date.now() });
+  captainAddTool.points.push({ lon, lat, chl, sst, height, speed, direction, depth, freshness, ts: Date.now() });
   renderPtsLayer(map);
   updatePtsPanel();
   document.getElementById('captain-save-btn')?.style.setProperty('display', 'inline-block');
