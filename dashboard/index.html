@@ -549,23 +549,19 @@
 
     /* Hamburger button and menu panel */
     #hamburger-btn{
-      position:fixed; top:52px; right:8px; z-index:2201;
-      width:44px; height:44px; border:1px solid rgba(255,255,255,0.42); border-radius:8px;
-      background:rgba(5,11,16,0.92); color:#fff; cursor:pointer;
+      position:fixed; top:8px; right:8px; z-index:2201;
+      width:48px; height:48px; border:2px solid rgba(255,255,255,0.72); border-radius:8px;
+      background:rgba(9,74,132,0.96); color:#fff; font-size:26px; font-weight:900; cursor:pointer;
       box-shadow:0 4px 16px rgba(0,0,0,0.62);
-      padding:0; display:flex; align-items:center; justify-content:center; overflow:hidden;
-    }
-    #hamburger-btn img, #combined-menu-btn img{
-      display:block; width:180px; max-width:none; height:auto; flex:none; pointer-events:none;
+      padding:0;
     }
     #menu-panel{
-      position:fixed; top:104px; right:8px; z-index:2200;
+      position:fixed; top:62px; right:8px; z-index:2200;
       width:clamp(280px, 82vw, 360px); max-width:calc(100vw - 16px); min-width:280px;
       display:none; flex-direction:column; gap:10px; padding:12px;
       background:rgba(5,11,16,0.94); border:1px solid rgba(255,255,255,0.22); border-radius:8px;
       box-shadow:0 12px 30px rgba(0,0,0,0.45); backdrop-filter:blur(8px);
-      box-sizing:border-box; height:min(640px, calc(100dvh - 116px)); overflow:auto;
-      transform:none !important; zoom:1;
+      box-sizing:border-box; height:min(640px, calc(100dvh - 74px)); overflow:auto;
     }
     #menu-panel.open{ display:flex; }
     #menu-panel label{ display:flex; flex-direction:column; gap:5px; font-size:12px; font-weight:800; color:#9fb0c3; }
@@ -621,7 +617,7 @@
 
     @media (max-width:720px){
       /* Mobile: move feedback button to top-right, away from bottom map gestures. */
-      #hamburger-btn{ top:76px; right:6px; }
+      #hamburger-btn{ top:8px; right:6px; }
       body.mobile-device #feedback-float{
         bottom: calc(12px + env(safe-area-inset-bottom, 0px));
         top: auto;
@@ -633,9 +629,9 @@
       #nav-bar{ order:1; flex-basis:100%; }
       #toolbar-status{ order:2; flex:1 1 100%; white-space:normal; }
       #menu-panel{
-        top:76px; right:6px; width:clamp(280px, calc(100vw - 12px), 360px);
+        top:58px; right:6px; width:clamp(280px, calc(100vw - 12px), 360px);
         max-width:calc(100vw - 12px); min-width:280px;
-        height:min(680px, calc(100dvh - 84px)); padding:10px; gap:8px;
+        height:min(680px, calc(100dvh - 66px)); padding:10px; gap:8px;
       }
       #menu-panel .hamburger-range-block{
         display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr);
@@ -671,7 +667,7 @@
     body.thermal-fronts-mode .hamburger-range-block{ display:none !important; }
     /* Combined mode: hide single-product slider/progress, show sidebar */
     body.combined-mode #combined-menu-btn{
-      top:52px !important; right:8px !important; left:auto !important;
+      top:8px !important; right:8px !important; left:auto !important;
       z-index:2201 !important;
       display:flex !important;
       border-left:1px solid var(--border);
@@ -1303,9 +1299,7 @@
       <button id="feedbackSubmit">Send</button>
     </div>
   </div>
-  <button id="hamburger-btn" aria-label="Open product menu">
-    <img src="../fishedge-logo-transparent.png" alt="FishEdge menu">
-  </button>
+  <button id="hamburger-btn" aria-label="Open product menu">☰</button>
   <div id="map"></div>
   <div id="combined-readout">—, —</div>
   <div id="combined-hover-tip"></div>
@@ -1465,8 +1459,10 @@
     </div>
     <div id="combined-home-link"><a href="/">HOME</a></div>
   </div>
-  <button id="combined-menu-btn" aria-label="Open product menu" style="display:none;position:fixed;top:52px;right:8px;z-index:40;width:44px;height:44px;background:var(--panel);border:none;border-left:1px solid var(--border);cursor:pointer;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:0;">
-    <img src="../fishedge-logo-transparent.png" alt="FishEdge menu">
+  <button id="combined-menu-btn" aria-label="Toggle sidebar" style="display:none;position:fixed;top:8px;right:8px;z-index:40;width:44px;height:44px;background:var(--panel);border:none;border-left:1px solid var(--border);cursor:pointer;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:0;">
+    <span style="display:block;width:18px;height:2px;background:var(--fg);border-radius:2px;"></span>
+    <span style="display:block;width:18px;height:2px;background:var(--fg);border-radius:2px;"></span>
+    <span style="display:block;width:18px;height:2px;background:var(--fg);border-radius:2px;"></span>
   </button>
 
   <div id="briefing-panel" aria-live="polite" style="display:none">
