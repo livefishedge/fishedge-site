@@ -384,7 +384,12 @@
       // dashboard into a worldwide feature-name layer.
       var bbox = selectedRegionBbox() || paddedBbox(extent);
       Promise.all([fetchGrounds(bbox), fetchGebco(bbox), fetchLocalGrounds(bbox)]).then(function (sets) {
-        var items = mergeFeatures(sets[0], sets[1], sets[2]);
+        // A usable local dataset owns the region. Federal/global sources are
+        // fallback-only so duplicate or less-local labels do not reappear
+        // beside NJ/MD fishing grounds.
+        var items = sets[2].length
+          ? mergeFeatures([], [], sets[2])
+          : mergeFeatures(sets[0], sets[1], []);
         state.items.set(map, function () { render(items); });
         render(items);
         log('refreshed', items.length, 'underwater structures');
