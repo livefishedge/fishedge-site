@@ -578,6 +578,12 @@
       letter-spacing:.01em;
       box-shadow:0 0 0 2px rgba(77,156,255,.14);
     }
+    #menu-panel #hamburger-product-select option{
+      background:#12345a;
+      color:#dff0ff;
+      font-size:16px;
+      font-weight:900;
+    }
     #menu-panel button.active{ background:#1d4f91; border-color:#4d7dff; }
     #menu-panel .mode-row{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
     #menu-panel #all-day-toggle{ flex-direction:row; align-items:center; justify-content:flex-start; color:var(--fg); }
@@ -5090,12 +5096,13 @@ function generateContourLevels(maxDepth) {
   if (!Number.isFinite(maxDepth) || maxDepth <= 0) return [];
   const factor = depthUnit === "ft" ? 3.28084 : depthUnit === "fathom" ? 0.546806649 : 1;
   const maxDisplay = maxDepth * factor;
-  const stepDisplay = Math.max(5, Math.round((maxDisplay / 14) / 5) * 5);
-  const levels = [];
-  for (let displayLevel = stepDisplay; displayLevel <= maxDisplay + stepDisplay * 0.25; displayLevel += stepDisplay) {
-    levels.push(displayLevel / factor);
-  }
-  return levels;
+  // Use the same irregular-but-regularly-spaced fishing-depth pattern in
+  // every unit system: 25, 50, 100, 200, 500, ... . For very shallow
+  // extents, retain useful 5/10/20-unit contours instead of returning none.
+  const standard = [25, 50, 100, 200, 500, 1000, 2000, 5000, 10000];
+  const shallow = [5, 10, 20];
+  const levels = maxDisplay < 25 ? shallow : standard;
+  return levels.filter(level => level <= maxDisplay + 1e-9).map(level => level / factor);
 }
 
 function formatContourLevel(meters) {
@@ -6113,12 +6120,10 @@ function generateContourLevels(maxDepth) {
   if (!Number.isFinite(maxDepth) || maxDepth <= 0) return [];
   const factor = depthUnit === "ft" ? 3.28084 : depthUnit === "fathom" ? 0.546806649 : 1;
   const maxDisplay = maxDepth * factor;
-  const stepDisplay = Math.max(5, Math.round((maxDisplay / 14) / 5) * 5);
-  const levels = [];
-  for (let displayLevel = stepDisplay; displayLevel <= maxDisplay + stepDisplay * 0.25; displayLevel += stepDisplay) {
-    levels.push(displayLevel / factor);
-  }
-  return levels;
+  const standard = [25, 50, 100, 200, 500, 1000, 2000, 5000, 10000];
+  const shallow = [5, 10, 20];
+  const levels = maxDisplay < 25 ? shallow : standard;
+  return levels.filter(level => level <= maxDisplay + 1e-9).map(level => level / factor);
 }
 
 function extractContourSegments(bd, level, sx, sy, extent) {
