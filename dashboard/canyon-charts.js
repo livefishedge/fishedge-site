@@ -337,7 +337,8 @@
     window.fishedgeUnderwater = {
       setVisible: setVisible,
       toggle: function () { return setVisible(!state.visible); },
-      isVisible: function () { return state.visible; }
+      isVisible: function () { return state.visible; },
+      attachMap: attachToMap
     };
     var tick = 0;
     scoutMaps();

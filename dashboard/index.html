@@ -2049,6 +2049,8 @@ let _readoutHooked = false;
 let _relayoutHooked = false;
 
 let viewState = { hasRange:false, xRange:null, yRange:null, centerLonLat:null, zoom:null, rotation:0 };
+let viewportRestoreSerial = 0;
+let viewportRestoreLock = null;
 function viewportFromParams(params = QUERY_PARAMS) {
   const x0 = Number(params.get("x0"));
   const x1 = Number(params.get("x1"));
@@ -2159,6 +2161,7 @@ function appendViewportParams(url) {
   return url;
 }
 function syncViewStateFromOlMap(map) {
+  if (viewportRestoreLock && performance.now() < viewportRestoreLock.until) return;
   const vp = mapViewportRanges(map);
   if (!vp) return;
   viewState.hasRange = true;
@@ -2224,9 +2227,10 @@ function applyViewStateToOlMap(map, fallbackExtent) {
   view.fit(extent, { size, nearest: true });
 }
 
-function scheduleViewportRestore() {
+function scheduleViewportRestore(token = viewportRestoreLock?.token) {
   if (!viewState.hasRange) return;
   const restore = () => {
+    if (token !== viewportRestoreSerial) return;
     let map = null;
     if (currentVar === "combined") map = window._combinedMap;
     else if (currentVar === "thermal_fronts") map = thermalFrontState.map;
@@ -2235,11 +2239,20 @@ function scheduleViewportRestore() {
     map.updateSize();
     applyViewStateToOlMap(map, null);
   };
+  const release = () => {
+    if (!viewportRestoreLock || viewportRestoreLock.token !== token) return;
+    restore();
+    viewportRestoreLock = null;
+    if (currentVar === "combined" && window._combinedMap) syncViewStateFromOlMap(window._combinedMap);
+    else if (currentVar === "thermal_fronts" && thermalFrontState.map) syncViewStateFromOlMap(thermalFrontState.map);
+    else if (desktopMapState.map || mobileMapState.map) syncViewStateFromOlMap(desktopMapState.map || mobileMapState.map);
+  };
   requestAnimationFrame(() => {
     restore();
     requestAnimationFrame(restore);
   });
   setTimeout(restore, 250);
+  setTimeout(release, 650);
 }
 applyInitialViewportParams();
 let landTrace = null;
@@ -2445,6 +2458,7 @@ async function initDesktopMapIfNeeded() {
     interactions: desktopInteractions
   });
   desktopMapState.map.on("moveend", () => syncViewStateFromOlMap(desktopMapState.map));
+  window.fishedgeUnderwater?.attachMap?.(desktopMapState.map);
   installOlGestureZoomFallback(desktopMapState.map, target);
   // Add the OFM two-layer vector basemap (water below, land above). This
   // replaces the previous bathy-derived land mask as the desktop single-
@@ -5532,6 +5546,7 @@ function initMobileMapIfNeeded() {
     interactions: mobileInteractions
   });
   mobileMapState.map.on("moveend", () => syncViewStateFromOlMap(mobileMapState.map));
+  window.fishedgeUnderwater?.attachMap?.(mobileMapState.map);
   installOlGestureZoomFallback(mobileMapState.map, target);
   // Add the OFM two-layer vector basemap so the mobile single-product pages
   // match the combined dashboard's look.
@@ -5681,6 +5696,7 @@ async function renderCombinedMode() {
     try { window._combinedMap.dispose(); } catch (_) {}
     window._combinedMap.setTarget(undefined);
     window._combinedMap = null; // null BEFORE building new — so subsequent calls see a clean slate
+    window._combinedLandLayer = null;
     window._combinedChlLayer = null;
     window._combinedSstLayer = null;
     window._combinedBathyLayer = null;
@@ -5714,6 +5730,7 @@ async function renderCombinedMode() {
   });
   window._combinedMap = map;
   window._combinedMapRef = map;
+  window.fishedgeUnderwater?.attachMap?.(map);
   attachMapToUnifiedTarget(map);
   installCaptainToolHandler(map);
   if (captainAddTool.points.length) renderPtsLayer(map);
@@ -5885,6 +5902,16 @@ async function renderCombinedMode() {
   // ── Layer: Bathymetry contours ───────────────────────────────────────
   const bathyData = await loadBathymetryJson(BATHY_JSON_URL);
   const bathyGridInfo = { xAxis: bathyData.xAxis, yAxis: bathyData.yAxis, nx: bathyData.xAxis.length, ny: bathyData.yAxis.length };
+  // The OFM foreground keeps land labels/lines above data but intentionally
+  // omits land fills. Add the bathymetry-derived opaque mask here so contour
+  // lines and rasters cannot paint over land in the combined dashboard.
+  const combinedLandCanvas = makeMobileLandCanvas(bathyData);
+  if (combinedLandCanvas) {
+    const combinedLandSource = canvasToOlSource(combinedLandCanvas, frameExtentFromGrid({ xAxis: bathyData.xAxis, yAxis: bathyData.yAxis }));
+    const combinedLandLayer = new ol.layer.Image({ source: combinedLandSource, zIndex: 20 });
+    map.addLayer(combinedLandLayer);
+    window._combinedLandLayer = combinedLandLayer;
+  }
   const bathyLayer = buildBathyContourLayer(bathyData, bathyGridInfo, map);
   if (bathyLayer) { map.addLayer(bathyLayer); window._combinedBathyLayer = bathyLayer; }
 
@@ -9053,6 +9080,7 @@ async function addNearestFrontOverlay(fig, baseVar, baseFrameMeta) {
 }
 
 async function setCurrentVar(v, keepTime = true, keepRange = true) {
+  const switchToken = ++viewportRestoreSerial;
   const prevVar = currentVar;
   const prevFrames = framesByVar[prevVar] || [];
   const prevFrame = prevFrames[currentFrameIdx] || null;
@@ -9072,6 +9100,7 @@ async function setCurrentVar(v, keepTime = true, keepRange = true) {
       try { window._combinedMap.dispose(); } catch (_) {}
       window._combinedMap.setTarget(undefined);
       window._combinedMap = null;
+      window._combinedLandLayer = null;
     }
   }
 
@@ -9113,6 +9142,11 @@ async function setCurrentVar(v, keepTime = true, keepRange = true) {
     viewState.hasRange = true;
   }
   if (liveView) Object.assign(viewState, liveView);
+  if (savedRange || liveView) {
+    viewportRestoreLock = { token: switchToken, until: performance.now() + 650 };
+  } else {
+    viewportRestoreLock = null;
+  }
 
   syncRangeInputsToVar();
   updateSliderUI();
@@ -9123,7 +9157,7 @@ async function setCurrentVar(v, keepTime = true, keepRange = true) {
 
   if (frames.length || currentVar === "thermal_fronts") {
     await showFrame();
-    scheduleViewportRestore();
+    if (switchToken === viewportRestoreSerial) scheduleViewportRestore(switchToken);
   }
   if (currentVar === "combined" && toolbarStatus) toolbarStatus.textContent = "";
   else return;
