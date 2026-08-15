@@ -3050,6 +3050,13 @@ const dashboardChrome = {
 };
 function syncDashboardChrome() {
   const combined = currentVar === "combined" || document.body.classList.contains("combined-mode");
+  const nav = document.getElementById("nav-bar");
+  const slider = document.getElementById("frame-slider");
+  const progressVisible = !combined && dashboardChrome.toolbar && nav && slider &&
+    getComputedStyle(dashboardChrome.toolbar).display !== "none" &&
+    getComputedStyle(nav).display !== "none" &&
+    getComputedStyle(slider).display !== "none" &&
+    slider.getBoundingClientRect().width > 0;
   // Keep the control chrome explicit. CSS still provides the layout, but
   // these inline values prevent an async product switch or auth callback
   // from leaving the map visible with its controls hidden.
@@ -3074,10 +3081,22 @@ function syncDashboardChrome() {
   if (dashboardChrome.captainTools) {
     dashboardChrome.captainTools.style.display = "flex";
     dashboardChrome.captainTools.style.visibility = "visible";
+    dashboardChrome.captainTools.style.top = progressVisible
+      ? `${Math.ceil(dashboardChrome.toolbar.getBoundingClientRect().bottom + 4)}px`
+      : "8px";
   }
   if (dashboardChrome.host) dashboardChrome.host.style.display = "none";
 }
 syncDashboardChrome();
+if (typeof ResizeObserver === "function" && dashboardChrome.toolbar) {
+  const chromeResizeObserver = new ResizeObserver(() => syncDashboardChrome());
+  chromeResizeObserver.observe(dashboardChrome.toolbar);
+}
+if (typeof MutationObserver === "function" && dashboardChrome.toolbar) {
+  const chromeMutationObserver = new MutationObserver(() => syncDashboardChrome());
+  chromeMutationObserver.observe(dashboardChrome.toolbar, { attributes: true, childList: true, subtree: true });
+}
+window.addEventListener("resize", syncDashboardChrome);
 if (combinedProductSelect) {
   combinedProductSelect.value = currentVar;
   combinedProductSelect.addEventListener("change", async () => {
@@ -10226,6 +10245,15 @@ let captainDistTool = {
   lineLayer: null,
   mapRef: null
 };
+try {
+  const savedDistancePoints = JSON.parse(localStorage.getItem('fishedge_distance_points') || '[]');
+  if (Array.isArray(savedDistancePoints)) {
+    captainDistTool.points = savedDistancePoints.filter(p => Number.isFinite(p?.lon) && Number.isFinite(p?.lat));
+  }
+} catch (_) {}
+function persistDistancePoints() {
+  try { localStorage.setItem('fishedge_distance_points', JSON.stringify(captainDistTool.points)); } catch (_) {}
+}
 
 let captainAddTool = {
   active: false,
@@ -10245,7 +10273,6 @@ function activateDistTool(map) {
   if (captainAddTool.active) toggleAddTool(map);
   captainDistTool.active = true;
   captainDistTool.mapRef = map;
-  captainDistTool.points = [];
   document.getElementById('captain-dist-tool')?.classList.add('active');
   document.getElementById('captain-dist-tool')?.setAttribute('aria-pressed', 'true');
   document.getElementById('captain-dist-panel')?.classList.add('visible');
@@ -10257,13 +10284,11 @@ function activateDistTool(map) {
 function deactivateDistTool() {
   if (!captainDistTool.active) return;
   captainDistTool.active = false;
-  clearDistLayer();
   document.getElementById('captain-dist-tool')?.classList.remove('active');
   document.getElementById('captain-dist-tool')?.setAttribute('aria-pressed', 'false');
-  document.getElementById('captain-dist-panel')?.classList.remove('visible');
+  if (captainDistTool.points.length) document.getElementById('captain-dist-panel')?.classList.add('visible');
   const map = captainDistTool.mapRef;
   if (map) map.getTargetElement()?.style.setProperty('cursor', 'crosshair');
-  captainDistTool.points = [];
   updateDistPanel();
 }
 
@@ -10280,11 +10305,12 @@ function saveDistMeasurement() {
   try {
     localStorage.setItem('fishedge_last_distance_measurement', JSON.stringify({ pairs, savedAt: Date.now() }));
   } catch (_) {}
+  persistDistancePoints();
   captainDistTool.active = false;
   document.getElementById('captain-dist-tool')?.classList.remove('active');
   document.getElementById('captain-dist-tool')?.setAttribute('aria-pressed', 'false');
   captainDistTool.mapRef?.getTargetElement()?.style.setProperty('cursor', 'crosshair');
-  document.getElementById('captain-dist-panel')?.classList.add('collapsed');
+  document.getElementById('captain-dist-panel')?.classList.add('visible', 'collapsed');
 }
 
 function clearDistLayer() {
@@ -10313,7 +10339,7 @@ function updateDistPanel() {
     const p1 = captainDistTool.points[i];
     const p2 = captainDistTool.points[i + 1];
     const pair = Math.floor(i / 2) + 1;
-    list.innerHTML += `<div style="color:#7a8fa8;margin-bottom:4px;"><b style="color:var(--fg);">Pair ${pair}</b><br>Pt ${i + 1}: ${p1.lat.toFixed(4)}, ${p1.lon.toFixed(4)}`;
+    list.innerHTML += `<div style="color:#7a8fa8;margin-bottom:4px;"><div style="display:flex;justify-content:space-between;align-items:center;"><b style="color:var(--fg);">Pair ${pair}</b><button onclick="window.removeDistancePair(${pair - 1})" style="background:none;border:none;color:#7a8fa8;cursor:pointer;font-size:11px;padding:2px 4px;" title="Delete pair">✕</button></div>Pt ${i + 1}: ${p1.lat.toFixed(4)}, ${p1.lon.toFixed(4)}`;
     if (p2) {
       const d = getDistanceKm(p1, p2);
       running += d;
@@ -10326,6 +10352,17 @@ function updateDistPanel() {
   if (total) total.textContent = captainDistTool.points.length >= 2
     ? `Total: ${formatDist(running)}` : '';
 }
+
+window.removeDistancePair = function (pairIndex) {
+  const start = Number(pairIndex) * 2;
+  if (!Number.isInteger(start) || start < 0 || start >= captainDistTool.points.length) return;
+  captainDistTool.points.splice(start, 2);
+  persistDistancePoints();
+  const map = activeCaptainToolMap() || captainDistTool.mapRef;
+  if (map) renderDistLayer(map);
+  updateDistPanel();
+  if (!captainDistTool.points.length) document.getElementById('captain-dist-panel')?.classList.remove('visible');
+};
 
 function renderDistLayer(map) {
   clearDistLayer();
@@ -10357,6 +10394,7 @@ function renderDistLayer(map) {
 
 function addDistPoint(lon, lat, map) {
   captainDistTool.points.push({ lon, lat });
+  persistDistancePoints();
   renderDistLayer(map);
   updateDistPanel();
 }
@@ -10690,7 +10728,6 @@ document.getElementById('captain-pts-panel')?.addEventListener('click', event =>
 
 // Distance results use the same compact/collapsible interaction as Waypoints.
 document.getElementById('captain-dist-panel')?.addEventListener('click', event => {
-  if (!captainDistTool.active) return;
   if (event.target.closest('button, a, input, select')) return;
   document.getElementById('captain-dist-panel')?.classList.toggle('collapsed');
 });
@@ -10754,6 +10791,16 @@ let _captainMapClickMap = null;
 
 function installCaptainToolHandler(map) {
   if (!map) return;
+  if (captainDistTool.points.length) {
+    if (captainDistTool.lineLayer && captainDistTool.mapRef && captainDistTool.mapRef !== map) {
+      try { captainDistTool.mapRef.removeLayer(captainDistTool.lineLayer); } catch (_) {}
+      captainDistTool.lineLayer = null;
+    }
+    captainDistTool.mapRef = map;
+    renderDistLayer(map);
+    document.getElementById('captain-dist-panel')?.classList.add('visible');
+    updateDistPanel();
+  }
   if (_captainMapClickHandler && _captainMapClickMap) {
     _captainMapClickMap.un('click', _captainMapClickHandler);
   }
