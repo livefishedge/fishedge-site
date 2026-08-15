@@ -18,6 +18,10 @@
     'Undersea_Features/FeatureServer/0/query';
   var NJ_GROUNDS_URL =
     'https://www.shore-guide.com/data/downloads/nj-fishing-grounds.geojson';
+  // Local fishing-ground sources are compiled into one static asset during
+  // deployment. This avoids four live GIS requests and browser-side cleanup
+  // on every map attach/refresh.
+  var STATIC_LOCAL_GROUNDS_URL = 'data/fishing-grounds.json';
   var MD_FISHING_ROOT =
     'https://mdgeodata.md.gov/imap/rest/services/Biota/MD_Finfish/FeatureServer/10/query';
   var MD_REEF_ROOT =
@@ -48,6 +52,7 @@
     attributionEl: null,
     visible: false,
     showPolygons: false,
+    staticLocalPromise: null,
   };
 
   function log() {
@@ -251,18 +256,17 @@
     var cached = state.cache.get(key);
     if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) return Promise.resolve(cached.features);
     if (state.inflight.has(key)) return state.inflight.get(key);
-    var promise = Promise.all([
-      fetchNjLocal(bbox).catch(function (err) { logErr('NJ source failed', err); return []; }),
-      fetchArcGISLocal(MD_FISHING_ROOT, bbox, 'Fishing ground').catch(function (err) { logErr('MD grounds failed', err); return []; }),
-      fetchArcGISLocal(MD_REEF_ROOT, bbox, 'Artificial reef').catch(function (err) { logErr('MD reefs failed', err); return []; }),
-      fetchArcGISLocal(ATLANTIC_FISHING_ATLAS_ROOT, bbox, 'Fishing ground').then(function (features) {
-        return features.map(function (item) {
-          item.source = 'BOEM Atlantic Fishing Atlas';
-          return item;
+    if (!state.staticLocalPromise) {
+      state.staticLocalPromise = fetch(STATIC_LOCAL_GROUNDS_URL + '?v=1')
+        .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+        .then(function (j) { return Array.isArray(j.features) ? j.features : []; })
+        .catch(function (err) {
+          logErr('static fishing-ground asset failed', err && err.message ? err.message : err);
+          return [];
         });
-      }).catch(function (err) { logErr('Atlantic Fishing Atlas failed', err); return []; })
-    ]).then(function (sets) {
-      var features = sets[0].concat(sets[1], sets[2], sets[3]);
+    }
+    var promise = state.staticLocalPromise.then(function (allFeatures) {
+      var features = allFeatures.filter(function (item) { return pointInBbox(item.point, bbox); });
       state.cache.set(key, { features: features, fetchedAt: Date.now() });
       return features;
     }).catch(function (err) {
@@ -441,13 +445,13 @@
         ? intersectBboxes(viewportBbox, selectedRegionBbox())
         : viewportBbox;
       if (!bbox) return;
-      Promise.all([fetchGrounds(bbox), fetchGebco(bbox), fetchLocalGrounds(bbox)]).then(function (sets) {
-        // A usable local dataset owns the region. Federal/global sources are
-        // fallback-only so duplicate or less-local labels do not reappear
-        // beside NJ/MD fishing grounds.
-        var items = sets[2].length
-          ? mergeFeatures([], [], sets[2])
-          : mergeFeatures(sets[0], sets[1], []);
+      // Load the compiled local asset first. Only query the slower global
+      // services when this viewport has no local coverage at all.
+      fetchLocalGrounds(bbox).then(function (local) {
+        if (local.length) return mergeFeatures([], [], local);
+        return Promise.all([fetchGrounds(bbox), fetchGebco(bbox)])
+          .then(function (sets) { return mergeFeatures(sets[0], sets[1], []); });
+      }).then(function (items) {
         // ArcGIS can return polygons that intersect the query envelope while
         // their label centroid is outside it. Keep only labels in the actual
         // padded viewport so zooming in also reduces rendering work.
@@ -455,7 +459,7 @@
         state.items.set(map, function () { render(items); });
         render(items);
         log('refreshed', items.length, 'underwater structures');
-      });
+      }).catch(function (err) { logErr('fishing-ground refresh failed', err); });
     }
     map.on('moveend', refresh);
     map.on('change:size', refresh);
