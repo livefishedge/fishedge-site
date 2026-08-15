@@ -560,7 +560,7 @@
       display:none; flex-direction:column; gap:10px; padding:12px;
       background:rgba(5,11,16,0.94); border:1px solid rgba(255,255,255,0.22); border-radius:8px;
       box-shadow:0 12px 30px rgba(0,0,0,0.45); backdrop-filter:blur(8px);
-      box-sizing:border-box; max-height:calc(100dvh - 74px); overflow:auto;
+      box-sizing:border-box; height:min(640px, calc(100dvh - 74px)); overflow:auto;
     }
     #menu-panel.open{ display:flex; }
     #menu-panel label{ display:flex; flex-direction:column; gap:5px; font-size:12px; font-weight:800; color:#9fb0c3; }
@@ -584,6 +584,28 @@
       font-size:16px;
       font-weight:900;
     }
+    #hamburger-product-title,
+    #combined-product-title{
+      display:block; margin:0; color:var(--product-color,#8ed0ff);
+      font-size:22px; line-height:1.05; font-weight:950; letter-spacing:-.025em;
+    }
+    #hamburger-product-title::before,
+    #combined-product-title::before{
+      content:"CONTROL PANEL"; display:block; margin-bottom:5px;
+      color:#8ea4bb; font-size:10px; line-height:1; font-weight:850;
+      letter-spacing:.14em; text-transform:uppercase;
+    }
+    #hamburger-product-title[data-product="combined"],
+    #combined-product-title[data-product="combined"]{
+      color:#ffd166; font-size:24px; text-shadow:0 0 18px rgba(255,209,102,.18);
+    }
+    #hamburger-product-title[data-product="chl"], #combined-product-title[data-product="chl"]{ color:#62e58a; }
+    #hamburger-product-title[data-product="sst"], #combined-product-title[data-product="sst"]{ color:#ff9d57; }
+    #hamburger-product-title[data-product="thermal_fronts"], #combined-product-title[data-product="thermal_fronts"]{ color:#ff6b8a; }
+    #hamburger-product-title[data-product="uv"], #combined-product-title[data-product="uv"]{ color:#8bd7ff; }
+    #hamburger-product-title[data-product="bathy"], #combined-product-title[data-product="bathy"]{ color:#c59bff; }
+    #account-link-wrap{ margin-top:auto !important; padding-top:12px; border-top:1px solid rgba(255,255,255,.18); }
+    #account-link-wrap a, #combined-account-link a{ color:#ffd166 !important; font-size:13px !important; font-weight:900 !important; letter-spacing:.08em; }
     #menu-panel button.active{ background:#1d4f91; border-color:#4d7dff; }
     #menu-panel .mode-row{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
     #menu-panel #all-day-toggle{ flex-direction:row; align-items:center; justify-content:flex-start; color:var(--fg); }
@@ -610,7 +632,7 @@
       #toolbar-status{ order:2; flex:1 1 100%; white-space:normal; }
       #menu-panel{
         top:58px; right:6px; width:min(360px, calc(100vw - 12px));
-        max-height:calc(100dvh - 66px); padding:10px; gap:8px;
+        height:min(680px, calc(100dvh - 66px)); padding:10px; gap:8px;
       }
       #menu-panel .hamburger-range-block{
         display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr);
@@ -1317,10 +1339,8 @@ body.combined-mode #combined-menu-btn{
     <div id="captain-dist-total" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-weight:700;color:var(--fg);"></div>
   </div>
   <div id="combined-controls">
-    <div style="text-align:center;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--border);">
-      <a href="account.html" style="color:var(--accent2);font-size:12px;font-weight:700;text-decoration:none;letter-spacing:0.05em;">MY ACCOUNT</a>
-    </div>
     <div class="combined-section">
+      <h1 id="combined-product-title" data-product="combined">Captain's Dashboard</h1>
       <select id="combined-product-select">
         <option value="combined">Captain's Dashboard</option>
         <option value="chl">Chlorophyll</option>
@@ -1437,6 +1457,9 @@ body.combined-mode #combined-menu-btn{
         </div>
       </div>
     </div>
+    <div id="combined-account-link" style="margin-top:auto;padding-top:12px;border-top:1px solid var(--border);text-align:center;">
+      <a href="account.html" style="text-decoration:none;">MY ACCOUNT</a>
+    </div>
   </div>
   <button id="combined-menu-btn" aria-label="Toggle sidebar" style="display:none;position:fixed;top:8px;right:8px;z-index:40;width:44px;height:44px;background:var(--panel);border:none;border-left:1px solid var(--border);cursor:pointer;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:0;">
     <span style="display:block;width:18px;height:2px;background:var(--fg);border-radius:2px;"></span>
@@ -1455,6 +1478,7 @@ body.combined-mode #combined-menu-btn{
 
   <div id="menu-panel">
       <label id="hamburger-product-label">
+        <h1 id="hamburger-product-title" data-product="combined">Captain's Dashboard</h1>
         <select id="hamburger-product-select">
           <option value="combined">Captain's Dashboard</option>
           <option value="chl">Chlorophyll</option>
@@ -2180,6 +2204,20 @@ function currentLiveViewStateForMap(map) {
 function syncProductSelectors() {
   if (hamburgerProductSelect) hamburgerProductSelect.value = currentVar;
   if (combinedProductSelect) combinedProductSelect.value = currentVar;
+  const labels = {
+    combined: "Captain's Dashboard",
+    chl: "Chlorophyll",
+    sst: "Temperature",
+    thermal_fronts: "Thermal Fronts",
+    uv: "Currents / Height",
+    bathy: "Bathymetry"
+  };
+  [document.getElementById("hamburger-product-title"), document.getElementById("combined-product-title")]
+    .filter(Boolean)
+    .forEach((el) => {
+      el.textContent = labels[currentVar] || "Captain's Dashboard";
+      el.dataset.product = currentVar;
+    });
 }
 function applyViewStateToOlMap(map, fallbackExtent) {
   if (!map) return;
