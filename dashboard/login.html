@@ -299,13 +299,17 @@
           btn.disabled = true;
           setStatus('Sending…', '');
 
+          try { localStorage.setItem('fishedge:pending_verification', email); } catch (e) {}
+
           var redirectTo = window.omvAuthRedirectUrl
             ? window.omvAuthRedirectUrl('account.html')
-            : new URL('account.html', 'https://livefishedge.github.io/view/').href;
+            : new URL('account.html', window.location.href).href;
+          var redirectUrl = new URL(redirectTo);
+          redirectUrl.searchParams.set('email', email);
           var res = await sb.auth.resend({
             type: 'signup',
             email: email,
-            options: { emailRedirectTo: redirectTo }
+            options: { emailRedirectTo: redirectUrl.href }
           });
 
           if (res && res.error) {

@@ -209,13 +209,17 @@
           return;
         }
 
+        try { localStorage.setItem('fishedge:pending_verification', actualEmail); } catch (e) {}
+
         var redirectTo = window.omvAuthRedirectUrl
           ? window.omvAuthRedirectUrl('account.html')
-          : new URL('account.html', 'https://app.fishedge.live/dashboard/signup-success.html').href;
+          : new URL('account.html', window.location.href).href;
+        var redirectUrl = new URL(redirectTo);
+        redirectUrl.searchParams.set('email', actualEmail);
         var res = await sb.auth.resend({
           type: 'signup',
           email: actualEmail,
-          options: { emailRedirectTo: redirectTo }
+          options: { emailRedirectTo: redirectUrl.href }
         });
 
         if (res && res.error) {

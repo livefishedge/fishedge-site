@@ -199,7 +199,14 @@
 
         var pendingEmail = null;
         try {
-          pendingEmail = localStorage.getItem('fishedge:pending_verification');
+          var urlEmail = new URLSearchParams(window.location.search).get('email');
+          if (urlEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(urlEmail)) {
+            pendingEmail = urlEmail;
+            try { localStorage.setItem('fishedge:pending_verification', pendingEmail); } catch (e) {}
+          }
+          if (!pendingEmail) {
+            pendingEmail = localStorage.getItem('fishedge:pending_verification');
+          }
         } catch (e) {}
 
         if (pendingEmail) {
@@ -211,9 +218,8 @@
           return;
         }
 
-        // No stashed email (cookies cleared, or they registered on a different
-        // device). Send them to verify-email.html where they can re-enter their
-        // address.
+        // No email in the redirect and no same-browser stash. Send them to
+        // verify-email.html where they can re-enter their address.
         renderConfirm('err',
           'That confirmation link has expired. ' +
           '<a href="verify-email.html" style="color:var(--accent2);text-decoration:underline">Send a fresh one</a>.');
@@ -352,6 +358,12 @@
     });
   }
 
+  function escHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[c];
+    });
+  }
+
   // "Link expired" page with a Resend button. Auto-resend on mount would
   // surprise the captain with an email they didn't ask for; this gives them
   // explicit control.
@@ -361,7 +373,7 @@
         '<h1 class="err">Link Expired</h1>' +
         '<p class="err" style="opacity:0.85;line-height:1.5">' +
           'Your confirmation link expired — they only last one hour. ' +
-          'We can send a fresh one to <strong>' + email + '</strong>.' +
+          'We can send a fresh one to <strong>' + escHtml(email) + '</strong>.' +
         '</p>' +
         '<button id="resend-expired-btn" type="button" ' +
           'style="width:100%;padding:13px;margin-top:22px;background:var(--accent);color:#fff;border:0;border-radius:8px;font-size:1rem;font-weight:700;cursor:pointer">Resend Confirmation Email</button>' +
@@ -387,12 +399,13 @@
       setStatus('', '');
       var redirectTo = window.omvAuthRedirectUrl
         ? window.omvAuthRedirectUrl('account.html')
-        : new URL('account.html',
-            'https://app.fishedge.live/dashboard/signup-success.html').href;
+        : new URL('account.html', window.location.href).href;
+      var redirectUrl = new URL(redirectTo);
+      redirectUrl.searchParams.set('email', email);
       var res = await sb.auth.resend({
         type: 'signup',
         email: email,
-        options: { emailRedirectTo: redirectTo }
+        options: { emailRedirectTo: redirectUrl.href }
       });
       if (res && res.error) {
         // Most common: over_email_send_rate_limit. Show it verbatim so the
@@ -404,8 +417,8 @@
       }
       // Success — flip to the "fresh email sent" confirmation screen.
       renderResent(
-        'A fresh confirmation link is on its way to <strong>' + email + '</strong>. ' +
-        'Open it within 24 hours this time and you\'re in.');
+        'A fresh confirmation link is on its way to <strong>' + escHtml(email) + '</strong>. ' +
+        'Open it within one hour and you\'re in.');
     });
   }
 

@@ -160,9 +160,16 @@
     return valid;
   }
 
-  function authRedirectUrl(path) {
-    if (window.omvAuthRedirectUrl) return window.omvAuthRedirectUrl(path);
-    return new URL(path, 'https://livefishedge.github.io/view/').href;
+  function authRedirectUrl(path, email) {
+    var href = window.omvAuthRedirectUrl
+      ? window.omvAuthRedirectUrl(path)
+      : new URL(path, window.location.href).href;
+    if (email) {
+      var u = new URL(href);
+      u.searchParams.set('email', email);
+      return u.href;
+    }
+    return href;
   }
 
   // ── Google Identity Services ─────────────────────────────────────────────
@@ -198,7 +205,7 @@
       password: password,
       options: {
         data: { name: name, phone: phone, selected_region: region },
-        emailRedirectTo: authRedirectUrl('account.html')
+        emailRedirectTo: authRedirectUrl('account.html', email)
       }
     });
 
