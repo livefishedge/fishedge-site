@@ -601,6 +601,7 @@
     #menu-panel #hamburger-product-select[data-product="sst"], #combined-product-select[data-product="sst"]{ color:#ff9d57; }
     #menu-panel #hamburger-product-select[data-product="thermal_fronts"], #combined-product-select[data-product="thermal_fronts"]{ color:#ff6b8a; }
     #menu-panel #hamburger-product-select[data-product="uv"], #combined-product-select[data-product="uv"]{ color:#8bd7ff; }
+    #menu-panel #hamburger-product-select[data-product="sla"], #combined-product-select[data-product="sla"]{ color:#ffcf66; }
     #menu-panel #hamburger-product-select[data-product="bathy"], #combined-product-select[data-product="bathy"]{ color:#c59bff; }
     #account-link-wrap{ margin-top:auto !important; padding-top:12px; border-top:1px solid rgba(255,255,255,.18); }
     #account-link-wrap a, #combined-account-link a{ color:#ffd166 !important; font-size:13px !important; font-weight:900 !important; letter-spacing:.08em; }
@@ -1364,9 +1365,10 @@
         <option value="combined">Captain's Dashboard</option>
         <option value="chl">Chlorophyll</option>
         <option value="sst">Temperature</option>
-        <option value="thermal_fronts">Thermal Fronts</option>
-        <option value="uv">Currents/Height</option>
-        <option value="bathy">Bathymetry</option>
+          <option value="thermal_fronts">Thermal Fronts</option>
+          <option value="uv">Currents/Height</option>
+          <option value="sla">Sea Level Anomaly</option>
+          <option value="bathy">Bathymetry</option>
       </select>
     </div>
     <div class="combined-section">
@@ -1444,6 +1446,13 @@
         <button id="combined-height-unit-toggle" class="combined-unit-button" type="button">ft</button>
       </div>
       <label class="combined-toggle">
+        <input type="checkbox" id="chk-combined-sla">
+        <span class="box"></span>
+        <span class="combined-dot dot-front"></span>
+        <span>Sea Level Anomaly</span>
+      </label>
+      <div id="combined-sla-scan-time" style="font-size:11px;color:#ffcf66;margin-left:28px;margin-bottom:8px;"></div>
+      <label class="combined-toggle">
         <input type="checkbox" id="chk-combined-fishing" checked>
         <span class="box"></span>
         <span class="combined-dot dot-bathy"></span>
@@ -1491,9 +1500,10 @@
           <option value="combined">Captain's Dashboard</option>
           <option value="chl">Chlorophyll</option>
           <option value="sst">Temperature</option>
-          <option value="thermal_fronts">Thermal Fronts</option>
-          <option value="uv">Currents/Height</option>
-          <option value="bathy">Bathymetry</option>
+        <option value="thermal_fronts">Thermal Fronts</option>
+        <option value="uv">Currents/Height</option>
+        <option value="sla">Sea Level Anomaly</option>
+        <option value="bathy">Bathymetry</option>
         </select>
       </label>
       <div id="thermal-front-controls">
@@ -1892,15 +1902,18 @@ const VAR_LABELS = {
   chl:"Chlorophyll", sst:"Temperature",
   chl_front:"CHL Fronts", sst_front:"SST Fronts",
   uv:"Currents/Height",
+  sla:"Sea Level Anomaly",
   bathy:"Bathymetry",
   thermal_fronts:"Thermal Fronts",
   combined:"Captain's Dashboard"
 };
+window.__FISHEDGE_SLA_BUILD = { contract: "sla-product-v1", sha: "feat-sea-level-anomaly" };
 
 const VAR_TO_GRID = {
   chl: "viirs_chl_750_grid.json",
   sst: "goes_sst_1000_grid.json",
   uv:  "uv_12500_grid.json",
+  sla: null,
   thermal_fronts: null,   // thermal_fronts frames have no grid file — inferred from frame metadata
   combined: null
 };
@@ -1939,6 +1952,7 @@ const DEFAULT_RANGES = {
   chl_front: { vmin: 1.0, vmax: 3.0, unit: "fold/km" },
   sst_front: { vmin: 0.0, vmax: 1.0, unit: "°C/km" },
   uv:    { vmin: -1.0, vmax: 5.0, unit: "Height (ft)" }, /* ADT/SSH is stored in metres and displayed in feet. */
+  sla:   { vmin: -0.5, vmax: 0.5, unit: "SLA (m)" },
   bathy: { vmin: 0.0,  vmax: 3000.0, unit: "m" },
   thermal_fronts: { vmin: 0.0, vmax: 1.0, unit: "°C/km" },
   combined: { vmin: 0.0, vmax: 1.0, unit: "" }
@@ -1950,6 +1964,7 @@ let userRanges = {
   chl_front: { ...DEFAULT_RANGES.chl_front },
   sst_front: { ...DEFAULT_RANGES.sst_front },
   uv:    { ...DEFAULT_RANGES.uv },
+  sla:   { ...DEFAULT_RANGES.sla },
   bathy: { ...DEFAULT_RANGES.bathy },
   thermal_fronts: { ...DEFAULT_RANGES.thermal_fronts },
   combined: { ...DEFAULT_RANGES.combined }
@@ -1984,6 +1999,7 @@ function unitLabelForVar(varKey) {
   if (varKey === "sst" || varKey === "thermal_fronts" || varKey === "sst_front") return tempUnitLabel();
   if (varKey === "bathy") return depthUnitLabel();
   if (varKey === "uv") return `Height (${heightUnitLabel()})`;
+  if (varKey === "sla") return "Sea Level Anomaly (m)";
   return DEFAULT_RANGES[varKey]?.unit || "";
 }
 function formatArrowSpeed(ms) {
@@ -2099,6 +2115,11 @@ const UV_SCALE = [
   [0.75, "#fde725"],
   [1.00, "#fff7bc"]
 ];
+const SLA_SCALE = [
+  [0.00, "#2166ac"],
+  [0.50, "#f7f7f7"],
+  [1.00, "#b2182b"]
+];
 
 /* show 0.01, 0.1, 1, 10 on CHL colorbar */
 const CHL_TICKS_LINEAR = [0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10];
@@ -2107,8 +2128,8 @@ const CHL_TICKTEXT = CHL_TICKS_LINEAR.map(v => ([0.02,0.1,1,10].includes(v)) ? S
 
 /* ========================= STATE ========================= */
 let lastUpdateTimestamp = null;
-let framesByVar = { chl: [], sst: [], chl_front: [], sst_front: [], uv: [], bathy: [], thermal_fronts: [], combined: [] };
-let frameTimesByVar = { chl: [], sst: [], chl_front: [], sst_front: [], uv: [], bathy: [], thermal_fronts: [], combined: [] };
+let framesByVar = { chl: [], sst: [], chl_front: [], sst_front: [], uv: [], sla: [], bathy: [], thermal_fronts: [], combined: [] };
+let frameTimesByVar = { chl: [], sst: [], chl_front: [], sst_front: [], uv: [], sla: [], bathy: [], thermal_fronts: [], combined: [] };
 const INITIAL_VAR = QUERY_PARAMS.get("var");
 let currentVar = VAR_LABELS[INITIAL_VAR] ? INITIAL_VAR : "combined";
 let currentFrameIdx = 0;
@@ -2652,6 +2673,7 @@ function renderDesktopReadout(lon, lat, pixel) {
   }
   const { value, row, col } = sample;
   if (currentVar === "sst") setReadout(`${base}, ${formatSstValue(value)}`);
+  else if (currentVar === "sla") setReadout(`${base}, SLA ${Number(value).toFixed(3)} m`);
   else if (currentVar === "bathy") setReadout(`${base}, ${formatDepth(value)}`);
   else if (currentVar === "uv") {
     const d = (dataObj && dataObj.data && !Array.isArray(dataObj.data)) ? dataObj.data : dataObj;
@@ -3189,6 +3211,7 @@ const chkChl = document.getElementById("chk-combined-chl");
 const chkSst = document.getElementById("chk-combined-sst");
 const chkUv = document.getElementById("chk-combined-uv");
 const chkHeight = document.getElementById("chk-combined-height");
+const chkSla = document.getElementById("chk-combined-sla");
 const chkBathy = document.getElementById("chk-combined-bathy");
 const chkFront = document.getElementById("chk-combined-front");
 const chkFishing = document.getElementById("chk-combined-fishing");
@@ -3333,6 +3356,13 @@ if (chkBathy) chkBathy.addEventListener("change", e => {
 });
 if (chkHeight) chkHeight.addEventListener("change", e => {
   if (window._combinedHeightLayer) window._combinedHeightLayer.setVisible(e.target.checked);
+});
+if (chkSla) chkSla.addEventListener("change", async e => {
+  if (!e.target.checked) {
+    if (window._combinedSlaLayer) window._combinedSlaLayer.setVisible(false);
+    return;
+  }
+  if (window._combinedMap) await rebuildCombinedSlaLayer(window._combinedMap);
 });
 if (chkFront) chkFront.addEventListener("change", e => {
   if (window._combinedFrontDensityLayer) window._combinedFrontDensityLayer.setVisible(e.target.checked);
@@ -3912,6 +3942,7 @@ function timeOnlyLabel(varKey, frameMeta) {
   if (varKey === "sst") { const dt = parseSstUtcFromName(filename); return dt ? (isPortrait() ? fmtPortraitDaytimeLocal(dt) : fmtLocalDateTime(dt)) : ""; }
   if (varKey === "chl_front" || varKey === "sst_front") { const dt = parseFrontUtcFromName(filename); return dt ? (isPortrait() ? fmtPortraitDaytimeLocal(dt) : fmtLocalDateTime(dt)) : ""; }
   if (varKey === "uv")  { const dt = parseUvDateFromName(filename);  return dt ? fmtLocalDate(dt) : ""; }
+  if (varKey === "sla") { const dt = frameMeta?.time_iso ? new Date(frameMeta.time_iso) : null; return dt && !isNaN(dt) ? fmtLocalDate(dt) : ""; }
   return "";
 }
 
@@ -3975,6 +4006,7 @@ function epochMsForFrame(varKey, frameMeta) {
   if (varKey === "sst") dt = parseSstUtcFromName(filename);
   if (varKey === "chl_front" || varKey === "sst_front") dt = parseFrontUtcFromName(filename);
   if (varKey === "uv")  dt = parseUvDateFromName(filename);
+  if (varKey === "sla" && frameMeta?.time_iso) dt = new Date(frameMeta.time_iso);
   // Fallback: use time_iso from frame metadata (handles SGLI and other sensors with non-standard filenames)
   if (!dt && frameMeta?.time_iso) {
     dt = new Date(frameMeta.time_iso);
@@ -3997,6 +4029,7 @@ function filterFramesForVar(varKey, frames) {
     if (varKey === "chl_front" && !fn.startsWith("chlfront_")) continue;
     if (varKey === "sst_front" && !fn.startsWith("sstfront_")) continue;
     if (varKey === "uv"  && !fn.startsWith("uv_")) continue;
+    if (varKey === "sla" && !fn.startsWith("sla_")) continue;
     if (varKey === "thermal_fronts" && !fn.startsWith("sstfront_")) continue;
     out.push(f);
   }
@@ -4016,7 +4049,7 @@ function closestIndex(times, targetMs) {
 }
 
 function isDaytimeFrame(varKey, frameMeta) {
-  if (varKey === "bathy" || varKey === "uv") return true;
+  if (varKey === "bathy" || varKey === "uv" || varKey === "sla") return true;
   const t = epochMsForFrame(varKey, frameMeta);
   if (t === null) return true;
   const hr = new Date(t).getUTCHours();
@@ -4617,11 +4650,29 @@ function buildBathy(bathy) {
   };
 }
 
+function buildSla(gridInfo, dataObj) {
+  const z = dataObj?.sla || dataObj?.z || dataObj?.data;
+  if (!is2D(z)) throw new Error("SLA JSON missing 2-D key: sla");
+  const lo = DEFAULT_RANGES.sla.vmin;
+  const hi = DEFAULT_RANGES.sla.vmax;
+  return {
+    data: [{
+      type: "heatmap",
+      x: gridInfo.xAxis, y: gridInfo.yAxis, z,
+      customdata: z, hoverinfo: "none", showscale: false,
+      zauto: false, zmin: lo, zmax: hi,
+      colorscale: SLA_SCALE, colorbar: colorbarFor("sla"), zsmooth: false
+    }],
+    layout: stableLayout()
+  };
+}
+
 function buildForVar(varKey, gridInfo, dataObj) {
   if (varKey === "chl") return buildChl(gridInfo, dataObj);
   if (varKey === "sst") return buildSst(gridInfo, dataObj);
   if (varKey === "chl_front" || varKey === "sst_front") return buildFrontLines(gridInfo, dataObj, varKey);
   if (varKey === "uv")  return buildUv(gridInfo, dataObj);
+  if (varKey === "sla") return buildSla(gridInfo, dataObj);
   throw new Error(`Unsupported varKey=${varKey}`);
 }
 
@@ -4673,6 +4724,7 @@ function mobileValueConfig(varKey) {
   }
   if (varKey === "sst") return { scale: SST_SCALE, lo: userRanges.sst.vmin, hi: userRanges.sst.vmax, transform: v => v };
   if (varKey === "uv") return { scale: UV_SCALE, lo: userRanges.uv.vmin, hi: userRanges.uv.vmax, transform: v => v };
+  if (varKey === "sla") return { scale: SLA_SCALE, lo: userRanges.sla.vmin, hi: userRanges.sla.vmax, transform: v => v };
   return { scale: BATHY_SCALE, lo: userRanges.bathy.vmin, hi: userRanges.bathy.vmax, transform: v => v };
 }
 
@@ -4684,6 +4736,7 @@ function mobileZForVar(varKey, dataObj) {
     const adt = d?.adt || dataObj?.meta?.grid?.adt || d?.z;
     return is2D(adt) ? adt.map(row => row.map(v => metersToHeight(v))) : adt;
   }
+  if (varKey === "sla") return dataObj.sla || dataObj.z || dataObj.data;
   if (varKey === "bathy") return dataObj.depth;
   return null;
 }
@@ -6096,6 +6149,11 @@ async function renderCombinedMode() {
   // NEWEST UV frame (not the oldest) and refreshes on demand.
   const uvHoursSel = document.getElementById("combined-uv-hours");
   await rebuildCombinedUvLayer(map, { hoursMode: uvHoursSel?.value || "latest" });
+  // SLA is deliberately opt-in so the production dashboard's initial
+  // appearance and network behavior remain unchanged.
+  if (document.getElementById("chk-combined-sla")?.checked) {
+    await rebuildCombinedSlaLayer(map);
+  }
 
   // ── Layer: Thermal fronts — fixed-pixel point symbols
   await thermalLoadData();
@@ -7157,6 +7215,38 @@ async function rebuildCombinedUvLayer(map, { hoursMode = "latest" } = {}) {
   }
 }
 
+async function rebuildCombinedSlaLayer(map) {
+  if (window._combinedSlaLayer && map) {
+    try { map.removeLayer(window._combinedSlaLayer); } catch (_) {}
+    window._combinedSlaLayer = null;
+  }
+  const status = document.getElementById("combined-sla-scan-time");
+  const frames = framesByVar.sla || [];
+  if (!frames.length) { if (status) status.textContent = "Sea Level Anomaly unavailable"; return null; }
+  const frame = [...frames].sort((a,b) => (epochMsForFrame("sla", b) || 0) - (epochMsForFrame("sla", a) || 0))[0];
+  try {
+    const data = await fetchFrameData("sla", frame);
+    const grid = await loadGridForVar("sla", data);
+    const canvas = makeMobileRasterCanvas("sla", grid, data);
+    const layer = new ol.layer.Image({
+      source: canvasToOlSource(canvas, frameExtentFromGrid(grid)),
+      zIndex: 11,
+      opacity: 0.58
+    });
+    layer.setVisible(Boolean(chkSla?.checked));
+    map.addLayer(layer);
+    window._combinedSlaLayer = layer;
+    window._combinedSlaData = data;
+    window._combinedSlaGrid = grid;
+    if (status) status.textContent = frame.time_iso ? `Source: ${fmtDaytimeLocal(epochMsForFrame("sla", frame))}` : "Source loaded";
+    return layer;
+  } catch (err) {
+    console.warn("[SLA] combined render failed", err);
+    if (status) status.textContent = "Sea Level Anomaly unavailable";
+    return null;
+  }
+}
+
 // Wire the UV hours select. Idempotent.
 function combinedUvWireHoursSelect() {
   const sel = document.getElementById("combined-uv-hours");
@@ -7530,7 +7620,7 @@ async function renderMobileFrame(frameMeta) {
   // during the async fetch above, AFTER the early-return at the top of
   // this function ran. The mobile raster canvas only handles single-variable
   // 2-D rasters, so bail out cleanly for any non-raster view.
-  if (currentVar !== "chl" && currentVar !== "sst" && currentVar !== "uv" && currentVar !== "bathy") {
+  if (currentVar !== "chl" && currentVar !== "sst" && currentVar !== "uv" && currentVar !== "sla" && currentVar !== "bathy") {
     console.info("[OL mobile] renderMobileFrame: skipping — currentVar=" + currentVar + " has no 2-D mobile raster");
     document.body.classList.remove("mobile-map-ready");
     return false;
@@ -9470,12 +9560,13 @@ async function loadIndex() {
   framesByVar.chl_front = filterFramesForVar("chl_front", fbv.chl_front || []);
   framesByVar.sst_front = filterFramesForVar("sst_front", fbv.sst_front || []);
   framesByVar.uv  = filterFramesForVar("uv",  fbv.uv  || []);
+  framesByVar.sla = filterFramesForVar("sla", fbv.sla || []);
   const thermalSourceFrames = (fbv.thermal_fronts && fbv.thermal_fronts.length) ? fbv.thermal_fronts : (fbv.sst_front || []);
   framesByVar.thermal_fronts = filterFramesForVar("thermal_fronts", thermalSourceFrames);
   framesByVar.bathy = [{ json_path: BATHY_JSON_URL }];
   framesByVar.combined = [{ json_path: "__combined_native__" }];
 
-  for (const v of ["chl","sst","chl_front","sst_front","uv","bathy","thermal_fronts","combined"]) {
+  for (const v of ["chl","sst","chl_front","sst_front","uv","sla","bathy","thermal_fronts","combined"]) {
     framesByVar[v].sort((a,b) => (epochMsForFrame(v,a) ?? 0) - (epochMsForFrame(v,b) ?? 0));  // oldest-first → left=oldest, right=newest
     frameTimesByVar[v] = framesByVar[v].map(f => epochMsForFrame(v,f));
   }
@@ -9524,7 +9615,7 @@ async function loadIndex() {
 
 function inferGridFromFrame(v, dataObj) {
   const bbox = dataObj && dataObj.bbox;
-  const z = v === "uv" ? dataObj?.adt : (dataObj?.sst || dataObj?.z || dataObj?.chl || dataObj?.data);
+  const z = v === "uv" ? dataObj?.adt : (v === "sla" ? dataObj?.sla : (dataObj?.sst || dataObj?.z || dataObj?.chl || dataObj?.data));
   const ny = dataObj?.ny || (Array.isArray(z) ? z.length : 0);
   const nx = dataObj?.nx || (Array.isArray(z) && Array.isArray(z[0]) ? z[0].length : 0);
   if (!bbox || bbox.length < 4 || !nx || !ny) throw new Error(`Cannot infer grid for ${v}`);
