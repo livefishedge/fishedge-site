@@ -71,13 +71,13 @@
     <h1>FishEdge</h1>
     <p class="subtitle">Sign in to access your marine intelligence dashboard.</p>
 
-    <div id="verify-banner" style="display:none;margin-bottom:14px;padding:10px 12px;border:1px solid #f59e0b;background:rgba(245,158,11,0.08);color:#fbbf24;border-radius:8px;font-size:12.5px;line-height:1.4;">
+    <div id="verify-banner" style="display:none;margin-bottom:14px;padding:14px 16px;border:2px solid #dc2626;background:rgba(220,38,38,0.12);color:#fca5a5;border-radius:10px;font-size:13.5px;line-height:1.5;font-weight:600;">
       <div>Please verify your email before accessing the dashboard. Check your inbox for the confirmation link, then sign in.</div>
-      <div id="resend-wrap" style="margin-top:8px;font-size:12px;color:#9fb0c2">
-        Didn't get the email?
-        <button type="button" id="resend-btn" style="all:unset;color:var(--accent2);font-weight:700;cursor:pointer;text-decoration:underline;text-underline-offset:3px;padding:0 2px">Resend confirmation</button>
+      <div id="resend-wrap" style="margin-top:10px;font-size:12.5px;color:#fda4af">
+        Didn't get the email — or did your link expire?
+        <button type="button" id="resend-btn" style="all:unset;color:#fff;background:var(--accent);font-weight:700;cursor:pointer;padding:6px 12px;border-radius:6px;margin-left:6px;font-size:12px">Resend confirmation</button>
         <span id="resend-cooldown" style="display:none;color:#7a8fa6"></span>
-        <span id="resend-status" style="display:block;margin-top:6px;font-size:11.5px" role="status" aria-live="polite"></span>
+        <span id="resend-status" style="display:block;margin-top:8px;font-size:11.5px" role="status" aria-live="polite"></span>
       </div>
     </div>
 
@@ -241,19 +241,26 @@
           setTimeout(function(){ tickCooldown(remaining - 1000); }, 1000);
         }
 
-        // Auto-show the banner+resend if the page was reached with reason=verify,
-        // or if the email field already has a value (sticky from prior attempt).
+        // Auto-show the banner+resend if ANY of:
+        //   (a) the page was reached with ?reason=verify (legacy bounce path)
+        //   (b) sessionStorage flag was set by a prior bounce from the dashboard
+        //   (c) localStorage has a stashed pending_verification email — captain
+        //       who registered but never confirmed, coming back hours/days later.
+        // Also prefill the email field so Resend is one tap.
         try {
           var params = new URLSearchParams(window.location.search);
           var reason = params.get('reason');
           var sticky = sessionStorage.getItem('email_verification_required') === 'true';
-          var emailInForm = (document.getElementById('email').value || '').trim();
-          if (reason === 'verify' || sticky) {
+          var pending = null;
+          try { pending = localStorage.getItem('fishedge:pending_verification'); } catch (_) {}
+          var emailEl = document.getElementById('email');
+          var emailInForm = (emailEl.value || '').trim();
+
+          if (reason === 'verify' || sticky || pending) {
             banner.style.display = 'block';
-          } else if (emailInForm) {
-            // user typed an email but hasn't submitted yet — keep banner hidden until
-            // they sign in once; this guards against showing the resend widget
-            // preemptively on cold page loads.
+          }
+          if (pending && !emailInForm) {
+            emailEl.value = pending;
           }
         } catch(e) {}
 
@@ -323,6 +330,10 @@
           btn.textContent = 'Sign in';
           return;
         }
+
+        // Captain is fully signed in. Clear the pending-verification stash so the
+        // loud red banner does not auto-show on their next cold visit to login.
+        try { localStorage.removeItem('fishedge:pending_verification'); } catch (e) {}
 
         // If there's a pending profile from registration, create it now
         try {

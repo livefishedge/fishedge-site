@@ -107,6 +107,9 @@
         window.location.replace('login.html');
         return;
       }
+      // Email is confirmed. Clear the "pending verification" stash so login.html's
+      // loud red banner does not auto-show on the captain's next cold visit.
+      try { localStorage.removeItem('fishedge:pending_verification'); } catch(e) {}
       // Fetch profile
       var profile = null;
       try {
@@ -131,8 +134,117 @@
       attachLogout();
       attachEditProfile();
     } else {
+      // No session. The captain may have just clicked an *expired* confirmation
+      // link — Supabase redirects with #error_code=otp_expired (and friends) when
+      // the token has aged past OTP_EXPIRY (default 1h). Auto-resend using the
+      // email stashed at signup so captains don't get stranded at this gate.
+      var hash = String(window.location.hash || '');
+      var hashParams = new URLSearchParams(hash.substring(1));
+      var errorCode = hashParams.get('error_code') || '';
+      var errorDesc = hashParams.get('error_description') || '';
+      var isExpiredLink = errorCode === 'otp_expired'
+        || /expired/i.test(errorDesc)
+        || /invalid/i.test(errorDesc);
+
+      if (isExpiredLink) {
+        // Strip the stale hash so it doesn't get re-parsed on refresh.
+        try {
+          history.replaceState(null, '',
+            window.location.pathname + window.location.search);
+        } catch (e) {}
+
+        var pendingEmail = null;
+        try {
+          pendingEmail = localStorage.getItem('fishedge:pending_verification');
+        } catch (e) {}
+
+        if (pendingEmail) {
+          // Render an explicit "link expired" page with a Resend button.
+          // Auto-firing resend on mount would send an email the captain didn't
+          // ask for; making it explicit gives them control and surfaces what
+          // actually happened.
+          renderExpired(pendingEmail);
+          return;
+        }
+
+        // No stashed email (cookies cleared, or they registered on a different
+        // device). Send them to verify-email.html where they can re-enter their
+        // address.
+        renderConfirm('err',
+          'That confirmation link has expired. ' +
+          '<a href="verify-email.html" style="color:var(--accent2);text-decoration:underline">Send a fresh one</a>.');
+        return;
+      }
+
+      // No session, no expired-link signature — stale tab or other route.
       window.location.replace('login.html');
     }
+  }
+
+  function renderResent(message) {
+    card.innerHTML =
+      '<div class="confirm-card">' +
+        '<h1 class="ok">Fresh Confirmation Sent</h1>' +
+        '<p class="ok" style="opacity:0.85;line-height:1.5">' + message + '</p>' +
+        '<a href="login.html" style="display:block;text-align:center;padding:13px;background:var(--accent2);color:#050b10;border-radius:8px;font-size:1rem;font-weight:700;text-decoration:none;margin-top:22px;">Back to Sign In</a>' +
+      '</div>';
+  }
+
+  // "Link expired" page with a Resend button. Auto-resend on mount would
+  // surprise the captain with an email they didn't ask for; this gives them
+  // explicit control.
+  function renderExpired(email) {
+    card.innerHTML =
+      '<div class="confirm-card">' +
+        '<h1 class="err">Link Expired</h1>' +
+        '<p class="err" style="opacity:0.85;line-height:1.5">' +
+          'Your confirmation link expired — they only last one hour. ' +
+          'We can send a fresh one to <strong>' + email + '</strong>.' +
+        '</p>' +
+        '<button id="resend-expired-btn" type="button" ' +
+          'style="width:100%;padding:13px;margin-top:22px;background:var(--accent);color:#fff;border:0;border-radius:8px;font-size:1rem;font-weight:700;cursor:pointer">Resend Confirmation Email</button>' +
+        '<div id="resend-expired-status" role="status" aria-live="polite" ' +
+          'style="display:none;margin-top:12px;font-size:0.85rem;line-height:1.4"></div>' +
+        '<a href="login.html" style="display:block;text-align:center;margin-top:14px;font-size:0.85rem;color:var(--accent2);text-decoration:none">Back to Sign In</a>' +
+      '</div>';
+
+    var btn = document.getElementById('resend-expired-btn');
+    var statusEl = document.getElementById('resend-expired-status');
+
+    function setStatus(text, cls) {
+      statusEl.textContent = text || '';
+      statusEl.className = cls || '';
+      statusEl.style.display = text ? 'block' : 'none';
+      if (cls === 'err')  statusEl.style.color = '#fca5a5';
+      if (cls === 'sent') statusEl.style.color = '#5eead4';
+    }
+
+    btn.addEventListener('click', async function () {
+      btn.disabled = true;
+      btn.textContent = 'Sending…';
+      setStatus('', '');
+      var redirectTo = window.omvAuthRedirectUrl
+        ? window.omvAuthRedirectUrl('account.html')
+        : new URL('account.html',
+            'https://app.fishedge.live/dashboard/signup-success.html').href;
+      var res = await sb.auth.resend({
+        type: 'signup',
+        email: email,
+        options: { emailRedirectTo: redirectTo }
+      });
+      if (res && res.error) {
+        // Most common: over_email_send_rate_limit. Show it verbatim so the
+        // captain knows whether to wait a minute or try something else.
+        btn.disabled = false;
+        btn.textContent = 'Resend Confirmation Email';
+        setStatus(res.error.message || 'Could not resend. Try again in a minute.', 'err');
+        return;
+      }
+      // Success — flip to the "fresh email sent" confirmation screen.
+      renderResent(
+        'A fresh confirmation link is on its way to <strong>' + email + '</strong>. ' +
+        'Open it within 24 hours this time and you\'re in.');
+    });
   }
 
   function attachLogout() {
