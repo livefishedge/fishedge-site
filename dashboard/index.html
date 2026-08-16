@@ -1938,9 +1938,10 @@ function uvArrowLengthCells(speed) {
 function uvContourLevels(vmin = userRanges?.uv?.vmin ?? -1, vmax = userRanges?.uv?.vmax ?? 5) {
   const levels = [];
   const inchInDisplayUnits = heightUnit === "m" ? 0.0254 : (1 / 12);
-  const first = Math.ceil((Number(vmin) - 1e-9) / inchInDisplayUnits);
-  const last = Math.floor((Number(vmax) + 1e-9) / inchInDisplayUnits);
-  for (let n = first; n <= last; n++) levels.push(Number((n * inchInDisplayUnits).toFixed(6)));
+  const contourStep = inchInDisplayUnits * 2;
+  const first = Math.ceil((Number(vmin) - 1e-9) / contourStep);
+  const last = Math.floor((Number(vmax) + 1e-9) / contourStep);
+  for (let n = first; n <= last; n++) levels.push(Number((n * contourStep).toFixed(6)));
   // Zero is a semantic reference line, not a range-dependent contour.
   if (!levels.includes(0)) levels.push(0);
   levels.sort((a, b) => a - b);
@@ -1954,6 +1955,13 @@ function uvContourIsMajor(level) {
 function uvContourLabel(level) {
   const inches = heightUnit === "m" ? Number(level) / 0.0254 : Number(level) * 12;
   return String(Math.round(inches));
+}
+
+function uvColorbarTicks(vmin, vmax) {
+  const step = heightUnit === "m" ? 0.1524 : 0.5;
+  const first = Math.ceil((Number(vmin) - 1e-9) / step);
+  const last = Math.floor((Number(vmax) + 1e-9) / step);
+  return Array.from({ length: Math.max(0, last - first + 1) }, (_, i) => Number(((first + i) * step).toFixed(4)));
 }
 
 let slaUnit = localStorage.getItem("sla_unit") === "cm" ? "cm" : "in";
@@ -4254,8 +4262,8 @@ async function renderFooterColorbarToDiv(targetDiv, varKey) {
     cValues = [cmin, cmax];
     /* Height contours use integer display-unit spacing. */
     tickmode = "array";
-    tickvals = uvContourLevels(cmin, cmax);
-    ticktext = tickvals.map(v => String(v));
+    tickvals = uvColorbarTicks(cmin, cmax);
+    ticktext = tickvals.map(v => heightUnit === "m" ? v.toFixed(2) : v.toFixed(1));
   } else if (varKey === "sla") {
     chosenScale = SLA_SCALE;
     cValues = [cmin, cmax];
@@ -4509,7 +4517,7 @@ function buildUv(gridInfo, dataObj) {
     contours: {
       start: contourLevelsForPlot[0],
       end:   contourLevelsForPlot[contourLevelsForPlot.length - 1],
-      size:  1 / 12,               /* fixed one-inch physical interval */
+      size:  2 / 12,               /* fixed two-inch physical interval */
       coloring: "lines",           /* lines only, no fill */
       showlabels: true,
       labelfont: { size: 10, color: "#0c1723", family: "Arial Black" }
@@ -5198,7 +5206,7 @@ function buildSlaContourLayer(dataObj, gridInfo, map) {
     source: new ol.source.Vector({ features }), zIndex: 16,
     updateWhileAnimating: true, updateWhileInteracting: true,
     style: feature => new ol.style.Style({ stroke: new ol.style.Stroke({
-        color: feature.get("contourLevel") === 0 ? "#e6e6e6" : "rgba(210,210,210,0.92)",
+        color: "rgba(25,25,25,0.96)",
       width: feature.get("contourLevel") === 0 ? 2 : 1,
       lineCap: "round", lineJoin: "round"
     }) })
