@@ -95,6 +95,36 @@
   }
 
   async function init() {
+    // ── Capture expired-link signature from URL hash BEFORE getSession() ─────
+    // supabase-init.js is configured with detectSessionInUrl: true. When
+    // getSession() is called, supabase-js asynchronously processes the hash:
+    //   - if it's a valid code → exchanges it for a session
+    //   - if it's an error (otp_expired) → clears the hash, no session set
+    // By the time getSession() returns, the hash is gone and _ref.error is
+    // null (the URL error isn't surfaced through getSession — it's only on
+    // onAuthStateChange). So we have to read the hash synchronously, BEFORE
+    // calling getSession(), and clear it ourselves so supabase-js doesn't try
+    // to exchange a dead token.
+    var hashExpired = false;
+    try {
+      var hash = String(window.location.hash || '');
+      if (hash && (hash.indexOf('error_code') !== -1 || hash.indexOf('error_description') !== -1)) {
+        var hp = new URLSearchParams(hash.substring(1));
+        var hec = hp.get('error_code') || '';
+        var hed = hp.get('error_description') || '';
+        if (hec === 'otp_expired'
+            || /expired/i.test(hed)
+            || /invalid/i.test(hed)) {
+          hashExpired = true;
+          // Clear the hash so supabase-js doesn't try to process it.
+          try {
+            history.replaceState(null, '',
+              window.location.pathname + window.location.search);
+          } catch (e) {}
+        }
+      }
+    } catch (e) {}
+
     // Check for returning from email confirmation link (session may be set in URL)
     var _ref = await sb.auth.getSession();
     var session = _ref.data.session;
@@ -155,28 +185,10 @@
       attachLogout();
       attachEditProfile();
     } else {
-      // No session. The captain may have just clicked an *expired* confirmation
-      // link. Supabase's hosted PKCE flow has two ways of surfacing the failure:
-      //   (a) the URL hash carries #error_code=otp_expired&error_description=...
-      //   (b) supabase-js (detectSessionInUrl:true) consumes the hash, fails
-      //       the code exchange, and returns the error via getSession()'s
-      //       `.error` property with the hash already cleared.
-      // The (b) path is the common one in practice — check BOTH, because by the
-      // time init() runs the hash is often gone.
-      var hash = String(window.location.hash || '');
-      var hashParams = new URLSearchParams(hash.substring(1));
-      var hashErrorCode = hashParams.get('error_code') || '';
-      var hashErrorDesc = hashParams.get('error_description') || '';
-      var isExpiredLink = hashErrorCode === 'otp_expired'
-        || /expired/i.test(hashErrorDesc)
-        || /invalid/i.test(hashErrorDesc);
-
-      if (!isExpiredLink && _ref && _ref.error) {
-        var errText = String(_ref.error.code || '') + ' ' + String(_ref.error.message || '');
-        if (/expired/i.test(errText) || /invalid/i.test(errText) || _ref.error.code === 'otp_expired') {
-          isExpiredLink = true;
-        }
-      }
+      // No session. If the URL hash had an expired-link signature we
+      // captured at the top of init(), render the Link Expired page.
+      // (We can't rely on _ref.error here — see the comment block above.)
+      var isExpiredLink = hashExpired;
 
       if (isExpiredLink) {
         // Strip the stale hash so it doesn't get re-parsed on refresh.
