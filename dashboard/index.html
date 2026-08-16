@@ -601,6 +601,7 @@
     #menu-panel #hamburger-product-select[data-product="sst"], #combined-product-select[data-product="sst"]{ color:#ff9d57; }
     #menu-panel #hamburger-product-select[data-product="thermal_fronts"], #combined-product-select[data-product="thermal_fronts"]{ color:#ff6b8a; }
     #menu-panel #hamburger-product-select[data-product="uv"], #combined-product-select[data-product="uv"]{ color:#8bd7ff; }
+    #menu-panel #hamburger-product-select[data-product="sla"], #combined-product-select[data-product="sla"]{ color:#ffcf66; }
     #menu-panel #hamburger-product-select[data-product="bathy"], #combined-product-select[data-product="bathy"]{ color:#c59bff; }
     #account-link-wrap{ margin-top:auto !important; padding-top:12px; border-top:1px solid rgba(255,255,255,.18); }
     #account-link-wrap a, #combined-account-link a{ color:#ffd166 !important; font-size:13px !important; font-weight:900 !important; letter-spacing:.08em; }
@@ -1364,9 +1365,10 @@
         <option value="combined">Captain's Dashboard</option>
         <option value="chl">Chlorophyll</option>
         <option value="sst">Temperature</option>
-        <option value="thermal_fronts">Thermal Fronts</option>
-        <option value="uv">Currents/Height</option>
-        <option value="bathy">Bathymetry</option>
+          <option value="thermal_fronts">Thermal Fronts</option>
+          <option value="uv">Currents/Height</option>
+          <option value="sla">Sea Level Anomaly</option>
+          <option value="bathy">Bathymetry</option>
       </select>
     </div>
     <div class="combined-section">
@@ -1444,6 +1446,14 @@
         <button id="combined-height-unit-toggle" class="combined-unit-button" type="button">ft</button>
       </div>
       <label class="combined-toggle">
+        <input type="checkbox" id="chk-combined-sla">
+        <span class="box"></span>
+        <span class="combined-dot dot-front"></span>
+        <span>Sea Level Anomaly</span>
+      </label>
+      <button id="combined-sla-unit-toggle" class="combined-unit-button" type="button">in</button>
+      <div id="combined-sla-scan-time" style="font-size:11px;color:#ffcf66;margin-left:28px;margin-bottom:8px;"></div>
+      <label class="combined-toggle">
         <input type="checkbox" id="chk-combined-fishing" checked>
         <span class="box"></span>
         <span class="combined-dot dot-bathy"></span>
@@ -1491,9 +1501,10 @@
           <option value="combined">Captain's Dashboard</option>
           <option value="chl">Chlorophyll</option>
           <option value="sst">Temperature</option>
-          <option value="thermal_fronts">Thermal Fronts</option>
-          <option value="uv">Currents/Height</option>
-          <option value="bathy">Bathymetry</option>
+        <option value="thermal_fronts">Thermal Fronts</option>
+        <option value="uv">Currents/Height</option>
+        <option value="sla">Sea Level Anomaly</option>
+        <option value="bathy">Bathymetry</option>
         </select>
       </label>
       <div id="thermal-front-controls">
@@ -1537,6 +1548,7 @@
         <div class="range-actions">
           <button id="hamburger-apply">Apply</button>
           <button id="hamburger-reset">Reset</button>
+          <button id="sla-unit-toggle" type="button" style="display:none">in</button>
         </div>
       </div>
       <div id="hamburger-cbar"></div>
@@ -1892,21 +1904,26 @@ const VAR_LABELS = {
   chl:"Chlorophyll", sst:"Temperature",
   chl_front:"CHL Fronts", sst_front:"SST Fronts",
   uv:"Currents/Height",
+  sla:"Sea Level Anomaly",
   bathy:"Bathymetry",
   thermal_fronts:"Thermal Fronts",
   combined:"Captain's Dashboard"
 };
+window.__FISHEDGE_SLA_BUILD = { contract: "sla-product-v1", sha: "feat-sea-level-anomaly" };
 
 const VAR_TO_GRID = {
   chl: "viirs_chl_750_grid.json",
   sst: "goes_sst_1000_grid.json",
   uv:  "uv_12500_grid.json",
+  sla: null,
   thermal_fronts: null,   // thermal_fronts frames have no grid file — inferred from frame metadata
   combined: null
 };
 
 // UV/ADT source values are metres; the product presents height in feet.
 const UV_M_TO_FT = 3.28084;
+const SLA_M_TO_IN = 39.3700787402;
+const SLA_M_TO_CM = 100;
 const UV_ARROW_MIN_SPEED = 0.035;
 const UV_ARROW_MAX_SPEED = 1.2;
 const UV_ARROW_MIN_LENGTH_CELLS = 0.95;
@@ -1920,9 +1937,9 @@ function uvArrowLengthCells(speed) {
 
 function uvContourLevels(vmin = userRanges?.uv?.vmin ?? -1, vmax = userRanges?.uv?.vmax ?? 5) {
   const levels = [];
-  const first = Math.ceil((Number(vmin) - 1e-9) / 0.2);
-  const last = Math.floor((Number(vmax) + 1e-9) / 0.2);
-  for (let n = first; n <= last; n++) levels.push(Number((n * 0.2).toFixed(1)));
+  const first = Math.ceil((Number(vmin) - 1e-9));
+  const last = Math.floor((Number(vmax) + 1e-9));
+  for (let n = first; n <= last; n++) levels.push(n);
   // Zero is a semantic reference line, not a range-dependent contour.
   if (!levels.includes(0)) levels.push(0);
   levels.sort((a, b) => a - b);
@@ -1930,7 +1947,32 @@ function uvContourLevels(vmin = userRanges?.uv?.vmin ?? -1, vmax = userRanges?.u
 }
 
 function uvContourIsMajor(level) {
-  return Number(level) === 0 || (Math.round(Math.abs(Number(level)) / 0.2) % 5 === 0);
+  return Number(level) === 0;
+}
+
+let slaUnit = localStorage.getItem("sla_unit") === "cm" ? "cm" : "in";
+function slaUnitLabel() { return slaUnit === "cm" ? "cm" : "in"; }
+function metersToSla(value) {
+  if (value === null || value === undefined || value === "") return value;
+  return slaUnit === "cm" ? Number(value) * SLA_M_TO_CM : Number(value) * SLA_M_TO_IN;
+}
+function formatSlaValue(value) { return `${metersToSla(value).toFixed(1)} ${slaUnitLabel()}`; }
+function setSlaUnit(next, refresh = true) {
+  if (!(next === "in" || next === "cm") || next === slaUnit) return;
+  const factor = next === "cm" ? 2.54 : (1 / 2.54);
+  userRanges.sla.vmin *= factor;
+  userRanges.sla.vmax *= factor;
+  slaUnit = next;
+  localStorage.setItem("sla_unit", slaUnit);
+  if (refresh && currentVar === "sla") showFrame();
+}
+function slaContourLevels(vmin = userRanges?.sla?.vmin ?? -20, vmax = userRanges?.sla?.vmax ?? 20) {
+  const levels = [];
+  const first = Math.ceil(Number(vmin) - 1e-9);
+  const last = Math.floor(Number(vmax) + 1e-9);
+  for (let n = first; n <= last; n++) levels.push(n);
+  if (!levels.includes(0)) levels.push(0);
+  return levels.sort((a, b) => a - b);
 }
 
 const DEFAULT_RANGES = {
@@ -1939,6 +1981,7 @@ const DEFAULT_RANGES = {
   chl_front: { vmin: 1.0, vmax: 3.0, unit: "fold/km" },
   sst_front: { vmin: 0.0, vmax: 1.0, unit: "°C/km" },
   uv:    { vmin: -1.0, vmax: 5.0, unit: "Height (ft)" }, /* ADT/SSH is stored in metres and displayed in feet. */
+  sla:   { vmin: -20, vmax: 20, unit: "SLA (in)" },
   bathy: { vmin: 0.0,  vmax: 3000.0, unit: "m" },
   thermal_fronts: { vmin: 0.0, vmax: 1.0, unit: "°C/km" },
   combined: { vmin: 0.0, vmax: 1.0, unit: "" }
@@ -1950,6 +1993,7 @@ let userRanges = {
   chl_front: { ...DEFAULT_RANGES.chl_front },
   sst_front: { ...DEFAULT_RANGES.sst_front },
   uv:    { ...DEFAULT_RANGES.uv },
+  sla:   { ...DEFAULT_RANGES.sla },
   bathy: { ...DEFAULT_RANGES.bathy },
   thermal_fronts: { ...DEFAULT_RANGES.thermal_fronts },
   combined: { ...DEFAULT_RANGES.combined }
@@ -1969,7 +2013,10 @@ const MS_TO_KT = 1.94384;
 function msToKt(ms) { return ms * MS_TO_KT; }
 function mToFathom(m) { return m * 0.546806649; }
 function heightUnitLabel() { return heightUnit === "m" ? "m" : "ft"; }
-function metersToHeight(meters) { return heightUnit === "m" ? Number(meters) : Number(meters) * UV_M_TO_FT; }
+function metersToHeight(meters) {
+  if (meters === null || meters === undefined || meters === "") return meters;
+  return heightUnit === "m" ? Number(meters) : Number(meters) * UV_M_TO_FT;
+}
 let depthUnit = ["fathom", "ft", "m"].includes(localStorage.getItem("depth_unit"))
   ? localStorage.getItem("depth_unit") : "fathom";
 function mToFeet(m) { return m * 3.28084; }
@@ -1984,6 +2031,7 @@ function unitLabelForVar(varKey) {
   if (varKey === "sst" || varKey === "thermal_fronts" || varKey === "sst_front") return tempUnitLabel();
   if (varKey === "bathy") return depthUnitLabel();
   if (varKey === "uv") return `Height (${heightUnitLabel()})`;
+  if (varKey === "sla") return `Sea Level Anomaly (${slaUnitLabel()})`;
   return DEFAULT_RANGES[varKey]?.unit || "";
 }
 function formatArrowSpeed(ms) {
@@ -2099,6 +2147,11 @@ const UV_SCALE = [
   [0.75, "#fde725"],
   [1.00, "#fff7bc"]
 ];
+const SLA_SCALE = [
+  [0.00, "#2166ac"],
+  [0.50, "#f7f7f7"],
+  [1.00, "#b2182b"]
+];
 
 /* show 0.01, 0.1, 1, 10 on CHL colorbar */
 const CHL_TICKS_LINEAR = [0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10];
@@ -2107,8 +2160,8 @@ const CHL_TICKTEXT = CHL_TICKS_LINEAR.map(v => ([0.02,0.1,1,10].includes(v)) ? S
 
 /* ========================= STATE ========================= */
 let lastUpdateTimestamp = null;
-let framesByVar = { chl: [], sst: [], chl_front: [], sst_front: [], uv: [], bathy: [], thermal_fronts: [], combined: [] };
-let frameTimesByVar = { chl: [], sst: [], chl_front: [], sst_front: [], uv: [], bathy: [], thermal_fronts: [], combined: [] };
+let framesByVar = { chl: [], sst: [], chl_front: [], sst_front: [], uv: [], sla: [], bathy: [], thermal_fronts: [], combined: [] };
+let frameTimesByVar = { chl: [], sst: [], chl_front: [], sst_front: [], uv: [], sla: [], bathy: [], thermal_fronts: [], combined: [] };
 const INITIAL_VAR = QUERY_PARAMS.get("var");
 let currentVar = VAR_LABELS[INITIAL_VAR] ? INITIAL_VAR : "combined";
 let currentFrameIdx = 0;
@@ -2350,6 +2403,8 @@ let mobileMapState = {
   bathyContourLayerURL: null,     // bathy URL the contour layer was last built for
   arrowLayer: null,
   uvContourLayer: null,
+  slaContourLayer: null,
+  slaContourLabelOverlays: [],
   placeLayer: null,
   cursorLayer: null,
   cursorFeature: null,
@@ -2367,6 +2422,8 @@ let desktopMapState = {
   placeLayer: null,
   arrowLayer: null,
   uvContourLayer: null,
+  slaContourLayer: null,
+  slaContourLabelOverlays: [],
   bathyContourLayer: null,
   currentGridInfo: null,
   currentDataObj: null,
@@ -2652,6 +2709,7 @@ function renderDesktopReadout(lon, lat, pixel) {
   }
   const { value, row, col } = sample;
   if (currentVar === "sst") setReadout(`${base}, ${formatSstValue(value)}`);
+  else if (currentVar === "sla") setReadout(`${base}, SLA ${formatSlaValue(value)}`);
   else if (currentVar === "bathy") setReadout(`${base}, ${formatDepth(value)}`);
   else if (currentVar === "uv") {
     const d = (dataObj && dataObj.data && !Array.isArray(dataObj.data)) ? dataObj.data : dataObj;
@@ -2791,6 +2849,12 @@ async function renderDesktopFrame(frameMeta) {
     if (desktopMapState.uvContourLayer) map.addLayer(desktopMapState.uvContourLayer);
   } else {
     clearUvContourLayer(desktopMapState);
+  }
+  clearSlaContourLayer(desktopMapState);
+  if (currentVar === "sla") {
+    desktopMapState.slaContourLayer = buildSlaContourLayer(dataObj, gridInfo, map);
+    desktopMapState.slaContourLabelOverlays = desktopMapState.slaContourLayer?.__slaLabelOverlays || [];
+    if (desktopMapState.slaContourLayer) map.addLayer(desktopMapState.slaContourLayer);
   }
   if (desktopMapState.arrowLayer) desktopMapState.arrowLayer.setVisible(currentVar === "uv");
   if (thermalFrontState.frontLayer) thermalFrontState.frontLayer.setVisible(false);
@@ -3174,6 +3238,12 @@ if (tempUnitToggle) {
 function updateTempUnitToggleLabel() {
   if (tempUnitToggle) tempUnitToggle.textContent = tempUnitLabel();
 }
+const slaUnitToggle = document.getElementById("sla-unit-toggle");
+slaUnitToggle?.addEventListener("click", () => {
+  setSlaUnit(slaUnit === "in" ? "cm" : "in", false);
+  slaUnitToggle.textContent = slaUnit;
+  if (currentVar === "sla") showFrame();
+});
 
 if (combinedRegionSelect) {
   combinedRegionSelect.value = REGION_ID;
@@ -3189,6 +3259,7 @@ const chkChl = document.getElementById("chk-combined-chl");
 const chkSst = document.getElementById("chk-combined-sst");
 const chkUv = document.getElementById("chk-combined-uv");
 const chkHeight = document.getElementById("chk-combined-height");
+const chkSla = document.getElementById("chk-combined-sla");
 const chkBathy = document.getElementById("chk-combined-bathy");
 const chkFront = document.getElementById("chk-combined-front");
 const chkFishing = document.getElementById("chk-combined-fishing");
@@ -3334,6 +3405,13 @@ if (chkBathy) chkBathy.addEventListener("change", e => {
 if (chkHeight) chkHeight.addEventListener("change", e => {
   if (window._combinedHeightLayer) window._combinedHeightLayer.setVisible(e.target.checked);
 });
+if (chkSla) chkSla.addEventListener("change", async e => {
+  if (!e.target.checked) {
+    if (window._combinedSlaContourLayer) window._combinedSlaContourLayer.setVisible(false);
+    return;
+  }
+  if (window._combinedMap) await rebuildCombinedSlaLayer(window._combinedMap);
+});
 if (chkFront) chkFront.addEventListener("change", e => {
   if (window._combinedFrontDensityLayer) window._combinedFrontDensityLayer.setVisible(e.target.checked);
   if (window._combinedFrontLineLayer) window._combinedFrontLineLayer.setVisible(e.target.checked);
@@ -3386,11 +3464,13 @@ const combinedThermalUnitBtn = document.getElementById("combined-thermal-unit-to
 const combinedThermalDistanceBtn = document.getElementById("combined-thermal-distance-toggle");
 const combinedBathyUnitBtn = document.getElementById("combined-bathy-unit-toggle");
 const combinedHeightUnitBtn = document.getElementById("combined-height-unit-toggle");
+const combinedSlaUnitBtn = document.getElementById("combined-sla-unit-toggle");
 function refreshCombinedUnitButtons() {
   if (combinedSstUnitBtn) combinedSstUnitBtn.textContent = tempUnit === "F" ? "°F" : "°C";
   if (combinedThermalUnitBtn) combinedThermalUnitBtn.textContent = tempUnit === "F" ? "°F" : "°C";
   if (combinedThermalDistanceBtn) combinedThermalDistanceBtn.textContent = thermalDistUnit === "nm" ? "nm" : "km";
   if (combinedHeightUnitBtn) combinedHeightUnitBtn.textContent = heightUnit;
+  if (combinedSlaUnitBtn) combinedSlaUnitBtn.textContent = slaUnit;
   if (combinedBathyUnitBtn) combinedBathyUnitBtn.textContent = depthUnit;
 }
 combinedSstUnitBtn?.addEventListener("click", (event) => {
@@ -3427,6 +3507,13 @@ combinedHeightUnitBtn?.addEventListener("click", (event) => {
   event.preventDefault(); event.stopPropagation();
   setHeightUnit(heightUnit === "ft" ? "m" : "ft");
   refreshCombinedUnitButtons();
+});
+combinedSlaUnitBtn?.addEventListener("click", (event) => {
+  event.preventDefault(); event.stopPropagation();
+  setSlaUnit(slaUnit === "in" ? "cm" : "in", false);
+  refreshCombinedUnitButtons();
+  if (currentVar === "combined" && window._combinedMap && chkSla?.checked) rebuildCombinedSlaLayer(window._combinedMap);
+  else if (currentVar === "sla") showFrame();
 });
 setHeightUnit(heightUnit, false);
 function setDepthUnit(u, refresh = true) {
@@ -3912,6 +3999,7 @@ function timeOnlyLabel(varKey, frameMeta) {
   if (varKey === "sst") { const dt = parseSstUtcFromName(filename); return dt ? (isPortrait() ? fmtPortraitDaytimeLocal(dt) : fmtLocalDateTime(dt)) : ""; }
   if (varKey === "chl_front" || varKey === "sst_front") { const dt = parseFrontUtcFromName(filename); return dt ? (isPortrait() ? fmtPortraitDaytimeLocal(dt) : fmtLocalDateTime(dt)) : ""; }
   if (varKey === "uv")  { const dt = parseUvDateFromName(filename);  return dt ? fmtLocalDate(dt) : ""; }
+  if (varKey === "sla") { const dt = frameMeta?.time_iso ? new Date(frameMeta.time_iso) : null; return dt && !isNaN(dt) ? fmtLocalDate(dt) : ""; }
   return "";
 }
 
@@ -3975,6 +4063,7 @@ function epochMsForFrame(varKey, frameMeta) {
   if (varKey === "sst") dt = parseSstUtcFromName(filename);
   if (varKey === "chl_front" || varKey === "sst_front") dt = parseFrontUtcFromName(filename);
   if (varKey === "uv")  dt = parseUvDateFromName(filename);
+  if (varKey === "sla" && frameMeta?.time_iso) dt = new Date(frameMeta.time_iso);
   // Fallback: use time_iso from frame metadata (handles SGLI and other sensors with non-standard filenames)
   if (!dt && frameMeta?.time_iso) {
     dt = new Date(frameMeta.time_iso);
@@ -3997,6 +4086,7 @@ function filterFramesForVar(varKey, frames) {
     if (varKey === "chl_front" && !fn.startsWith("chlfront_")) continue;
     if (varKey === "sst_front" && !fn.startsWith("sstfront_")) continue;
     if (varKey === "uv"  && !fn.startsWith("uv_")) continue;
+    if (varKey === "sla" && !fn.startsWith("sla_")) continue;
     if (varKey === "thermal_fronts" && !fn.startsWith("sstfront_")) continue;
     out.push(f);
   }
@@ -4016,7 +4106,7 @@ function closestIndex(times, targetMs) {
 }
 
 function isDaytimeFrame(varKey, frameMeta) {
-  if (varKey === "bathy" || varKey === "uv") return true;
+  if (varKey === "bathy" || varKey === "uv" || varKey === "sla") return true;
   const t = epochMsForFrame(varKey, frameMeta);
   if (t === null) return true;
   const hr = new Date(t).getUTCHours();
@@ -4149,10 +4239,16 @@ async function renderFooterColorbarToDiv(targetDiv, varKey) {
   } else if (varKey === "uv") {
     chosenScale = UV_SCALE;
     cValues = [cmin, cmax];
-    /* Height is displayed in feet; contours use 0.2-ft spacing. */
+    /* Height contours use integer display-unit spacing. */
     tickmode = "array";
-    tickvals = [-1.0, -0.2, 0.6, 1.4, 2.2, 3.0, 3.8, 4.6, 5.0];
-    ticktext = tickvals.map(v => v.toFixed(1));
+    tickvals = uvContourLevels(cmin, cmax);
+    ticktext = tickvals.map(v => String(v));
+  } else if (varKey === "sla") {
+    chosenScale = SLA_SCALE;
+    cValues = [cmin, cmax];
+    tickmode = "array";
+    tickvals = slaContourLevels(cmin, cmax).filter(v => v === 0 || v % 5 === 0);
+    ticktext = tickvals.map(v => String(v));
   } else if (varKey === "bathy") {
     chosenScale = BATHY_SCALE;
     cValues = [cmin, cmax];
@@ -4385,7 +4481,7 @@ function buildUv(gridInfo, dataObj) {
        the bulletproof way to draw labeled contour lines on a Plotly heatmap. */
   };
 
-  /* ADT contour overlay as a SEPARATE Plotly trace — 0.2 ft intervals.
+  /* ADT contour overlay as a SEPARATE Plotly trace — integer intervals.
      The "0" level contour is the deep frontal location and is explicitly
      labeled. The OpenLayers path applies the 2px-every-fifth hierarchy. */
   const contourLines = {
@@ -4400,7 +4496,7 @@ function buildUv(gridInfo, dataObj) {
     contours: {
       start: contourLevelsForPlot[0],
       end:   contourLevelsForPlot[contourLevelsForPlot.length - 1],
-      size:  0.2,                  /* 0.2 ft intervals */
+      size:  1,                    /* integer display-unit intervals */
       coloring: "lines",           /* lines only, no fill */
       showlabels: true,
       labelfont: { size: 10, color: "#0c1723", family: "Arial Black" }
@@ -4617,11 +4713,37 @@ function buildBathy(bathy) {
   };
 }
 
+function buildSla(gridInfo, dataObj) {
+  const raw = dataObj?.sla || dataObj?.z || dataObj?.data;
+  if (!is2D(raw)) throw new Error("SLA JSON missing 2-D key: sla");
+  const z = raw.map(row => row.map(metersToSla));
+  const lo = userRanges.sla.vmin;
+  const hi = userRanges.sla.vmax;
+  const levels = slaContourLevels(lo, hi);
+  return {
+    data: [{
+      type: "heatmap",
+      x: gridInfo.xAxis, y: gridInfo.yAxis, z,
+      customdata: z, hoverinfo: "none", showscale: false,
+      zauto: false, zmin: lo, zmax: hi,
+      colorscale: SLA_SCALE, colorbar: colorbarFor("sla"), zsmooth: false
+    }, {
+      type: "contour", x: gridInfo.xAxis, y: gridInfo.yAxis, z,
+      showscale: false, hoverinfo: "none",
+      contours: { start: levels[0], end: levels[levels.length - 1], size: 1, coloring: "lines", showlabels: true,
+        labelfont: { size: 10, color: "#0c1723", family: "Arial Black" } },
+      line: { color: "rgba(30,30,30,0.95)", width: 1, smoothing: 0 }
+    }],
+    layout: stableLayout()
+  };
+}
+
 function buildForVar(varKey, gridInfo, dataObj) {
   if (varKey === "chl") return buildChl(gridInfo, dataObj);
   if (varKey === "sst") return buildSst(gridInfo, dataObj);
   if (varKey === "chl_front" || varKey === "sst_front") return buildFrontLines(gridInfo, dataObj, varKey);
   if (varKey === "uv")  return buildUv(gridInfo, dataObj);
+  if (varKey === "sla") return buildSla(gridInfo, dataObj);
   throw new Error(`Unsupported varKey=${varKey}`);
 }
 
@@ -4673,6 +4795,7 @@ function mobileValueConfig(varKey) {
   }
   if (varKey === "sst") return { scale: SST_SCALE, lo: userRanges.sst.vmin, hi: userRanges.sst.vmax, transform: v => v };
   if (varKey === "uv") return { scale: UV_SCALE, lo: userRanges.uv.vmin, hi: userRanges.uv.vmax, transform: v => v };
+  if (varKey === "sla") return { scale: SLA_SCALE, lo: userRanges.sla.vmin, hi: userRanges.sla.vmax, transform: metersToSla };
   return { scale: BATHY_SCALE, lo: userRanges.bathy.vmin, hi: userRanges.bathy.vmax, transform: v => v };
 }
 
@@ -4683,6 +4806,9 @@ function mobileZForVar(varKey, dataObj) {
     const d = (dataObj && dataObj.data && !Array.isArray(dataObj.data)) ? dataObj.data : dataObj;
     const adt = d?.adt || dataObj?.meta?.grid?.adt || d?.z;
     return is2D(adt) ? adt.map(row => row.map(v => metersToHeight(v))) : adt;
+  }
+  if (varKey === "sla") {
+    return dataObj.sla || dataObj.z || dataObj.data;
   }
   if (varKey === "bathy") return dataObj.depth;
   return null;
@@ -4733,7 +4859,7 @@ function drawUvContours(ctx, z, nx, ny, xFlip, yFlip) {
       }
     }
     ctx.strokeStyle = "rgba(35,35,35,0.94)";
-    // One 2px major line every five 0.2-ft contours; the other lines are 1px.
+    // All contours use the same interval; zero is the only emphasized line.
     ctx.lineWidth = uvContourIsMajor(level) ? 2 : 1;
     ctx.strokeStyle = level === 0 ? "#000000" : "rgba(35,35,35,0.94)";
     ctx.stroke();
@@ -4935,11 +5061,11 @@ function buildUvContourLayer(dataObj, gridInfo, map) {
         }));
       }
     }
-    // Put plain labels directly on the zero contour. Marching-squares emits
+    // Put plain labels directly on every contour. Marching-squares emits
     // short segments, so select midpoint candidates in screen space: this
     // yields one label per visible contour branch and additional labels on
     // long branches without stacking labels on adjacent cells.
-    if (ft === 0 && levelFeatures.length) {
+    if (levelFeatures.length) {
       const labelOverlays = [];
       if (map) {
         const candidates = levelFeatures.map(feature => {
@@ -4959,9 +5085,9 @@ function buildUvContourLayer(dataObj, gridInfo, map) {
         for (const candidate of chosen) {
           const labelEl = document.createElement("div");
           const labelText = document.createElement("span");
-          labelText.textContent = "0";
+          labelText.textContent = String(ft);
           labelEl.appendChild(labelText);
-          labelEl.setAttribute("aria-label", "zero foot contour");
+          labelEl.setAttribute("aria-label", `${ft} ${heightUnitLabel()} ADT contour`);
           labelEl.style.cssText = "pointer-events:none;width:0;height:0;overflow:visible;";
           labelText.style.cssText = "display:block;color:#111820;font:700 13px/1 Arial,sans-serif;white-space:nowrap;transform-origin:50% 50%;transform:translate(-50%,-50%);text-shadow:-1px -1px 0 rgba(255,255,255,.95),1px -1px 0 rgba(255,255,255,.95),-1px 1px 0 rgba(255,255,255,.95),1px 1px 0 rgba(255,255,255,.95);";
           const overlay = new ol.Overlay({ element: labelEl, positioning: "center-center", stopEvent: false, offset: [0, 0] });
@@ -4980,7 +5106,7 @@ function buildUvContourLayer(dataObj, gridInfo, map) {
           overlay.__angleListener = map.on("moveend", updateLabelAngle);
           labelOverlays.push(overlay);
         }
-        features._uvZeroLabelOverlays = labelOverlays;
+        features._uvZeroLabelOverlays = (features._uvZeroLabelOverlays || []).concat(labelOverlays);
       }
     }
     features.push(...levelFeatures);
@@ -4992,12 +5118,90 @@ function buildUvContourLayer(dataObj, gridInfo, map) {
     style: feature => new ol.style.Style({ stroke: new ol.style.Stroke({
         color: feature.get("contourLevel") === 0 ? "#000000" : "rgba(25,25,25,0.96)",
         width: feature.get("contourLevel") === 0 || feature.get("major") ? 2 : 1,
-        lineDash: feature.get("contourLevel") !== 0 && feature.get("major") ? [4, 3] : undefined,
+        lineDash: undefined,
         lineCap: "round", lineJoin: "round"
       }) })
   });
   layer.__uvZeroLabelOverlays = features._uvZeroLabelOverlays || [];
   return layer;
+}
+
+// Shared SLA contour renderer. Values are converted to the selected display
+// unit before contouring, so raster, labels, readouts, and colorbar agree.
+function buildSlaContourLayer(dataObj, gridInfo, map) {
+  const raw = dataObj?.sla || dataObj?.z || dataObj?.data;
+  const z = is2D(raw) ? raw.map(row => row.map(metersToSla)) : raw;
+  const xs = gridInfo?.xAxis || [], ys = gridInfo?.yAxis || [];
+  if (!is2D(z) || xs.length < 2 || ys.length < 2) return null;
+  const levels = slaContourLevels(userRanges.sla.vmin, userRanges.sla.vmax);
+  const features = [];
+  const labelOverlays = [];
+  for (const level of levels) {
+    const levelFeatures = [];
+    for (let j = 0; j < ys.length - 1; j++) for (let i = 0; i < xs.length - 1; i++) {
+      const val = [z[j]?.[i], z[j]?.[i + 1], z[j + 1]?.[i + 1], z[j + 1]?.[i]].map(Number);
+      if (val.some(v => !Number.isFinite(v))) continue;
+      const p = [[xs[i],ys[j]],[xs[i+1],ys[j]],[xs[i+1],ys[j+1]],[xs[i],ys[j+1]]];
+      const hits = [];
+      for (const [a,b] of [[0,1],[1,2],[2,3],[3,0]]) {
+        if ((val[a] < level) !== (val[b] < level)) {
+          const t = (level - val[a]) / (val[b] - val[a]);
+          hits.push([p[a][0] + (p[b][0]-p[a][0])*t, p[a][1] + (p[b][1]-p[a][1])*t]);
+        }
+      }
+      for (let k = 0; k + 1 < hits.length; k += 2) {
+        levelFeatures.push(new ol.Feature({
+          geometry: new ol.geom.LineString(hits.slice(k,k+2).map(pt => toMapProjection(pt))),
+          contourLevel: level
+        }));
+      }
+    }
+    features.push(...levelFeatures);
+    if (!map) continue;
+    const candidates = levelFeatures.map(feature => {
+      const geometry = feature.getGeometry();
+      const coordinate = geometry.getCoordinateAt(0.5);
+      const a = map.getPixelFromCoordinate(geometry.getCoordinates()[0]);
+      const b = map.getPixelFromCoordinate(geometry.getCoordinates()[1]);
+      return { coordinate, pixel: map.getPixelFromCoordinate(coordinate), angle: Math.atan2(b[1]-a[1], b[0]-a[0]) * 180 / Math.PI };
+    }).filter(c => c.pixel && Number.isFinite(c.pixel[0]) && Number.isFinite(c.pixel[1]));
+    candidates.sort((a,b) => a.pixel[1] - b.pixel[1] || a.pixel[0] - b.pixel[0]);
+    const chosen = [];
+    for (const candidate of candidates) {
+      if (chosen.every(other => Math.hypot(candidate.pixel[0]-other.pixel[0], candidate.pixel[1]-other.pixel[1]) >= 110)) chosen.push(candidate);
+    }
+    for (const candidate of chosen) {
+      const el = document.createElement("div");
+      el.textContent = String(level);
+      el.setAttribute("aria-label", `${level} ${slaUnitLabel()} SLA contour`);
+      el.style.cssText = "pointer-events:none;color:#111820;font:700 11px/1 Arial,sans-serif;white-space:nowrap;text-shadow:-1px -1px 0 rgba(255,255,255,.95),1px 1px 0 rgba(255,255,255,.95);";
+      const overlay = new ol.Overlay({ element: el, positioning: "center-center", stopEvent: false });
+      overlay.setPosition(candidate.coordinate);
+      map.addOverlay(overlay);
+      labelOverlays.push(overlay);
+    }
+  }
+  const layer = new ol.layer.Vector({
+    source: new ol.source.Vector({ features }), zIndex: 16,
+    updateWhileAnimating: true, updateWhileInteracting: true,
+    style: feature => new ol.style.Style({ stroke: new ol.style.Stroke({
+      color: feature.get("contourLevel") === 0 ? "#000000" : "rgba(35,35,35,0.94)",
+      width: feature.get("contourLevel") === 0 ? 2 : 1,
+      lineCap: "round", lineJoin: "round"
+    }) })
+  });
+  layer.__slaLabelOverlays = labelOverlays;
+  return layer;
+}
+
+function clearSlaContourLayer(state) {
+  if (!state) return;
+  for (const overlay of state.slaContourLabelOverlays || []) {
+    if (state.map) state.map.removeOverlay(overlay);
+  }
+  if (state.map && state.slaContourLayer) state.map.removeLayer(state.slaContourLayer);
+  state.slaContourLayer = null;
+  state.slaContourLabelOverlays = [];
 }
 
 // Draw a line using direct pixel manipulation (Bresenham-inspired)
@@ -5546,6 +5750,7 @@ function renderMobileReadoutFromLonLat(lon, lat, pixel) {
   if (currentVar === "sst") setReadout(`${base}, ${formatSstValue(val)}`);
   else if (currentVar === "bathy") setReadout(`${base}, ${formatDepth(val)}`);
   else if (currentVar === "uv") setReadout(formatUvReadout(base, mobileMapState.currentGridInfo, mobileMapState.currentDataObj, lon, lat, mobileMapState.map, null, val));
+  else if (currentVar === "sla") setReadout(`${base}, SLA ${formatSlaValue(val)}`);
   else setReadout(`${base} ${formatChlValue(val)}`);
 }
 
@@ -6096,6 +6301,11 @@ async function renderCombinedMode() {
   // NEWEST UV frame (not the oldest) and refreshes on demand.
   const uvHoursSel = document.getElementById("combined-uv-hours");
   await rebuildCombinedUvLayer(map, { hoursMode: uvHoursSel?.value || "latest" });
+  // SLA is deliberately opt-in so the production dashboard's initial
+  // appearance and network behavior remain unchanged.
+  if (document.getElementById("chk-combined-sla")?.checked) {
+    await rebuildCombinedSlaLayer(map);
+  }
 
   // ── Layer: Thermal fronts — fixed-pixel point symbols
   await thermalLoadData();
@@ -7157,6 +7367,38 @@ async function rebuildCombinedUvLayer(map, { hoursMode = "latest" } = {}) {
   }
 }
 
+async function rebuildCombinedSlaLayer(map) {
+  if (window._combinedSlaContourLayer) {
+    for (const overlay of window._combinedSlaContourLayer.__slaLabelOverlays || []) {
+      try { map.removeOverlay(overlay); } catch (_) {}
+    }
+    try { map.removeLayer(window._combinedSlaContourLayer); } catch (_) {}
+    window._combinedSlaContourLayer = null;
+  }
+  const status = document.getElementById("combined-sla-scan-time");
+  const frames = framesByVar.sla || [];
+  if (!frames.length) { if (status) status.textContent = "Sea Level Anomaly unavailable"; return null; }
+  const frame = [...frames].sort((a,b) => (epochMsForFrame("sla", b) || 0) - (epochMsForFrame("sla", a) || 0))[0];
+  try {
+    const data = await fetchFrameData("sla", frame);
+    const grid = await loadGridForVar("sla", data);
+    // Captain's Dashboard is contour-only by design: no SLA raster fill.
+    const layer = buildSlaContourLayer(data, grid, map);
+    if (!layer) throw new Error("SLA contour layer unavailable");
+    layer.setVisible(Boolean(chkSla?.checked));
+    map.addLayer(layer);
+    window._combinedSlaContourLayer = layer;
+    window._combinedSlaData = data;
+    window._combinedSlaGrid = grid;
+    if (status) status.textContent = frame.time_iso ? `Source: ${fmtDaytimeLocal(epochMsForFrame("sla", frame))}` : "Source loaded";
+    return layer;
+  } catch (err) {
+    console.warn("[SLA] combined render failed", err);
+    if (status) status.textContent = "Sea Level Anomaly unavailable";
+    return null;
+  }
+}
+
 // Wire the UV hours select. Idempotent.
 function combinedUvWireHoursSelect() {
   const sel = document.getElementById("combined-uv-hours");
@@ -7530,7 +7772,7 @@ async function renderMobileFrame(frameMeta) {
   // during the async fetch above, AFTER the early-return at the top of
   // this function ran. The mobile raster canvas only handles single-variable
   // 2-D rasters, so bail out cleanly for any non-raster view.
-  if (currentVar !== "chl" && currentVar !== "sst" && currentVar !== "uv" && currentVar !== "bathy") {
+  if (currentVar !== "chl" && currentVar !== "sst" && currentVar !== "uv" && currentVar !== "sla" && currentVar !== "bathy") {
     console.info("[OL mobile] renderMobileFrame: skipping — currentVar=" + currentVar + " has no 2-D mobile raster");
     document.body.classList.remove("mobile-map-ready");
     return false;
@@ -7574,6 +7816,12 @@ async function renderMobileFrame(frameMeta) {
     if (mobileMapState.uvContourLayer) map.addLayer(mobileMapState.uvContourLayer);
   } else {
     clearUvContourLayer(mobileMapState);
+  }
+  clearSlaContourLayer(mobileMapState);
+  if (currentVar === "sla") {
+    mobileMapState.slaContourLayer = buildSlaContourLayer(dataObj, gridInfo, map);
+    mobileMapState.slaContourLabelOverlays = mobileMapState.slaContourLayer?.__slaLabelOverlays || [];
+    if (mobileMapState.slaContourLayer) map.addLayer(mobileMapState.slaContourLayer);
   }
   await ensureMobileLandLayer(map);
   ensureMobilePlaceLayer(map);
@@ -7788,6 +8036,11 @@ function syncRangeInputsToVar() {
   if (hVmin) hVmin.value = currentVar === "sst" ? formatSstRangeInput(userRanges.sst.vmin) : userRanges[currentVar].vmin;
   if (hVmax) hVmax.value = currentVar === "sst" ? formatSstRangeInput(userRanges.sst.vmax) : userRanges[currentVar].vmax;
   if (hTitle) hTitle.textContent = currentVar === "uv" ? "Height" : (VAR_LABELS[currentVar] || currentVar);
+  const slaUnitBtn = document.getElementById("sla-unit-toggle");
+  if (slaUnitBtn) {
+    slaUnitBtn.style.display = currentVar === "sla" ? "inline-block" : "none";
+    slaUnitBtn.textContent = slaUnit;
+  }
   syncProductSelectors();
   if (hamburgerRegionSelect) hamburgerRegionSelect.value = REGION_ID;
   updateTempUnitUI();
@@ -9470,12 +9723,13 @@ async function loadIndex() {
   framesByVar.chl_front = filterFramesForVar("chl_front", fbv.chl_front || []);
   framesByVar.sst_front = filterFramesForVar("sst_front", fbv.sst_front || []);
   framesByVar.uv  = filterFramesForVar("uv",  fbv.uv  || []);
+  framesByVar.sla = filterFramesForVar("sla", fbv.sla || []);
   const thermalSourceFrames = (fbv.thermal_fronts && fbv.thermal_fronts.length) ? fbv.thermal_fronts : (fbv.sst_front || []);
   framesByVar.thermal_fronts = filterFramesForVar("thermal_fronts", thermalSourceFrames);
   framesByVar.bathy = [{ json_path: BATHY_JSON_URL }];
   framesByVar.combined = [{ json_path: "__combined_native__" }];
 
-  for (const v of ["chl","sst","chl_front","sst_front","uv","bathy","thermal_fronts","combined"]) {
+  for (const v of ["chl","sst","chl_front","sst_front","uv","sla","bathy","thermal_fronts","combined"]) {
     framesByVar[v].sort((a,b) => (epochMsForFrame(v,a) ?? 0) - (epochMsForFrame(v,b) ?? 0));  // oldest-first → left=oldest, right=newest
     frameTimesByVar[v] = framesByVar[v].map(f => epochMsForFrame(v,f));
   }
@@ -9524,7 +9778,7 @@ async function loadIndex() {
 
 function inferGridFromFrame(v, dataObj) {
   const bbox = dataObj && dataObj.bbox;
-  const z = v === "uv" ? dataObj?.adt : (dataObj?.sst || dataObj?.z || dataObj?.chl || dataObj?.data);
+  const z = v === "uv" ? dataObj?.adt : (v === "sla" ? dataObj?.sla : (dataObj?.sst || dataObj?.z || dataObj?.chl || dataObj?.data));
   const ny = dataObj?.ny || (Array.isArray(z) ? z.length : 0);
   const nx = dataObj?.nx || (Array.isArray(z) && Array.isArray(z[0]) ? z[0].length : 0);
   if (!bbox || bbox.length < 4 || !nx || !ny) throw new Error(`Cannot infer grid for ${v}`);

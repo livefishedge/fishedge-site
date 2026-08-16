@@ -213,6 +213,27 @@
       await sb.auth.signOut();
     }
 
+    // Stash the signup email so the captain doesn't get stranded if:
+    //   (a) they click the confirmation link after OTP_EXPIRY (default 1h) and
+    //       it 401s server-side — account.html can auto-resend using this
+    //   (b) they return to login.html days later, never having confirmed —
+    //       the loud red banner auto-shows and the email field is prefilled
+    //       so Resend is one tap
+    // Also stash the full signup data so that if Supabase re-creates a
+    // deleted user on a stale-link click (see account.html renderReCreation),
+    // the captain doesn't have to retype their captain details from memory.
+    // Cleared in account.html once the captain is fully confirmed, and in
+    // login.html once they actually sign in.
+    try {
+      localStorage.setItem('fishedge:pending_verification', email);
+      localStorage.setItem('fishedge:pending_profile', JSON.stringify({
+        email: email,
+        name: name,
+        phone: phone,
+        selected_region: region
+      }));
+    } catch (e) {}
+
     window.location.replace('verify-email.html?email=' + encodeURIComponent(email));
   });
 
