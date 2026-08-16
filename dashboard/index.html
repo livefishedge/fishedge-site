@@ -1937,9 +1937,10 @@ function uvArrowLengthCells(speed) {
 
 function uvContourLevels(vmin = userRanges?.uv?.vmin ?? -1, vmax = userRanges?.uv?.vmax ?? 5) {
   const levels = [];
-  const first = Math.ceil((Number(vmin) - 1e-9));
-  const last = Math.floor((Number(vmax) + 1e-9));
-  for (let n = first; n <= last; n++) levels.push(n);
+  const inchInDisplayUnits = heightUnit === "m" ? 0.0254 : (1 / 12);
+  const first = Math.ceil((Number(vmin) - 1e-9) / inchInDisplayUnits);
+  const last = Math.floor((Number(vmax) + 1e-9) / inchInDisplayUnits);
+  for (let n = first; n <= last; n++) levels.push(Number((n * inchInDisplayUnits).toFixed(6)));
   // Zero is a semantic reference line, not a range-dependent contour.
   if (!levels.includes(0)) levels.push(0);
   levels.sort((a, b) => a - b);
@@ -1948,6 +1949,11 @@ function uvContourLevels(vmin = userRanges?.uv?.vmin ?? -1, vmax = userRanges?.u
 
 function uvContourIsMajor(level) {
   return Number(level) === 0;
+}
+
+function uvContourLabel(level) {
+  const inches = heightUnit === "m" ? Number(level) / 0.0254 : Number(level) * 12;
+  return String(Math.round(inches));
 }
 
 let slaUnit = localStorage.getItem("sla_unit") === "cm" ? "cm" : "in";
@@ -3497,6 +3503,13 @@ const combinedHeightModeFtBtn = null;
 const combinedHeightModeMBtn = null;
 function setHeightUnit(u, refresh = true) {
   if (!["ft", "m"].includes(u)) return;
+  if (u === heightUnit) {
+    refreshCombinedUnitButtons();
+    return;
+  }
+  const factor = u === "m" ? (1 / UV_M_TO_FT) : UV_M_TO_FT;
+  userRanges.uv.vmin *= factor;
+  userRanges.uv.vmax *= factor;
   heightUnit = u;
   localStorage.setItem("surface_height_unit", heightUnit);
   combinedHeightModeFtBtn?.classList.toggle("active", u === "ft");
@@ -4496,13 +4509,13 @@ function buildUv(gridInfo, dataObj) {
     contours: {
       start: contourLevelsForPlot[0],
       end:   contourLevelsForPlot[contourLevelsForPlot.length - 1],
-      size:  1,                    /* integer display-unit intervals */
+      size:  1 / 12,               /* fixed one-inch physical interval */
       coloring: "lines",           /* lines only, no fill */
       showlabels: true,
       labelfont: { size: 10, color: "#0c1723", family: "Arial Black" }
     },
     line: {                         /* explicit line color/width (not via contours.color which Plotly 2.34 can ignore) */
-      color: "rgba(30,30,30,0.95)",
+      color: "rgba(210,210,210,0.92)",
       width: 1,
       smoothing: 0
     }
@@ -4858,10 +4871,10 @@ function drawUvContours(ctx, z, nx, ny, xFlip, yFlip) {
         }
       }
     }
-    ctx.strokeStyle = "rgba(35,35,35,0.94)";
+    ctx.strokeStyle = "rgba(210,210,210,0.92)";
     // All contours use the same interval; zero is the only emphasized line.
     ctx.lineWidth = uvContourIsMajor(level) ? 2 : 1;
-    ctx.strokeStyle = level === 0 ? "#000000" : "rgba(35,35,35,0.94)";
+    ctx.strokeStyle = level === 0 ? "#e6e6e6" : "rgba(210,210,210,0.92)";
     ctx.stroke();
   }
   ctx.restore();
@@ -5085,9 +5098,9 @@ function buildUvContourLayer(dataObj, gridInfo, map) {
         for (const candidate of chosen) {
           const labelEl = document.createElement("div");
           const labelText = document.createElement("span");
-          labelText.textContent = String(ft);
+          labelText.textContent = uvContourLabel(ft);
           labelEl.appendChild(labelText);
-          labelEl.setAttribute("aria-label", `${ft} ${heightUnitLabel()} ADT contour`);
+          labelEl.setAttribute("aria-label", `${uvContourLabel(ft)} inch ADT contour`);
           labelEl.style.cssText = "pointer-events:none;width:0;height:0;overflow:visible;";
           labelText.style.cssText = "display:block;color:#111820;font:700 13px/1 Arial,sans-serif;white-space:nowrap;transform-origin:50% 50%;transform:translate(-50%,-50%);text-shadow:-1px -1px 0 rgba(255,255,255,.95),1px -1px 0 rgba(255,255,255,.95),-1px 1px 0 rgba(255,255,255,.95),1px 1px 0 rgba(255,255,255,.95);";
           const overlay = new ol.Overlay({ element: labelEl, positioning: "center-center", stopEvent: false, offset: [0, 0] });
@@ -5116,7 +5129,7 @@ function buildUvContourLayer(dataObj, gridInfo, map) {
     source: new ol.source.Vector({ features }), zIndex: 16,
     updateWhileAnimating: true, updateWhileInteracting: true,
     style: feature => new ol.style.Style({ stroke: new ol.style.Stroke({
-        color: feature.get("contourLevel") === 0 ? "#000000" : "rgba(25,25,25,0.96)",
+        color: feature.get("contourLevel") === 0 ? "#e6e6e6" : "rgba(210,210,210,0.92)",
         width: feature.get("contourLevel") === 0 || feature.get("major") ? 2 : 1,
         lineDash: undefined,
         lineCap: "round", lineJoin: "round"
@@ -5185,7 +5198,7 @@ function buildSlaContourLayer(dataObj, gridInfo, map) {
     source: new ol.source.Vector({ features }), zIndex: 16,
     updateWhileAnimating: true, updateWhileInteracting: true,
     style: feature => new ol.style.Style({ stroke: new ol.style.Stroke({
-      color: feature.get("contourLevel") === 0 ? "#000000" : "rgba(35,35,35,0.94)",
+        color: feature.get("contourLevel") === 0 ? "#e6e6e6" : "rgba(210,210,210,0.92)",
       width: feature.get("contourLevel") === 0 ? 2 : 1,
       lineCap: "round", lineJoin: "round"
     }) })
