@@ -1,33 +1,42 @@
 /* dashboard/bathy-lod.js
  *
  * Progressive bathymetric contours (Level-of-Detail controller).
- * Coarse GEBCO grid always available; medium/fine PBF tiles requested
- * only when zoom + coverage thresholds are crossed. Loaded as a classic
- * <script> BEFORE the inline bathy code in dashboard/index.html.
+ * Coarse GEBCO grid always available; medium (25 m) and fine (10 m)
+ * contour data are requested only when zoom + coverage thresholds are
+ * crossed. Loaded as a classic <script> BEFORE the inline bathy code in
+ * dashboard/index.html.
+ *
+ * v1 (shipped today, 2026-08-16T22-41Z-v12-bathy-lod-dev): flat GeoJSON
+ *     files for medium and fine. Pivoted away from tippecanoe PBF tiles
+ *     because no-root apt blocks libsqlite3-dev. The controller detects
+ *     flat vs tile URLs from the URL pattern and routes accordingly.
+ *
+ * v2 (future upgrade, see lod-manifest.json): replace the GeoJSON URLs
+ *     with tippecanoe-built {z}/{x}/{y}.pbf tiles sourced from NOAA
+ *     BlueTopo + NCEI multibeam. The PBF path is already wired in this
+ *     controller — flip the URLs and you're done.
  *
  * Single global: window.BathyLodController.
- * Single config:   window.BATHY_LOD_CONFIG (tweak tile roots / coverage
- *                   boxes here; everything else is internal).
+ * Single config:   window.BATHY_LOD_CONFIG.
  *
  * Author: CTO. Branch: feat/bathy-lod-canyon-zoom (dev preview only).
- * Dev build marker: 2026-08-16T22-41Z-v12-bathy-lod-dev
  */
 (function (global) {
   "use strict";
 
   // ─── Configuration ───────────────────────────────────────────────────
   const CONFIG = {
-    // CDN roots for medium/fine PBF vector tiles. Keys are REGION_IDs.
-    // Each URL follows the standard {z}/{x}/{y}.pbf XYZ scheme used by
-    // OpenLayers' ol.source.VectorTile.
+    // v1: flat GeoJSON. v2: swap the URLs for {z}/{x}/{y}.pbf (PBF
+    //     VectorTile) — the controller detects the pattern and routes
+    //     to the right loader automatically.
     TILE_ROOTS: {
       usec_md: {
-        medium: "https://data.fishedge.live/dev/bathy/v1/usec_md/medium/{z}/{x}/{y}.pbf",
-        fine:   "https://data.fishedge.live/dev/bathy/v1/usec_md/fine/{z}/{x}/{y}.pbf"
+        medium: "https://data.fishedge.live/dev/bathy/v1/usec_md/medium.json",
+        fine:   "https://data.fishedge.live/dev/bathy/v1/usec_md/fine.json"
       },
       usec_south: {
-        medium: "https://data.fishedge.live/dev/bathy/v1/usec_south/medium/{z}/{x}/{y}.pbf",
-        fine:   "https://data.fishedge.live/dev/bathy/v1/usec_south/fine/{z}/{x}/{y}.pbf"
+        medium: "https://data.fishedge.live/dev/bathy/v1/usec_south/medium.json",
+        fine:   "https://data.fishedge.live/dev/bathy/v1/usec_south/fine.json"
       }
     },
 
@@ -45,35 +54,22 @@
       }
     },
 
-    // Hysteresis band (zoom units) around the medium/fine thresholds so a
-    // tiny fractional-zoom wobble at z=8.00 doesn't ping-pong.
     HYSTERESIS: 0.25,
-
-    // First-load timeout for medium/fine tiles. On expiry, fall back to
-    // coarse and remember the failure for FAILURE_COOLDOWN_MS.
     FIRST_LOAD_TIMEOUT_MS: 8000,
-
-    // After a failed tile load, skip retries for this many ms. Prevents
-    // a 404-on-every-keystroke retry storm.
     FAILURE_COOLDOWN_MS: 30000,
-
-    // Cross-fade duration between coarse and the new LOD's tile layer.
     CROSS_FADE_MS: 200,
 
     // Zoom thresholds for switching between LODs.
     THRESHOLDS: { medium: 8, fine: 11 },
 
-    // PBF tile pyramid zoom bounds (Tippecanoe -Z/-z flags). Tiles
-    // outside this range won't be requested by OL.
+    // PBF tile pyramid zoom bounds (Tippecanoe -Z/-z flags). Only used
+    // when the URL contains {z}/{x}/{y} (PBF path). Ignored for flat
+    // GeoJSON.
     MIN_ZOOM: { medium: 8, fine: 11 },
     MAX_ZOOM: { medium: 10, fine: 14 },
 
-    // Mobile is opt-in for high-res tiles by default (separate perf
-    // envelope). Pass { mobileEnabled: true } in opts to override.
     DEFAULT_MOBILE_ENABLED: false,
 
-    // Feature style for tile-derived contours. Matches the existing
-    // desktop/mobile/combined palette but tuned for higher density.
     STYLE: function (feature) {
       const depth = Number(feature.get("depth")) || 0;
       const major = depth >= 1000;
@@ -88,7 +84,6 @@
 
   // ─── Helpers ─────────────────────────────────────────────────────────
 
-  // Viewport center in WGS84 lon/lat, regardless of view projection.
   function viewportCenterLonLat(map) {
     const view = map.getView();
     const center = view.getCenter();
@@ -98,18 +93,15 @@
     return ol.proj.toLonLat(center);
   }
 
-  function viewportInBbox(bbox) {
+  function viewportInBbox(map, bbox) {
     if (!bbox || bbox.length !== 4) return false;
-    const ll = viewportCenterLonLat(this.map);
+    const ll = viewportCenterLonLat(map);
     if (!ll) return false;
     const [w, s, e, n] = bbox;
     return ll[0] >= w && ll[0] <= e && ll[1] >= s && ll[1] <= n;
   }
 
-  // Decide which LOD to show given current zoom, region, and the LOD
-  // we're already on (for hysteresis). Cascade fine→medium→coarse on
-  // coverage miss.
-  function pickLod(zoom, regionId, activeLod) {
+  function pickLod(zoom, regionId, activeLod, map) {
     const cov = CONFIG.COVERAGE[regionId] || {};
     const fineCov = cov.fine;
     const medCov  = cov.medium;
@@ -117,13 +109,11 @@
     const medT  = CONFIG.THRESHOLDS.medium;
     const h = CONFIG.HYSTERESIS;
 
-    // Natural LOD for the current zoom.
     let candidate = zoom >= fineT ? "fine"
                   : zoom >= medT  ? "medium"
                   : "coarse";
 
-    // Hysteresis: stick with the previous LOD if we're wobbling inside
-    // the band. Only smooth transitions medium↔fine and coarse↔medium.
+    // Hysteresis
     if (activeLod === "fine" && zoom < fineT && zoom >= medT - h) {
       candidate = "fine";
     } else if (activeLod === "medium" && zoom < medT && zoom >= medT - h) {
@@ -132,11 +122,11 @@
       candidate = "coarse";
     }
 
-    // Coverage fallback. Fine unavailable → medium; medium unavailable → coarse.
-    if (candidate === "fine" && !viewportInBbox.call({ map: this.map }, fineCov)) {
-      candidate = viewportInBbox.call({ map: this.map }, medCov) ? "medium" : "coarse";
+    // Coverage fallback
+    if (candidate === "fine" && !viewportInBbox(map, fineCov)) {
+      candidate = viewportInBbox(map, medCov) ? "medium" : "coarse";
     }
-    if (candidate === "medium" && !viewportInBbox.call({ map: this.map }, medCov)) {
+    if (candidate === "medium" && !viewportInBbox(map, medCov)) {
       candidate = "coarse";
     }
 
@@ -158,9 +148,9 @@
       : (opts.mobileEnabled === false ? false : CONFIG.DEFAULT_MOBILE_ENABLED);
 
     this.activeLod = "coarse";
-    this.swapToken = 0;             // monotonic — detect stale swaps
-    this.tileLayers = {};           // { medium: VectorTile, fine: VectorTile }
-    this.failedLods = {};           // { "fine:usec_md": Date.now() }
+    this.swapToken = 0;
+    this.tileLayers = {};
+    this.failedLods = {};
     this._coarseBaseOpacity = 1;
     this._coarseBaseVisible = true;
     if (this.coarseLayer) {
@@ -175,23 +165,14 @@
     console.info(`[bathy] lod ${event} ${msg}`);
   };
 
-  // Cheap idempotent gate. Returns the current active LOD if unchanged.
-  // Otherwise kicks off an async swap and returns the *current* LOD
-  // (the swap will complete on its own; the 150ms moveend caller doesn't
-  // need to await it before doing its coarse rebuild).
   BathyLodController.prototype.syncForView = function () {
     if (this.disposed) return this.activeLod;
     if (this.scope === "mobile" && !this.mobileEnabled) return this.activeLod;
-
     const view = this.map.getView();
     const zoom = view.getZoom();
     if (!Number.isFinite(zoom)) return this.activeLod;
-
-    const candidate = pickLod.call(this, zoom, this.regionId, this.activeLod);
+    const candidate = pickLod(zoom, this.regionId, this.activeLod, this.map);
     if (candidate === this.activeLod) return this.activeLod;
-
-    // Fire-and-forget; the swap runs in the background and the next
-    // syncForView() will see the new activeLod once it lands.
     this._swapTo(candidate, zoom, "zoom-change");
     return this.activeLod;
   };
@@ -204,7 +185,6 @@
     const failKey = `${target}:${this.regionId}`;
     const failedAt = this.failedLods[failKey];
 
-    // Cooldown gate
     if (failedAt && Date.now() - failedAt < CONFIG.FAILURE_COOLDOWN_MS) {
       const ageS = Math.round((Date.now() - failedAt) / 1000);
       this._log("skip", `${from}->${target} failed ${ageS}s ago; cooldown`);
@@ -219,21 +199,19 @@
       return Promise.resolve("coarse");
     }
 
-    // medium or fine: build tile layer, await first tile, cross-fade
-    return this._ensureTileLayer(target, token).then(function (tileLayer) {
+    return this._ensureLayer(target, token).then(function (layer) {
       if (self.disposed || token !== self.swapToken) {
         self._log("stale", `${target} aborted; map changed mid-load`);
         return self.activeLod;
       }
-      if (!tileLayer) {
-        // Timeout/error
+      if (!layer) {
         self.failedLods[failKey] = Date.now();
         self._showOnly("coarse");
         self.activeLod = "coarse";
         self._log("unavailable", `${target}; retaining coarse; timeout or error`);
         return self.activeLod;
       }
-      return self._crossFade(target, tileLayer).then(function () {
+      return self._crossFade(target, layer).then(function () {
         if (self.disposed || token !== self.swapToken) {
           self._log("stale", `${target} cross-fade aborted`);
           return self.activeLod;
@@ -246,49 +224,88 @@
     });
   };
 
-  BathyLodController.prototype._ensureTileLayer = function (lod, token) {
+  // Dual-path: detects {z}/{x}/{y}.pbf (PBF VectorTile) vs flat .json
+  // (GeoJSON Vector). Returns the layer on success, null on
+  // timeout/error.
+  BathyLodController.prototype._ensureLayer = function (lod, token) {
     const self = this;
     if (this.tileLayers[lod]) return Promise.resolve(this.tileLayers[lod]);
     const rootUrl = (CONFIG.TILE_ROOTS[this.regionId] || {})[lod];
     if (!rootUrl) return Promise.resolve(null);
 
-    const source = new ol.source.VectorTile({
-      url: rootUrl,
-      format: new ol.format.MVT(),
-      projection: "EPSG:3857",
-      minZoom: CONFIG.MIN_ZOOM[lod],
-      maxZoom: CONFIG.MAX_ZOOM[lod],
-      wrapX: false
-    });
-    const layer = new ol.layer.VectorTile({
-      source: source,
-      style: CONFIG.STYLE,
-      opacity: 0,
-      zIndex: (this.coarseLayer.getZIndex ? this.coarseLayer.getZIndex() : 15) + 0.1
-    });
-    this.map.addLayer(layer);
-    this.tileLayers[lod] = layer;
+    const isTileUrl = rootUrl.indexOf("{z}") !== -1;
 
-    return new Promise(function (resolve) {
-      let resolved = false;
-      const finish = function (ok) {
-        if (resolved) return;
-        resolved = true;
-        source.un("tileloadend", onOk);
-        source.un("tileloaderror", onErr);
+    if (isTileUrl) {
+      // ─── v2 path: PBF VectorTile ────────────────────────────────────
+      const source = new ol.source.VectorTile({
+        url: rootUrl,
+        format: new ol.format.MVT(),
+        projection: "EPSG:3857",
+        minZoom: CONFIG.MIN_ZOOM[lod],
+        maxZoom: CONFIG.MAX_ZOOM[lod],
+        wrapX: false
+      });
+      const layer = new ol.layer.VectorTile({
+        source: source,
+        style: CONFIG.STYLE,
+        opacity: 0,
+        zIndex: (this.coarseLayer.getZIndex ? this.coarseLayer.getZIndex() : 15) + 0.1
+      });
+      this.map.addLayer(layer);
+      this.tileLayers[lod] = layer;
+
+      return new Promise(function (resolve) {
+        let resolved = false;
+        const finish = function (ok) {
+          if (resolved) return;
+          resolved = true;
+          source.un("tileloadend", onOk);
+          source.un("tileloaderror", onErr);
+          clearTimeout(timer);
+          resolve(ok ? layer : null);
+        };
+        const onOk = function () { finish(true); };
+        const onErr = function () { finish(false); };
+        source.on("tileloadend", onOk);
+        source.on("tileloaderror", onErr);
+        const timer = setTimeout(function () { finish(false); }, CONFIG.FIRST_LOAD_TIMEOUT_MS);
+      });
+    }
+
+    // ─── v1 path: flat GeoJSON ────────────────────────────────────────
+    const ctrl = (typeof AbortController !== "undefined") ? new AbortController() : null;
+    const timer = setTimeout(function () {
+      if (ctrl) ctrl.abort();
+    }, CONFIG.FIRST_LOAD_TIMEOUT_MS);
+
+    return fetch(rootUrl, ctrl ? { signal: ctrl.signal } : {})
+      .then(function (res) {
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        return res.json();
+      })
+      .then(function (gj) {
         clearTimeout(timer);
-        resolve(ok ? layer : null);
-      };
-      const onOk = function () { finish(true); };
-      const onErr = function () { finish(false); };
-      source.on("tileloadend", onOk);
-      source.on("tileloaderror", onErr);
-      const timer = setTimeout(function () { finish(false); }, CONFIG.FIRST_LOAD_TIMEOUT_MS);
-      // No explicit "kick" needed: the source starts loading as soon as
-      // the layer is added to the map and there are visible tiles.
-      // Edge case: if the layer is added but the current zoom is outside
-      // [minZoom, maxZoom], no tiles are requested → timeout fires → null.
-    });
+        if (self.disposed || token !== self.swapToken) return null;
+        const format = new ol.format.GeoJSON();
+        const features = format.readFeatures(gj, {
+          dataProjection: "EPSG:4326",
+          featureProjection: "EPSG:3857"
+        });
+        const source = new ol.source.Vector({ features: features, wrapX: false });
+        const layer = new ol.layer.Vector({
+          source: source,
+          style: CONFIG.STYLE,
+          opacity: 0,
+          zIndex: (self.coarseLayer.getZIndex ? self.coarseLayer.getZIndex() : 15) + 0.1
+        });
+        self.map.addLayer(layer);
+        self.tileLayers[lod] = layer;
+        return layer;
+      })
+      .catch(function () {
+        clearTimeout(timer);
+        return null;
+      });
   };
 
   BathyLodController.prototype._crossFade = function (target, toLayer) {
@@ -331,7 +348,7 @@
 
   BathyLodController.prototype.dispose = function () {
     this.disposed = true;
-    this.swapToken++;       // invalidate any in-flight swap
+    this.swapToken++;
     Object.keys(this.tileLayers).forEach(function (lod) {
       const l = this.tileLayers[lod];
       if (l && this.map) this.map.removeLayer(l);

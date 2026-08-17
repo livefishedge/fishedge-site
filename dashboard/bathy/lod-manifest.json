@@ -1,44 +1,39 @@
 {
   "pilot": {
     "name": "baltimore-canyon",
-    "bbox_wgs84": [
-      -74.7,
-      38.0,
-      -73.8,
-      38.6
-    ],
-    "notes": "NOAA states that BlueTopo Atlantic Coast coverage is complete, but BlueTopo fills gaps in water deeper than 200 m with GMRT. Use BlueTopo as the seamless medium-LOD base and use survey-level NCEI multibeam for the 10 m canyon-detail contours. The NCEI Bathymetric Data Viewer query for this bbox confirms many intersecting multibeam cruises, including NOAA canyon-focused EX1404L2, EX1206, EX1302, and NF-13-09. NOS BAG catalog entries also intersect the bbox, but the offshore W00358 surface is 111 m while the 1-2 m H11554/H11555/H11873 surfaces are shelf-focused; BAGs are therefore gap-fill, not the primary canyon source. JSON has no Infinity literal, so null in coarse.zoom_range[0] means an unbounded minimum zoom. Unknown per-survey cell size or vertical datum is represented as null and must be read from file-level metadata before mosaicking."
+    "bbox_wgs84": [-74.7, 38.0, -73.8, 38.6],
+    "notes": "v1 ships flat GeoJSON over the existing GEBCO 2026 15-arc-second raster-derived grid because tippecanoe PBF tiling is blocked (no-root apt, libsqlite3-dev unavailable). The LOD switching logic + zoom/coverage thresholds + cross-fade + abort-on-region-switch all work end-to-end on the dev preview. Visual detail is GEBCO-grade (~450 m cells, ~25 m smoothed contours) — NOT NOAA-grade canyon morphology. v2 swaps the URLs for tippecanoe-built {z}/{x}/{y}.pbf sourced from NOAA BlueTopo (1/3 arc-second) + NCEI multibeam (1 m) — the controller already detects the URL pattern and routes to the PBF loader. v2 source candidates confirmed: BlueTopo bucket is noaa-ocs-nationalbathymetry-pds.s3.amazonaws.com/BlueTopo/; NCEI multibeam cruises intersecting the bbox include NOAA Okeanos EX1404L2 (Our Deepwater Backyard), EX1206 (NE/Mid-Atlantic Canyons), EX1302, and NF-13-09. NCEI Bathymetric Data Viewer is the canonical selector (https://www.ncei.noaa.gov/maps/bathymetry/?layers=multibeam). BlueTopo fills deeper-than-200-m gaps with GMRT — accept that, don't upsampling it. NOS BAG catalog entries also intersect the bbox (1-2 m shelf surveys like H11554/H11555/H11873, plus 111 m W00358 offshore); BAGs are gap-fill, not the primary canyon source."
   },
   "lod": {
     "coarse": {
       "kind": "existing-grid",
       "source": "GEBCO 2026 15-arc-second subset, baked into dashboard/data/gebco_bath_latest/gebco_bathy.json at runtime",
-      "contour_intervals_m": [
-        100,
-        200,
-        500,
-        1000,
-        2000,
-        5000
-      ],
-      "zoom_range": [
-        null,
-        7.99
-      ]
+      "contour_intervals_m": [100, 200, 500, 1000, 2000, 5000],
+      "zoom_range": [null, 7.99]
     },
     "medium": {
-      "kind": "pbf-vector-tiles",
+      "kind": "flat-geojson",
+      "kind_v2": "pbf-vector-tiles",
       "contour_interval_m": 25,
-      "zoom_range": [
-        8,
-        10.99
-      ],
-      "tile_root": "https://data.fishedge.live/dev/bathy/v1/usec_md/medium/{z}/{x}/{y}.pbf",
-      "source_priority": [
+      "contour_intervals_m_v1": [25, 50, 100, 200, 500, 1000, 2000],
+      "zoom_range": [8, 10.99],
+      "tile_root_v1": "https://data.fishedge.live/dev/bathy/v1/usec_md/medium.json",
+      "tile_root_v2": "https://data.fishedge.live/dev/bathy/v1/usec_md/medium/{z}/{x}/{y}.pbf",
+      "v1_metadata": {
+        "format": "GeoJSON FeatureCollection of LineString contours",
+        "source_grid": "GEBCO 2026 15-arc-second (0.00417° step)",
+        "extraction": "matplotlib.pyplot.contour (marching squares)",
+        "simplification": "shapely.simplify tol=0.0003° (~26 m at 38°N)",
+        "features": 1881,
+        "size_bytes": 1191952,
+        "depths_m": [25, 50, 100, 200, 500, 1000, 2000],
+        "generated_at": "2026-08-17T03:53Z"
+      },
+      "source_priority_v2": [
         "NOAA BlueTopo (where 1/3 arc-second or better)",
         "NOAA NCEI multibeam surveys intersecting bbox"
       ],
-      "mosaic_files": [
+      "mosaic_files_v2": [
         {
           "name": "NOAA Office of Coast Survey BlueTopo",
           "url": "https://noaa-ocs-nationalbathymetry-pds.s3.amazonaws.com/BlueTopo/{tile_id}/BlueTopo_{tile_id}_{YYYYMMDD}.tiff",
@@ -58,18 +53,29 @@
       ]
     },
     "fine": {
-      "kind": "pbf-vector-tiles",
+      "kind": "flat-geojson",
+      "kind_v2": "pbf-vector-tiles",
       "contour_interval_m": 10,
-      "zoom_range": [
-        11,
-        14
-      ],
-      "tile_root": "https://data.fishedge.live/dev/bathy/v1/usec_md/fine/{z}/{x}/{y}.pbf",
-      "source_priority": [
+      "contour_intervals_m_v1": [10, 20, 30, 40, 50, 75, 100, 150, 200, 300, 500, 1000, 2000],
+      "zoom_range": [11, 14],
+      "tile_root_v1": "https://data.fishedge.live/dev/bathy/v1/usec_md/fine.json",
+      "tile_root_v2": "https://data.fishedge.live/dev/bathy/v1/usec_md/fine/{z}/{x}/{y}.pbf",
+      "v1_metadata": {
+        "format": "GeoJSON FeatureCollection of LineString contours",
+        "source_grid": "GEBCO 2026 15-arc-second (0.00417° step)",
+        "extraction": "matplotlib.pyplot.contour (marching squares)",
+        "simplification": "shapely.simplify tol=0.0001° (~9 m at 38°N)",
+        "features": 104,
+        "size_bytes": 293746,
+        "depths_m": [10, 20, 30, 40, 50, 75, 100, 150, 200, 300],
+        "bbox_filter_wgs84": [-74.85, 38.05, -73.65, 38.55],
+        "generated_at": "2026-08-17T03:54Z"
+      },
+      "source_priority_v2": [
         "NOAA NCEI multibeam (highest-resolution surveys for Baltimore Canyon)",
         "NOAA NOS hydrographic BAGs where survey density is sparse"
       ],
-      "mosaic_files": [
+      "mosaic_files_v2": [
         {
           "name": "NOAA Okeanos Explorer EX1404L2 — Our Deepwater Backyard: Exploring the Atlantic Canyons and Seamounts",
           "url": "https://www.ngdc.noaa.gov/ships/okeanos_explorer/EX1404L2_mb.html",
@@ -106,25 +112,23 @@
     }
   },
   "build_pipeline": {
-    "tools": [
-      "gdalbuildvrt",
-      "gdalwarp",
-      "gdal_contour",
-      "tippecanoe",
-      "mb-util"
-    ],
-    "intermediate_crs": "EPSG:32618 (UTM 18N for Mid-Atlantic)",
-    "intermediate_cell_size_m": "varies by LOD — see build_bathy_lod.sh",
+    "tools": ["matplotlib", "shapely", "tippecanoe", "mb-util", "gdalbuildvrt", "gdalwarp", "gdal_contour"],
+    "tools_v1_only": ["matplotlib", "shapely"],
+    "tools_v2_required": ["tippecanoe", "mb-util", "gdalbuildvrt", "gdalwarp", "gdal_contour"],
+    "intermediate_crs_v2": "EPSG:32618 (UTM 18N for Mid-Atlantic)",
+    "intermediate_cell_size_m_v2": "varies by LOD — see build_bathy_lod.sh",
     "pbf_min_zoom_medium": 8,
     "pbf_max_zoom_medium": 10,
     "pbf_min_zoom_fine": 11,
     "pbf_max_zoom_fine": 14
   },
   "attribution": {
-    "medium": "NOAA bathymetric data — public domain",
-    "fine": "NOAA multibeam bathymetry — public domain",
-    "coarse": "GEBCO Compilation Group (2026) GEBCO 2026 Grid — https://www.gebco.net/"
+    "medium_v1": "GEBCO Compilation Group (2026) GEBCO 2026 Grid — https://www.gebco.net/ (v1 ships from GEBCO; v2 swaps to NOAA data)",
+    "fine_v1": "GEBCO Compilation Group (2026) GEBCO 2026 Grid — https://www.gebco.net/ (v1 ships from GEBCO; v2 swaps to NOAA data)",
+    "coarse": "GEBCO Compilation Group (2026) GEBCO 2026 Grid — https://www.gebco.net/",
+    "medium_v2": "NOAA bathymetric data — public domain",
+    "fine_v2": "NOAA multibeam bathymetry — public domain"
   },
-  "generated_at": "2026-08-17T03:05:12Z",
-  "schema_version": 1
+  "generated_at": "2026-08-17T03:55Z",
+  "schema_version": 2
 }
