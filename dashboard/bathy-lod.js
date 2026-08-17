@@ -162,6 +162,43 @@
 
   // ─── Controller ──────────────────────────────────────────────────────
 
+  // Dev-only sweep: hide the legacy index.html native bathymetry Vector
+  // layers that were already attached to the map before this controller
+  // mounts. Without this, the controller's BlueTopo contours are drawn
+  // underneath/over the native GEBCO contours and are visually invisible.
+  // Production (CTO_COMBINED_BUILD unchanged) does not load this
+  // controller, so the sweep is scoped to the dev preview branch only.
+  function __bathyLodHideNativeLayers(map) {
+    if (!map || typeof map.getLayers !== "function") return 0;
+    const layers = map.getLayers().getArray();
+    let hidden = 0;
+    for (const l of layers) {
+      if (!l || l.__bathyLodOwned) continue;
+      let isBathy = false;
+      // Match the legacy _bathyLayer global handle set in index.html.
+      if (global._bathyLayer && l === global._bathyLayer) isBathy = true;
+      // Match by zIndex: index.html draws bathy at zIndex 16, sst/uv at
+      // lower values, and basemap at much lower values.
+      if (!isBathy && typeof l.getZIndex === "function") {
+        const z = l.getZIndex();
+        if (Number.isFinite(z) && z >= 15 && z <= 20) isBathy = true;
+      }
+      if (isBathy) {
+        l.setVisible(false);
+        l.__bathyLodHidden = true;
+        hidden++;
+      }
+    }
+    // Belt-and-braces: hide the global handle directly in case the
+    // map's layer array isn't authoritative.
+    if (global._bathyLayer && !global._bathyLayer.__bathyLodHidden) {
+      global._bathyLayer.setVisible(false);
+      global._bathyLayer.__bathyLodHidden = true;
+      hidden++;
+    }
+    return hidden;
+  }
+
   function BathyLodController(opts) {
     if (!opts || !opts.map || !opts.coarseLayer) {
       throw new Error("BathyLodController requires { map, coarseLayer }");
@@ -185,8 +222,14 @@
       this._coarseBaseOpacity = this.coarseLayer.getOpacity();
       this._coarseBaseVisible = this.coarseLayer.getVisible();
     }
+    // Mark our coarse layer so the sweep ignores it. The native-sweep
+    // runs FIRST so any pre-existing layer zIndex >= 15 is hidden before
+    // we attach our own coarse/medium/fine layers.
+    global.__bathyLodActive = true;
+    const hidden = __bathyLodHideNativeLayers(this.map);
+    if (this.coarseLayer) this.coarseLayer.__bathyLodOwned = true;
     this.disposed = false;
-    this._log("init", `scope=${this.scope}; region=${this.regionId}; mobile=${this.mobileEnabled}`);
+    this._log("init", `scope=${this.scope}; region=${this.regionId}; mobile=${this.mobileEnabled}; hid_native_bathy=${hidden}`);
   }
 
   BathyLodController.prototype._log = function (event, msg) {
@@ -289,6 +332,7 @@
         opacity: 0,
         zIndex: (this.coarseLayer.getZIndex ? this.coarseLayer.getZIndex() : 15) + 0.1
       });
+      layer.__bathyLodOwned = true;
 
       return new Promise(function (resolve) {
         let resolved = false;
@@ -340,6 +384,7 @@
           opacity: 0,
           zIndex: (self.coarseLayer.getZIndex ? self.coarseLayer.getZIndex() : 15) + 0.1
         });
+        layer.__bathyLodOwned = true;
         self.map.addLayer(layer);
         self.tileLayers[lod] = layer;
         return layer;
