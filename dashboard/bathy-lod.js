@@ -88,14 +88,19 @@
     STYLE_FOR_LOD: function (lod) {
       const color = lod === "fine" ? "rgba(0, 229, 255, 0.98)" : "rgba(255, 170, 0, 0.96)";
       const width = lod === "fine" ? 2.4 : 1.7;
+      const cache = Object.create(null);
       return function (feature) {
         const depth = Number(feature.get("depth_m") ?? feature.get("depth")) || 0;
-        return new ol.style.Style({
-          stroke: new ol.style.Stroke({
-            color: color,
-            width: depth >= 1000 ? width + 0.5 : width
-          })
-        });
+        const key = String(depth);
+        if (!cache[key]) {
+          cache[key] = new ol.style.Style({
+            stroke: new ol.style.Stroke({
+              color: color,
+              width: depth >= 1000 ? width + 0.5 : width
+            })
+          });
+        }
+        return cache[key];
       };
     }
   };
@@ -167,6 +172,7 @@
 
     this.activeLod = "coarse";
     this.swapToken = 0;
+    this.pendingLod = null;
     this.tileLayers = {};
     this.failedLods = {};
     this._coarseBaseOpacity = 1;
@@ -191,12 +197,16 @@
     if (!Number.isFinite(zoom)) return this.activeLod;
     const candidate = pickLod(zoom, this.regionId, this.activeLod, this.map);
     if (candidate === this.activeLod) return this.activeLod;
+    // Serialize transitions: rapid wheel events must not create overlapping
+    // VectorTile layers and concurrent cross-fades.
+    if (this.pendingLod) return this.activeLod;
     this._swapTo(candidate, zoom, "zoom-change");
     return this.activeLod;
   };
 
   BathyLodController.prototype._swapTo = function (target, zoom, reason) {
     const from = this.activeLod;
+    this.pendingLod = target;
     const token = ++this.swapToken;
     const startedAt = performance.now();
     const self = this;
@@ -212,6 +222,7 @@
     if (target === "coarse") {
       this._showOnly("coarse");
       this.activeLod = "coarse";
+      this.pendingLod = null;
       const elapsed = performance.now() - startedAt;
       this._log("swap", `${from}->coarse; zoom ${zoom.toFixed(2)}; ${reason}; ${elapsed.toFixed(0)}ms`);
       return Promise.resolve("coarse");
@@ -219,10 +230,12 @@
 
     return this._ensureLayer(target, token).then(function (layer) {
       if (self.disposed || token !== self.swapToken) {
+        self.pendingLod = null;
         self._log("stale", `${target} aborted; map changed mid-load`);
         return self.activeLod;
       }
       if (!layer) {
+        self.pendingLod = null;
         self.failedLods[failKey] = Date.now();
         self._showOnly("coarse");
         self.activeLod = "coarse";
@@ -231,10 +244,12 @@
       }
       return self._crossFade(target, layer).then(function () {
         if (self.disposed || token !== self.swapToken) {
+          self.pendingLod = null;
           self._log("stale", `${target} cross-fade aborted`);
           return self.activeLod;
         }
         self.activeLod = target;
+        self.pendingLod = null;
         const elapsed = performance.now() - startedAt;
         self._log("swap", `${from}->${target}; zoom ${zoom.toFixed(2)}; ${reason}; ${elapsed.toFixed(0)}ms`);
         return target;
