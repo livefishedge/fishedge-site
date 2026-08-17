@@ -31,8 +31,8 @@
     //     to the right loader automatically.
     TILE_ROOTS: {
       usec_md: {
-        medium: "https://data.fishedge.live/dev/bathy/v1/usec_md/medium/{z}/{x}/{y}.pbf?v=20260817-bluetopo-raw2",
-        fine:   "https://data.fishedge.live/dev/bathy/v1/usec_md/fine/{z}/{x}/{y}.pbf?v=20260817-bluetopo-raw2"
+        medium: "https://data.fishedge.live/dev/bathy/v1/usec_md/medium/{z}/{x}/{y}.pbf?v=20260817-v28-tiles-rebuilt",
+        fine:   "https://data.fishedge.live/dev/bathy/v1/usec_md/fine/{z}/{x}/{y}.pbf?v=20260817-v28-tiles-rebuilt"
       },
       usec_south: {
         medium: "https://data.fishedge.live/dev/bathy/v1/usec_south/medium.json",
@@ -340,16 +340,22 @@
           if (resolved) return;
           resolved = true;
           source.un("tileloadend", onOk);
-          source.un("tileloaderror", onErr);
           clearTimeout(timer);
           resolve(ok ? layer : null);
         };
         const onOk = function () { finish(true); };
-        const onErr = function () { finish(false); };
         source.on("tileloadend", onOk);
-        source.on("tileloaderror", onErr);
         const timer = setTimeout(function () { finish(false); }, CONFIG.FIRST_LOAD_TIMEOUT_MS);
 
+        // v28: deliberately do NOT listen for `tileloaderror`. Sparse tile
+        // pyramids are the norm — BlueTopo and NCEI mosaics have nodata
+        // cells, partial coverage, and 404s in remote corners. Failing the
+        // whole layer on the first missing tile (the old behavior) made the
+        // LOD swap brittle. OL's VectorTile source already renders nothing
+        // for tiles it can't load; that's the correct failure mode. Only
+        // treat the layer as unavailable on a timeout (no tile loaded at
+        // all within FIRST_LOAD_TIMEOUT_MS).
+        //
         // Register listeners before attaching the layer. Adding a VectorTile
         // layer can synchronously schedule/load its first tile; registering
         // afterward can miss the only tileloadend event and falsely time out.
