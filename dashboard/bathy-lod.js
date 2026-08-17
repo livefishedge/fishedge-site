@@ -216,6 +216,7 @@
     if (failedAt && Date.now() - failedAt < CONFIG.FAILURE_COOLDOWN_MS) {
       const ageS = Math.round((Date.now() - failedAt) / 1000);
       this._log("skip", `${from}->${target} failed ${ageS}s ago; cooldown`);
+      this.pendingLod = null;
       return Promise.resolve(this.activeLod);
     }
 
@@ -284,8 +285,6 @@
         opacity: 0,
         zIndex: (this.coarseLayer.getZIndex ? this.coarseLayer.getZIndex() : 15) + 0.1
       });
-      this.map.addLayer(layer);
-      this.tileLayers[lod] = layer;
 
       return new Promise(function (resolve) {
         let resolved = false;
@@ -302,6 +301,12 @@
         source.on("tileloadend", onOk);
         source.on("tileloaderror", onErr);
         const timer = setTimeout(function () { finish(false); }, CONFIG.FIRST_LOAD_TIMEOUT_MS);
+
+        // Register listeners before attaching the layer. Adding a VectorTile
+        // layer can synchronously schedule/load its first tile; registering
+        // afterward can miss the only tileloadend event and falsely time out.
+        self.map.addLayer(layer);
+        self.tileLayers[lod] = layer;
       });
     }
 
