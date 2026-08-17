@@ -38,7 +38,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-init.js?v=20260806c"></script>
   <script src="canyon-charts.js?v=20260815h-static-data"></script>
-<script src="bathy-lod.js?v=20260817-v16-tile-event-race-fix-dev"></script>
+<script src="bathy-lod.js?v=20260817-v17-auth-region-fix-dev"></script>
   <script src="https://cdn.jsdelivr.net/npm/posthog-js@1.200.0/dist/array.js"></script>
 
 
@@ -1851,7 +1851,11 @@ window.__applyAuthRegion = function(profiles, granted, session, userId) {
   //   2) profile.selected_region if valid (and granted, if entitlement is gated)
   //   3) first granted region (by sort_order) or fallback to usec_south
   let activeRegion = null;
-  if (urlRegion && REGIONS[urlRegion] && (!entitlementGated || grantedIds.has(urlRegion))) {
+  // Feature-preview override: the NOAA bathymetry pilot is intentionally
+  // testable on the preview even when the account's production region grants
+  // do not include usec_md. Production hosts retain entitlement gating.
+  const isBathyFeaturePreview = location.hostname === 'feat-bathy-lod-canyon-zoom.fishedge-site.pages.dev';
+  if (urlRegion && REGIONS[urlRegion] && (isBathyFeaturePreview || !entitlementGated || grantedIds.has(urlRegion))) {
     activeRegion = urlRegion;
   } else if (profile && profile.selected_region && REGIONS[profile.selected_region] && (!entitlementGated || grantedIds.has(profile.selected_region))) {
     activeRegion = profile.selected_region;
