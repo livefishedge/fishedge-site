@@ -1366,7 +1366,7 @@
         <option value="chl">Chlorophyll</option>
         <option value="sst">Temperature</option>
           <option value="thermal_fronts">Thermal Fronts</option>
-          <option value="uv">Currents/Height</option>
+          <option value="uv">Currents/Sea Level</option>
           <option value="sla">Sea Level Anomaly</option>
           <option value="bathy">Bathymetry</option>
       </select>
@@ -1441,17 +1441,19 @@
           <input type="checkbox" id="chk-combined-height" checked>
           <span class="box"></span>
           <span class="combined-dot dot-uv"></span>
-          <span>Surface Height</span>
+        <span>Sea Level</span>
         </label>
         <button id="combined-height-unit-toggle" class="combined-unit-button" type="button">ft</button>
       </div>
-      <label class="combined-toggle">
-        <input type="checkbox" id="chk-combined-sla">
-        <span class="box"></span>
-        <span class="combined-dot dot-front"></span>
-        <span>Sea Level Anomaly</span>
-      </label>
-      <button id="combined-sla-unit-toggle" class="combined-unit-button" type="button">in</button>
+      <div class="combined-product-row">
+        <label class="combined-toggle">
+          <input type="checkbox" id="chk-combined-sla">
+          <span class="box"></span>
+          <span class="combined-dot dot-front"></span>
+          <span>Sea Level Anomaly</span>
+        </label>
+        <button id="combined-sla-unit-toggle" class="combined-unit-button" type="button">in</button>
+      </div>
       <div id="combined-sla-scan-time" style="font-size:11px;color:#ffcf66;margin-left:28px;margin-bottom:8px;"></div>
       <label class="combined-toggle">
         <input type="checkbox" id="chk-combined-fishing" checked>
@@ -1502,7 +1504,7 @@
           <option value="chl">Chlorophyll</option>
           <option value="sst">Temperature</option>
         <option value="thermal_fronts">Thermal Fronts</option>
-        <option value="uv">Currents/Height</option>
+        <option value="uv">Currents/Sea Level</option>
         <option value="sla">Sea Level Anomaly</option>
         <option value="bathy">Bathymetry</option>
         </select>
@@ -1903,7 +1905,7 @@ window.__applyAuthRegion = function(profiles, granted, session, userId) {
 const VAR_LABELS = {
   chl:"Chlorophyll", sst:"Temperature",
   chl_front:"CHL Fronts", sst_front:"SST Fronts",
-  uv:"Currents/Height",
+  uv:"Currents/Sea Level",
   sla:"Sea Level Anomaly",
   bathy:"Bathymetry",
   thermal_fronts:"Thermal Fronts",
@@ -2044,7 +2046,7 @@ function formatDepth(meters) {
 function unitLabelForVar(varKey) {
   if (varKey === "sst" || varKey === "thermal_fronts" || varKey === "sst_front") return tempUnitLabel();
   if (varKey === "bathy") return depthUnitLabel();
-  if (varKey === "uv") return `Height (${heightUnitLabel()})`;
+  if (varKey === "uv") return `Sea Level (${heightUnitLabel()})`;
   if (varKey === "sla") return `Sea Level Anomaly (${slaUnitLabel()})`;
   return DEFAULT_RANGES[varKey]?.unit || "";
 }
@@ -4523,8 +4525,9 @@ function buildUv(gridInfo, dataObj) {
       labelfont: { size: 10, color: "#0c1723", family: "Arial Black" }
     },
     line: {                         /* explicit line color/width (not via contours.color which Plotly 2.34 can ignore) */
-      color: "rgba(210,210,210,0.92)",
-      width: 1,
+      color: "#000000",
+      width: 3,
+      dash: "dot",
       smoothing: 0
     }
   };
@@ -4879,10 +4882,11 @@ function drawUvContours(ctx, z, nx, ny, xFlip, yFlip) {
         }
       }
     }
-    ctx.strokeStyle = "rgba(210,210,210,0.92)";
+    ctx.strokeStyle = "#000000";
     // All contours use the same interval; zero is the only emphasized line.
-    ctx.lineWidth = uvContourIsMajor(level) ? 2 : 1;
-    ctx.strokeStyle = level === 0 ? "#e6e6e6" : "rgba(210,210,210,0.92)";
+    ctx.lineWidth = uvContourIsMajor(level) ? 4 : 3;
+    ctx.setLineDash([1, 6]);
+    ctx.strokeStyle = "#000000";
     ctx.stroke();
   }
   ctx.restore();
@@ -5050,7 +5054,7 @@ function clearUvContourLayer(state) {
 }
 
 // Render ADT contours as OL vectors so width is measured in screen pixels,
-// not low-resolution raster pixels. This is the authoritative Currents/Height path.
+// not low-resolution raster pixels. This is the authoritative Currents/Sea Level path.
 function buildUvContourLayer(dataObj, gridInfo, map) {
   const d = (dataObj?.data && !Array.isArray(dataObj.data)) ? dataObj.data : dataObj;
   const zMeters = d?.adt || d?.z;
@@ -5137,9 +5141,9 @@ function buildUvContourLayer(dataObj, gridInfo, map) {
     source: new ol.source.Vector({ features }), zIndex: 16,
     updateWhileAnimating: true, updateWhileInteracting: true,
     style: feature => new ol.style.Style({ stroke: new ol.style.Stroke({
-        color: feature.get("contourLevel") === 0 ? "#e6e6e6" : "rgba(210,210,210,0.92)",
-        width: feature.get("contourLevel") === 0 || feature.get("major") ? 2 : 1,
-        lineDash: undefined,
+        color: "#000000",
+        width: feature.get("contourLevel") === 0 ? 4 : 3,
+        lineDash: [1, 6],
         lineCap: "round", lineJoin: "round"
       }) })
   });
@@ -7354,7 +7358,7 @@ async function rebuildCombinedUvLayer(map, { hoursMode = "latest" } = {}) {
     const grid = await loadGridForVar("uv", data);
     window._combinedUvGrid = grid;
     window._combinedUvData = data;
-    // Surface Height is contour-only. Currents remain a separate arrow layer.
+    // Sea Level is contour-only. Currents remain a separate arrow layer.
     const heightLayer = buildUvContourLayer(data, grid, map);
     const heightCheck = document.getElementById("chk-combined-height");
     if (heightLayer) heightLayer.setVisible(heightCheck ? heightCheck.checked : true);
