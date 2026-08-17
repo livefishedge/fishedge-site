@@ -360,8 +360,11 @@
         if (t < 1) requestAnimationFrame(tick);
         else {
           if (fromLayer) {
-            fromLayer.setOpacity(1);
-            fromLayer.setVisible(target === "coarse");
+            // Keep the dynamic field-of-view contours faintly visible under
+            // the NOAA tile layer. This makes the zoom-density change
+            // obvious even where a particular vector tile is sparse.
+            fromLayer.setOpacity(target === "coarse" ? 1 : 0.24);
+            fromLayer.setVisible(true);
           }
           resolve();
         }

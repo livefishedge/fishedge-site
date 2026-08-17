@@ -38,7 +38,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-init.js?v=20260806c"></script>
   <script src="canyon-charts.js?v=20260815h-static-data"></script>
-<script src="bathy-lod.js?v=20260817-v19-dense-ncei-fine-dev"></script>
+<script src="bathy-lod.js?v=20260817-v20-dynamic-fov-contours-dev"></script>
   <script src="https://cdn.jsdelivr.net/npm/posthog-js@1.200.0/dist/array.js"></script>
 
 
@@ -5597,16 +5597,17 @@ function updateBathyContours(map, bd, layer, scope = "single") {
   const sx = Math.max(1, Math.floor(bd.nx / maxW));
   const sy = Math.max(1, Math.floor(bd.ny / maxH));
 
-  const maxDepth = depthMaxInExtent(bd, extent, sx, sy);
-  const levels = generateContourLevels(maxDepth);
+  const range = depthRangeInExtent(bd, extent, sx, sy);
+  const levels = generateContourLevels(range.min, range.max, map.getView().getZoom());
 
   const result = buildBathyContourFeatures(bd, levels, sx, sy, extent);
   replaceBathyContourFeatures(source, result, scope, startedAt);
 }
 
-function depthMaxInExtent(bd, extent, sx, sy) {
+function depthRangeInExtent(bd, extent, sx, sy) {
   const [vx0, vy0, vx1, vy1] = extent;
-  let maxD = 0;
+  let minD = Infinity;
+  let maxD = -Infinity;
   for (let row = 0; row < bd.ny; row += sy) {
     const lat = bd.yAxis[row];
     if (lat < vy0 || lat > vy1) continue;
@@ -5614,23 +5615,31 @@ function depthMaxInExtent(bd, extent, sx, sy) {
       const lon = bd.xAxis[col];
       if (lon < vx0 || lon > vx1) continue;
       const d = bd.depth[row][col];
+      if (!Number.isFinite(d) || d < 0) continue;
+      if (d < minD) minD = d;
       if (d > maxD) maxD = d;
     }
   }
-  return maxD;
+  return { min: minD, max: maxD };
 }
 
-function generateContourLevels(maxDepth) {
-  if (!Number.isFinite(maxDepth) || maxDepth <= 0) return [];
-  const factor = depthUnit === "ft" ? 3.28084 : depthUnit === "fathom" ? 0.546806649 : 1;
-  const maxDisplay = maxDepth * factor;
-  // Use the same irregular-but-regularly-spaced fishing-depth pattern in
-  // every unit system: 25, 50, 100, 200, 500, ... . For very shallow
-  // extents, retain useful 5/10/20-unit contours instead of returning none.
-  const standard = [25, 50, 100, 200, 500, 1000, 2000, 5000, 10000];
-  const shallow = [5, 10, 20];
-  const levels = maxDisplay < 25 ? shallow : standard;
-  return levels.filter(level => level <= maxDisplay + 1e-9).map(level => level / factor);
+function generateContourLevels(minDepth, maxDepth, zoom) {
+  if (!Number.isFinite(minDepth) || !Number.isFinite(maxDepth) || maxDepth <= minDepth) return [];
+  // Choose a readable number of contours from the actual field-of-view
+  // range. Zooming in increases the target density; the 1/2/5 ladder keeps
+  // labels and lines stable instead of producing arbitrary intervals.
+  const targetCount = Number.isFinite(zoom) && zoom >= 11 ? 20 : (zoom >= 8 ? 14 : 8);
+  const rawStep = (maxDepth - minDepth) / targetCount;
+  const magnitude = Math.pow(10, Math.floor(Math.log10(rawStep)));
+  const normalized = rawStep / magnitude;
+  const nice = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10;
+  const step = nice * magnitude;
+  const first = Math.ceil(minDepth / step) * step;
+  const levels = [];
+  for (let level = first; level <= maxDepth + step * 1e-6 && levels.length < 100; level += step) {
+    levels.push(Number(level.toFixed(6)));
+  }
+  return levels;
 }
 
 function formatContourLevel(meters) {
