@@ -1,0 +1,130 @@
+{
+  "pilot": {
+    "name": "baltimore-canyon",
+    "bbox_wgs84": [
+      -74.7,
+      38.0,
+      -73.8,
+      38.6
+    ],
+    "notes": "NOAA states that BlueTopo Atlantic Coast coverage is complete, but BlueTopo fills gaps in water deeper than 200 m with GMRT. Use BlueTopo as the seamless medium-LOD base and use survey-level NCEI multibeam for the 10 m canyon-detail contours. The NCEI Bathymetric Data Viewer query for this bbox confirms many intersecting multibeam cruises, including NOAA canyon-focused EX1404L2, EX1206, EX1302, and NF-13-09. NOS BAG catalog entries also intersect the bbox, but the offshore W00358 surface is 111 m while the 1-2 m H11554/H11555/H11873 surfaces are shelf-focused; BAGs are therefore gap-fill, not the primary canyon source. JSON has no Infinity literal, so null in coarse.zoom_range[0] means an unbounded minimum zoom. Unknown per-survey cell size or vertical datum is represented as null and must be read from file-level metadata before mosaicking."
+  },
+  "lod": {
+    "coarse": {
+      "kind": "existing-grid",
+      "source": "GEBCO 2026 15-arc-second subset, baked into dashboard/data/gebco_bath_latest/gebco_bathy.json at runtime",
+      "contour_intervals_m": [
+        100,
+        200,
+        500,
+        1000,
+        2000,
+        5000
+      ],
+      "zoom_range": [
+        null,
+        7.99
+      ]
+    },
+    "medium": {
+      "kind": "pbf-vector-tiles",
+      "contour_interval_m": 25,
+      "zoom_range": [
+        8,
+        10.99
+      ],
+      "tile_root": "https://data.fishedge.live/dev/bathy/v1/usec_md/medium/{z}/{x}/{y}.pbf",
+      "source_priority": [
+        "NOAA BlueTopo (where 1/3 arc-second or better)",
+        "NOAA NCEI multibeam surveys intersecting bbox"
+      ],
+      "mosaic_files": [
+        {
+          "name": "NOAA Office of Coast Survey BlueTopo",
+          "url": "https://noaa-ocs-nationalbathymetry-pds.s3.amazonaws.com/BlueTopo/{tile_id}/BlueTopo_{tile_id}_{YYYYMMDD}.tiff",
+          "format": "multilayer floating-point GeoTIFF with companion Raster Attribute Table (.tiff.aux.xml); use the dated BlueTopo tile-scheme GeoPackage to resolve tile_id",
+          "native_cell_size": null,
+          "vertical_datum": "national vertical datum; confirm the exact datum from each tile's metadata before mosaicking",
+          "license": "U.S. public domain; NOAA Coast Survey acknowledgement requested"
+        },
+        {
+          "name": "NOAA NCEI Bathymetric Data Viewer — multibeam survey selection for pilot bbox",
+          "url": "https://www.ncei.noaa.gov/maps/bathymetry/?layers=multibeam",
+          "format": "survey-dependent raw multibeam vendor files and processed XYZ/GeoTIFF/ASCII grids where supplied",
+          "native_cell_size": null,
+          "vertical_datum": null,
+          "license": "NOAA-distributed data; verify contributor metadata, attribution, and datum per survey"
+        }
+      ]
+    },
+    "fine": {
+      "kind": "pbf-vector-tiles",
+      "contour_interval_m": 10,
+      "zoom_range": [
+        11,
+        14
+      ],
+      "tile_root": "https://data.fishedge.live/dev/bathy/v1/usec_md/fine/{z}/{x}/{y}.pbf",
+      "source_priority": [
+        "NOAA NCEI multibeam (highest-resolution surveys for Baltimore Canyon)",
+        "NOAA NOS hydrographic BAGs where survey density is sparse"
+      ],
+      "mosaic_files": [
+        {
+          "name": "NOAA Okeanos Explorer EX1404L2 — Our Deepwater Backyard: Exploring the Atlantic Canyons and Seamounts",
+          "url": "https://www.ngdc.noaa.gov/ships/okeanos_explorer/EX1404L2_mb.html",
+          "format": "Kongsberg EM302 raw multibeam (.all.mb58.gz), processed generic XYZ soundings (.mb162), and originator-provided 25 m WGS84 grids (GeoTIFF/XYZ/ESRI ASCII)",
+          "native_cell_size": "25 m for the confirmed originator-provided grid; full-resolution sounding spacing varies",
+          "vertical_datum": null,
+          "license": "NOAA Office of Ocean Exploration and Research data; U.S. public domain with NOAA attribution requested"
+        },
+        {
+          "name": "NOAA Okeanos Explorer EX1206 — Northeast and Mid-Atlantic Canyons Exploration",
+          "url": "https://data.noaa.gov/waf/NOAA/NESDIS/NGDC/MGG/Multibeam/iso/xml/EX1206_Multibeam.xml",
+          "format": "Kongsberg EM302 multibeam survey archive; inspect the NCEI survey record for available raw and processed deliverables",
+          "native_cell_size": null,
+          "vertical_datum": null,
+          "license": "NOAA data; U.S. public domain with NOAA attribution requested"
+        },
+        {
+          "name": "NOAA Ship Nancy Foster NF-13-09 — Deepwater Canyons 2013: Benthic Lander Recovery",
+          "url": "https://www.ngdc.noaa.gov/ships/nancy_foster/NF-13-09_mb.html",
+          "format": "Kongsberg EM1002 raw multibeam vendor files (.all.mb56.gz)",
+          "native_cell_size": null,
+          "vertical_datum": null,
+          "license": "NOAA Office of Ocean Exploration and Research data; U.S. public domain with NOAA attribution requested"
+        },
+        {
+          "name": "NOAA National Ocean Service Hydrographic Survey BAG archive",
+          "url": "https://www.ncei.noaa.gov/products/nos-hydrographic-survey",
+          "format": "Bathymetric Attributed Grid (BAG), optionally converted by NCEI to ASCII XYZ with XML metadata",
+          "native_cell_size": "survey-dependent; bbox catalog query returned 1 m, 2 m, and 111 m BAG surfaces",
+          "vertical_datum": "MLLW for recent post-1980 NOS surveys; confirm per-survey metadata",
+          "license": "NOAA data; U.S. public domain with NOAA attribution requested"
+        }
+      ]
+    }
+  },
+  "build_pipeline": {
+    "tools": [
+      "gdalbuildvrt",
+      "gdalwarp",
+      "gdal_contour",
+      "tippecanoe",
+      "mb-util"
+    ],
+    "intermediate_crs": "EPSG:32618 (UTM 18N for Mid-Atlantic)",
+    "intermediate_cell_size_m": "varies by LOD — see build_bathy_lod.sh",
+    "pbf_min_zoom_medium": 8,
+    "pbf_max_zoom_medium": 10,
+    "pbf_min_zoom_fine": 11,
+    "pbf_max_zoom_fine": 14
+  },
+  "attribution": {
+    "medium": "NOAA bathymetric data — public domain",
+    "fine": "NOAA multibeam bathymetry — public domain",
+    "coarse": "GEBCO Compilation Group (2026) GEBCO 2026 Grid — https://www.gebco.net/"
+  },
+  "generated_at": "2026-08-17T03:05:12Z",
+  "schema_version": 1
+}
