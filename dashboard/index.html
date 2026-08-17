@@ -1702,7 +1702,8 @@ var REGION_FALLBACKS = {
   usec_south: { bbox: [-81,   31.0, -73.0, 36.0] },
 };
 
-var REGION_ID = QUERY_PARAMS.get("region") || "usec_south";
+// Dev bathymetry preview targets the Mid-Atlantic NOAA BlueTopo pilot.
+var REGION_ID = QUERY_PARAMS.get("region") || "usec_md";
 if (!REGIONS[REGION_ID]) REGION_ID = "usec_south";
 
 // Bounding Box (LonMin, LatMin, LonMax, LatMax) — set by setActiveRegion()
