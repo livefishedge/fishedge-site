@@ -5599,6 +5599,16 @@ function updateBathyContours(map, bd, layer, scope = "single") {
 
   const range = depthRangeInExtent(bd, extent, sx, sy);
   const levels = generateContourLevels(range.min, range.max, map.getView().getZoom());
+  // Share the viewport-derived contour levels with the BlueTopo VectorTile
+  // layers. Their source geometry is fixed, but the visible subset is now
+  // dynamic and follows the current min/max depth range.
+  window._bathyLodLevels = levels;
+  const lodController = desktopMapState.__bathyLodController;
+  if (lodController && lodController.tileLayers) {
+    Object.values(lodController.tileLayers).forEach(layer => {
+      if (layer && typeof layer.changed === "function") layer.changed();
+    });
+  }
 
   const result = buildBathyContourFeatures(bd, levels, sx, sy, extent);
   replaceBathyContourFeatures(source, result, scope, startedAt);

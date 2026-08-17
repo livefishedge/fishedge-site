@@ -91,6 +91,18 @@
       const cache = Object.create(null);
       return function (feature) {
         const depth = Number(feature.get("depth_m") ?? feature.get("depth")) || 0;
+        // BlueTopo contours are generated at fixed source intervals. The
+        // browser chooses which of those available lines to show from the
+        // current coarse-grid field-of-view range. This keeps the high-res
+        // layer dynamic without inventing geometry between nodata gaps.
+        const wanted = global._bathyLodLevels;
+        if (Array.isArray(wanted) && wanted.length) {
+          const tolerance = lod === "fine" ? 5.1 : 12.6;
+          const selected = wanted.some(function (level) {
+            return Math.abs(depth - Number(level)) <= tolerance;
+          });
+          if (!selected) return null;
+        }
         const key = String(depth);
         if (!cache[key]) {
           cache[key] = new ol.style.Style({
