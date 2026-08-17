@@ -55,21 +55,21 @@
     "fine": {
       "kind": "flat-geojson",
       "kind_v2": "pbf-vector-tiles",
-      "contour_interval_m": 10,
+      "contour_interval_m": 25,
       "contour_intervals_m_v1": [10, 20, 30, 40, 50, 75, 100, 150, 200, 300, 500, 1000, 2000],
       "zoom_range": [11, 14],
       "tile_root_v1": "https://data.fishedge.live/dev/bathy/v1/usec_md/fine.json",
       "tile_root_v2": "https://data.fishedge.live/dev/bathy/v1/usec_md/fine/{z}/{x}/{y}.pbf",
       "v1_metadata": {
         "format": "GeoJSON FeatureCollection of LineString contours",
-        "source_grid": "GEBCO 2026 15-arc-second (0.00417° step)",
-        "extraction": "matplotlib.pyplot.contour (marching squares)",
-        "simplification": "shapely.simplify tol=0.0001° (~9 m at 38°N)",
-        "features": 104,
-        "size_bytes": 293746,
-        "depths_m": [10, 20, 30, 40, 50, 75, 100, 150, 200, 300],
-        "bbox_filter_wgs84": [-74.85, 38.05, -73.65, 38.55],
-        "generated_at": "2026-08-17T03:54Z"
+        "source_grid": "NOAA NCEI EX1404L2 processed 25 m WGS84 grid",
+        "extraction": "gdal_contour interval=25 m",
+        "features": 839,
+        "size_bytes": 638976,
+        "depth_levels": 72,
+        "bounds_wgs84": [-74.761629, 36.841184, -73.182606, 38.620249],
+        "generated_at": "2026-08-17T14:45Z",
+        "note": "Fine is a denser zoom display of the confirmed 25 m NCEI surface; it is not a claim of 10 m source resolution."
       },
       "source_priority_v2": [
         "NOAA NCEI multibeam (highest-resolution surveys for Baltimore Canyon)",

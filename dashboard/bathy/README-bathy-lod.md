@@ -6,14 +6,14 @@
 **Production:** `fishedge.live/dashboard/` — **DO NOT MERGE TO MAIN** while this branch is open.
 
 Progressive resolution for depth contours. Coarse GEBCO grid is always
-visible; medium (25 m) and fine (10 m) PBF vector tiles are requested
+visible; medium and fine PBF vector tiles are requested
 only when the viewport zoom + coverage cross the configured thresholds.
 
 | LOD | Zoom | Contour interval | Source | Tile format |
 |-----|------|------------------|--------|-------------|
 | coarse | 0–7   | 100 / 200 / 500 / 1000 / 2000 / 5000 m | existing GEBCO 2026 raster-derived JSON (`gebco_bathy.json`) | inline Vector |
 | medium | 8–10  | 25 m  | NOAA BlueTopo + NCEI multibeam (Mid-Atlantic) | `ol.source.VectorTile` PBF |
-| fine   | 11–14 | 10 m  | NOAA NCEI multibeam (Baltimore Canyon pilot) | `ol.source.VectorTile` PBF |
+| fine   | 11–14 | 25 m interval | NOAA NCEI EX1404L2 surface, denser zoom display | `ol.source.VectorTile` PBF |
 
 ---
 
