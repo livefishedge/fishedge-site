@@ -31,8 +31,8 @@
     //     to the right loader automatically.
     TILE_ROOTS: {
       usec_md: {
-        medium: "https://data.fishedge.live/dev/bathy/v1/usec_md/medium/{z}/{x}/{y}.pbf?v=20260817-raw-mvt",
-        fine:   "https://data.fishedge.live/dev/bathy/v1/usec_md/fine/{z}/{x}/{y}.pbf?v=20260817-raw-mvt"
+        medium: "https://data.fishedge.live/dev/bathy/v1/usec_md/medium/{z}/{x}/{y}.pbf?v=20260817-bluetopo-mvt",
+        fine:   "https://data.fishedge.live/dev/bathy/v1/usec_md/fine/{z}/{x}/{y}.pbf?v=20260817-bluetopo-mvt"
       },
       usec_south: {
         medium: "https://data.fishedge.live/dev/bathy/v1/usec_south/medium.json",
