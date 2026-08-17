@@ -38,7 +38,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-init.js?v=20260806c"></script>
   <script src="canyon-charts.js?v=20260815h-static-data"></script>
-<script src="bathy-lod.js?v=20260817-v20-dynamic-fov-contours-dev"></script>
+<script src="bathy-lod.js?v=20260817-v21-dynamic-contour-fallback-dev"></script>
   <script src="https://cdn.jsdelivr.net/npm/posthog-js@1.200.0/dist/array.js"></script>
 
 
@@ -5614,7 +5614,7 @@ function depthRangeInExtent(bd, extent, sx, sy) {
     for (let col = 0; col < bd.nx; col += sx) {
       const lon = bd.xAxis[col];
       if (lon < vx0 || lon > vx1) continue;
-      const d = bd.depth[row][col];
+      const d = Number(bd.depth[row][col]);
       if (!Number.isFinite(d) || d < 0) continue;
       if (d < minD) minD = d;
       if (d > maxD) maxD = d;
@@ -5624,7 +5624,12 @@ function depthRangeInExtent(bd, extent, sx, sy) {
 }
 
 function generateContourLevels(minDepth, maxDepth, zoom) {
-  if (!Number.isFinite(minDepth) || !Number.isFinite(maxDepth) || maxDepth <= minDepth) return [];
+  if (!Number.isFinite(minDepth) || !Number.isFinite(maxDepth) || maxDepth <= minDepth) {
+    // Never blank the bathymetry layer because a viewport range is briefly
+    // unavailable during a resize/region switch. Preserve a useful fallback.
+    if (!Number.isFinite(maxDepth) || maxDepth <= 0) return [25, 50, 100, 200, 500, 1000, 2000];
+    minDepth = 0;
+  }
   // Choose a readable number of contours from the actual field-of-view
   // range. Zooming in increases the target density; the 1/2/5 ladder keeps
   // labels and lines stable instead of producing arbitrary intervals.
