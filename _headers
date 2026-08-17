@@ -18,3 +18,15 @@
 
 /index.html
   Cache-Control: public, max-age=5, must-revalidate
+
+/dashboard/*.html
+  Cache-Control: public, max-age=300, must-revalidate
+
+/dashboard/login
+  Cache-Control: public, max-age=300, must-revalidate
+
+/dashboard/register
+  Cache-Control: public, max-age=300, must-revalidate
+
+/dashboard/forgot-password
+  Cache-Control: public, max-age=300, must-revalidate
