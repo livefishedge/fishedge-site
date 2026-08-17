@@ -88,11 +88,25 @@
       };
 
       /* If the GSI library is already loaded, initialise immediately.
-       * Otherwise the onload callback below will handle it when it arrives. */
+       * Otherwise poll briefly. The Google script is loaded with async/defer
+       * and does not call our helper directly, so relying on script order can
+       * leave the sign-in button blank. */
       if (window.google && window.google.accounts) {
         doInit();
       } else {
-        window.__gsiOnLoadCallback = doInit;
+        waitForGoogle(0);
+      }
+
+      function waitForGoogle(attempt) {
+        if (window.google && window.google.accounts) {
+          doInit();
+          return;
+        }
+        if (attempt >= 50) {
+          onError('Google sign-in is still loading. Refresh and try again.');
+          return;
+        }
+        setTimeout(function () { waitForGoogle(attempt + 1); }, 100);
       }
 
       function doInit() {
@@ -141,8 +155,4 @@
     },
   };
 
-  /* Auto-wire the GSI library load callback if set before this script ran. */
-  if (window.__gsiOnLoadCallback) {
-    window.gsiAuth.initGoogleSignIn(window.__gsiOpts || {});
-  }
 })();

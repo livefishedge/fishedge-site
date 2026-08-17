@@ -44,8 +44,11 @@
     }
     .success { color: #2dd4bf; }
     .error { color: #f87171; }
-    .register-link { font-size: 12px; text-align: center; margin-top: 16px; opacity: 0.6; }
-    #gsi-button-wrap { margin-bottom: 18px; }
+    .auth-links { display: flex; justify-content: space-between; gap: 12px; margin-top: 10px; font-size: 12px; }
+    .auth-links a { color: var(--accent2); text-decoration: none; }
+    .auth-links a:hover { text-decoration: underline; }
+    .register-link { font-size: 12px; text-align: center; margin-top: 16px; opacity: 0.75; }
+    #gsi-button-wrap { margin-bottom: 16px; min-height: 40px; }
     .divider { display: flex; align-items: center; gap: 10px; margin: 16px 0; color: #7a8fa6; font-size: 12px; opacity: 0.5; }
     .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: #1b2836; }
     .register-link a { color: var(--accent2); text-decoration: none; }
@@ -81,6 +84,12 @@
       </div>
     </div>
 
+    <div id="gsi-button-wrap">
+      <div id="gsi-button"></div>
+    </div>
+
+    <div class="divider" aria-hidden="true">or sign in with email</div>
+
     <form id="login-form" novalidate>
       <label for="email">Email address</label>
       <input type="email" id="email" placeholder="captain@example.com" required />
@@ -100,18 +109,18 @@
       <button type="submit" id="signin-btn">Sign in</button>
     </form>
 
-    <div id="msg"></div>
-
-    <div id="gsi-button-wrap">
-      <div id="gsi-button"></div>
+    <div class="auth-links">
+      <a href="forgot-password.html">Forgot password?</a>
+      <a href="register.html">Create account</a>
     </div>
 
-    <div class="divider" aria-hidden="true">or sign in with email</div>
+    <div id="msg"></div>
+  </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js?v=20260531"></script>
   <script src="supabase-init.js?v=20260806c"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="gsi-auth.js"></script>
+  <script src="gsi-auth.js?v=20260816a"></script>
   <script>
     (function() {
       const sb = window.sb;
