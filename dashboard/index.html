@@ -1565,7 +1565,7 @@
 <script>
 /* ========================= CONFIG ========================= */
 const CTO_TEST_LABEL = "hello pages rebuild"; // 2026-08-13 zero-label overlay verification
-const CTO_THERMAL_BUILD = "2026-08-16T22-41Z-v12-bathy-lod-dev"; // bumps on each push (DEV PREVIEW ONLY — feat/bathy-lod-canyon-zoom)
+const CTO_THERMAL_BUILD = "2026-08-17T13-50Z-v27-controller-survives-dev"; // bumps on each push (DEV PREVIEW ONLY — feat/bathy-lod-canyon-zoom)
 // Captain's Dashboard ("combined" mode) build fingerprint. Mike,
 // 2026-06-13 14:01 ET: "the captain's dashboard in index.html needs
 // a thorough check. Eg, the CHL layer shows inconsistent data from
@@ -5512,23 +5512,13 @@ async function ensureDesktopBathyContourLayer(map, bathyData, gridInfo) {
   // Update contours for current viewport
   updateBathyContours(map, bd, layer, "desktop-initial");
 
-  // v12 bathy LOD: attach a controller that progressively swaps in
-  // medium/fine PBF tiles when zoom + coverage thresholds are crossed.
-  // unbindBathyMoveend (called on region switch) disposes this controller.
-  if (!desktopMapState.__bathyLodController && typeof BathyLodController === "function") {
-    desktopMapState.__bathyLodController = new BathyLodController({
-      map: map,
-      coarseLayer: layer,
-      regionId: (typeof REGION_ID !== "undefined") ? REGION_ID : "usec_md",
-      scope: "desktop",
-      mobileEnabled: true
-    });
-    desktopMapState.__bathyLodController.syncForView();
-  }
-
   // Debounced single-fire handler. ensureDesktopBathyContourLayer can run
   // repeatedly while reusing the same map/layer; without unbind, listeners
   // accumulate and each moveend triggers N full rebuilds with stale closures.
+  // BIND BEFORE CONTROLLER: bindBathyMoveend → unbindBathyMoveend disposes
+  // any existing controller so its tile layers are removed on region switch.
+  // On first call no controller exists yet, so the disposal is a no-op and
+  // the controller instantiated below survives. (v27 fix — see strike 12.)
   bindBathyMoveend(map, desktopMapState, () => {
     // LOD swap gate — cheap, idempotent, fires-and-forgets a tile load.
     if (desktopMapState.__bathyLodController) {
@@ -5540,6 +5530,21 @@ async function ensureDesktopBathyContourLayer(map, bathyData, gridInfo) {
       updateBathyContours(map, bd, layer, "desktop");
     }
   });
+
+  // v12 bathy LOD: attach a controller that progressively swaps in
+  // medium/fine PBF tiles when zoom + coverage thresholds are crossed.
+  // Must be created AFTER bindBathyMoveend so unbindBathyMoveend's
+  // disposal doesn't kill it. (v27 fix.)
+  if (!desktopMapState.__bathyLodController && typeof BathyLodController === "function") {
+    desktopMapState.__bathyLodController = new BathyLodController({
+      map: map,
+      coarseLayer: layer,
+      regionId: (typeof REGION_ID !== "undefined") ? REGION_ID : "usec_md",
+      scope: "desktop",
+      mobileEnabled: true
+    });
+    desktopMapState.__bathyLodController.syncForView();
+  }
 }
 
 // Build all contour levels in one pass. Each level becomes a single
@@ -5779,18 +5784,7 @@ async function ensureMobileBathyContourLayer(map, bathyData /*, gridInfo */) {
   // 3857 viewport extent to 4326 before comparing against bd.yAxis — this
   // is the same fix the combined view already had.
   updateBathyContours(map, bd, layer, "mobile-initial");
-  // v12 bathy LOD: mobile stays on coarse by default (separate perf
-  // envelope). Set BATHY_LOD_MOBILE_ENABLED=true at runtime to opt in.
-  if (!mobileMapState.__bathyLodController && typeof BathyLodController === "function") {
-    mobileMapState.__bathyLodController = new BathyLodController({
-      map: map,
-      coarseLayer: layer,
-      regionId: (typeof REGION_ID !== "undefined") ? REGION_ID : "usec_md",
-      scope: "mobile",
-      mobileEnabled: (typeof window !== "undefined" && window.BATHY_LOD_MOBILE_ENABLED === true)
-    });
-    mobileMapState.__bathyLodController.syncForView();
-  }
+  // BIND BEFORE CONTROLLER: see desktop analog above. (v27 fix.)
   bindBathyMoveend(map, mobileMapState, () => {
     if (mobileMapState.__bathyLodController) {
       mobileMapState.__bathyLodController.syncForView();
@@ -5801,6 +5795,20 @@ async function ensureMobileBathyContourLayer(map, bathyData /*, gridInfo */) {
       updateBathyContours(map, bd, layer, "mobile");
     }
   });
+  // v12 bathy LOD: mobile stays on coarse by default (separate perf
+  // envelope). Set BATHY_LOD_MOBILE_ENABLED=true at runtime to opt in.
+  // Must be created AFTER bindBathyMoveend so unbindBathyMoveend's
+  // disposal doesn't kill it. (v27 fix.)
+  if (!mobileMapState.__bathyLodController && typeof BathyLodController === "function") {
+    mobileMapState.__bathyLodController = new BathyLodController({
+      map: map,
+      coarseLayer: layer,
+      regionId: (typeof REGION_ID !== "undefined") ? REGION_ID : "usec_md",
+      scope: "mobile",
+      mobileEnabled: (typeof window !== "undefined" && window.BATHY_LOD_MOBILE_ENABLED === true)
+    });
+    mobileMapState.__bathyLodController.syncForView();
+  }
 }
 
 function mobilePlaceStyle(feature) {
