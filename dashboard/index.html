@@ -1564,7 +1564,7 @@
 <script>
 /* ========================= CONFIG ========================= */
 const CTO_TEST_LABEL = "hello pages rebuild"; // 2026-08-13 zero-label overlay verification
-const CTO_THERMAL_BUILD = "2026-06-16T11-33Z-v10-zoomfix-v2"; // bumps on each push
+const CTO_THERMAL_BUILD = "2026-08-17T01-20Z-v11-bathy-debounce"; // bumps on each push
 // Captain's Dashboard ("combined" mode) build fingerprint. Mike,
 // 2026-06-13 14:01 ET: "the captain's dashboard in index.html needs
 // a thorough check. Eg, the CHL layer shows inconsistent data from
@@ -1741,6 +1741,9 @@ function setActiveRegion(regionId, regionMeta) {
     // (mobileMapState / desktopMapState are `let` declarations further down; this branch
     //  only runs on a real region switch, never on the boot-time call, so TDZ is not hit.)
     try {
+      // Cancel any pending bathy rebuild timers/listeners before swapping data.
+      unbindBathyMoveend(mobileMapState);
+      unbindBathyMoveend(desktopMapState);
       if (mobileMapState && mobileMapState.landLayer) {
         if (mobileMapState.map) mobileMapState.map.removeLayer(mobileMapState.landLayer);
         mobileMapState.landLayer = null;
@@ -3417,6 +3420,16 @@ if (chkBathy) chkBathy.addEventListener("change", e => {
   if (window._combinedBathyLayer) window._combinedBathyLayer.setVisible(e.target.checked);
   const legend = document.getElementById("combined-bathy-legend");
   if (legend) legend.style.display = e.target.checked ? "" : "none";
+  // Rebuild for the viewport reached while the layer was hidden; otherwise
+  // the contours stay pinned to wherever they were when the user hid bathy.
+  if (e.target.checked && window._combinedMap) {
+    updateBathyContoursForMap(
+      window._combinedMap,
+      window._bathyData,
+      window._bathyContourSource,
+      "combined-toggle"
+    );
+  }
 });
 if (chkHeight) chkHeight.addEventListener("change", e => {
   if (window._combinedHeightLayer) {
@@ -5421,6 +5434,34 @@ async function ensureDesktopPlaceLayer(map) {
   map.addLayer(layer);
 }
 
+// Bathymetry contour rebuild orchestration: a single debounced moveend
+// handler per OL map state. Prevents listener accumulation across
+// `ensureDesktopBathyContourLayer` re-renders and region switches, and
+// coalesces the burst of moveend events from a single zoom gesture into
+// one delayed rebuild.
+const BATHY_REBUILD_DEBOUNCE_MS = 150;
+
+function unbindBathyMoveend(owner) {
+  if (!owner) return;
+  clearTimeout(owner.__bathyMoveendTimer);
+  owner.__bathyMoveendTimer = null;
+  if (owner.__bathyMoveendKey && ol?.Observable?.unByKey) {
+    ol.Observable.unByKey(owner.__bathyMoveendKey);
+  }
+  owner.__bathyMoveendKey = null;
+}
+
+function bindBathyMoveend(map, owner, rebuild) {
+  unbindBathyMoveend(owner);
+  owner.__bathyMoveendKey = map.on("moveend", () => {
+    clearTimeout(owner.__bathyMoveendTimer);
+    owner.__bathyMoveendTimer = setTimeout(() => {
+      owner.__bathyMoveendTimer = null;
+      rebuild();
+    }, BATHY_REBUILD_DEBOUNCE_MS);
+  });
+}
+
 async function ensureDesktopBathyContourLayer(map, bathyData, gridInfo) {
   if (!map) return;
   // Re-use existing layer or create new one
@@ -5450,25 +5491,58 @@ async function ensureDesktopBathyContourLayer(map, bathyData, gridInfo) {
   window._bathyLayer = layer;
 
   // Update contours for current viewport
-  updateBathyContours(map, bd, layer);
+  updateBathyContours(map, bd, layer, "desktop-initial");
 
-  // Re-draw on every pan/zoom
-  map.on("moveend", () => {
-    if (desktopMapState.bathyContourLayer?.getVisible()) {
-      updateBathyContours(map, bd, desktopMapState.bathyContourLayer);
+  // Debounced single-fire handler. ensureDesktopBathyContourLayer can run
+  // repeatedly while reusing the same map/layer; without unbind, listeners
+  // accumulate and each moveend triggers N full rebuilds with stale closures.
+  bindBathyMoveend(map, desktopMapState, () => {
+    if (desktopMapState.map === map
+        && desktopMapState.bathyContourLayer === layer
+        && layer.getVisible()) {
+      updateBathyContours(map, bd, layer, "desktop");
     }
   });
 }
 
-function updateBathyContours(map, bd, layer) {
+// Build all contour levels in one pass. Each level becomes a single
+// MultiLineString feature (one OL transform per level, not per segment)
+// and the level's depth is preserved as a feature property for styling
+// and click readouts.
+function buildBathyContourFeatures(bd, levels, sx, sy, extent) {
+  const features = [];
+  let segmentCount = 0;
+  for (const level of levels) {
+    const segs = extractContourSegments(bd, level, sx, sy, extent);
+    if (!segs.length) continue;
+    segmentCount += segs.length;
+    const geom = new ol.geom.MultiLineString(segs);
+    geom.transform("EPSG:4326", "EPSG:3857");
+    features.push(new ol.Feature({ geometry: geom, depth: level }));
+  }
+  return { features, segmentCount };
+}
+
+// Atomic source replacement: build the new feature set first, then swap.
+// clear(true) drops dispatcher events for old features, addFeatures fires
+// them once for the whole new set (vs thousands of per-segment addFeature
+// calls in the old code).
+function replaceBathyContourFeatures(source, result, scope, startedAt) {
+  source.clear(true);
+  if (result.features.length) source.addFeatures(result.features);
+  const elapsedMs = performance.now() - startedAt;
+  console.info(`[bathy] ${scope} rebuild ${elapsedMs.toFixed(0)}ms; ${result.segmentCount} segments; ${result.features.length} level features`);
+}
+
+function updateBathyContours(map, bd, layer, scope = "single") {
   // bd/layer are optional: fall back to desktop's globals (set by
   // ensureDesktopBathyContourLayer). Pass them explicitly when the layer
   // belongs to a different state object (e.g. mobileMapState.bathyContourLayer).
   bd = bd || window._bathyData;
   layer = layer || window._bathyLayer;
   if (!bd || !layer) return;
+  const startedAt = performance.now();
   const source = layer.getSource();
-  source.clear();
 
   // The OL view is in EPSG:3857 (Web Mercator) but bd.xAxis/yAxis are 4326.
   // Previously this function compared lat/lon (degrees) directly against the
@@ -5489,14 +5563,8 @@ function updateBathyContours(map, bd, layer) {
   const maxDepth = depthMaxInExtent(bd, extent, sx, sy);
   const levels = generateContourLevels(maxDepth);
 
-  for (const level of levels) {
-    const segs = extractContourSegments(bd, level, sx, sy, extent);
-    for (const seg of segs) {
-      const feat = new ol.Feature({ geometry: new ol.geom.LineString(seg), depth: level });
-      feat.getGeometry().transform("EPSG:4326", "EPSG:3857");
-      source.addFeature(feat);
-    }
-  }
+  const result = buildBathyContourFeatures(bd, levels, sx, sy, extent);
+  replaceBathyContourFeatures(source, result, scope, startedAt);
 }
 
 function depthMaxInExtent(bd, extent, sx, sy) {
@@ -5575,9 +5643,6 @@ function extractContourSegments(bd, level, sx, sy, extent) {
             segments.push(coords);
           }
         }
-        if (coords[0] && coords[1] && Math.hypot(coords[0][0] - coords[1][0], coords[0][1] - coords[1][1]) > 0.01) {
-          segments.push(coords);
-        }
       }
     }
   }
@@ -5652,10 +5717,12 @@ async function ensureMobileBathyContourLayer(map, bathyData /*, gridInfo */) {
   // updateBathyContours now takes explicit (bd, layer) and transforms the
   // 3857 viewport extent to 4326 before comparing against bd.yAxis — this
   // is the same fix the combined view already had.
-  updateBathyContours(map, bd, layer);
-  map.on("moveend", () => {
-    if (mobileMapState.bathyContourLayer?.getVisible()) {
-      updateBathyContours(map, bd, mobileMapState.bathyContourLayer);
+  updateBathyContours(map, bd, layer, "mobile-initial");
+  bindBathyMoveend(map, mobileMapState, () => {
+    if (mobileMapState.map === map
+        && mobileMapState.bathyContourLayer === layer
+        && layer.getVisible()) {
+      updateBathyContours(map, bd, layer, "mobile");
     }
   });
 }
@@ -6497,22 +6564,35 @@ function buildBathyContourLayer(bathyData, gridInfo, map) {
     }),
     zIndex: 15
   });
-  window._bathyData = {
+  const bd = {
     xAxis: bathyData.xAxis, yAxis: bathyData.yAxis,
     depth: bathyData.depth,
     nx: bathyData.xAxis.length, ny: bathyData.yAxis.length
   };
+  window._bathyData = bd;
   window._bathyContourSource = source;
-  updateBathyContoursForMap(map);
-  window._combinedMap?.on("moveend", () => updateBathyContoursForMap(window._combinedMap));
+  updateBathyContoursForMap(map, bd, source, "combined-initial");
+  // Owner is the layer itself (combined has no long-lived state object like
+  // desktopMapState). The guard inside rebuild() skips work if the layer was
+  // swapped out under us by a region switch.
+  bindBathyMoveend(map, layer, () => {
+    if (window._combinedMap === map
+        && window._combinedBathyLayer === layer
+        && layer.getVisible()) {
+      updateBathyContoursForMap(map, bd, source, "combined");
+    }
+  });
   return layer;
 }
 
-function updateBathyContoursForMap(map) {
-  const bd = window._bathyData;
-  const source = window._bathyContourSource;
+function updateBathyContoursForMap(
+  map,
+  bd = window._bathyData,
+  source = window._bathyContourSource,
+  scope = "combined"
+) {
   if (!bd || !source || !map) return;
-  source.clear();
+  const startedAt = performance.now();
   // Combined view is EPSG:3857. depthMaxInExtent and extractContourSegments
   // compare against bd.xAxis/bd.yAxis in 4326, so transform first.
   const viewExtent = map.getView().calculateExtent(map.getSize());
@@ -6520,7 +6600,6 @@ function updateBathyContoursForMap(map) {
   const extent = viewProjCode === "EPSG:4326"
     ? viewExtent
     : ol.proj.transformExtent(viewExtent, viewProjCode, "EPSG:4326");
-  const [vx0, vy0, vx1, vy1] = extent;
   const maxW = 400, maxH = 600;
   const sx = Math.max(1, Math.floor(bd.nx / maxW));
   const sy = Math.max(1, Math.floor(bd.ny / maxH));
@@ -6528,14 +6607,8 @@ function updateBathyContoursForMap(map) {
   const levels = generateContourLevels(maxDepth);
   window._combinedBathyLevels = levels;
   updateCombinedBathyLegend(levels);
-  for (const level of levels) {
-    const segs = extractContourSegments(bd, level, sx, sy, extent);
-    for (const seg of segs) {
-      const feat = new ol.Feature({ geometry: new ol.geom.LineString(seg), depth: level });
-      feat.getGeometry().transform("EPSG:4326", "EPSG:3857");
-      source.addFeature(feat);
-    }
-  }
+  const result = buildBathyContourFeatures(bd, levels, sx, sy, extent);
+  replaceBathyContourFeatures(source, result, scope, startedAt);
 }
 
 function updateCombinedBathyLegend(levels) {
@@ -6619,9 +6692,6 @@ function extractContourSegments(bd, level, sx, sy, extent) {
           if (d0 > 0.01 && d1 > 0.01) {
             segments.push(coords);
           }
-        }
-        if (coords[0] && coords[1] && Math.hypot(coords[0][0] - coords[1][0], coords[0][1] - coords[1][1]) > 0.01) {
-          segments.push(coords);
         }
       }
     }
