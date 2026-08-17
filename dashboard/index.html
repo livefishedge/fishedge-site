@@ -38,7 +38,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-init.js?v=20260806c"></script>
   <script src="canyon-charts.js?v=20260815h-static-data"></script>
-<script src="bathy-lod.js?v=20260817-v17-auth-region-fix-dev"></script>
+<script src="bathy-lod.js?v=20260817-v18-bathy-default-dev"></script>
   <script src="https://cdn.jsdelivr.net/npm/posthog-js@1.200.0/dist/array.js"></script>
 
 
@@ -2188,7 +2188,13 @@ let lastUpdateTimestamp = null;
 let framesByVar = { chl: [], sst: [], chl_front: [], sst_front: [], uv: [], sla: [], bathy: [], thermal_fronts: [], combined: [] };
 let frameTimesByVar = { chl: [], sst: [], chl_front: [], sst_front: [], uv: [], sla: [], bathy: [], thermal_fronts: [], combined: [] };
 const INITIAL_VAR = QUERY_PARAMS.get("var");
-let currentVar = VAR_LABELS[INITIAL_VAR] ? INITIAL_VAR : "combined";
+// The feature preview is a bathymetry review surface first. Keep production's
+// normal Captain dashboard default, but make a bare preview URL open the
+// actual Bathymetry product so the NOAA LOD is visible without a hidden
+// `?var=bathy` requirement.
+let currentVar = VAR_LABELS[INITIAL_VAR]
+  ? INITIAL_VAR
+  : (location.hostname === 'feat-bathy-lod-canyon-zoom.fishedge-site.pages.dev' ? 'bathy' : 'combined');
 let currentFrameIdx = 0;
 let playing = false;
 let playTimer = null;
