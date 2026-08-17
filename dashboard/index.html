@@ -3419,14 +3419,23 @@ if (chkBathy) chkBathy.addEventListener("change", e => {
   if (legend) legend.style.display = e.target.checked ? "" : "none";
 });
 if (chkHeight) chkHeight.addEventListener("change", e => {
-  if (window._combinedHeightLayer) window._combinedHeightLayer.setVisible(e.target.checked);
+  if (window._combinedHeightLayer) {
+    window._combinedHeightLayer.setVisible(e.target.checked);
+    setContourLabelsVisible(window._combinedHeightLayer, e.target.checked, "__uvZeroLabelOverlays");
+  }
 });
 if (chkSla) chkSla.addEventListener("change", async e => {
   if (!e.target.checked) {
-    if (window._combinedSlaContourLayer) window._combinedSlaContourLayer.setVisible(false);
+    if (window._combinedSlaContourLayer) {
+      window._combinedSlaContourLayer.setVisible(false);
+      setContourLabelsVisible(window._combinedSlaContourLayer, false, "__slaLabelOverlays");
+    }
     return;
   }
-  if (window._combinedMap) await rebuildCombinedSlaLayer(window._combinedMap);
+  if (window._combinedMap) {
+    await rebuildCombinedSlaLayer(window._combinedMap);
+    setContourLabelsVisible(window._combinedSlaContourLayer, true, "__slaLabelOverlays");
+  }
 });
 if (chkFront) chkFront.addEventListener("change", e => {
   if (window._combinedFrontDensityLayer) window._combinedFrontDensityLayer.setVisible(e.target.checked);
@@ -4884,7 +4893,7 @@ function drawUvContours(ctx, z, nx, ny, xFlip, yFlip) {
     }
     ctx.strokeStyle = "#000000";
     // All contours use the same interval; zero is the only emphasized line.
-    ctx.lineWidth = uvContourIsMajor(level) ? 4 : 3;
+    ctx.lineWidth = 3;
     ctx.setLineDash([1, 6]);
     ctx.strokeStyle = "#000000";
     ctx.stroke();
@@ -5142,7 +5151,7 @@ function buildUvContourLayer(dataObj, gridInfo, map) {
     updateWhileAnimating: true, updateWhileInteracting: true,
     style: feature => new ol.style.Style({ stroke: new ol.style.Stroke({
         color: "#000000",
-        width: feature.get("contourLevel") === 0 ? 4 : 3,
+        width: 3,
         lineDash: [1, 6],
         lineCap: "round", lineJoin: "round"
       }) })
@@ -5211,7 +5220,7 @@ function buildSlaContourLayer(dataObj, gridInfo, map) {
     updateWhileAnimating: true, updateWhileInteracting: true,
     style: feature => new ol.style.Style({ stroke: new ol.style.Stroke({
         color: "rgba(25,25,25,0.96)",
-      width: feature.get("contourLevel") === 0 ? 2 : 1,
+      width: 2,
       lineCap: "round", lineJoin: "round"
     }) })
   });
@@ -5227,6 +5236,12 @@ function clearSlaContourLayer(state) {
   if (state.map && state.slaContourLayer) state.map.removeLayer(state.slaContourLayer);
   state.slaContourLayer = null;
   state.slaContourLabelOverlays = [];
+}
+
+function setContourLabelsVisible(layer, visible, property) {
+  for (const overlay of layer?.[property] || []) {
+    if (overlay?.getElement()) overlay.getElement().style.display = visible ? "" : "none";
+  }
 }
 
 // Draw a line using direct pixel manipulation (Bresenham-inspired)
@@ -7361,7 +7376,11 @@ async function rebuildCombinedUvLayer(map, { hoursMode = "latest" } = {}) {
     // Sea Level is contour-only. Currents remain a separate arrow layer.
     const heightLayer = buildUvContourLayer(data, grid, map);
     const heightCheck = document.getElementById("chk-combined-height");
-    if (heightLayer) heightLayer.setVisible(heightCheck ? heightCheck.checked : true);
+    if (heightLayer) {
+      const visible = heightCheck ? heightCheck.checked : true;
+      heightLayer.setVisible(visible);
+      setContourLabelsVisible(heightLayer, visible, "__uvZeroLabelOverlays");
+    }
     if (heightLayer && map) {
       map.addLayer(heightLayer);
       window._combinedHeightLayer = heightLayer;
@@ -7410,7 +7429,9 @@ async function rebuildCombinedSlaLayer(map) {
     // Captain's Dashboard is contour-only by design: no SLA raster fill.
     const layer = buildSlaContourLayer(data, grid, map);
     if (!layer) throw new Error("SLA contour layer unavailable");
-    layer.setVisible(Boolean(chkSla?.checked));
+    const visible = Boolean(chkSla?.checked);
+    layer.setVisible(visible);
+    setContourLabelsVisible(layer, visible, "__slaLabelOverlays");
     map.addLayer(layer);
     window._combinedSlaContourLayer = layer;
     window._combinedSlaData = data;
@@ -9913,11 +9934,27 @@ async function loadGridForVar(v, dataObj = null) {
 
 
 async function fetchFrameData(varKey, frameMeta) {
-  const p = framePathOf(frameMeta);
-  if (!p) throw new Error("Frame has no json path");
-  const res = await fetch(p + (p.includes('?') ? '&' : '?') + 't=' + Date.now());
-  if (!res.ok) throw new Error(`Frame load failed: ${p}`);
-  return await res.json();
+  const candidates = [frameMeta];
+  // The rolling R2 publisher can leave a stale UV manifest entry after an
+  // old object is purged. If the selected frame is 404, walk newest-first
+  // to the first object that still exists instead of failing the map.
+  if (varKey === "uv") {
+    for (const candidate of [...(framesByVar.uv || [])].sort((a, b) =>
+      (epochMsForFrame("uv", b) || 0) - (epochMsForFrame("uv", a) || 0))) {
+      if (!candidates.includes(candidate)) candidates.push(candidate);
+    }
+  }
+  let lastPath = "";
+  for (const candidate of candidates) {
+    const p = framePathOf(candidate);
+    if (!p) continue;
+    lastPath = p;
+    try {
+      const res = await fetch(p + (p.includes('?') ? '&' : '?') + 't=' + Date.now());
+      if (res.ok) return await res.json();
+    } catch (_) {}
+  }
+  throw new Error(`Frame load failed: ${lastPath || "no json path"}`);
 }
 
 async function prepareLandMask() {
