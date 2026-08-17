@@ -71,7 +71,7 @@
     DEFAULT_MOBILE_ENABLED: false,
 
     STYLE: function (feature) {
-      const depth = Number(feature.get("depth")) || 0;
+      const depth = Number(feature.get("depth_m") ?? feature.get("depth")) || 0;
       const major = depth >= 1000;
       return new ol.style.Style({
         stroke: new ol.style.Stroke({
@@ -79,6 +79,24 @@
           width: major ? 1.2 : 0.9
         })
       });
+    },
+
+    // Make the LOD transition visually unambiguous in the dev pilot:
+    // coarse stays subdued, medium becomes amber, and fine becomes cyan
+    // with a wider stroke. Production styling is unchanged because this
+    // controller is only loaded by the feature preview branch.
+    STYLE_FOR_LOD: function (lod) {
+      const color = lod === "fine" ? "rgba(0, 229, 255, 0.98)" : "rgba(255, 170, 0, 0.96)";
+      const width = lod === "fine" ? 2.4 : 1.7;
+      return function (feature) {
+        const depth = Number(feature.get("depth_m") ?? feature.get("depth")) || 0;
+        return new ol.style.Style({
+          stroke: new ol.style.Stroke({
+            color: color,
+            width: depth >= 1000 ? width + 0.5 : width
+          })
+        });
+      };
     }
   };
 
@@ -247,7 +265,7 @@
       });
       const layer = new ol.layer.VectorTile({
         source: source,
-        style: CONFIG.STYLE,
+        style: CONFIG.STYLE_FOR_LOD(lod),
         opacity: 0,
         zIndex: (this.coarseLayer.getZIndex ? this.coarseLayer.getZIndex() : 15) + 0.1
       });
@@ -294,7 +312,7 @@
         const source = new ol.source.Vector({ features: features, wrapX: false });
         const layer = new ol.layer.Vector({
           source: source,
-          style: CONFIG.STYLE,
+          style: CONFIG.STYLE_FOR_LOD(lod),
           opacity: 0,
           zIndex: (self.coarseLayer.getZIndex ? self.coarseLayer.getZIndex() : 15) + 0.1
         });
