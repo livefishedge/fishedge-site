@@ -9,7 +9,7 @@
  *
  * Two stacked layers:
  *   1. Line layer (zIndex 8): all isolines, single 10 µs step, thin stroke.
- *   2. Label layer (zIndex 9): TD value labels at every 50 µs step,
+ *   2. Label layer (zIndex 1000): TD value labels at every 50 µs step,
  *      positioned on the line just inside the current viewport edges
  *      (top / bottom / left / right).
  *
@@ -39,7 +39,7 @@
       GEOJSON_URL:    "loran/td_grid_9960_usec_md.geojson",
       REGION:        "usec_md",
       Z_INDEX:       8,
-      LABEL_Z_INDEX: 9,
+      LABEL_Z_INDEX: 1000,
       LABEL_STEP_US: 50,
       STYLES: {
         "9960-X": { color: "#d9534f" },
@@ -48,7 +48,7 @@
       LINE_WIDTH:    0.8,
       LINE_OPACITY:  0.65,
       EDGE_PAD_PX:   32,
-      LABEL_ROTATION_CLOCKWISE_RAD: 20 * Math.PI / 180,
+      LABEL_ROTATION_CLOCKWISE_RAD: 10 * Math.PI / 180,
     };
 
   // ── State ───────────────────────────────────────────────────────────
