@@ -67,6 +67,27 @@
     console.log("[bathy-perf]", msg, data || "");
   }
 
+  // ── Silent PostHog capture ──────────────────────────────────────────
+  // Fires only on freeze events — zero noise in your analytics otherwise.
+  function phCapture(entry) {
+    try {
+      if (window.posthog && window.posthog.capture) {
+        window.posthog.capture("bathy_freeze", {
+          duration_ms:   entry.durationMs,
+          threshold_ms:  entry.thresholdMs,
+          zoom:          entry.zoom,
+          bbox_w:        entry.bbox ? entry.bbox.w : null,
+          bbox_s:        entry.bbox ? entry.bbox.s : null,
+          bbox_e:        entry.bbox ? entry.bbox.e : null,
+          bbox_n:        entry.bbox ? entry.bbox.n : null,
+          layer_visible: entry.layerVisible,
+          map_label:     entry.mapLabel || null,
+          type:          entry.type,
+        });
+      }
+    } catch (_) {}
+  }
+
   // ── Instrument updateBathyContours ─────────────────────────────────
   // The freeze is caused by updateBathyContours running synchronously
   // on every moveend. Wrap it to measure wall-clock duration.
@@ -107,15 +128,13 @@
     push(entry);
 
     if (frozen) {
+      entry.mapLabel = "updateBathyContours";
+      phCapture(entry);
       console.warn(
         "[bathy-perf] FREEZE " + dur.toFixed(0) + "ms > " + THRESHOLD_MS + "ms" +
         " | zoom=" + zoom + " | bbox=" + JSON.stringify(bbox) +
-        " | visible=" + visible +
-        " | Call stack below (approximate):"
+        " | visible=" + visible
       );
-      // Stack is approximate since we're inside a callback, but the bbox+zoom
-      // context is enough to reproduce by hitting the same viewport
-      console.warn(entry);
     }
   }
 
@@ -176,6 +195,8 @@
           });
 
           if (frozen) {
+            entry.mapLabel = label;
+            phCapture(entry);
             console.warn("[bathy-perf] MOVEEND_FREEZE " + dur.toFixed(0) + "ms" +
               " | zoom=" + zoom + " | bbox=" + JSON.stringify(bbox));
           }
