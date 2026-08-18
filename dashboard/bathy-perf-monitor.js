@@ -88,6 +88,17 @@
     } catch (_) {}
   }
 
+  function phLoaded() {
+    try {
+      if (window.posthog && window.posthog.capture) {
+        window.posthog.capture("bathy_perf_monitor_loaded", {
+          threshold_ms: THRESHOLD_MS,
+          href: location.href,
+        });
+      }
+    } catch (_) {}
+  }
+
   // ── Instrument updateBathyContours ─────────────────────────────────
   // The freeze is caused by updateBathyContours running synchronously
   // on every moveend. Wrap it to measure wall-clock duration.
@@ -195,7 +206,17 @@
           });
 
           if (frozen) {
-            entry.mapLabel = label;
+            var entry = {
+              ts:         new Date().toISOString(),
+              type:       "MOVEEND_FREEZE",
+              durationMs: round(dur),
+              thresholdMs: THRESHOLD_MS,
+              zoom:       zoom,
+              bbox:       bbox,
+              layerVisible: isVisible(layer),
+              mapLabel:   label,
+              suspected:  "moveend handler overhead",
+            };
             phCapture(entry);
             console.warn("[bathy-perf] MOVEEND_FREEZE " + dur.toFixed(0) + "ms" +
               " | zoom=" + zoom + " | bbox=" + JSON.stringify(bbox));
@@ -227,6 +248,7 @@
   }, 60000);
 
   log("bathy-perf monitor ACTIVE (threshold=" + THRESHOLD_MS + "ms, ring=" + RING_BUFFER_MAX + ")");
+  phLoaded();
   console.log(
     "%c[bathy-perf] Active — freeze log stored in localStorage['" + STORAGE_KEY + "']",
     "background:#7b2ff7;color:#fff;padding:2px 6px;border-radius:3px"

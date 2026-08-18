@@ -5487,12 +5487,26 @@ async function ensureDesktopBathyContourLayer(map, bathyData, gridInfo) {
   // Update contours for current viewport
   updateBathyContours(map, bd, layer);
 
-  // Re-draw on every pan/zoom
+  // Re-draw after pan/zoom settles. Some devices emit clusters of moveend
+  // events during inertial zoom; coalesce them into one contour rebuild.
   map.on("moveend", () => {
     if (desktopMapState.bathyContourLayer?.getVisible()) {
-      updateBathyContours(map, bd, desktopMapState.bathyContourLayer);
+      scheduleBathyContourUpdate(desktopMapState, map, bd, desktopMapState.bathyContourLayer);
     }
   });
+}
+
+const BATHY_CONTOUR_DEBOUNCE_MS = 180;
+
+function scheduleBathyContourUpdate(owner, map, bd, layer) {
+  if (!owner || !map || !bd || !layer) return;
+  clearTimeout(owner.__bathyContourTimer);
+  owner.__bathyContourTimer = setTimeout(() => {
+    owner.__bathyContourTimer = null;
+    if (layer.getVisible()) {
+      updateBathyContours(map, bd, layer);
+    }
+  }, BATHY_CONTOUR_DEBOUNCE_MS);
 }
 
 function updateBathyContours(map, bd, layer) {
@@ -5690,7 +5704,7 @@ async function ensureMobileBathyContourLayer(map, bathyData /*, gridInfo */) {
   updateBathyContours(map, bd, layer);
   map.on("moveend", () => {
     if (mobileMapState.bathyContourLayer?.getVisible()) {
-      updateBathyContours(map, bd, mobileMapState.bathyContourLayer);
+      scheduleBathyContourUpdate(mobileMapState, map, bd, mobileMapState.bathyContourLayer);
     }
   });
 }
@@ -6539,8 +6553,17 @@ function buildBathyContourLayer(bathyData, gridInfo, map) {
   };
   window._bathyContourSource = source;
   updateBathyContoursForMap(map);
-  window._combinedMap?.on("moveend", () => updateBathyContoursForMap(window._combinedMap));
+  window._combinedMap?.on("moveend", () => scheduleCombinedBathyContourUpdate(window._combinedMap));
   return layer;
+}
+
+function scheduleCombinedBathyContourUpdate(map) {
+  if (!map) return;
+  clearTimeout(map.__combinedBathyContourTimer);
+  map.__combinedBathyContourTimer = setTimeout(() => {
+    map.__combinedBathyContourTimer = null;
+    updateBathyContoursForMap(map);
+  }, BATHY_CONTOUR_DEBOUNCE_MS);
 }
 
 function updateBathyContoursForMap(map) {
@@ -11519,6 +11542,7 @@ installDraggable(document.getElementById("captain-pts-panel"), document.getEleme
 installDraggable(document.getElementById("captain-dist-panel"), document.getElementById("captain-dist-drag-handle"), "fishedge_distance_position", "button, a, input, select");
 if (typeof syncDashboardPanels === "function") syncDashboardPanels();
 </script>
+<script src="bathy-perf-monitor.js?v=20260818c"></script>
 <!-- rebuilt:captains-dashboard-readout-v2-$(date +%s) -->
 </body>
 </html>
