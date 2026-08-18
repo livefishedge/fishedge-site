@@ -11,32 +11,21 @@
  *   1. Line layer (zIndex 8): all isolines, single 10 µs step, thin stroke.
  *   2. Label layer (zIndex 9): TD value labels at every 50 µs step,
  *      positioned where each line crosses the current viewport edges
- *      (top / bottom / left / right). Each label is rotated to EXACTLY
- *      match its line's local tangent at the crossing point (computed
- *      in JS from the segment direction at the intersection, not from
- *      the centroid angle baked into the GeoJSON — hyperbolic lines have
- *      varying angle along their curve). Anchor is pushed inside the
- *      viewport by EDGE_PAD_PX worth of geographic distance so the text
- *      bounding box never crosses the screen edge. Recomputed on every
- *      map moveend so labels follow as the captain pans / zooms.
+ *      (top / bottom / left / right). Each label uses ONE rotation per
+ *      line (the centroid angle baked into the GeoJSON by the generator)
+ *      so labels on the same line are visually consistent.
+ *
+ * Rotation rule (Mike, #32126):
+ *   - 9960-Y (horizontal lines): readability flip applied → text always
+ *     reads east consistently regardless of which way matplotlib ordered
+ *     the vertices.
+ *   - 9960-X (vertical lines): NO flip → text reads along the line's
+ *     actual direction. The NNE branch and SSW branch read in opposite
+ *     directions (NNE vs SSW), each parallel to its own branch — which is
+ *     what "rotate each grid label to be exactly in parallel with the line"
+ *     requires.
  *
  * Single global: window.LoranTdController
- *
- * API:
- *   LoranTdController.enable()       — fetch GeoJSON (if needed), add both
- *                                       layers to map, set visible.
- *   LoranTdController.disable()      — hide both layers (keeps cache).
- *   LoranTdController.toggle(visible)— show/hide without removing.
- *   LoranTdController.isEnabled()    — boolean.
- *   LoranTdController.isRegionSupported() — true if REGION_ID === "usec_md".
- *
- * Color conventions:
- *   9960-X (Nantucket):  #d9534f  (red)
- *   9960-Y (Cape Fear):  #0275d8  (blue)
- *   All lines:           0.8 px, opacity 0.65 (single weight per Mike spec)
- *   Labels:              bold 11px monospace, line-color fill, dark halo,
- *                        rotated exactly parallel to the line's local
- *                        tangent at the edge crossing.
  *
  * Branch: feat/loran-td-grid-usec-md
  */
@@ -45,52 +34,40 @@
 
   // ── Configuration ───────────────────────────────────────────────────
   const CONFIG = {
-    GEOJSON_URL:    "loran/td_grid_9960_usec_md.geojson",
-    REGION:         "usec_md",
-    Z_INDEX:        8,
-    LABEL_Z_INDEX:  9,
-    // Labels are at every 50 µs step (rounded numbers); lines are every 10 µs.
-    LABEL_STEP_US:  50,
-    STYLES: {
-      "9960-X": { color: "#d9534f" },
-      "9960-Y": { color: "#0275d8" },
-    },
-    LINE_WIDTH:    0.8,
-    LINE_OPACITY:  0.65,
-    // Push the label anchor inside the viewport by this many pixels.
-    // The text bounding box (width ~30px, height ~11px) plus a margin
-    // fits comfortably within this padding for all 50 µs TD values
-    // we display. The padding is applied in geographic coordinates
-    // (pixels × current resolution), so it scales correctly with zoom.
-    EDGE_PAD_PX:   32,
-  };
+      GEOJSON_URL:    "loran/td_grid_9960_usec_md.geojson",
+      REGION:        "usec_md",
+      Z_INDEX:       8,
+      LABEL_Z_INDEX: 9,
+      LABEL_STEP_US: 50,
+      STYLES: {
+        "9960-X": { color: "#d9534f" },
+        "9960-Y": { color: "#0275d8" },
+      },
+      LINE_WIDTH:    0.8,
+      LINE_OPACITY:  0.65,
+      EDGE_PAD_PX:   32,
+    };
 
   // ── State ───────────────────────────────────────────────────────────
   const state = {
-    enabled:       false,
-    loaded:        false,
-    loading:       null,
-    lineLayer:     null,
-    lineSource:    null,
-    labelLayer:    null,
-    labelSource:   null,
-    attachedMap:   null,
-    fetchErr:      null,
+    enabled:     false,
+    loaded:      false,
+    loading:     null,
+    lineLayer:   null,
+    lineSource:  null,
+    labelLayer:  null,
+    labelSource: null,
+    attachedMap: null,
+    fetchErr:    null,
   };
 
-  // ── Edge intersection with local-line-angle capture ─────────────────
+  // ── Edge intersections ──────────────────────────────────────────────
   //
-  // Walks a LineString and, for every segment that crosses one of the four
-  // viewport edges, emits an intersection record carrying:
-  //   coord     — the geographic position INSIDE the viewport (anchored
-  //               EDGE_PAD_PX away from the edge in geographic units)
-  //   edge      — 'left' | 'right' | 'top' | 'bottom'
-  //   rotation  — the line's LOCAL tangent at that crossing (radians CCW
-  //               from east in EPSG:3857 = the OL Text.rotation convention).
-  //               Hyperbolic LOPs have varying angle along the curve, so the
-  //               centroid angle baked into the GeoJSON is NOT accurate at
-  //               the edge; computing it from the bracketing segment here
-  //               makes the label exactly parallel to the line at that point.
+  // For each segment of the LineString, check the four viewport edges.
+  // Emits one record per crossing with coord (pushed EDGE_PAD_PX inward
+  // in geo units so the text never clips) and the edge name. Rotation is
+  // NOT computed here — it comes from the LineString-level centroid angle
+  // baked into the GeoJSON (see buildEdgeIntersectionLabels).
   function computeEdgeIntersects(lineCoords, map) {
     const view = map.getView();
     const extent = view.calculateExtent(map.getSize());
@@ -105,26 +82,12 @@
       const p2 = lineCoords[i + 1];
       if (!Number.isFinite(p1[0]) || !Number.isFinite(p2[0])) continue;
 
-      // Local segment tangent in EPSG:3857 (CCW from east axis; same as
-      // lat/lon locally because Web Mercator is conformal with the same
-      // east/north orientation as WGS84).
-      const segDx = p2[0] - p1[0];
-      const segDy = p2[1] - p1[1];
-      // NO readability flip — text follows the line's actual direction.
-      // For our X lines (~78° NNE branch or ~-102° SSW branch) and Y
-      // lines (~0° horizontal), every rotation lands in (-π, π] and stays
-      // right-side-up readable (top of letters within ~80° of north).
-      // The prior flip made both X branches read NNE which "reversed"
-      // the SSW branch's reading direction — Mike's feedback.
-      const segAngle = Math.atan2(segDy, segDx);
-
       // Left edge (x = minX, west). Push anchor east (into the viewport).
       if ((p1[0] - minX) * (p2[0] - minX) < 0) {
         const t = (minX - p1[0]) / (p2[0] - p1[0]);
         const y = p1[1] + t * (p2[1] - p1[1]);
         if (y >= minY && y <= maxY) {
-          out.push({ coord: [minX + paddingGeo, y],
-                     edge: "left", rotation: segAngle });
+          out.push({ coord: [minX + paddingGeo, y], edge: "left" });
         }
       }
       // Right edge (x = maxX, east). Push anchor west.
@@ -132,8 +95,7 @@
         const t = (maxX - p1[0]) / (p2[0] - p1[0]);
         const y = p1[1] + t * (p2[1] - p1[1]);
         if (y >= minY && y <= maxY) {
-          out.push({ coord: [maxX - paddingGeo, y],
-                     edge: "right", rotation: segAngle });
+          out.push({ coord: [maxX - paddingGeo, y], edge: "right" });
         }
       }
       // Bottom edge (y = minY, south). Push anchor north.
@@ -141,8 +103,7 @@
         const t = (minY - p1[1]) / (p2[1] - p1[1]);
         const x = p1[0] + t * (p2[0] - p1[0]);
         if (x >= minX && x <= maxX) {
-          out.push({ coord: [x, minY + paddingGeo],
-                     edge: "bottom", rotation: segAngle });
+          out.push({ coord: [x, minY + paddingGeo], edge: "bottom" });
         }
       }
       // Top edge (y = maxY, north). Push anchor south.
@@ -150,8 +111,7 @@
         const t = (maxY - p1[1]) / (p2[1] - p1[1]);
         const x = p1[0] + t * (p2[0] - p1[0]);
         if (x >= minX && x <= maxX) {
-          out.push({ coord: [x, maxY - paddingGeo],
-                     edge: "top", rotation: segAngle });
+          out.push({ coord: [x, maxY - paddingGeo], edge: "top" });
         }
       }
     }
@@ -165,13 +125,34 @@
       if (Math.round(td) % CONFIG.LABEL_STEP_US !== 0) continue;
       const coords = lineFeature.getGeometry().getCoordinates();
       if (!coords || coords.length < 2) continue;
+      const pair = lineFeature.get("pair");
+
+      // Per-LineString rotation: read the centroid angle baked into the
+      // GeoJSON by the generator. ONE rotation per line so all labels
+      // on the same line look identical (no per-edge drift).
+      let lineAngle = Number(lineFeature.get("angle_rad") || 0);
+
+      // Conditional readability flip:
+      //   - 9960-Y (horizontal lines, centroid near 0° or π): apply the
+      //     flip so the text always reads east consistently, regardless of
+      //     which way matplotlib ordered the LineString vertices.
+      //   - 9960-X (vertical lines, centroid near ±80°): NO flip. The
+      //     NNE-ordered branch keeps its +78° rotation (text reads NNE);
+      //     the SSW-ordered branch keeps its −102° rotation (text reads
+      //     SSW). Both read along their own branch — parallel to the line
+      //     as Mike asked for in #32102.
+      if (pair === "9960-Y") {
+        if (lineAngle > Math.PI / 2)        lineAngle -= Math.PI;
+        else if (lineAngle <= -Math.PI / 2) lineAngle += Math.PI;
+      }
+
       const intersections = computeEdgeIntersects(coords, map);
       for (const intersection of intersections) {
         labels.push(new ol.Feature({
           geometry: new ol.geom.Point(intersection.coord),
-          pair:        lineFeature.get("pair"),
+          pair:        pair,
           td:          td,
-          rotation:    intersection.rotation,
+          rotation:    lineAngle,
           edge:        intersection.edge,
           kind:        "td-label",
         }));
@@ -211,7 +192,7 @@
           lineCap: "round",
           lineJoin: "round",
         }),
-        overflow:     true,            // don't drop labels that graze the edge
+        overflow:     true,
         textAlign:    "center",
         textBaseline: "middle",
         padding: [2, 3, 2, 3],
@@ -373,7 +354,6 @@
     return regionOk();
   }
 
-  // ── Expose ──────────────────────────────────────────────────────────
   global.LoranTdController = {
     enable,
     disable,
