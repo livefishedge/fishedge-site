@@ -14,16 +14,14 @@
  *      (top / bottom / left / right).
  *
  * Rotation rule (Mike, #32126, #32139, #32142, #32262):
- *   - Labels are parallel to the local segment tangent at every label
- *     position. TD isolines are hyperbolic curves — the tangent direction
- *     varies continuously along the line, so NO fixed per-pair rotation
- *     offset is applied. Adding a fixed offset (e.g. +15° X / +9° Y)
- *     drifts the label off the line wherever the curve bends. The
- *     +15°/+9° values from commits 998e6ed → db384c3 were removed in
- *     #32262 (2026-08-18).
- *   - Rotation source: the actual rendered LineString segment that holds
- *     the label. NOT the centroid angle baked into the GeoJSON, and NOT
- *     an analytic tangent that can differ from the simplified polyline.
+ *   - Labels follow the analytic local tangent of the TD hyperbola at the
+ *     label point. TD isolines curve continuously, so a single segment
+ *     chord is not sufficient where the line bends.
+ *   - The rendered LineString segment is used only to choose the tangent's
+ *     sign, preserving the actual branch direction. The label coordinate
+ *     remains on the rendered line just inside the viewport edge.
+ *   - No fixed per-pair rotation offset is applied. Adding +15° X / +9° Y
+ *     drifts labels away from the local curve direction.
  *   - Readability flip (separate concern from parallelism — this is about
  *     text reading direction east vs west, not about parallelism):
  *       9960-Y (horizontal lines, edge tangent ~0° or ~π): flip applied
@@ -57,11 +55,43 @@
       LINE_WIDTH:    0.8,
       LINE_OPACITY:  0.65,
       EDGE_PAD_PX:   32,
-      // LABEL_ROTATION_CLOCKWISE_RAD removed: TD isolines are hyperbolic
-      // curves, not straight lines, so a fixed per-pair offset breaks
-      // parallelism. Labels now use the local segment tangent only.
-      // (Mike, 2026-08-18 #32262)
     };
+
+  // These must match generate_td_grid.py exactly. A TD isoline is a level
+  // set of (distance(P, secondary) - distance(P, master)). Its tangent is
+  // perpendicular to that function's gradient; this gives the real curve
+  // direction at the label point, including the bend between GeoJSON
+  // vertices.
+  const STATIONS_3857 = {
+    M: ol.proj.fromLonLat([-76.82591889, 42.71408778]),
+    X: ol.proj.fromLonLat([-69.97737111, 41.25334611]),
+    Y: ol.proj.fromLonLat([-77.91280556, 34.06283556]),
+  };
+
+  function trueTangentAt(px, py, secKey, segmentAngle) {
+    const master = STATIONS_3857.M;
+    const secondary = STATIONS_3857[secKey];
+    const dm = Math.hypot(master[0] - px, master[1] - py);
+    const ds = Math.hypot(secondary[0] - px, secondary[1] - py);
+    if (dm < 1 || ds < 1) return segmentAngle;
+
+    // Gradient of distance-to-secondary minus distance-to-master.
+    const gx = (secondary[0] - px) / ds - (master[0] - px) / dm;
+    const gy = (secondary[1] - py) / ds - (master[1] - py) / dm;
+    const tangent = Math.atan2(gx, -gy);
+    const opposite = tangent + Math.PI;
+
+    // Preserve the LineString's direction so the readability rule below
+    // remains deterministic for the two branches.
+    const angularDistance = (a, b) => {
+      let d = a - b;
+      while (d > Math.PI) d -= 2 * Math.PI;
+      while (d < -Math.PI) d += 2 * Math.PI;
+      return Math.abs(d);
+    };
+    return angularDistance(tangent, segmentAngle) <=
+      angularDistance(opposite, segmentAngle) ? tangent : opposite;
+  }
 
   // ── State ───────────────────────────────────────────────────────────
   const state = {
@@ -161,7 +191,11 @@
 
       const intersections = computeEdgeIntersects(coords, map);
       for (const intersection of intersections) {
-        let rotation = intersection.rotation;
+        const secKey = pair === "9960-X" ? "X" : "Y";
+        let rotation = trueTangentAt(
+          intersection.coord[0], intersection.coord[1], secKey,
+          intersection.rotation,
+        );
 
         // Conditional readability flip — the key part of Mike's feedback.
         //   - 9960-Y (horizontal lines, edge tangent ~0° or ~π): apply
@@ -182,7 +216,7 @@
           else if (rotation <= -Math.PI / 2) rotation += Math.PI;
         }
 
-        // DEBUG: log label rotation for every label placed
+        // DEBUG: log both the rendered chord and analytic curve tangent.
         console.log(
           `[loran-td:label] pair=${pair} TD=${Math.round(td)} edge=${intersection.edge} ` +
           `segAngle=${(intersection.rotation * 180 / Math.PI).toFixed(1)}° → ` +
