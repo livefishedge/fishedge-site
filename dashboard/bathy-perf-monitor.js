@@ -3,10 +3,11 @@
  * ──────────────────────
  * Automatic freeze detector for bathymetry moveend → updateBathyContours.
  *
- * Activate: add ?bathy_perf=1 to the dashboard URL.
+ * Passive mode: always captures freeze events to PostHog.
+ * Debug mode: add ?bathy_perf=1 to the dashboard URL.
  * e.g. https://feat-bathy-realness-overlay.fishedge-site.pages.dev/dashboard/?bathy_perf=1
  *
- * What it captures (saved to localStorage, survives page reload):
+ * What debug mode captures (saved to localStorage, survives page reload):
  *   - Every moveend event: timestamp, viewport bbox, duration ms
  *   - Freeze events (duration > THRESHOLD_MS): full viewport state +
  *     approximate stack of the slow updateBathyContours call
@@ -22,8 +23,8 @@
 (function () {
   "use strict";
 
-  if (new URLSearchParams(location.search).get("bathy_perf") !== "1") return;
   if (typeof window === "undefined") return;
+  var DEBUG_MODE = new URLSearchParams(location.search).get("bathy_perf") === "1";
 
   // ── Tunables ────────────────────────────────────────────────────────
   var THRESHOLD_MS    = 500;      // "freeze" = single-frame duration above this
@@ -56,6 +57,7 @@
   var ring = [];
 
   function push(entry) {
+    if (!DEBUG_MODE && entry.type !== "FREEZE" && entry.type !== "MOVEEND_FREEZE") return;
     ring.push(entry);
     if (ring.length > RING_BUFFER_MAX) ring.shift();
     try {
@@ -64,6 +66,7 @@
   }
 
   function log(msg, data) {
+    if (!DEBUG_MODE) return;
     console.log("[bathy-perf]", msg, data || "");
   }
 
@@ -89,6 +92,7 @@
   }
 
   function phLoaded() {
+    if (!DEBUG_MODE) return;
     try {
       if (window.posthog && window.posthog.capture) {
         window.posthog.capture("bathy_perf_monitor_loaded", {
@@ -235,23 +239,27 @@
 
   // ── SLA summary ─────────────────────────────────────────────────────
   // Dump a compliance table every 60 seconds if there were any freezes
-  var summaryInterval = setInterval(function () {
-    if (!ring.length) return;
-    var freezes = ring.filter(function (e) { return e.type === "FREEZE" || e.type === "MOVEEND_FREEZE"; });
-    var total   = ring.length;
-    var frozen  = freezes.length;
-    var sla     = Math.round((1 - frozen / total) * 100);
-    log("60s summary: " + total + " moveends, " + frozen + " freezes, SLA=" + sla + "%");
-    if (frozen > 0) {
-      console.warn("[bathy-perf] Last freeze:", freezes[frozen - 1]);
-    }
-  }, 60000);
+  if (DEBUG_MODE) {
+    var summaryInterval = setInterval(function () {
+      if (!ring.length) return;
+      var freezes = ring.filter(function (e) { return e.type === "FREEZE" || e.type === "MOVEEND_FREEZE"; });
+      var total   = ring.length;
+      var frozen  = freezes.length;
+      var sla     = Math.round((1 - frozen / total) * 100);
+      log("60s summary: " + total + " moveends, " + frozen + " freezes, SLA=" + sla + "%");
+      if (frozen > 0) {
+        console.warn("[bathy-perf] Last freeze:", freezes[frozen - 1]);
+      }
+    }, 60000);
+  }
 
   log("bathy-perf monitor ACTIVE (threshold=" + THRESHOLD_MS + "ms, ring=" + RING_BUFFER_MAX + ")");
   phLoaded();
-  console.log(
-    "%c[bathy-perf] Active — freeze log stored in localStorage['" + STORAGE_KEY + "']",
-    "background:#7b2ff7;color:#fff;padding:2px 6px;border-radius:3px"
-  );
+  if (DEBUG_MODE) {
+    console.log(
+      "%c[bathy-perf] Active — freeze log stored in localStorage['" + STORAGE_KEY + "']",
+      "background:#7b2ff7;color:#fff;padding:2px 6px;border-radius:3px"
+    );
+  }
 
 })();
