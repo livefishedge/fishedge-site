@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <title>FishEdge Bathymetry Source Comparison</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@10.4.0/ol.css">
+  <script src="https://cdn.jsdelivr.net/npm/ol@10.4.0/dist/ol.js"></script>
+  <style>
+    html,body,#map{height:100%;margin:0;background:#06131d;font-family:system-ui,-apple-system,sans-serif}
+    #panel{position:fixed;z-index:5;top:12px;left:12px;width:min(330px,calc(100vw - 24px));padding:14px 16px;border:1px solid #395263;border-radius:10px;background:rgba(5,14,22,.92);color:#e8f1f7;box-shadow:0 5px 24px #0008;backdrop-filter:blur(8px)}
+    h1{font-size:16px;margin:0 0 4px} p{font-size:11px;color:#a9beca;line-height:1.35;margin:5px 0 12px}.group{border-top:1px solid #29404d;padding-top:9px;margin-top:9px}.row{display:flex;align-items:center;gap:8px;margin:8px 0;font-size:13px;font-weight:650}.row input{width:16px;height:16px;accent-color:#22c6ca}.swatch{width:12px;height:12px;border-radius:50%;background:linear-gradient(135deg,#080018,#2b197d,#087cd0,#16c9c7,#b5efb0);flex:none}.meta{font-size:10px;color:#8fa7b5;margin-left:32px;margin-top:-5px}.legend{height:11px;border-radius:4px;margin-top:7px;background:linear-gradient(90deg,#050012,#231477,#1850a5,#078bd0,#14c7c4,#83efb1,#dff6c5)}.legend-labels{display:flex;justify-content:space-between;color:#9cb1ba;font-size:9px;margin-top:2px}.badge{display:inline-block;padding:2px 5px;border-radius:4px;background:#153546;color:#9eeef0;font-size:10px;font-weight:800}#status{color:#8fdde0;font-size:10px;margin-top:10px}
+  </style>
+</head>
+<body>
+<div id="map"></div>
+<aside id="panel">
+  <h1>Baltimore Canyon · bathymetry comparison</h1>
+  <p>Toggle one source at a time at the same zoom and palette. This isolates source coverage and texture from the renderer.</p>
+  <div class="group"><span class="badge">DATA SOURCES</span>
+    <label class="row"><input type="checkbox" data-layer="dem" checked><span class="swatch"></span>DEM Global Mosaic <b>1 arc-sec</b></label>
+    <div class="meta">NCEI DEM Global Mosaic · native 1 arc-sec grid</div>
+    <label class="row"><input type="checkbox" data-layer="bag"><span class="swatch"></span>NOS BAG Mosaic <b>1 arc-sec</b></label>
+    <div class="meta">NOS hydrographic survey BAG surfaces · survey-dependent coverage</div>
+    <label class="row"><input type="checkbox" data-layer="average"><span class="swatch"></span>DEM + BAG average</label>
+    <div class="meta">Valid-overlap average used by the earlier comparison</div>
+    <label class="row"><input type="checkbox" data-layer="multibeam"><span class="swatch"></span>Multibeam Mosaic Combined <b>3 arc-sec</b></label>
+    <div class="meta">NCEI combined multibeam product · nominal ~90 m grid</div>
+  </div>
+  <div class="group"><span class="badge">REFERENCE PALETTE</span><div class="legend"></div><div class="legend-labels"><span>−4500 m</span><span>deep</span><span>shallow</span><span>0 m</span></div></div>
+  <div id="status">Zoom in to inspect survey texture.</div>
+</aside>
+<script>
+(() => {
+  const root = 'https://data.fishedge.live/dev/bathy/v1/usec_md/';
+  const urls = {
+    dem: root + 'ncei_dem/color/{z}/{x}/{y}.png?v=20260818-palette1',
+    bag: root + 'ncei_bag/color/{z}/{x}/{y}.png?v=20260818-palette1',
+    average: root + 'ncei_average/color/{z}/{x}/{y}.png?v=20260818-palette1',
+    multibeam: root + 'ncei_multibeam/color/{z}/{x}/{y}.png?v=20260818-palette1'
+  };
+  const center = ol.proj.fromLonLat([-74.05, 38.22]);
+  const layers = {};
+  for (const [name,url] of Object.entries(urls)) {
+    layers[name] = new ol.layer.Tile({source:new ol.source.XYZ({url,crossOrigin:'anonymous',minZoom:5,maxZoom:12}),visible:name==='dem',opacity:.94,zIndex:10});
+  }
+  const map = new ol.Map({target:'map',layers:[new ol.layer.Tile({source:new ol.source.XYZ({url:'https://tile.openstreetmap.org/{z}/{x}/{y}.png',crossOrigin:'anonymous'}),opacity:.28}),...Object.values(layers)],view:new ol.View({center,zoom:8,minZoom:5,maxZoom:13})});
+  const status=document.getElementById('status');
+  function update(){const active=Object.entries(layers).filter(([,l])=>l.getVisible()).map(([n])=>n); status.textContent=(active.length?active.join(' + ')+' · zoom '+map.getView().getZoom().toFixed(1):'No source selected')+' · same palette / same renderer';}
+  document.querySelectorAll('[data-layer]').forEach(cb=>cb.addEventListener('change',()=>{layers[cb.dataset.layer].setVisible(cb.checked);update();}));
+  map.getView().on('change:resolution',update); update();
+})();
+</script>
+</body>
+</html>
