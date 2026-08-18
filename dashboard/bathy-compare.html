@@ -8,12 +8,13 @@
   <script src="https://cdn.jsdelivr.net/npm/ol@10.4.0/dist/ol.js"></script>
   <style>
     html,body,#map{height:100%;margin:0;background:#06131d;font-family:system-ui,-apple-system,sans-serif}
-    #panel{position:fixed;z-index:5;top:12px;left:12px;width:min(330px,calc(100vw - 24px));padding:14px 16px;border:1px solid #395263;border-radius:10px;background:rgba(5,14,22,.92);color:#e8f1f7;box-shadow:0 5px 24px #0008;backdrop-filter:blur(8px)}
-    h1{font-size:16px;margin:0 0 4px} p{font-size:11px;color:#a9beca;line-height:1.35;margin:5px 0 12px}.group{border-top:1px solid #29404d;padding-top:9px;margin-top:9px}.row{display:flex;align-items:center;gap:8px;margin:8px 0;font-size:13px;font-weight:650}.row input{width:16px;height:16px;accent-color:#22c6ca}.swatch{width:12px;height:12px;border-radius:50%;background:linear-gradient(135deg,#080018,#2b197d,#087cd0,#16c9c7,#b5efb0);flex:none}.meta{font-size:10px;color:#8fa7b5;margin-left:32px;margin-top:-5px}.legend{height:11px;border-radius:4px;margin-top:7px;background:linear-gradient(90deg,#050012,#231477,#1850a5,#078bd0,#14c7c4,#83efb1,#dff6c5)}.legend-labels{display:flex;justify-content:space-between;color:#9cb1ba;font-size:9px;margin-top:2px}.badge{display:inline-block;padding:2px 5px;border-radius:4px;background:#153546;color:#9eeef0;font-size:10px;font-weight:800}#status{color:#8fdde0;font-size:10px;margin-top:10px}
+    #panel{position:fixed;z-index:5;top:12px;left:12px;width:min(330px,calc(100vw - 24px));padding:14px 16px;border:1px solid #395263;border-radius:10px;background:rgba(5,14,22,.92);color:#e8f1f7;box-shadow:0 5px 24px #0008;backdrop-filter:blur(8px);transition:transform .2s ease,opacity .2s ease}.panel-toggle{position:fixed;z-index:6;top:12px;left:12px;border:1px solid #496879;border-radius:8px;background:rgba(5,14,22,.9);color:#e8f1f7;padding:9px 11px;font-weight:800;cursor:pointer;box-shadow:0 4px 16px #0008}.panel-toggle[aria-expanded="true"]{display:none}#panel.is-hidden{transform:translateX(calc(-100% - 24px));opacity:0;pointer-events:none}
+    h1{font-size:16px;margin:0 0 4px} p{font-size:11px;color:#a9beca;line-height:1.35;margin:5px 0 12px}.group{border-top:1px solid #29404d;padding-top:9px;margin-top:9px}.row{display:flex;align-items:center;gap:8px;margin:8px 0;font-size:13px;font-weight:650}.row input{width:16px;height:16px;accent-color:#19c9d4}.swatch{width:12px;height:12px;border-radius:50%;background:linear-gradient(135deg,#030107,#1b0d55,#3325a2,#155ed0,#08a7d3,#18d0cb);flex:none}.meta{font-size:10px;color:#8fa7b5;margin-left:32px;margin-top:-5px}.legend{height:11px;border-radius:4px;margin-top:7px;background:linear-gradient(90deg,#030107,#160a46,#31209a,#155ed0,#08a7d3,#18d0cb)}.legend-labels{display:flex;justify-content:space-between;color:#9cb1ba;font-size:9px;margin-top:2px}.badge{display:inline-block;padding:2px 5px;border-radius:4px;background:#153546;color:#9eeef0;font-size:10px;font-weight:800}#status{color:#8fdde0;font-size:10px;margin-top:10px}
   </style>
 </head>
 <body>
 <div id="map"></div>
+<button id="panel-toggle" class="panel-toggle" type="button" aria-expanded="false">Layers</button>
 <aside id="panel">
   <h1>Baltimore Canyon · bathymetry comparison</h1>
   <p>Toggle one source at a time at the same zoom and palette. This isolates source coverage and texture from the renderer.</p>
@@ -46,6 +47,11 @@
   }
   const map = new ol.Map({target:'map',layers:[new ol.layer.Tile({source:new ol.source.XYZ({url:'https://tile.openstreetmap.org/{z}/{x}/{y}.png',crossOrigin:'anonymous'}),opacity:.28}),...Object.values(layers)],view:new ol.View({center,zoom:8,minZoom:5,maxZoom:13})});
   const status=document.getElementById('status');
+  const panel=document.getElementById('panel');
+  const panelToggle=document.getElementById('panel-toggle');
+  panelToggle.addEventListener('click',()=>{panel.classList.remove('is-hidden');panelToggle.setAttribute('aria-expanded','true');});
+  const close=document.createElement('button'); close.type='button'; close.textContent='Hide'; close.style.cssText='float:right;border:1px solid #496879;border-radius:6px;background:#102734;color:#d7eef2;padding:4px 8px;font-weight:800;cursor:pointer';
+  close.addEventListener('click',()=>{panel.classList.add('is-hidden');panelToggle.setAttribute('aria-expanded','false');}); panel.prepend(close);
   function update(){const active=Object.entries(layers).filter(([,l])=>l.getVisible()).map(([n])=>n); status.textContent=(active.length?active.join(' + ')+' · zoom '+map.getView().getZoom().toFixed(1):'No source selected')+' · same palette / same renderer';}
   document.querySelectorAll('[data-layer]').forEach(cb=>cb.addEventListener('change',()=>{layers[cb.dataset.layer].setVisible(cb.checked);update();}));
   map.getView().on('change:resolution',update); update();
