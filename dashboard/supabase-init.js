@@ -3,7 +3,7 @@
  * Goals:
  *  1) One Supabase client, one storage key, one source of truth for the whole app.
  *  2) persistSession + autoRefreshToken are EXPLICIT (Supabase defaults can drift).
- *  3) Keep the session alive for the whole day with two mechanisms:
+ *  3) Keep the session alive for 24 hours with two mechanisms:
  *     a) Activity-based refresh: any user click/keypress/scroll/touch calls
  *        sb.auth.refreshSession() (debounced, max once per 30 min). This keeps
  *        the access token fresh and exercises the refresh token so it doesn't
@@ -11,15 +11,17 @@
  *     b) Leader-tab coordination: when multiple tabs are open, only ONE tab
  *        (the leader) hits Supabase for refresh; other tabs listen on a
  *        BroadcastChannel and read the updated session from localStorage.
- *  4) Soft warning UI: when the access token is within 5 minutes of expiring,
- *     show a small "Session expiring soon — stay signed in?" toast with a
- *     button. If the user clicks it OR is active, we refresh. If they ignore
- *     it, we redirect to login.html once the token is actually dead.
- *  5) Server-side note: for the session to actually last > 24h, the Supabase
- *     project must have a long refresh-token expiry (default on hosted is
- *     28 days for paid, but verify in Dashboard → Authentication → Sign In/Up
- *     → Sessions → "Refresh token expiry"). This file can only keep the
- *     client active; the server decides the hard ceiling.
+ *  4) Soft warning UI: when the session is within 30 minutes of needing a
+ *     credential re-entry (refresh token near expiry), show a toast. For a
+ *     24-hour session this means users see the toast roughly 23.5 hours in.
+ *     If the user clicks Stay OR is active, we refresh. If they ignore it,
+ *     we redirect to login.html once the session is actually dead.
+ *  5) Server-side requirement: Supabase Dashboard → Authentication →
+ *     Sessions → "Refresh token expiry" must be set to 24 hours (or longer).
+ *     The client can only keep a valid session alive; if the server expires
+ *     refresh tokens in under 24h the user will be forced to re-login regardless.
+ *     On Supabase hosted (paid tier) the default is 28 days — well above 24h.
+ *     Free tier: verify the setting; it may default to 7 days or shorter.
  *
  * Usage: include BEFORE the page's auth script.
  *   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -34,7 +36,7 @@
   const APP_BASE_URL = 'https://app.fishedge.live/dashboard/signup-success.html';
   const STORAGE_KEY = 'ocean-mvp-auth'; // stable, app-wide
   const ACTIVITY_REFRESH_MIN_MS = 30 * 60 * 1000; // 30 min
-  const EXPIRY_WARN_MS = 5 * 60 * 1000; // 5 min before JWT exp
+  const EXPIRY_WARN_MS = 30 * 60 * 1000; // 30 min — toast appears at ~23.5h into a 24h session
   const TAB_CHANNEL = 'ocean-mvp-auth-tab';
 
   if (!window.supabase || !window.supabase.createClient) {
@@ -212,8 +214,8 @@
     // page), SameSite=Lax (allows cross-subdomain nav), Secure (HTTPS only),
     // 7-day Max-Age (matches supabase refresh-token default).
     try {
-      var oneWeek = 7 * 24 * 60 * 60;
-      document.cookie = 'fishedge_logged_in=1; Path=/; Domain=.fishedge.live; Max-Age=' + oneWeek + '; Secure; SameSite=Lax';
+      var twentyFourHours = 24 * 60 * 60;
+      document.cookie = 'fishedge_logged_in=1; Path=/; Domain=.fishedge.live; Max-Age=' + twentyFourHours + '; Secure; SameSite=Lax';
     } catch (_) {}
   });
 
