@@ -10,6 +10,7 @@
     html,body,#map{height:100%;margin:0;background:#06131d;font-family:system-ui,-apple-system,sans-serif}
     #panel{position:fixed;z-index:5;top:12px;left:12px;width:min(330px,calc(100vw - 24px));padding:14px 16px;border:1px solid #395263;border-radius:10px;background:rgba(5,14,22,.92);color:#e8f1f7;box-shadow:0 5px 24px #0008;backdrop-filter:blur(8px);transition:transform .2s ease,opacity .2s ease}.panel-toggle{position:fixed;z-index:6;top:12px;left:12px;border:1px solid #496879;border-radius:8px;background:rgba(5,14,22,.9);color:#e8f1f7;padding:9px 11px;font-weight:800;cursor:pointer;box-shadow:0 4px 16px #0008}.panel-toggle[aria-expanded="true"]{display:none}#panel.is-hidden{transform:translateX(calc(-100% - 24px));opacity:0;pointer-events:none}
     h1{font-size:16px;margin:0 0 4px} p{font-size:11px;color:#a9beca;line-height:1.35;margin:5px 0 12px}.group{border-top:1px solid #29404d;padding-top:9px;margin-top:9px}.row{display:flex;align-items:center;gap:8px;margin:8px 0;font-size:13px;font-weight:650}.row input{width:16px;height:16px;accent-color:#19c9d4}.swatch{width:12px;height:12px;border-radius:50%;background:linear-gradient(135deg,#030107,#1b0d55,#3325a2,#155ed0,#08a7d3,#18d0cb);flex:none}.meta{font-size:10px;color:#8fa7b5;margin-left:32px;margin-top:-5px}.legend{height:11px;border-radius:4px;margin-top:7px;background:linear-gradient(90deg,#030107,#160a46,#31209a,#155ed0,#08a7d3,#18d0cb)}.legend-labels{display:flex;justify-content:space-between;color:#9cb1ba;font-size:9px;margin-top:2px}.badge{display:inline-block;padding:2px 5px;border-radius:4px;background:#153546;color:#9eeef0;font-size:10px;font-weight:800}#status{color:#8fdde0;font-size:10px;margin-top:10px}
+    .legend-viridis{height:11px;border-radius:4px;margin-top:7px;background:linear-gradient(90deg,#440154,#3b528b,#21918c,#5ec962,#fde725)}
   </style>
 </head>
 <body>
@@ -17,7 +18,7 @@
 <button id="panel-toggle" class="panel-toggle" type="button" aria-expanded="false">Layers</button>
 <aside id="panel">
   <h1>Baltimore Canyon · bathymetry comparison</h1>
-  <p>Toggle one source at a time at the same zoom and palette. This isolates source coverage and texture from the renderer.</p>
+  <p>Toggle one source at a time at the same zoom and palette. This isolates source coverage and texture from the renderer. The Realness overlay shows where each cell is supported by real survey soundings vs interpolated fill.</p>
   <div class="group"><span class="badge">DATA SOURCES</span>
     <label class="row"><input type="checkbox" data-layer="dem" checked><span class="swatch"></span>DEM Global Mosaic <b>1 arc-sec</b></label>
     <div class="meta">NCEI DEM Global Mosaic · native 1 arc-sec grid</div>
@@ -27,6 +28,12 @@
     <div class="meta">Valid-overlap average used by the earlier comparison</div>
     <label class="row"><input type="checkbox" data-layer="multibeam"><span class="swatch"></span>Multibeam Mosaic Combined <b>3 arc-sec</b></label>
     <div class="meta">NCEI combined multibeam product · nominal ~90 m grid</div>
+  </div>
+  <div class="group"><span class="badge">REALNESS OVERLAY</span>
+    <label class="row"><input type="checkbox" data-layer="realness"><span class="swatch" style="background:linear-gradient(135deg,#440154,#3b528b,#21918c,#5ec962,#fde725)"></span>Realness score (real vs interpolated)</label>
+    <div class="meta">Viridis: purple = low (interpolated), yellow = high (real survey micro-topography). Score = max(local-stddev × provenance weight) across DEM / BAG / Multibeam.</div>
+    <div class="legend-viridis"></div>
+    <div class="legend-labels"><span>interpolated</span><span>rough</span><span>real multibeam</span></div>
   </div>
   <div class="group"><span class="badge">REFERENCE PALETTE</span><div class="legend"></div><div class="legend-labels"><span>−4500 m</span><span>deep</span><span>shallow</span><span>0 m</span></div></div>
   <div id="status">Zoom in to inspect survey texture.</div>
@@ -40,11 +47,33 @@
     average: root + 'ncei_average/color/{z}/{x}/{y}.png?v=20260818-palette1',
     multibeam: root + 'ncei_multibeam/color/{z}/{x}/{y}.png?v=20260818-palette1'
   };
+  // Realness overlay: inline metadata for the Baltimore Canyon bbox (matches realness_meta.json).
+  // Bounds are EPSG:4326: [southLat, westLon] to [northLat, eastLon].
+  const realnessMeta = {
+    width: 1080, height: 1080,
+    bboxSW: [37.7, -74.2],   // south-west corner (lat, lon)
+    bboxNE: [38.5, -73.4],   // north-east corner
+    p99_m: 66.98,
+    provenanceWeights: { multibeam: 1.0, bag: 0.85, dem: 0.25 }
+  };
   const center = ol.proj.fromLonLat([-74.05, 38.22]);
   const layers = {};
   for (const [name,url] of Object.entries(urls)) {
     layers[name] = new ol.layer.Tile({source:new ol.source.XYZ({url,crossOrigin:'anonymous',minZoom:5,maxZoom:12}),visible:name==='dem',opacity:.94,zIndex:10});
   }
+  // Realness overlay: static image covering the Baltimore Canyon bbox.
+  const realnessSW = ol.proj.fromLonLat([realnessMeta.bboxSW[1], realnessMeta.bboxSW[0]]);
+  const realnessNE = ol.proj.fromLonLat([realnessMeta.bboxNE[1], realnessMeta.bboxNE[0]]);
+  layers.realness = new ol.layer.Image({
+    source: new ol.source.ImageStatic({
+      url: './data/bathy/baltimore_canyon/realness.png?v=20260818-realness1',
+      imageExtent: [realnessSW[0], realnessSW[1], realnessNE[0], realnessNE[1]],
+      crossOrigin: 'anonymous'
+    }),
+    opacity: 0.7,
+    visible: false,
+    zIndex: 20
+  });
   const map = new ol.Map({target:'map',layers:[new ol.layer.Tile({source:new ol.source.XYZ({url:'https://tile.openstreetmap.org/{z}/{x}/{y}.png',crossOrigin:'anonymous'}),opacity:.28}),...Object.values(layers)],view:new ol.View({center,zoom:8,minZoom:5,maxZoom:13})});
   const status=document.getElementById('status');
   const panel=document.getElementById('panel');
