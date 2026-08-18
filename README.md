@@ -64,6 +64,17 @@ python3 -m http.server 8000 --directory dashboard 8001
 # open http://localhost:8001/
 ```
 
+## Auth page regression check
+
+Login and signup must keep Google/Gmail auth visible above the email form, and
+login must keep the forgot-password link. Run this before touching auth pages:
+
+```bash
+node scripts/check-auth-pages.mjs
+```
+
+GitHub Actions runs the same check on auth-page changes.
+
 ## Editing the tournament calendar
 
 Edit the `TOURNAMENTS` array in `tournaments.js`.

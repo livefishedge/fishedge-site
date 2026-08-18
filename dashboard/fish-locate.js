@@ -633,6 +633,11 @@ const captainUi = buildLocateButton(doc, {
       if (ui) ui.setStatus('Geolocation requires HTTPS');
       return;
     }
+    // A denied request must not become a one-way application state. Always
+    // let the next click call getCurrentPosition again; the browser may show
+    // its permission prompt again, or may direct the user to site settings
+    // when the browser has made the denial permanent.
+    if (STATE.permission === 'denied') STATE.permission = 'unknown';
     if (ui) ui.setStatus('Requesting location\u2026');
 
     try {
@@ -652,8 +657,8 @@ const captainUi = buildLocateButton(doc, {
       }
       STATE.permission = 'granted';
     } catch (err) {
-      STATE.permission = err && err.code ? err.code : 'error';
       const code = err && err.code;
+      STATE.permission = code === 'denied' ? 'unknown' : (code || 'error');
       let msg = 'Could not get location';
       if (code === 'denied') msg = 'Permission denied. Enable location in browser settings to use this.';
       else if (code === 'unavailable') msg = 'Location unavailable. Try again outdoors or near a window.';

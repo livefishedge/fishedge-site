@@ -1,5 +1,6 @@
 // fishing-grounds.js — FishEdge toggleable undersea-feature labels.
-// The current authoritative source is BOEM's US Submarine Canyons service.
+// The layer merges federal undersea features with local NJ/MD fishing-ground
+// and reef datasets so the map uses the names captains actually use.
 // Labels are placed at polygon centroids, not at an average of all vertices;
 // averaging vertices can put a long/concave canyon label in the wrong water.
 // Layer zIndex is above raster products so labels remain visible when the
@@ -8,15 +9,28 @@
 (function () {
   'use strict';
 
-  var SOURCE_LABEL = 'BOEM US Submarine Canyons';
+  var SOURCE_LABEL = 'Local fishing grounds + BOEM/GEBCO';
   var SERVICE_ROOT =
     'https://services.arcgis.com/bDAhvQYMG4WL8O5o/arcgis/rest/services/' +
     'US_Submarine_Canyons/FeatureServer/';
   var GEBCO_ROOT =
     'https://services2.arcgis.com/Uq9r85Potqm3MfRV/arcgis/rest/services/' +
     'Undersea_Features/FeatureServer/0/query';
+  var NJ_GROUNDS_URL =
+    'https://www.shore-guide.com/data/downloads/nj-fishing-grounds.geojson';
+  // Local fishing-ground sources are compiled into one static asset during
+  // deployment. This avoids four live GIS requests and browser-side cleanup
+  // on every map attach/refresh.
+  var STATIC_LOCAL_GROUNDS_URL = 'data/fishing-grounds.json';
+  var MD_FISHING_ROOT =
+    'https://mdgeodata.md.gov/imap/rest/services/Biota/MD_Finfish/FeatureServer/10/query';
+  var MD_REEF_ROOT =
+    'https://mdgeodata.md.gov/imap/rest/services/Biota/MD_Finfish/FeatureServer/9/query';
+  var ATLANTIC_FISHING_ATLAS_ROOT =
+    'https://gis.boem.gov/arcgis/rest/services/AtlanticFishGuide/' +
+    'Atlantic_Coast_Fishing_Atlas/MapServer/2/query';
   var ATTRIBUTION =
-    'Underwater structures: BOEM canyons + GEBCO undersea features';
+    'Underwater structures: NJ DEP + MD DNR + BOEM/GEBCO';
   var CACHE_TTL_MS = 6 * 60 * 60 * 1000;
   var FETCH_TIMEOUT_MS = 12000;
   var BBOX_PAD = 0.05;
@@ -32,10 +46,13 @@
 
   var state = {
     layers: new Map(),
+    items: new Map(),
     cache: new Map(),
     inflight: new Map(),
     attributionEl: null,
     visible: false,
+    showPolygons: false,
+    staticLocalPromise: null,
   };
 
   function log() {
@@ -186,6 +203,80 @@
     return map[code] || code || 'Undersea feature';
   }
 
+  function pointInBbox(point, bbox) {
+    return point && point[0] >= bbox[0] && point[0] <= bbox[2] &&
+      point[1] >= bbox[1] && point[1] <= bbox[3];
+  }
+
+  function intersectBboxes(a, b) {
+    var out = [Math.max(a[0], b[0]), Math.max(a[1], b[1]),
+      Math.min(a[2], b[2]), Math.min(a[3], b[3])];
+    return out[0] <= out[2] && out[1] <= out[3] ? out : null;
+  }
+
+  function fetchArcGISLocal(url, bbox, type) {
+    var params = new URLSearchParams({
+      where: '1=1', geometry: bbox.join(','),
+      geometryType: 'esriGeometryEnvelope', inSR: '4326', outSR: '4326',
+      spatialRel: 'esriSpatialRelIntersects', outFields: '*',
+      returnGeometry: 'true', resultRecordCount: '2000', f: 'json'
+    });
+    return fetch(url + '?' + params.toString())
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function (j) {
+        if (j.error) throw new Error(j.error.message || 'Maryland query error');
+        return (j.features || []).map(function (f) {
+          var point = featurePoint(f);
+          var p = f.attributes || {};
+          var name = p.Name || p.name || p.NAME;
+          if (!point || !name || !pointInBbox(point, bbox)) return null;
+          var geometry = f.geometry && Array.isArray(f.geometry.rings)
+            ? { type: 'Polygon', coordinates: f.geometry.rings } : null;
+          return { point: point, geometry: geometry, name: name, type: type, source: 'Maryland DNR' };
+        }).filter(Boolean);
+      });
+  }
+
+  function fetchNjLocal(bbox) {
+    return fetch(NJ_GROUNDS_URL)
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function (j) {
+        return (j.features || []).map(function (f) {
+          var point = featurePoint(f);
+          var p = f.properties || {};
+          if (!point || !p.name || !pointInBbox(point, bbox)) return null;
+          return { point: point, geometry: f.geometry, name: p.name, type: 'Fishing ground',
+            region: p.region, system: p.profileType, source: 'NJ DEP / Shore Guide' };
+        }).filter(Boolean);
+      });
+  }
+
+  function fetchLocalGrounds(bbox) {
+    var key = 'local:' + bboxKey(bbox);
+    var cached = state.cache.get(key);
+    if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) return Promise.resolve(cached.features);
+    if (state.inflight.has(key)) return state.inflight.get(key);
+    if (!state.staticLocalPromise) {
+      state.staticLocalPromise = fetch(STATIC_LOCAL_GROUNDS_URL + '?v=1')
+        .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+        .then(function (j) { return Array.isArray(j.features) ? j.features : []; })
+        .catch(function (err) {
+          logErr('static fishing-ground asset failed', err && err.message ? err.message : err);
+          return [];
+        });
+    }
+    var promise = state.staticLocalPromise.then(function (allFeatures) {
+      var features = allFeatures.filter(function (item) { return pointInBbox(item.point, bbox); });
+      state.cache.set(key, { features: features, fetchedAt: Date.now() });
+      return features;
+    }).catch(function (err) {
+      logErr('local fishing-ground fetch failed', err && err.message ? err.message : err);
+      return [];
+    }).finally(function () { state.inflight.delete(key); });
+    state.inflight.set(key, promise);
+    return promise;
+  }
+
   function fetchGebco(bbox) {
     var key = 'gebco:' + bboxKey(bbox);
     var cached = state.cache.get(key);
@@ -217,29 +308,77 @@
     return promise;
   }
 
-  function mergeFeatures(boem, gebco) {
-    // Prefer the gazetteer anchor for a named feature; BOEM's polygon
-    // centroid is retained only when GEBCO has no matching name.
-    var merged = gebco.slice();
-    boem.forEach(function (item) {
-      var duplicate = merged.some(function (existing) {
-        var nameA = String(existing.name || '').toLowerCase();
-        var nameB = String(item.name || '').toLowerCase();
-        var nameMatch = nameA === nameB || nameB.indexOf(nameA) === 0 || nameA.indexOf(nameB) === 0;
-        // BOEM uses short names ("Norfolk") while GEBCO uses the full
-        // gazetteer name ("Norfolk Canyon"). Treat those as the same named
-        // feature even when the polygon centroid and gazetteer anchor differ.
-        return nameMatch;
-      });
-      if (!duplicate) merged.push(item);
+  function canonicalName(raw) {
+    var name = String(raw || '').trim();
+    var key = name.toLowerCase().replace(/[’']/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+    var aliases = {
+      'norfolk': 'Norfolk Canyon',
+      'norfolk canyon': 'Norfolk Canyon',
+      'norfork canyon': 'Norfolk Canyon',
+      'baltimore': 'Baltimore Canyon',
+      'baltimore canyon': 'Baltimore Canyon',
+      'wilmington': 'Wilmington Canyon',
+      'wilmington canyon': 'Wilmington Canyon',
+      'hudson': 'Hudson Canyon',
+      'hudson canyon': 'Hudson Canyon',
+      'poormans canyon': "Poor Man's Canyon",
+      'poor mans canyon': "Poor Man's Canyon",
+      'cigar or little bimini': 'The Cigar',
+      'the cigar': 'The Cigar',
+      '21 mile little hill or lump': '21 Mile Hill',
+      '21 mile hill': '21 Mile Hill',
+      '3 mile 10 mile hill or lump': '3 Mile Hill',
+      '3 mile hill': '3 Mile Hill'
+    };
+    return aliases[key] || name;
+  }
+
+  function mergeGeometry(a, b) {
+    if (!a) return b;
+    if (!b) return a;
+    if (a.type === 'Polygon' && b.type === 'Polygon') {
+      return { type: 'MultiPolygon', coordinates: [a.coordinates, b.coordinates] };
+    }
+    if (a.type === 'MultiPolygon' && b.type === 'Polygon') {
+      return { type: 'MultiPolygon', coordinates: a.coordinates.concat([b.coordinates]) };
+    }
+    if (a.type === 'Polygon' && b.type === 'MultiPolygon') {
+      return { type: 'MultiPolygon', coordinates: [a.coordinates].concat(b.coordinates) };
+    }
+    if (a.type === 'MultiPolygon' && b.type === 'MultiPolygon') {
+      return { type: 'MultiPolygon', coordinates: a.coordinates.concat(b.coordinates) };
+    }
+    return a;
+  }
+
+  function mergeNamedFeatures(features) {
+    var merged = [];
+    features.forEach(function (item) {
+      var displayName = canonicalName(item.name);
+      var existing = merged.find(function (candidate) { return candidate.name === displayName; });
+      if (!existing) {
+        merged.push(Object.assign({}, item, { name: displayName }));
+      } else {
+        existing.geometry = mergeGeometry(existing.geometry, item.geometry);
+      }
     });
     return merged;
+  }
+
+  function mergeFeatures(boem, gebco, local) {
+    // Local NJ/MD/Atlantic records own the region. Global BOEM/GEBCO records
+    // are used only when no local records are available at all.
+    var localMerged = mergeNamedFeatures(local);
+    return localMerged.length ? localMerged : mergeNamedFeatures(gebco.concat(boem));
   }
 
   function styleFor(feature) {
     var type = feature.get('type');
     var canyon = type === 'Canyon';
+    var polygon = feature.getGeometry() && feature.getGeometry().getType() !== 'Point';
     return new ol.style.Style({
+      fill: polygon ? new ol.style.Fill({ color: canyon ? 'rgba(255,209,102,0.12)' : 'rgba(98,230,197,0.10)' }) : undefined,
+      stroke: polygon ? new ol.style.Stroke({ color: canyon ? '#ffd166' : '#62e6c5', width: 1.4 }) : undefined,
       image: new ol.style.RegularShape({
         points: canyon ? 3 : 5,
         radius: canyon ? 5 : 4,
@@ -273,23 +412,54 @@
     map.addLayer(layer);
     layer.setVisible(state.visible);
     state.layers.set(map, layer);
+    function render(items) {
+      source.clear();
+      source.addFeatures((items || []).map(function (item) {
+        var geometry = null;
+        if (state.showPolygons && item.geometry && typeof ol.format !== 'undefined') {
+          try {
+            geometry = new ol.format.GeoJSON().readGeometry(item.geometry, {
+              dataProjection: 'EPSG:4326', featureProjection: 'EPSG:3857'
+            });
+          } catch (err) { logErr('polygon geometry skipped', item.name, err); }
+        }
+        geometry = geometry || new ol.geom.Point(ol.proj.fromLonLat(item.point));
+        return new ol.Feature({ geometry: geometry, name: item.name, type: item.type,
+          region: item.region, system: item.system, source: item.source || SOURCE_LABEL });
+      }));
+      layer.setVisible(state.visible);
+    }
+    state.items.set(map, render);
     function refresh() {
-      var extent = map.getView().calculateExtent(map.getSize() || [800, 600]);
+      var view = map.getView();
+      // Combined mode attaches this layer while the OL view is still being
+      // fitted. OpenLayers throws if calculateExtent() runs before a center
+      // exists; defer until the first move/resize event instead of aborting
+      // the dashboard renderer.
+      if (!view || !view.getCenter()) return;
+      var extent = view.calculateExtent(map.getSize() || [800, 600]);
       // Never let a broad/temporarily-unfitted map viewport turn a regional
       // dashboard into a worldwide feature-name layer.
-      var bbox = selectedRegionBbox() || paddedBbox(extent);
-      Promise.all([fetchGrounds(bbox), fetchGebco(bbox)]).then(function (sets) {
-        var items = mergeFeatures(sets[0], sets[1]);
-        source.clear();
-        source.addFeatures(items.map(function (item) {
-          var f = new ol.Feature({ geometry: new ol.geom.Point(ol.proj.fromLonLat(item.point)),
-            name: item.name, type: item.type, region: item.region,
-            system: item.system, source: item.source || SOURCE_LABEL });
-          return f;
-        }));
-        layer.setVisible(state.visible);
+      var viewportBbox = paddedBbox(extent);
+      var bbox = selectedRegionBbox()
+        ? intersectBboxes(viewportBbox, selectedRegionBbox())
+        : viewportBbox;
+      if (!bbox) return;
+      // Load the compiled local asset first. Only query the slower global
+      // services when this viewport has no local coverage at all.
+      fetchLocalGrounds(bbox).then(function (local) {
+        if (local.length) return mergeFeatures([], [], local);
+        return Promise.all([fetchGrounds(bbox), fetchGebco(bbox)])
+          .then(function (sets) { return mergeFeatures(sets[0], sets[1], []); });
+      }).then(function (items) {
+        // ArcGIS can return polygons that intersect the query envelope while
+        // their label centroid is outside it. Keep only labels in the actual
+        // padded viewport so zooming in also reduces rendering work.
+        items = items.filter(function (item) { return pointInBbox(item.point, bbox); });
+        state.items.set(map, function () { render(items); });
+        render(items);
         log('refreshed', items.length, 'underwater structures');
-      });
+      }).catch(function (err) { logErr('fishing-ground refresh failed', err); });
     }
     map.on('moveend', refresh);
     map.on('change:size', refresh);
@@ -330,14 +500,25 @@
     return state.visible;
   }
 
+  function setFullPolygons(visible) {
+    state.showPolygons = Boolean(visible);
+    state.items.forEach(function (render) { render(); });
+    window.dispatchEvent(new CustomEvent('fishedge-fishing-ground-polygons', {
+      detail: { visible: state.showPolygons }
+    }));
+    return state.showPolygons;
+  }
+
   function init() {
     if (window.__fishing_grounds_loaded) return;
     window.__fishing_grounds_loaded = true;
     if (typeof ol === 'undefined') return;
     window.fishedgeUnderwater = {
       setVisible: setVisible,
+      setFullPolygons: setFullPolygons,
       toggle: function () { return setVisible(!state.visible); },
       isVisible: function () { return state.visible; },
+      isFullPolygons: function () { return state.showPolygons; },
       attachMap: attachToMap
     };
     var tick = 0;

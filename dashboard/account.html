@@ -95,6 +95,36 @@
   }
 
   async function init() {
+    // ── Capture expired-link signature from URL hash BEFORE getSession() ─────
+    // supabase-init.js is configured with detectSessionInUrl: true. When
+    // getSession() is called, supabase-js asynchronously processes the hash:
+    //   - if it's a valid code → exchanges it for a session
+    //   - if it's an error (otp_expired) → clears the hash, no session set
+    // By the time getSession() returns, the hash is gone and _ref.error is
+    // null (the URL error isn't surfaced through getSession — it's only on
+    // onAuthStateChange). So we have to read the hash synchronously, BEFORE
+    // calling getSession(), and clear it ourselves so supabase-js doesn't try
+    // to exchange a dead token.
+    var hashExpired = false;
+    try {
+      var hash = String(window.location.hash || '');
+      if (hash && (hash.indexOf('error_code') !== -1 || hash.indexOf('error_description') !== -1)) {
+        var hp = new URLSearchParams(hash.substring(1));
+        var hec = hp.get('error_code') || '';
+        var hed = hp.get('error_description') || '';
+        if (hec === 'otp_expired'
+            || /expired/i.test(hed)
+            || /invalid/i.test(hed)) {
+          hashExpired = true;
+          // Clear the hash so supabase-js doesn't try to process it.
+          try {
+            history.replaceState(null, '',
+              window.location.pathname + window.location.search);
+          } catch (e) {}
+        }
+      }
+    } catch (e) {}
+
     // Check for returning from email confirmation link (session may be set in URL)
     var _ref = await sb.auth.getSession();
     var session = _ref.data.session;
@@ -107,6 +137,9 @@
         window.location.replace('login.html');
         return;
       }
+      // Email is confirmed. Clear the "pending verification" stash so login.html's
+      // loud red banner does not auto-show on the captain's next cold visit.
+      try { localStorage.removeItem('fishedge:pending_verification'); } catch(e) {}
       // Fetch profile
       var profile = null;
       try {
@@ -120,19 +153,273 @@
         }
       } catch(e) {}
 
-      // If this is a fresh confirmation (no profile at all yet), redirect to viewer
-      // Otherwise show the account page (phone/region may be null but we show the page)
+      // Distinguish "fresh signup confirmed" from "stale-link re-creation":
+      //   - Fresh signup: localStorage has NO profile_completed_for flag for this
+      //     email (because the captain never had a profile before). Render the
+      //     standard "Welcome" page.
+      //   - Re-creation: localStorage HAS profile_completed_for === user.email
+      //     (from a prior session that has since been deleted in Supabase, and
+      //     now Supabase re-created the user on a stale confirmation click).
+      //     Render the "Account Reset" page so the captain re-enters their
+      //     captain details — their user_metadata is empty after re-creation.
+      var completedFor = null;
+      try { completedFor = localStorage.getItem('fishedge:profile_completed_for'); } catch (e) {}
+      var isReCreation = completedFor === user.email;
+
       if (!profile) {
-        renderConfirm('ok', 'Signup successful — your email is verified and your FishEdge account is ready.');
+        if (isReCreation) {
+          renderReCreation(user.email);
+        } else {
+          renderConfirm('ok',
+            'Welcome to FishEdge! Your email is verified and your account is ready.');
+        }
         return;
       }
+
+      // Profile exists. Mark the email as "completed setup" so a future
+      // stale-link re-click (after a hypothetical admin-side delete) lands
+      // on the Account Reset page instead of the Welcome page.
+      try { localStorage.setItem('fishedge:profile_completed_for', user.email); } catch (e) {}
 
       renderAccount(user, profile);
       attachLogout();
       attachEditProfile();
     } else {
+      // No session. If the URL hash had an expired-link signature we
+      // captured at the top of init(), render the Link Expired page.
+      // (We can't rely on _ref.error here — see the comment block above.)
+      var isExpiredLink = hashExpired;
+
+      if (isExpiredLink) {
+        // Strip the stale hash so it doesn't get re-parsed on refresh.
+        try {
+          history.replaceState(null, '',
+            window.location.pathname + window.location.search);
+        } catch (e) {}
+
+        var pendingEmail = null;
+        try {
+          var urlEmail = new URLSearchParams(window.location.search).get('email');
+          if (urlEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(urlEmail)) {
+            pendingEmail = urlEmail;
+            try { localStorage.setItem('fishedge:pending_verification', pendingEmail); } catch (e) {}
+          }
+          if (!pendingEmail) {
+            pendingEmail = localStorage.getItem('fishedge:pending_verification');
+          }
+        } catch (e) {}
+
+        if (pendingEmail) {
+          // Render an explicit "link expired" page with a Resend button.
+          // Auto-firing resend on mount would send an email the captain didn't
+          // ask for; making it explicit gives them control and surfaces what
+          // actually happened.
+          renderExpired(pendingEmail);
+          return;
+        }
+
+        // No email in the redirect and no same-browser stash. Send them to
+        // verify-email.html where they can re-enter their address.
+        renderConfirm('err',
+          'That confirmation link has expired. ' +
+          '<a href="verify-email.html" style="color:var(--accent2);text-decoration:underline">Send a fresh one</a>.');
+        return;
+      }
+
+      // No session, no expired-link signature — stale tab or other route.
       window.location.replace('login.html');
     }
+  }
+
+  function renderResent(message) {
+    card.innerHTML =
+      '<div class="confirm-card">' +
+        '<h1 class="ok">Fresh Confirmation Sent</h1>' +
+        '<p class="ok" style="opacity:0.85;line-height:1.5">' + message + '</p>' +
+        '<a href="login.html" style="display:block;text-align:center;padding:13px;background:var(--accent2);color:#050b10;border-radius:8px;font-size:1rem;font-weight:700;text-decoration:none;margin-top:22px;">Back to Sign In</a>' +
+      '</div>';
+  }
+
+  // Account Reset page for the Supabase re-creation case (user was deleted,
+  // then a stale confirmation link triggered a silent re-creation). The
+  // captain's user_metadata is empty after re-creation, so we pre-fill the
+  // form from the pending_profile stash (set at original registration) when
+  // available, or render empty fields otherwise.
+  function renderReCreation(email) {
+    var pendingProfile = null;
+    try {
+      var raw = localStorage.getItem('fishedge:pending_profile');
+      if (raw) pendingProfile = JSON.parse(raw);
+    } catch (e) {}
+
+    var name  = pendingProfile ? String(pendingProfile.name || '') : '';
+    var phone = pendingProfile ? String(pendingProfile.phone || '') : '';
+    var region = pendingProfile ? String(pendingProfile.selected_region || '') : '';
+    var inputStyle = 'width:100%;padding:10px 12px;background:rgba(5,11,16,0.8);border:1px solid #1b2836;border-radius:8px;color:#e0e6ee;font-size:0.95rem;outline:none;margin-top:4px';
+    var labelStyle = 'display:block;font-size:0.78rem;opacity:0.7;margin-top:14px';
+
+    card.innerHTML =
+      '<div class="confirm-card">' +
+        '<h1 class="err">Account Reset</h1>' +
+        '<p class="err" style="opacity:0.85;line-height:1.5">' +
+          'Your account was deleted and re-created when you clicked an old ' +
+          'confirmation link. Please re-enter your captain details to finish setup.' +
+        '</p>' +
+        '<form id="recreate-form" novalidate style="text-align:left">' +
+          '<label for="rec-name" style="' + labelStyle + '">Name</label>' +
+          '<input id="rec-name" type="text" value="' + escAttr(name) + '" required style="' + inputStyle + '" />' +
+          '<label for="rec-phone" style="' + labelStyle + '">Phone</label>' +
+          '<input id="rec-phone" type="tel" value="' + escAttr(phone) + '" required style="' + inputStyle + '" />' +
+          '<label for="rec-region" style="' + labelStyle + '">Preferred Region</label>' +
+          '<select id="rec-region" required style="' + inputStyle + '">' +
+            '<option value="">Select a region...</option>' +
+            '<option value="usec_south"' + (region === 'usec_south' ? ' selected' : '') + '>US East Coast — South-Atlantic</option>' +
+            '<option value="usec_md"' + (region === 'usec_md' ? ' selected' : '') + '>US East Coast — Mid-Atlantic</option>' +
+          '</select>' +
+          '<div id="rec-error" style="display:none;margin-top:10px;font-size:0.82rem;padding:8px 12px;border-radius:6px;background:rgba(255,107,107,0.15);color:#ff6b6b"></div>' +
+          '<button id="rec-btn" type="submit" style="width:100%;padding:12px;margin-top:18px;background:#1a7f7a;border:0;border-radius:8px;color:#fff;font-size:1rem;font-weight:700;cursor:pointer">Complete Setup</button>' +
+        '</form>' +
+      '</div>';
+
+    document.getElementById('recreate-form').addEventListener('submit', async function (ev) {
+      ev.preventDefault();
+      var newName  = document.getElementById('rec-name').value.trim();
+      var newPhone = document.getElementById('rec-phone').value.trim();
+      var newRegion = document.getElementById('rec-region').value;
+      var errEl  = document.getElementById('rec-error');
+      var btnEl  = document.getElementById('rec-btn');
+
+      // Mirror register.html validation.
+      if (!newName) { errEl.textContent = 'Name required'; errEl.style.display = 'block'; return; }
+      if (!newPhone || newPhone.replace(/\D/g, '').length < 10) { errEl.textContent = 'Valid phone required'; errEl.style.display = 'block'; return; }
+      if (!newRegion) { errEl.textContent = 'Please select a region'; errEl.style.display = 'block'; return; }
+      errEl.style.display = 'none';
+
+      btnEl.disabled = true;
+      btnEl.textContent = 'Saving…';
+
+      var session = sb.auth.getSession ? (await sb.auth.getSession()).data.session : null;
+      if (!session) {
+        errEl.textContent = 'Session lost. Please sign in again.';
+        errEl.style.display = 'block';
+        btnEl.disabled = false;
+        btnEl.textContent = 'Complete Setup';
+        return;
+      }
+
+      try {
+        var r = await fetch(
+          'https://wfdpfeptmyiqifgwqpzu.supabase.co/rest/v1/profiles',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': 'sb_publishable_W6wnJkT70jb69JUZgM1dow_nabPZycR',
+              'Authorization': 'Bearer ' + session.access_token,
+              'Prefer': 'return=minimal'
+            },
+            body: JSON.stringify({
+              user_id: session.user.id,
+              name: newName,
+              phone: newPhone,
+              selected_region: newRegion
+            })
+          }
+        );
+        if (!r.ok && r.status !== 409) {
+          errEl.textContent = 'Could not save profile (' + r.status + '). Try again.';
+          errEl.style.display = 'block';
+          btnEl.disabled = false;
+          btnEl.textContent = 'Complete Setup';
+          return;
+        }
+      } catch (e) {
+        errEl.textContent = 'Network error saving profile. Try again.';
+        errEl.style.display = 'block';
+        btnEl.disabled = false;
+        btnEl.textContent = 'Complete Setup';
+        return;
+      }
+
+      // Mark setup complete and clear pending stashes.
+      try { localStorage.setItem('fishedge:profile_completed_for', email); } catch (e) {}
+      try { localStorage.removeItem('fishedge:pending_profile'); } catch (e) {}
+      try { localStorage.removeItem('fishedge:pending_verification'); } catch (e) {}
+
+      // Bounce to the dashboard — the captain is fully set up now.
+      window.location.replace('index.html');
+    });
+  }
+
+  // Minimal HTML-attribute escape for the re-creation form pre-fill.
+  function escAttr(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[c];
+    });
+  }
+
+  function escHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[c];
+    });
+  }
+
+  // "Link expired" page with a Resend button. Auto-resend on mount would
+  // surprise the captain with an email they didn't ask for; this gives them
+  // explicit control.
+  function renderExpired(email) {
+    card.innerHTML =
+      '<div class="confirm-card">' +
+        '<h1 class="err">Link Expired</h1>' +
+        '<p class="err" style="opacity:0.85;line-height:1.5">' +
+          'Your confirmation link expired — they only last one hour. ' +
+          'We can send a fresh one to <strong>' + escHtml(email) + '</strong>.' +
+        '</p>' +
+        '<button id="resend-expired-btn" type="button" ' +
+          'style="width:100%;padding:13px;margin-top:22px;background:var(--accent);color:#fff;border:0;border-radius:8px;font-size:1rem;font-weight:700;cursor:pointer">Resend Confirmation Email</button>' +
+        '<div id="resend-expired-status" role="status" aria-live="polite" ' +
+          'style="display:none;margin-top:12px;font-size:0.85rem;line-height:1.4"></div>' +
+        '<a href="login.html" style="display:block;text-align:center;margin-top:14px;font-size:0.85rem;color:var(--accent2);text-decoration:none">Back to Sign In</a>' +
+      '</div>';
+
+    var btn = document.getElementById('resend-expired-btn');
+    var statusEl = document.getElementById('resend-expired-status');
+
+    function setStatus(text, cls) {
+      statusEl.textContent = text || '';
+      statusEl.className = cls || '';
+      statusEl.style.display = text ? 'block' : 'none';
+      if (cls === 'err')  statusEl.style.color = '#fca5a5';
+      if (cls === 'sent') statusEl.style.color = '#5eead4';
+    }
+
+    btn.addEventListener('click', async function () {
+      btn.disabled = true;
+      btn.textContent = 'Sending…';
+      setStatus('', '');
+      var redirectTo = window.omvAuthRedirectUrl
+        ? window.omvAuthRedirectUrl('account.html')
+        : new URL('account.html', window.location.href).href;
+      var redirectUrl = new URL(redirectTo);
+      redirectUrl.searchParams.set('email', email);
+      var res = await sb.auth.resend({
+        type: 'signup',
+        email: email,
+        options: { emailRedirectTo: redirectUrl.href }
+      });
+      if (res && res.error) {
+        // Most common: over_email_send_rate_limit. Show it verbatim so the
+        // captain knows whether to wait a minute or try something else.
+        btn.disabled = false;
+        btn.textContent = 'Resend Confirmation Email';
+        setStatus(res.error.message || 'Could not resend. Try again in a minute.', 'err');
+        return;
+      }
+      // Success — flip to the "fresh email sent" confirmation screen.
+      renderResent(
+        'A fresh confirmation link is on its way to <strong>' + escHtml(email) + '</strong>. ' +
+        'Open it within one hour and you\'re in.');
+    });
   }
 
   function attachLogout() {

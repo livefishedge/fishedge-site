@@ -33,7 +33,15 @@
     .msg.success { background: rgba(45,212,191,0.15); color: var(--success); display: block; }
     .field-error { font-size: 0.75rem; color: var(--err); margin-top: 3px; }
     .login-link { font-size: 0.85rem; text-align: center; margin-top: 16px; opacity: 0.6; }
-    #gsi-button-wrap { margin-bottom: 16px; }
+    #gsi-button-wrap { margin-bottom: 16px; min-height: 44px; position: relative; }
+    #gsi-button-wrap.gsi-ready .gsi-fallback { display: none; }
+    .gsi-fallback {
+      width: 100%; min-height: 40px; display: flex; align-items: center; justify-content: center; gap: 12px;
+      background: #fff; color: #1f2937; border: 1px solid #dadce0; border-radius: 4px;
+      font-size: 14px; font-weight: 600; text-decoration: none; cursor: pointer;
+    }
+    .gsi-fallback:hover { background: #f8fafc; }
+    .gsi-mark { font-size: 18px; font-weight: 700; color: #4285f4; line-height: 1; }
     .divider { display: flex; align-items: center; gap: 10px; margin: 0 0 16px; color: #7a8fa6; font-size: 0.8rem; opacity: 0.5; }
     .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: #1b2836; }
     .login-link a { color: var(--accent2); text-decoration: none; }
@@ -60,6 +68,10 @@
   <p class="subtitle">Enter your info to create an account. We'll send a verification email — confirm it before signing in.</p>
 
   <div id="gsi-button-wrap">
+    <button type="button" class="gsi-fallback" id="gsi-fallback">
+      <span class="gsi-mark" aria-hidden="true">G</span>
+      <span>Continue with Gmail</span>
+    </button>
     <div id="gsi-button"></div>
   </div>
   <div class="divider" aria-hidden="true">or register with email</div>
@@ -107,7 +119,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js?v=20260531"></script>
 <script src="supabase-init.js?v=20260806c"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="gsi-auth.js"></script>
+<script src="gsi-auth.js?v=20260816a"></script>
 <script>
 (function() {
   var sb = window.sb;
@@ -160,12 +172,44 @@
     return valid;
   }
 
-  function authRedirectUrl(path) {
-    if (window.omvAuthRedirectUrl) return window.omvAuthRedirectUrl(path);
-    return new URL(path, 'https://livefishedge.github.io/view/').href;
+  function authRedirectUrl(path, email) {
+    var href = window.omvAuthRedirectUrl
+      ? window.omvAuthRedirectUrl(path)
+      : new URL(path, window.location.href).href;
+    if (email) {
+      var u = new URL(href);
+      u.searchParams.set('email', email);
+      return u.href;
+    }
+    return href;
   }
 
   // ── Google Identity Services ─────────────────────────────────────────────
+  function markGsiReady() {
+    var wrap = document.getElementById('gsi-button-wrap');
+    var iframe = document.querySelector('#gsi-button iframe');
+    if (wrap && iframe) wrap.classList.add('gsi-ready');
+  }
+
+  var gsiFallback = document.getElementById('gsi-fallback');
+  if (gsiFallback) {
+    gsiFallback.addEventListener('click', async function () {
+      if (!sb) {
+        showMsg('Auth not ready — refresh and try again.', 'error');
+        return;
+      }
+      showMsg('Opening Gmail signup…', 'success');
+      var redirectTo = authRedirectUrl('account.html');
+      var result = await sb.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: redirectTo }
+      });
+      if (result && result.error) {
+        showMsg(result.error.message || 'Gmail signup failed.', 'error');
+      }
+    });
+  }
+
   window.gsiAuth.initGoogleSignIn({
     onSuccess: function (session) {
       /* GSI → signInWithIdToken. For new users Google may or may not have
@@ -177,6 +221,8 @@
       showMsg(msg || 'Google sign-in failed.', 'error');
     },
   });
+  setTimeout(markGsiReady, 250);
+  setTimeout(markGsiReady, 1000);
 
   document.getElementById('reg-form').addEventListener('submit', async function(e) {
     e.preventDefault();
@@ -198,7 +244,7 @@
       password: password,
       options: {
         data: { name: name, phone: phone, selected_region: region },
-        emailRedirectTo: authRedirectUrl('account.html')
+        emailRedirectTo: authRedirectUrl('account.html', email)
       }
     });
 
@@ -212,6 +258,27 @@
     if (result.data && result.data.session) {
       await sb.auth.signOut();
     }
+
+    // Stash the signup email so the captain doesn't get stranded if:
+    //   (a) they click the confirmation link after OTP_EXPIRY (default 1h) and
+    //       it 401s server-side — account.html can auto-resend using this
+    //   (b) they return to login.html days later, never having confirmed —
+    //       the loud red banner auto-shows and the email field is prefilled
+    //       so Resend is one tap
+    // Also stash the full signup data so that if Supabase re-creates a
+    // deleted user on a stale-link click (see account.html renderReCreation),
+    // the captain doesn't have to retype their captain details from memory.
+    // Cleared in account.html once the captain is fully confirmed, and in
+    // login.html once they actually sign in.
+    try {
+      localStorage.setItem('fishedge:pending_verification', email);
+      localStorage.setItem('fishedge:pending_profile', JSON.stringify({
+        email: email,
+        name: name,
+        phone: phone,
+        selected_region: region
+      }));
+    } catch (e) {}
 
     window.location.replace('verify-email.html?email=' + encodeURIComponent(email));
   });

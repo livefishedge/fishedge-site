@@ -1,0 +1,29 @@
+name: Auth Pages Regression
+
+on:
+  push:
+    paths:
+      - 'dashboard/login.html'
+      - 'dashboard/register.html'
+      - 'dashboard/gsi-auth.js'
+      - '_headers'
+      - 'scripts/check-auth-pages.mjs'
+      - '.github/workflows/auth-pages.yml'
+  pull_request:
+    paths:
+      - 'dashboard/login.html'
+      - 'dashboard/register.html'
+      - 'dashboard/gsi-auth.js'
+      - '_headers'
+      - 'scripts/check-auth-pages.mjs'
+      - '.github/workflows/auth-pages.yml'
+
+jobs:
+  auth-pages:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: node scripts/check-auth-pages.mjs

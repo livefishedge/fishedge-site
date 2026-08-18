@@ -44,8 +44,11 @@
     }
     .success { color: #2dd4bf; }
     .error { color: #f87171; }
-    .register-link { font-size: 12px; text-align: center; margin-top: 16px; opacity: 0.6; }
-    #gsi-button-wrap { margin-bottom: 18px; }
+    .auth-links { display: flex; justify-content: space-between; gap: 12px; margin-top: 10px; font-size: 12px; }
+    .auth-links a { color: var(--accent2); text-decoration: none; }
+    .auth-links a:hover { text-decoration: underline; }
+    .register-link { font-size: 12px; text-align: center; margin-top: 16px; opacity: 0.75; }
+    #gsi-button-wrap { margin-bottom: 16px; min-height: 40px; }
     .divider { display: flex; align-items: center; gap: 10px; margin: 16px 0; color: #7a8fa6; font-size: 12px; opacity: 0.5; }
     .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: #1b2836; }
     .register-link a { color: var(--accent2); text-decoration: none; }
@@ -71,15 +74,21 @@
     <h1>FishEdge</h1>
     <p class="subtitle">Sign in to access your marine intelligence dashboard.</p>
 
-    <div id="verify-banner" style="display:none;margin-bottom:14px;padding:10px 12px;border:1px solid #f59e0b;background:rgba(245,158,11,0.08);color:#fbbf24;border-radius:8px;font-size:12.5px;line-height:1.4;">
+    <div id="verify-banner" style="display:none;margin-bottom:14px;padding:14px 16px;border:2px solid #dc2626;background:rgba(220,38,38,0.12);color:#fca5a5;border-radius:10px;font-size:13.5px;line-height:1.5;font-weight:600;">
       <div>Please verify your email before accessing the dashboard. Check your inbox for the confirmation link, then sign in.</div>
-      <div id="resend-wrap" style="margin-top:8px;font-size:12px;color:#9fb0c2">
-        Didn't get the email?
-        <button type="button" id="resend-btn" style="all:unset;color:var(--accent2);font-weight:700;cursor:pointer;text-decoration:underline;text-underline-offset:3px;padding:0 2px">Resend confirmation</button>
+      <div id="resend-wrap" style="margin-top:10px;font-size:12.5px;color:#fda4af">
+        Didn't get the email — or did your link expire?
+        <button type="button" id="resend-btn" style="all:unset;color:#fff;background:var(--accent);font-weight:700;cursor:pointer;padding:6px 12px;border-radius:6px;margin-left:6px;font-size:12px">Resend confirmation</button>
         <span id="resend-cooldown" style="display:none;color:#7a8fa6"></span>
-        <span id="resend-status" style="display:block;margin-top:6px;font-size:11.5px" role="status" aria-live="polite"></span>
+        <span id="resend-status" style="display:block;margin-top:8px;font-size:11.5px" role="status" aria-live="polite"></span>
       </div>
     </div>
+
+    <div id="gsi-button-wrap">
+      <div id="gsi-button"></div>
+    </div>
+
+    <div class="divider" aria-hidden="true">or sign in with email</div>
 
     <form id="login-form" novalidate>
       <label for="email">Email address</label>
@@ -100,18 +109,18 @@
       <button type="submit" id="signin-btn">Sign in</button>
     </form>
 
-    <div id="msg"></div>
-
-    <div id="gsi-button-wrap">
-      <div id="gsi-button"></div>
+    <div class="auth-links">
+      <a href="forgot-password.html">Forgot password?</a>
+      <a href="register.html">Create account</a>
     </div>
 
-    <div class="divider" aria-hidden="true">or sign in with email</div>
+    <div id="msg"></div>
+  </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js?v=20260531"></script>
   <script src="supabase-init.js?v=20260806c"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="gsi-auth.js"></script>
+  <script src="gsi-auth.js?v=20260816a"></script>
   <script>
     (function() {
       const sb = window.sb;
@@ -145,7 +154,28 @@
       }
 
       async function enforceEmailVerification(session) {
-        if (!session || session.user.email_confirmed_at) return true;
+        if (!session) return true;
+        if (session.user.email_confirmed_at) return true;
+
+        // JWT shows unconfirmed. Safety net for the stale-JWT case where
+        // Supabase re-creates a deleted user via a stale confirmation link:
+        // the password-auth session may not carry email_confirmed_at, but
+        // server-side the user IS confirmed (they have a profile row, which
+        // can only exist after the captain completed post-confirmation setup).
+        // Allow login in that case. If no profile, treat as genuinely
+        // unconfirmed and bounce.
+        try {
+          var r = await fetch(
+            'https://wfdpfeptmyiqifgwqpzu.supabase.co/rest/v1/profiles?user_id=eq.' +
+            encodeURIComponent(session.user.id) + '&select=user_id',
+            { headers: { 'apikey': 'sb_publishable_W6wnJkT70jb69JUZgM1dow_nabPZycR', 'Authorization': 'Bearer ' + session.access_token } }
+          );
+          if (r.ok) {
+            var arr = await r.json();
+            if (arr && arr.length > 0) return true;
+          }
+        } catch (e) {}
+
         await sb.auth.signOut();
         showMsg('Please verify your email before signing in.', 'error');
         return false;
@@ -241,19 +271,26 @@
           setTimeout(function(){ tickCooldown(remaining - 1000); }, 1000);
         }
 
-        // Auto-show the banner+resend if the page was reached with reason=verify,
-        // or if the email field already has a value (sticky from prior attempt).
+        // Auto-show the banner+resend if ANY of:
+        //   (a) the page was reached with ?reason=verify (legacy bounce path)
+        //   (b) sessionStorage flag was set by a prior bounce from the dashboard
+        //   (c) localStorage has a stashed pending_verification email — captain
+        //       who registered but never confirmed, coming back hours/days later.
+        // Also prefill the email field so Resend is one tap.
         try {
           var params = new URLSearchParams(window.location.search);
           var reason = params.get('reason');
           var sticky = sessionStorage.getItem('email_verification_required') === 'true';
-          var emailInForm = (document.getElementById('email').value || '').trim();
-          if (reason === 'verify' || sticky) {
+          var pending = null;
+          try { pending = localStorage.getItem('fishedge:pending_verification'); } catch (_) {}
+          var emailEl = document.getElementById('email');
+          var emailInForm = (emailEl.value || '').trim();
+
+          if (reason === 'verify' || sticky || pending) {
             banner.style.display = 'block';
-          } else if (emailInForm) {
-            // user typed an email but hasn't submitted yet — keep banner hidden until
-            // they sign in once; this guards against showing the resend widget
-            // preemptively on cold page loads.
+          }
+          if (pending && !emailInForm) {
+            emailEl.value = pending;
           }
         } catch(e) {}
 
@@ -271,13 +308,17 @@
           btn.disabled = true;
           setStatus('Sending…', '');
 
+          try { localStorage.setItem('fishedge:pending_verification', email); } catch (e) {}
+
           var redirectTo = window.omvAuthRedirectUrl
             ? window.omvAuthRedirectUrl('account.html')
-            : new URL('account.html', 'https://livefishedge.github.io/view/').href;
+            : new URL('account.html', window.location.href).href;
+          var redirectUrl = new URL(redirectTo);
+          redirectUrl.searchParams.set('email', email);
           var res = await sb.auth.resend({
             type: 'signup',
             email: email,
-            options: { emailRedirectTo: redirectTo }
+            options: { emailRedirectTo: redirectUrl.href }
           });
 
           if (res && res.error) {
@@ -323,6 +364,10 @@
           btn.textContent = 'Sign in';
           return;
         }
+
+        // Captain is fully signed in. Clear the pending-verification stash so the
+        // loud red banner does not auto-show on their next cold visit to login.
+        try { localStorage.removeItem('fishedge:pending_verification'); } catch (e) {}
 
         // If there's a pending profile from registration, create it now
         try {
