@@ -1,55 +1,152 @@
 {
   "region": "USEC-MD",
-  "color_scale_m": [-2500, 0],
+  "color_scale_m": [
+    -2500,
+    0
+  ],
   "sources": {
     "ex1404l3_west": {
       "title": "NOAA Okeanos EX1404L3 West",
       "resolution_m": 50,
       "quality": "dedicated EM302 survey grid",
-      "bounds_wsen": [-74.8401, 37.2501, -71.1794, 40.4154],
+      "bounds_wsen": [
+        -74.8401,
+        37.2501,
+        -71.1794,
+        40.4154
+      ],
       "source": "https://www.ngdc.noaa.gov/ships/okeanos_explorer/EX1404L3_mb.html"
     },
     "ex1404l3_hudson": {
       "title": "NOAA Okeanos EX1404L3 Hudson Canyon",
       "resolution_m": 15,
       "quality": "dedicated EM302 canyon grid",
-      "bounds_wsen": [-72.3744, 39.4438, -72.1654, 39.5353],
+      "bounds_wsen": [
+        -72.3744,
+        39.4438,
+        -72.1654,
+        39.5353
+      ],
       "source": "https://www.ngdc.noaa.gov/ships/okeanos_explorer/EX1404L3_mb.html"
     },
     "ex1303_hudson": {
       "title": "NOAA Okeanos EX1303 Hudson Canyon",
       "resolution_m": 30,
       "quality": "dedicated EM302 canyon grid",
-      "bounds_wsen": [-72.5260, 39.0541, -71.4157, 39.8092],
+      "bounds_wsen": [
+        -72.526,
+        39.0541,
+        -71.4157,
+        39.8092
+      ],
       "source": "https://www.ngdc.noaa.gov/ships/okeanos_explorer/EX1303_mb.html"
     },
     "ex2203_transit3": {
       "title": "NOAA Okeanos EX2203 Transit 3",
       "resolution_m": 25,
       "quality": "EM302 transit-track grid; not dedicated canyon mapping",
-      "bounds_wsen": [-77.1852, 31.7345, -71.7029, 39.7245],
+      "bounds_wsen": [
+        -77.1852,
+        31.7345,
+        -71.7029,
+        39.7245
+      ],
       "source": "https://www.ngdc.noaa.gov/ships/okeanos_explorer/EX2203_mb.html"
     },
     "usgs_washington_accomac": {
-      "title": "USGS Reson 7160 Washington–Accomac Canyons",
+      "title": "USGS Reson 7160 Washington\u2013Accomac Canyons",
       "resolution_m": 25,
       "quality": "processed MBES grid with published QA/QC",
-      "bounds_wsen": [-74.3465, 37.5024, -74.0095, 37.8568],
+      "bounds_wsen": [
+        -74.3465,
+        37.5024,
+        -74.0095,
+        37.8568
+      ],
       "source": "https://www.sciencebase.gov/catalog/item/5e7d1495e4b01d5092751d95"
     },
     "usgs_keller": {
       "title": "USGS Reson 7160 Keller Canyon",
       "resolution_m": 25,
       "quality": "processed MBES grid with published QA/QC",
-      "bounds_wsen": [-74.8733, 35.4972, -74.7604, 35.7519],
+      "bounds_wsen": [
+        -74.8733,
+        35.4972,
+        -74.7604,
+        35.7519
+      ],
       "source": "https://www.sciencebase.gov/catalog/item/5e7d1495e4b01d5092751d95"
     },
     "usgs_norfolk": {
       "title": "USGS Reson 7160 Norfolk Canyon",
       "resolution_m": 25,
       "quality": "processed MBES grid with published QA/QC",
-      "bounds_wsen": [-74.7601, 36.7500, -74.5668, 37.1159],
+      "bounds_wsen": [
+        -74.7601,
+        36.75,
+        -74.5668,
+        37.1159
+      ],
       "source": "https://www.sciencebase.gov/catalog/item/5e7d1495e4b01d5092751d95"
+    },
+    "at29_04_auv": {
+      "title": "AT29-04 near-bottom AUV bathymetry",
+      "resolution_m": "~1 local grids",
+      "quality": "processed NetCDF grid; patchy near-bottom AUV footprints",
+      "bounds_wsen": "multiple footprints in USEC-MD and Georges/Hudson area",
+      "source": "https://www.marine-geo.org/tools/search/DataSets.php?data_set_uids=31831,31832"
+    },
+    "knox17rr": {
+      "title": "KNOX17RR Atlantic-margin bathymetry",
+      "resolution_m": "~100",
+      "quality": "processed EM120 NetCDF grid; broad Atlantic-margin context",
+      "bounds_wsen": [
+        -74.15,
+        32.9,
+        -67.7,
+        37.8
+      ],
+      "source": "https://www.marine-geo.org/tools/search/Files.php?data_set_uid=8469"
+    },
+    "mgl2406": {
+      "title": "MGL2406",
+      "quality": "processed EM122 MB-System swath files; transit survey; not yet gridded in DEV",
+      "source": "https://www.marine-geo.org/tools/files/31936"
+    },
+    "rb_20_02": {
+      "title": "RB-20-02",
+      "quality": "processed EM122 MB-System swath files; not yet gridded in DEV",
+      "source": "https://www.marine-geo.org/tools/files/31617"
+    },
+    "mgl1407": {
+      "title": "MGL1407",
+      "quality": "processed EM122 MB-System swath files; not yet gridded in DEV",
+      "source": "https://www.marine-geo.org/tools/files/31928"
+    },
+    "rb0904": {
+      "title": "RB0904",
+      "quality": "processed MB-System multibeam swath files; not yet gridded in DEV",
+      "source": "https://www.marine-geo.org/tools/search/Files.php?data_set_uid=20560"
+    },
+    "at37_01": {
+      "title": "AT37-01",
+      "quality": "processed MB-System swath files; not yet gridded in DEV",
+      "source": "https://www.marine-geo.org/tools/search/Files.php?data_set_uid=30242"
+    },
+    "at01_03": {
+      "title": "AT01-03 Hudson Canyon",
+      "quality": "processed MB-System multibeam swath files; not yet gridded in DEV",
+      "source": "https://www.marine-geo.org/tools/search/Files.php?data_set_uid=16040"
+    },
+    "kn161_07": {
+      "title": "KN161-07",
+      "quality": "processed SeaBeam 2112 swath files; not yet gridded in DEV",
+      "source": "https://www.marine-geo.org/tools/search/Files.php?data_set_uid=22548"
+    },
+    "kn193_06": {
+      "title": "KN193-06",
+      "quality": "processed SeaBeam 3012 swath files; not yet gridded in DEV",
+      "source": "https://www.marine-geo.org/tools/search/Files.php?data_set_uid=19883"
     }
   }
 }

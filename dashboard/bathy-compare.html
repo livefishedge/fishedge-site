@@ -59,6 +59,19 @@
     <div class="meta">USGS 2017 MBES grid · documented QA/QC · direct canyon survey</div>
     <label class="row"><input type="checkbox" data-layer="usgsNorfolk"><span class="swatch"></span>USGS Reson 7160 Norfolk Canyon <b>25 m</b></label>
     <div class="meta">USGS 2017 MBES grid · documented QA/QC · direct canyon survey</div>
+    <label class="row"><input type="checkbox" data-layer="at29Auv"><span class="swatch"></span>AT29-04 near-bottom AUV <b>~1 m</b></label>
+    <div class="meta">Processed NetCDF grids · separate local AUV footprints; patchy coverage</div>
+    <label class="row"><input type="checkbox" data-layer="knox17rr"><span class="swatch"></span>KNOX17RR Atlantic-margin grid <b>~100 m</b></label>
+    <div class="meta">Processed EM120 NetCDF grid · broad Atlantic-margin context</div>
+  </div>
+  <div class="group"><span class="badge">PROCESSED SWATH CATALOG</span>
+    <div class="meta" style="margin:8px 0 0">Published processed survey files found in the USEC-MD search area. These are cataloged for raw-track ingestion, not shown as continuous raster layers yet.</div>
+    <div class="meta" style="margin:8px 0 0"><a href="https://www.marine-geo.org/tools/files/31936" target="_blank" rel="noopener" style="color:#8fe8ee">MGL2406</a> · 2024 Langseth EM122</div>
+    <div class="meta"><a href="https://www.marine-geo.org/tools/files/31617" target="_blank" rel="noopener" style="color:#8fe8ee">RB-20-02</a> · 2020 Ronald H. Brown EM122</div>
+    <div class="meta"><a href="https://www.marine-geo.org/tools/files/31928" target="_blank" rel="noopener" style="color:#8fe8ee">MGL1407</a> · 2014 Langseth EM122</div>
+    <div class="meta"><a href="https://www.marine-geo.org/tools/search/Files.php?data_set_uid=8469" target="_blank" rel="noopener" style="color:#8fe8ee">KNOX17RR</a> · processed EM120 grid (layer above)</div>
+    <div class="meta"><a href="https://www.marine-geo.org/tools/search/DataSets.php?data_set_uids=31831,31832" target="_blank" rel="noopener" style="color:#8fe8ee">AT29-04</a> · AUV grids (layer above)</div>
+    <div class="meta">Also cataloged: RB0904 · AT37-01 · AT01-03 · EW cruises · KN161-07 · KN193-06</div>
   </div>
   <div class="group"><span class="badge">REALNESS OVERLAY</span>
     <label class="row"><input type="checkbox" data-layer="realness"><span class="swatch" style="background:linear-gradient(135deg,#440154,#3b528b,#21918c,#5ec962,#fde725)"></span>Realness score (real vs interpolated)</label>
@@ -90,7 +103,9 @@
     ex2203Transit3: './data/bathy/canyon_tiles/ex2203_transit3/color/{z}/{x}/{y}.png?v=20260818-canyon2',
     usgsWashingtonAccomac: './data/bathy/canyon_tiles/usgs_washington_accomac/color/{z}/{x}/{y}.png?v=20260818-usgs1',
     usgsKeller: './data/bathy/canyon_tiles/usgs_keller/color/{z}/{x}/{y}.png?v=20260818-usgs1',
-    usgsNorfolk: './data/bathy/canyon_tiles/usgs_norfolk/color/{z}/{x}/{y}.png?v=20260818-usgs1'
+    usgsNorfolk: './data/bathy/canyon_tiles/usgs_norfolk/color/{z}/{x}/{y}.png?v=20260818-usgs1',
+    at29Auv: './data/bathy/canyon_tiles/at29_04_auv/color/{z}/{x}/{y}.png?v=20260818-mgds1',
+    knox17rr: './data/bathy/canyon_tiles/knox17rr/color/{z}/{x}/{y}.png?v=20260818-mgds1'
   };
   // Realness overlay: inline metadata for the Baltimore Canyon bbox (matches realness_meta.json).
   // Bounds are EPSG:4326: [southLat, westLon] to [northLat, eastLon].
@@ -104,7 +119,7 @@
   const center = ol.proj.fromLonLat([-74.05, 38.22]);
   const layers = {};
   for (const [name,url] of Object.entries(urls)) {
-    const maxZoom = (name === 'ex1404l3West' || name === 'ex2203Transit3') ? 11 : 13;
+    const maxZoom = (name === 'ex1404l3West' || name === 'ex2203Transit3' || name === 'knox17rr') ? 11 : 13;
     layers[name] = new ol.layer.Tile({source:new ol.source.XYZ({url,crossOrigin:'anonymous',minZoom:5,maxZoom}),visible:name==='dem',opacity:.94,zIndex:10});
   }
   // Realness overlay: static image covering the Baltimore Canyon bbox.
@@ -191,7 +206,7 @@
     const ll = ol.proj.toLonLat(evt.coordinate);
     rCoord.textContent = ll[1].toFixed(4) + '°N  ' + Math.abs(ll[0]).toFixed(4) + '°W';
     const myReq = ++reqId;
-  const active = ['dem','bag','average','multibeam','bluetopo','bluetopoMeasured','okeanos','ex1302','ex1903l2','ex1404l3West','ex1404l3Hudson','ex1303Hudson','ex2203Transit3','usgsWashingtonAccomac','usgsKeller','usgsNorfolk'].filter(n => layers[n] && layers[n].getVisible());
+    const active = ['dem','bag','average','multibeam','bluetopo','bluetopoMeasured','okeanos','ex1302','ex1903l2','ex1404l3West','ex1404l3Hudson','ex1303Hudson','ex2203Transit3','usgsWashingtonAccomac','usgsKeller','usgsNorfolk','at29Auv','knox17rr'].filter(n => layers[n] && layers[n].getVisible());
     if(!active.length){ rDepths.innerHTML = ''; return; }
     const results = await Promise.all(active.map(async n => [n, await tileDepth(layers[n], evt.coordinate)]));
     if(myReq !== reqId) return; // stale
@@ -217,6 +232,8 @@
     usgsWashingtonAccomac: 'USGS Reson 7160 Washington–Accomac Canyons · 25 m',
     usgsKeller: 'USGS Reson 7160 Keller Canyon · 25 m',
     usgsNorfolk: 'USGS Reson 7160 Norfolk Canyon · 25 m',
+    at29Auv: 'AT29-04 near-bottom AUV bathymetry · ~1 m local grids',
+    knox17rr: 'KNOX17RR processed EM120 Atlantic-margin grid · ~100 m',
     realness: 'Realness score overlay'
   };
   const datasetLabel = document.getElementById('dataset-label');
