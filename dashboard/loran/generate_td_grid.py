@@ -62,15 +62,32 @@ B = (1.0 - F) * A                   # Semi-minor axis (m)
 VELOCITY_M_PER_US = 299.692         # Saltwater propagation velocity (m/µs)
 
 
-# ── GRI 9960 transmitters (USCG-published WGS84 coordinates) ────────────────
+# ── GRI 9960 transmitters (WGS84, from MegaPulse chain info) ──────────────
+# Authoritative coordinates per the MegaPulse Loran-C chain table, which
+# matches USCG/NIST values to the precision published in the 1994 LORAN-C
+# Signal Specification. Source (archived):
+#   https://web.archive.org/web/20221112232009/https://www.megapulse.com/chaininfo.html
+# Cross-referenced with the Wikipedia LORAN-C station table.
+# Note: GRI 9960 also includes W (Caribou, ME) and Z (Dana, IN) — not modeled
+# here because the upstream starting point covered M/X/Y only and Mike's
+# spec was for those three.
 STATIONS = {
-    "M": (42.714258, -76.825828),   # Seneca, NY        (master)
-    "X": (41.253011, -69.983944),   # Nantucket, MA     (secondary)
-    "Y": (34.597547, -78.165444),   # Cape Fear, NC     (secondary)
+    "M": (42.71408778, -76.82591889),   # Seneca, NY        (master)
+    "X": (41.25334611,  -69.97737111),  # Nantucket, MA     (secondary)
+    "Y": (34.06283556,  -77.91280556),  # Carolina Beach, NC (secondary)
+                                       # (commonly misnamed "Cape Fear"; the
+                                       # actual 9960-Y tower is at Carolina
+                                       # Beach — ~60 km SE of the cape.)
 }
 
-# USCG coding delays (µs)
-DELAYS = {"X": 37969.92, "Y": 52928.93}
+# Emission Delay (µs) — MegaPulse "Emission / Coding Delay" column,
+# raw emission value. The Coding Delay is a rounded subset for receiver
+# display; the actual TD formula needs the raw emission value.
+#   TD(p) = (TOF_sec(p) − TOF_master(p)) + EmissionDelay(sec)
+DELAYS = {
+    "X": 26969.93,   # 9960-X Nantucket     (Coding 25000.00)
+    "Y": 42221.65,   # 9960-Y Carolina Beach (Coding 39000.00)
+}
 
 
 # ── Vectorized Vincenty inverse formula ──────────────────────────────────────
