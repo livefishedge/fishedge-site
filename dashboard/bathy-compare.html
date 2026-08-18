@@ -35,6 +35,10 @@
     <div class="meta">Valid-overlap average used by the earlier comparison</div>
     <label class="row"><input type="checkbox" data-layer="multibeam"><span class="swatch"></span>Multibeam Mosaic Combined <b>3 arc-sec</b></label>
     <div class="meta">NCEI combined multibeam product · nominal ~90 m grid</div>
+    <label class="row"><input type="checkbox" data-layer="bluetopo"><span class="swatch"></span>NOAA BlueTopo <b>8–16 m</b></label>
+    <div class="meta">BlueTopo elevation compilation · includes measured and interpolated cells</div>
+    <label class="row"><input type="checkbox" data-layer="bluetopoMeasured"><span class="swatch"></span>BlueTopo measured-only <b>8–16 m</b></label>
+    <div class="meta">Only cells marked bathy_coverage=true by NOAA BlueTopo contributor metadata</div>
   </div>
   <div class="group"><span class="badge">REALNESS OVERLAY</span>
     <label class="row"><input type="checkbox" data-layer="realness"><span class="swatch" style="background:linear-gradient(135deg,#440154,#3b528b,#21918c,#5ec962,#fde725)"></span>Realness score (real vs interpolated)</label>
@@ -49,11 +53,14 @@
 <script>
 (() => {
   const root = './data/bathy/v3/';
+  const extraRoot = './data/bathy/v4/';
   const urls = {
     dem: root + 'ncei_dem/color/{z}/{x}/{y}.png?v=20260818-wm-mask1',
     bag: root + 'ncei_bag/color/{z}/{x}/{y}.png?v=20260818-wm-mask1',
     average: root + 'ncei_multibeam/color/{z}/{x}/{y}.png?v=20260818-wm-mask1',
-    multibeam: root + 'ncei_multibeam/color/{z}/{x}/{y}.png?v=20260818-wm-mask1'
+    multibeam: root + 'ncei_multibeam/color/{z}/{x}/{y}.png?v=20260818-wm-mask1',
+    bluetopo: extraRoot + 'bluetopo_full/color/{z}/{x}/{y}.png?v=20260818-bluetopo1',
+    bluetopoMeasured: extraRoot + 'bluetopo_measured/color/{z}/{x}/{y}.png?v=20260818-bluetopo1'
   };
   // Realness overlay: inline metadata for the Baltimore Canyon bbox (matches realness_meta.json).
   // Bounds are EPSG:4326: [southLat, westLon] to [northLat, eastLon].
@@ -153,7 +160,7 @@
     const ll = ol.proj.toLonLat(evt.coordinate);
     rCoord.textContent = ll[1].toFixed(4) + '°N  ' + Math.abs(ll[0]).toFixed(4) + '°W';
     const myReq = ++reqId;
-    const active = ['dem','bag','average','multibeam'].filter(n => layers[n] && layers[n].getVisible());
+    const active = ['dem','bag','average','multibeam','bluetopo','bluetopoMeasured'].filter(n => layers[n] && layers[n].getVisible());
     if(!active.length){ rDepths.innerHTML = ''; return; }
     const results = await Promise.all(active.map(async n => [n, await tileDepth(layers[n], evt.coordinate)]));
     if(myReq !== reqId) return; // stale
@@ -167,6 +174,8 @@
     bag: 'NOS BAG Mosaic · survey-dependent 1 arc-sec',
     average: 'DEM + BAG average',
     multibeam: 'NCEI Multibeam Mosaic Combined · 3 arc-sec',
+    bluetopo: 'NOAA BlueTopo · 8–16 m compilation',
+    bluetopoMeasured: 'NOAA BlueTopo · measured-only · 8–16 m',
     realness: 'Realness score overlay'
   };
   const datasetLabel = document.getElementById('dataset-label');
