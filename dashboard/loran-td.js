@@ -54,6 +54,57 @@
       EDGE_PAD_PX:   32,
     };
 
+  // ── Station positions in EPSG:3857 (for true-tangent computation) ──
+  // Computed from the corrected lat/lon in the generator (commit 9ab12e1).
+  //   M (Seneca, NY):          lat 42.714258, lon -76.825828
+  //   X (Nantucket, MA):      lat 41.253011, lon -69.983944
+  //   Y (Carolina Beach, NC):  lat 34.062836, lon -77.912806  ← NOT Cape Fear
+  const STATIONS_3857 = {
+    M: ol.proj.fromLonLat([-76.825828, 42.714258]),  // [lon, lat]
+    X: ol.proj.fromLonLat([-69.983944, 41.253011]),
+    Y: ol.proj.fromLonLat([-77.912806, 34.062836]),
+  };
+
+  // ── True tangent at a point P on a TD line ──────────────────────────
+  // The gradient of the TD function at P is:
+  //   ∇TD_S = (P→S unit vector) − (P→M unit vector)
+  // where S is the secondary (X or Y) and M is the master. The tangent
+  // to the line is perpendicular to this gradient. We pick the perpendicular
+  // direction closer to the segment direction (segAngleHint) so the sign
+  // matches the line's actual travel direction.
+  function trueTangentAt(px, py, secKey, segAngleHint) {
+    const m = STATIONS_3857.M;
+    const s = STATIONS_3857[secKey];
+    // Unit vector from P to M
+    const dxM = m[0] - px, dyM = m[1] - py;
+    const lenM = Math.hypot(dxM, dyM);
+    if (lenM < 1) return segAngleHint;
+    const uxM = dxM / lenM, uyM = dyM / lenM;
+    // Unit vector from P to S
+    const dxS = s[0] - px, dyS = s[1] - py;
+    const lenS = Math.hypot(dxS, dyS);
+    if (lenS < 1) return segAngleHint;
+    const uxS = dxS / lenS, uyS = dyS / lenS;
+    // Gradient of TD
+    const gx = uxS - uxM;
+    const gy = uyS - uyM;
+    // Two perpendicular directions
+    const t1 = Math.atan2(gx, -gy);
+    const t2 = t1 + Math.PI;
+    // Normalize to [-π, π]
+    const norm = (a) => {
+      while (a > Math.PI) a -= 2 * Math.PI;
+      while (a < -Math.PI) a += 2 * Math.PI;
+      return a;
+    };
+    const t1n = norm(t1), t2n = norm(t2);
+    const sN = norm(segAngleHint);
+    // Pick the one closer to segAngleHint (with wraparound)
+    const d1 = Math.min(Math.abs(t1n - sN), Math.abs(t1n - sN + 2*Math.PI), Math.abs(t1n - sN - 2*Math.PI));
+    const d2 = Math.min(Math.abs(t2n - sN), Math.abs(t2n - sN + 2*Math.PI), Math.abs(t2n - sN - 2*Math.PI));
+    return d1 < d2 ? t1n : t2n;
+  }
+
   // ── State ───────────────────────────────────────────────────────────
   const state = {
     enabled:     false,
@@ -76,7 +127,7 @@
   // This per-segment angle is what makes the label exactly parallel to
   // the line AT THAT POINT — a centroid angle would be off by up to ±37°
   // for X lines (which are nearly vertical) and ±17° for Y lines.
-  function computeEdgeIntersects(lineCoords, map) {
+  function computeEdgeIntersects(lineCoords, map, secKey) {
     const view = map.getView();
     const extent = view.calculateExtent(map.getSize());
     const [minX, minY, maxX, maxY] = extent;
@@ -90,9 +141,12 @@
       const p2 = lineCoords[i + 1];
       if (!Number.isFinite(p1[0]) || !Number.isFinite(p2[0])) continue;
 
-      // Local segment tangent in EPSG:3857 (CCW from east axis; same as
-      // lat/lon locally because Web Mercator is conformal with the same
-      // east/north orientation as WGS84).
+      // Segment direction (secant from p1 to p2) — used as a hint for
+      // the true-tangent sign. The true tangent at the intersection
+      // point is perpendicular to the TD gradient and is the exact
+      // orientation the label needs (Mike #32161: "close to the right
+      // orientation but not quite" — the per-segment secant is off by
+      // up to ±37° from the true tangent for X lines, ±17° for Y).
       const segDx = p2[0] - p1[0];
       const segDy = p2[1] - p1[1];
       const segAngle = Math.atan2(segDy, segDx);
@@ -102,8 +156,9 @@
         const t = (minX - p1[0]) / (p2[0] - p1[0]);
         const y = p1[1] + t * (p2[1] - p1[1]);
         if (y >= minY && y <= maxY) {
-          out.push({ coord: [minX + paddingGeo, y],
-                     edge: "left", rotation: segAngle });
+          const cx = minX + paddingGeo;
+          const rot = trueTangentAt(cx, y, secKey, segAngle);
+          out.push({ coord: [cx, y], edge: "left", rotation: rot });
         }
       }
       // Right edge (x = maxX, east). Push anchor west.
@@ -111,8 +166,9 @@
         const t = (maxX - p1[0]) / (p2[0] - p1[0]);
         const y = p1[1] + t * (p2[1] - p1[1]);
         if (y >= minY && y <= maxY) {
-          out.push({ coord: [maxX - paddingGeo, y],
-                     edge: "right", rotation: segAngle });
+          const cx = maxX - paddingGeo;
+          const rot = trueTangentAt(cx, y, secKey, segAngle);
+          out.push({ coord: [cx, y], edge: "right", rotation: rot });
         }
       }
       // Bottom edge (y = minY, south). Push anchor north.
@@ -120,8 +176,9 @@
         const t = (minY - p1[1]) / (p2[1] - p1[1]);
         const x = p1[0] + t * (p2[0] - p1[0]);
         if (x >= minX && x <= maxX) {
-          out.push({ coord: [x, minY + paddingGeo],
-                     edge: "bottom", rotation: segAngle });
+          const cy = minY + paddingGeo;
+          const rot = trueTangentAt(x, cy, secKey, segAngle);
+          out.push({ coord: [x, cy], edge: "bottom", rotation: rot });
         }
       }
       // Top edge (y = maxY, north). Push anchor south.
@@ -129,8 +186,9 @@
         const t = (maxY - p1[1]) / (p2[1] - p1[1]);
         const x = p1[0] + t * (p2[0] - p1[0]);
         if (x >= minX && x <= maxX) {
-          out.push({ coord: [x, maxY - paddingGeo],
-                     edge: "top", rotation: segAngle });
+          const cy = maxY - paddingGeo;
+          const rot = trueTangentAt(x, cy, secKey, segAngle);
+          out.push({ coord: [x, cy], edge: "top", rotation: rot });
         }
       }
     }
@@ -145,8 +203,9 @@
       const coords = lineFeature.getGeometry().getCoordinates();
       if (!coords || coords.length < 2) continue;
       const pair = lineFeature.get("pair");
+      const secKey = pair === "9960-X" ? "X" : "Y";
 
-      const intersections = computeEdgeIntersects(coords, map);
+      const intersections = computeEdgeIntersects(coords, map, secKey);
       for (const intersection of intersections) {
         let rotation = intersection.rotation;
 
@@ -213,10 +272,22 @@
           lineCap: "round",
           lineJoin: "round",
         }),
+        // Semi-transparent dark background so the label is clearly
+        // readable on top of any line behind it. Mike (#32161) saw
+        // "red labels placed on the wrong line" — the issue was visual
+        // proximity with a nearby blue Y line, not a data problem.
+        // The background removes the ambiguity.
+        backgroundFill: new ol.style.Fill({
+          color: "rgba(15, 20, 30, 0.65)",
+        }),
+        backgroundStroke: new ol.style.Stroke({
+          color: "rgba(0, 0, 0, 0.4)",
+          width: 1,
+        }),
         overflow:     true,
         textAlign:    "center",
         textBaseline: "middle",
-        padding: [2, 3, 2, 3],
+        padding: [2, 4, 2, 4],
         rotation:     rotation,
       }),
     });
@@ -300,7 +371,7 @@
       source,
       style: labelStyleFor,
       zIndex: CONFIG.LABEL_Z_INDEX,
-      declutter: true,
+      declutter: false,
       updateWhileAnimating: false,
       updateWhileInteracting: false,
     });
