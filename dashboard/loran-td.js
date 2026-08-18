@@ -11,9 +11,14 @@
  *   1. Line layer (zIndex 8): all isolines, single 10 µs step, thin stroke.
  *   2. Label layer (zIndex 9): TD value labels at every 50 µs step,
  *      positioned where each line crosses the current viewport edges
- *      (top / bottom / left / right). Labels rotate to match their line's
- *      tangent angle so they read parallel to the line. Recomputed on every
- *      map moveend so they follow as the captain pans / zooms.
+ *      (top / bottom / left / right). Each label is rotated to EXACTLY
+ *      match its line's local tangent at the crossing point (computed
+ *      in JS from the segment direction at the intersection, not from
+ *      the centroid angle baked into the GeoJSON — hyperbolic lines have
+ *      varying angle along their curve). Anchor is pushed inside the
+ *      viewport by EDGE_PAD_PX worth of geographic distance so the text
+ *      bounding box never crosses the screen edge. Recomputed on every
+ *      map moveend so labels follow as the captain pans / zooms.
  *
  * Single global: window.LoranTdController
  *
@@ -30,7 +35,8 @@
  *   9960-Y (Cape Fear):  #0275d8  (blue)
  *   All lines:           0.8 px, opacity 0.65 (single weight per Mike spec)
  *   Labels:              bold 11px monospace, line-color fill, dark halo,
- *                        rotated parallel to the line direction.
+ *                        rotated exactly parallel to the line's local
+ *                        tangent at the edge crossing.
  *
  * Branch: feat/loran-td-grid-usec-md
  */
@@ -51,9 +57,12 @@
     },
     LINE_WIDTH:    0.8,
     LINE_OPACITY:  0.65,
-    // Padding (px) inward from the viewport edge so the label isn't clipped
-    // by the map's letterboxing. Per-edge offset uses offsetX/offsetY.
-    EDGE_PAD_PX:   8,
+    // Push the label anchor inside the viewport by this many pixels.
+    // The text bounding box (width ~30px, height ~11px) plus a margin
+    // fits comfortably within this padding for all 50 µs TD values
+    // we display. The padding is applied in geographic coordinates
+    // (pixels × current resolution), so it scales correctly with zoom.
+    EDGE_PAD_PX:   32,
   };
 
   // ── State ───────────────────────────────────────────────────────────
@@ -69,99 +78,101 @@
     fetchErr:      null,
   };
 
-  // ── Helpers ─────────────────────────────────────────────────────────
-  // Generator bakes `angle_rad` into each LineString feature (tangent at the
-  // centroid, radians CCW from east). For lines that go "downward"
-  // (|angle_rad| > π/2), flipping by π keeps the text right-side-up while
-  // still parallel to the line.
-  function readableRotation(angleRad) {
-    if (angleRad >  Math.PI / 2) return angleRad - Math.PI;
-    if (angleRad < -Math.PI / 2) return angleRad + Math.PI;
-    return angleRad;
-  }
-
-  // Find where a LineString crosses the 4 viewport edges. Returns up to 4
-  // intersections (one per edge that the line actually crosses). Each
-  // intersection is the geographic coordinate of the crossing point and the
-  // edge name ('top' / 'bottom' / 'left' / 'right') — used for text padding.
+  // ── Edge intersection with local-line-angle capture ─────────────────
   //
-  // Both inputs are in EPSG:3857 (Web Mercator meters).
-  function computeEdgeIntersects(lineCoords, extent) {
+  // Walks a LineString and, for every segment that crosses one of the four
+  // viewport edges, emits an intersection record carrying:
+  //   coord     — the geographic position INSIDE the viewport (anchored
+  //               EDGE_PAD_PX away from the edge in geographic units)
+  //   edge      — 'left' | 'right' | 'top' | 'bottom'
+  //   rotation  — the line's LOCAL tangent at that crossing (radians CCW
+  //               from east in EPSG:3857 = the OL Text.rotation convention).
+  //               Hyperbolic LOPs have varying angle along the curve, so the
+  //               centroid angle baked into the GeoJSON is NOT accurate at
+  //               the edge; computing it from the bracketing segment here
+  //               makes the label exactly parallel to the line at that point.
+  function computeEdgeIntersects(lineCoords, map) {
+    const view = map.getView();
+    const extent = view.calculateExtent(map.getSize());
     const [minX, minY, maxX, maxY] = extent;
     const out = [];
 
-    for (let i = 0; i < lineCoords.length - 1; i++) {
-      const [x1, y1] = lineCoords[i];
-      const [x2, y2] = lineCoords[i + 1];
-      if (!Number.isFinite(x1) || !Number.isFinite(x2)) continue;
+    const resolution = view.getResolution();
+    const paddingGeo = CONFIG.EDGE_PAD_PX * resolution;
 
-      // Left edge (x = minX)
-      if ((x1 - minX) * (x2 - minX) < 0) {
-        const t = (minX - x1) / (x2 - x1);
-        const y = y1 + t * (y2 - y1);
+    for (let i = 0; i < lineCoords.length - 1; i++) {
+      const p1 = lineCoords[i];
+      const p2 = lineCoords[i + 1];
+      if (!Number.isFinite(p1[0]) || !Number.isFinite(p2[0])) continue;
+
+      // Local segment tangent in EPSG:3857 (CCW from east axis; same as
+      // lat/lon locally because Web Mercator is conformal with the same
+      // east/north orientation as WGS84).
+      const segDx = p2[0] - p1[0];
+      const segDy = p2[1] - p1[1];
+      let segAngle = Math.atan2(segDy, segDx);
+      // Readability flip: keep rotation in (-π/2, π/2] so the text is
+      // never upside-down. The label is still parallel to the line; the
+      // flip just changes the reading direction along it.
+      if (segAngle >  Math.PI / 2) segAngle -= Math.PI;
+      else if (segAngle <= -Math.PI / 2) segAngle += Math.PI;
+
+      // Left edge (x = minX, west). Push anchor east (into the viewport).
+      if ((p1[0] - minX) * (p2[0] - minX) < 0) {
+        const t = (minX - p1[0]) / (p2[0] - p1[0]);
+        const y = p1[1] + t * (p2[1] - p1[1]);
         if (y >= minY && y <= maxY) {
-          out.push({ coord: [minX, y], edge: "left" });
+          out.push({ coord: [minX + paddingGeo, y],
+                     edge: "left", rotation: segAngle });
         }
       }
-      // Right edge (x = maxX)
-      if ((x1 - maxX) * (x2 - maxX) < 0) {
-        const t = (maxX - x1) / (x2 - x1);
-        const y = y1 + t * (y2 - y1);
+      // Right edge (x = maxX, east). Push anchor west.
+      if ((p1[0] - maxX) * (p2[0] - maxX) < 0) {
+        const t = (maxX - p1[0]) / (p2[0] - p1[0]);
+        const y = p1[1] + t * (p2[1] - p1[1]);
         if (y >= minY && y <= maxY) {
-          out.push({ coord: [maxX, y], edge: "right" });
+          out.push({ coord: [maxX - paddingGeo, y],
+                     edge: "right", rotation: segAngle });
         }
       }
-      // Bottom edge (y = minY)
-      if ((y1 - minY) * (y2 - minY) < 0) {
-        const t = (minY - y1) / (y2 - y1);
-        const x = x1 + t * (x2 - x1);
+      // Bottom edge (y = minY, south). Push anchor north.
+      if ((p1[1] - minY) * (p2[1] - minY) < 0) {
+        const t = (minY - p1[1]) / (p2[1] - p1[1]);
+        const x = p1[0] + t * (p2[0] - p1[0]);
         if (x >= minX && x <= maxX) {
-          out.push({ coord: [x, minY], edge: "bottom" });
+          out.push({ coord: [x, minY + paddingGeo],
+                     edge: "bottom", rotation: segAngle });
         }
       }
-      // Top edge (y = maxY)
-      if ((y1 - maxY) * (y2 - maxY) < 0) {
-        const t = (maxY - y1) / (y2 - y1);
-        const x = x1 + t * (x2 - x1);
+      // Top edge (y = maxY, north). Push anchor south.
+      if ((p1[1] - maxY) * (p2[1] - maxY) < 0) {
+        const t = (maxY - p1[1]) / (p2[1] - p1[1]);
+        const x = p1[0] + t * (p2[0] - p1[0]);
         if (x >= minX && x <= maxX) {
-          out.push({ coord: [x, maxY], edge: "top" });
+          out.push({ coord: [x, maxY - paddingGeo],
+                     edge: "top", rotation: segAngle });
         }
       }
     }
     return out;
   }
 
-  // Per-edge padding offset for the text. Edges are named relative to the
-  // label's screen position — left/right edges push horizontally inward,
-  // top/bottom push vertically inward.
-  function edgePadding(edge) {
-    const p = CONFIG.EDGE_PAD_PX;
-    switch (edge) {
-      case "left":   return [ p, 0];   // push right (away from edge)
-      case "right":  return [-p, 0];   // push left
-      case "top":    return [0,  p];   // push down
-      case "bottom": return [0, -p];   // push up
-      default:       return [0, 0];
-    }
-  }
-
   function buildEdgeIntersectionLabels(lineSource, map) {
-    const extent = map.getView().calculateExtent(map.getSize());
     const labels = [];
     for (const lineFeature of lineSource.getFeatures()) {
       const td = lineFeature.get("td");
       if (Math.round(td) % CONFIG.LABEL_STEP_US !== 0) continue;
       const coords = lineFeature.getGeometry().getCoordinates();
       if (!coords || coords.length < 2) continue;
-      const intersections = computeEdgeIntersects(coords, extent);
+      const intersections = computeEdgeIntersects(coords, map);
       for (const intersection of intersections) {
         labels.push(new ol.Feature({
           geometry: new ol.geom.Point(intersection.coord),
-          pair: lineFeature.get("pair"),
-          td: td,
-          angle_rad: lineFeature.get("angle_rad") || 0,
-          edge: intersection.edge,
-          kind: "td-label",
+          pair:        lineFeature.get("pair"),
+          td:          td,
+          rotation:    intersection.rotation,
+          edge:        intersection.edge,
+          kind:        "td-label",
         }));
       }
     }
@@ -174,8 +185,8 @@
     const cfg = CONFIG.STYLES[props.pair] || { color: "#888" };
     return new ol.style.Style({
       stroke: new ol.style.Stroke({
-        color: cfg.color,
-        width: CONFIG.LINE_WIDTH,
+        color:   cfg.color,
+        width:   CONFIG.LINE_WIDTH,
         opacity: CONFIG.LINE_OPACITY,
         lineCap: "round",
         lineJoin: "round",
@@ -187,8 +198,7 @@
     const props = feature.getProperties();
     const cfg = CONFIG.STYLES[props.pair] || { color: "#888" };
     const td = Number(props.td || 0);
-    const rotation = readableRotation(Number(props.angle_rad || 0));
-    const [offX, offY] = edgePadding(props.edge);
+    const rotation = Number(props.rotation || 0);
     return new ol.style.Style({
       text: new ol.style.Text({
         text: String(Math.round(td)),
@@ -200,13 +210,11 @@
           lineCap: "round",
           lineJoin: "round",
         }),
-        overflow: false,
-        textAlign: "center",
+        overflow:     true,            // don't drop labels that graze the edge
+        textAlign:    "center",
         textBaseline: "middle",
         padding: [2, 3, 2, 3],
-        offsetX: offX,
-        offsetY: offY,
-        rotation: rotation,
+        rotation:     rotation,
       }),
     });
   }
@@ -329,7 +337,6 @@
         state.labelLayer = buildLabelLayer();
         map.addLayer(state.labelLayer);
       }
-      // First-time attach: bind the map, listen for viewport changes.
       if (!state.attachedMap) {
         state.attachedMap = map;
         map.on("moveend", refreshEdgeLabels);
