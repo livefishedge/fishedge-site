@@ -61,6 +61,7 @@
     labelLayer:  null,
     labelSource: null,
     attachedMap: null,
+    moveendKey:  null,
     fetchErr:    null,
   };
 
@@ -218,6 +219,7 @@
         textBaseline: "middle",
         padding: [2, 3, 2, 3],
         rotation:     rotation,
+        rotateWithView: true,
       }),
     });
   }
@@ -237,8 +239,8 @@
     return true;
   }
 
-  function getCombinedMap() {
-    return global._combinedMap || null;
+  function getActiveMap(mapOverride) {
+    return mapOverride || global._combinedMapRef || global._combinedMap || null;
   }
 
   // ── Load GeoJSON once and cache ─────────────────────────────────────
@@ -316,15 +318,34 @@
     state.labelSource.addFeatures(labels);
   }
 
+  function attachLayersToMap(map) {
+    if (!map) return false;
+    if (state.attachedMap === map) return true;
+
+    if (state.attachedMap) {
+      if (state.moveendKey && ol.Observable?.unByKey) {
+        ol.Observable.unByKey(state.moveendKey);
+      }
+      if (state.lineLayer) state.attachedMap.removeLayer(state.lineLayer);
+      if (state.labelLayer) state.attachedMap.removeLayer(state.labelLayer);
+    }
+
+    map.addLayer(state.lineLayer);
+    map.addLayer(state.labelLayer);
+    state.attachedMap = map;
+    state.moveendKey = map.on("moveend", refreshEdgeLabels);
+    return true;
+  }
+
   // ── Public API ──────────────────────────────────────────────────────
-  async function enable() {
+  async function enable(mapOverride) {
     if (!regionOk()) return false;
-    const map = getCombinedMap();
+    const map = getActiveMap(mapOverride);
     if (!map) {
-      console.warn("[loran-td] _combinedMap not present; deferring.");
+      console.warn("[loran-td] No active OpenLayers map present; deferring.");
       return false;
     }
-    if (state.enabled && state.lineLayer) {
+    if (state.enabled && state.lineLayer && state.attachedMap === map) {
       state.lineLayer.setVisible(true);
       if (state.labelLayer) state.labelLayer.setVisible(true);
       refreshEdgeLabels();
@@ -334,16 +355,11 @@
       const source = await loadGeoJSON();
       if (!state.lineLayer) {
         state.lineLayer = buildLineLayer(source);
-        map.addLayer(state.lineLayer);
       }
       if (!state.labelLayer) {
         state.labelLayer = buildLabelLayer();
-        map.addLayer(state.labelLayer);
       }
-      if (!state.attachedMap) {
-        state.attachedMap = map;
-        map.on("moveend", refreshEdgeLabels);
-      }
+      attachLayersToMap(map);
       refreshEdgeLabels();
       state.lineLayer.setVisible(true);
       state.labelLayer.setVisible(true);
@@ -360,14 +376,19 @@
     state.enabled = false;
   }
 
-  function toggle(visible) {
-    if (visible) enable();
+  function toggle(visible, mapOverride) {
+    if (visible) return enable(mapOverride);
     else disable();
+    return Promise.resolve(true);
   }
 
-  function isEnabled() {
+  function isEnabled(mapOverride) {
+    const map = getActiveMap(mapOverride);
     return Boolean(
-      state.enabled && state.lineLayer && state.lineLayer.getVisible()
+      state.enabled &&
+      state.lineLayer &&
+      state.lineLayer.getVisible() &&
+      (!map || state.attachedMap === map)
     );
   }
 

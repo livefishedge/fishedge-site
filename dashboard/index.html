@@ -38,7 +38,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-init.js?v=20260806c"></script>
   <script src="canyon-charts.js?v=20260815h-static-data"></script>
-  <script src="loran-td.js?v=20260817-13"></script>
+  <script src="loran-td.js?v=20260817-14"></script>
   <script src="https://cdn.jsdelivr.net/npm/posthog-js@1.200.0/dist/array.js"></script>
 
 
@@ -3433,7 +3433,7 @@ if (chkBathy) chkBathy.addEventListener("change", e => {
 // via the antenna icon in #captain-tools — not a checkbox in the layer
 // list per Mike's UI request (2026-08-17).
 const loranTdTool = document.getElementById("captain-loran-td-tool");
-if (loranTdTool) loranTdTool.addEventListener("click", () => {
+if (loranTdTool) loranTdTool.addEventListener("click", async () => {
   if (!window.LoranTdController) return;
   if (window.LoranTdController.isRegionSupported &&
       window.LoranTdController.isRegionSupported() === false) {
@@ -3441,8 +3441,10 @@ if (loranTdTool) loranTdTool.addEventListener("click", () => {
     loranTdTool.setAttribute("title", "Loran-C TD Grid (GRI 9960) — not generated for this region");
     return;
   }
-  const turningOn = !window.LoranTdController.isEnabled();
-  window.LoranTdController.toggle(turningOn);
+  const map = activeCaptainToolMap();
+  const turningOn = !window.LoranTdController.isEnabled(map);
+  const ok = await window.LoranTdController.toggle(turningOn, map);
+  if (!ok) return;
   if (turningOn) {
     loranTdTool.classList.add("active");
     loranTdTool.setAttribute("aria-pressed", "true");
