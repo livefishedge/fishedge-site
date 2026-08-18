@@ -1581,7 +1581,7 @@ const CTO_THERMAL_BUILD = "2026-06-16T11-33Z-v10-zoomfix-v2"; // bumps on each p
 // a thorough check. Eg, the CHL layer shows inconsistent data from
 // the dropdown label; the currents layer shows stable data or time
 // stamp." Bumps on every push that touches combined mode.
-const CTO_COMBINED_BUILD = "dashboard-v2-2026-06-14T13:36";
+const CTO_COMBINED_BUILD = "dashboard-v2-2026-08-17T23:49-stale-frame-fallback";
 // v4.2: CHL chip multi-select (captain's dashboard). Refactored the
 // composite renderer so chip selection and the hours-window dropdown
 // share one code path; added a UV hours select + rebuild-on-reload so
@@ -9970,12 +9970,12 @@ async function loadGridForVar(v, dataObj = null) {
 
 async function fetchFrameData(varKey, frameMeta) {
   const candidates = [frameMeta];
-  // The rolling R2 publisher can leave a stale UV manifest entry after an
-  // old object is purged. If the selected frame is 404, walk newest-first
-  // to the first object that still exists instead of failing the map.
-  if (varKey === "uv") {
-    for (const candidate of [...(framesByVar.uv || [])].sort((a, b) =>
-      (epochMsForFrame("uv", b) || 0) - (epochMsForFrame("uv", a) || 0))) {
+  // The rolling R2 publisher can leave a stale manifest entry after an old
+  // object is purged. If the selected frame is 404, walk newest-first to the
+  // first object that still exists instead of failing the map.
+  if (Array.isArray(framesByVar[varKey])) {
+    for (const candidate of [...framesByVar[varKey]].sort((a, b) =>
+      (epochMsForFrame(varKey, b) || 0) - (epochMsForFrame(varKey, a) || 0))) {
       if (!candidates.includes(candidate)) candidates.push(candidate);
     }
   }
