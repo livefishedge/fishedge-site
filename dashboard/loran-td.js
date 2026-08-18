@@ -182,6 +182,13 @@
           else if (rotation <= -Math.PI / 2) rotation += Math.PI;
         }
 
+        // DEBUG: log label rotation for every label placed
+        console.log(
+          `[loran-td:label] pair=${pair} TD=${Math.round(td)} edge=${intersection.edge} ` +
+          `segAngle=${(intersection.rotation * 180 / Math.PI).toFixed(1)}° → ` +
+          `labelAngle=${(rotation * 180 / Math.PI).toFixed(1)}°`
+        );
+
         labels.push(new ol.Feature({
           geometry: new ol.geom.Point(intersection.coord),
           pair:        pair,
@@ -191,6 +198,13 @@
           kind:        "td-label",
         }));
       }
+    }
+    if (labels.length === 0) {
+      console.warn(
+        `[loran-td] No labels placed. ` +
+        `lineSource has ${lineSource.getFeatures().length} features. ` +
+        `Viewport: ${map.getView().calculateExtent(map.getSize()).join(", ")}`
+      );
     }
     return labels;
   }
