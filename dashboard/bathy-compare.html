@@ -16,10 +16,12 @@
     #readout .src{display:inline-block;min-width:74px;margin-right:4px;color:#19c9d4}
     #readout .v{color:#fff;font-weight:700}
     #readout .na{color:#5d7180}
+    #dataset-label{position:fixed;z-index:4;top:14px;left:50%;transform:translateX(-50%);max-width:calc(100vw - 150px);padding:8px 14px;border:1px solid #5c8794;border-radius:8px;background:rgba(5,14,22,.9);color:#e8f1f7;box-shadow:0 4px 16px #0008;backdrop-filter:blur(8px);font-size:13px;font-weight:800;text-align:center;pointer-events:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   </style>
 </head>
 <body>
 <div id="map"></div>
+<div id="dataset-label" aria-live="polite">DEM Global Mosaic · 1 arc-sec</div>
 <button id="panel-toggle" class="panel-toggle" type="button" aria-expanded="false">Layers</button>
 <aside id="panel">
   <h1>Baltimore Canyon · bathymetry comparison</h1>
@@ -91,8 +93,8 @@
   // Reference palette (matches .legend CSS gradient): linear interp between these stops
   // over the depth range -4500m → 0m. We inverse-decode a tile pixel back to depth.
   const palette = [
-    [0x03,0x01,0x07,-4500],[0x16,0x0a,0x46,-3600],[0x31,0x20,0x9a,-2700],
-    [0x15,0x5e,0xd0,-1800],[0x08,0xa7,0xd3,-900],[0x18,0xd0,0xcb,0]
+    [0x03,0x01,0x07,-2500],[0x16,0x0a,0x46,-2000],[0x31,0x20,0x9a,-1500],
+    [0x15,0x5e,0xd0,-1000],[0x08,0xa7,0xd3,-500],[0x18,0xd0,0xcb,0]
   ];
   function colorToDepth(r,g,b){
     let bI=0,bD=1e9,sI=0,sD=1e9;
@@ -117,7 +119,7 @@
     const url = urls[0]
       .replace('{z}', tc[0])
       .replace('{x}', tc[1])
-      .replace('{y}', (1<<tc[0]) - 1 - tc[2]); // TMS y -> XYZ y
+      .replace('{y}', -tc[2] - 1); // OpenLayers internal y -> XYZ y
     return new Promise((resolve) => {
       const img = new Image();
       img.crossOrigin = 'anonymous';
@@ -160,7 +162,15 @@
                  : '<span class="src">' + n + '</span><span class="v">' + (d>=0?'+':'') + d.toFixed(0) + ' m</span>'
     ).join('\n');
   });
-  function update(){const active=Object.entries(layers).filter(([,l])=>l.getVisible()).map(([n])=>n); status.textContent=(active.length?active.join(' + ')+' · zoom '+map.getView().getZoom().toFixed(1):'No source selected')+' · same palette / same renderer';}
+  const titles = {
+    dem: 'NCEI DEM Global Mosaic · 1 arc-sec',
+    bag: 'NOS BAG Mosaic · survey-dependent 1 arc-sec',
+    average: 'DEM + BAG average',
+    multibeam: 'NCEI Multibeam Mosaic Combined · 3 arc-sec',
+    realness: 'Realness score overlay'
+  };
+  const datasetLabel = document.getElementById('dataset-label');
+  function update(){const active=Object.entries(layers).filter(([,l])=>l.getVisible()).map(([n])=>n); datasetLabel.textContent=active.length?active.map(n=>titles[n]||n).join('  |  '):'No dataset selected'; status.textContent=(active.length?active.join(' + ')+' · zoom '+map.getView().getZoom().toFixed(1):'No source selected')+' · same palette / same renderer';}
   document.querySelectorAll('[data-layer]').forEach(cb=>cb.addEventListener('change',()=>{layers[cb.dataset.layer].setVisible(cb.checked);update();}));
   map.getView().on('change:resolution',update); update();
 })();
