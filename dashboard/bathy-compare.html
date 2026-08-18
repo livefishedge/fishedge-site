@@ -11,6 +11,11 @@
     #panel{position:fixed;z-index:5;top:12px;left:12px;width:min(330px,calc(100vw - 24px));padding:14px 16px;border:1px solid #395263;border-radius:10px;background:rgba(5,14,22,.92);color:#e8f1f7;box-shadow:0 5px 24px #0008;backdrop-filter:blur(8px);transition:transform .2s ease,opacity .2s ease}.panel-toggle{position:fixed;z-index:6;top:12px;left:12px;border:1px solid #496879;border-radius:8px;background:rgba(5,14,22,.9);color:#e8f1f7;padding:9px 11px;font-weight:800;cursor:pointer;box-shadow:0 4px 16px #0008}.panel-toggle[aria-expanded="true"]{display:none}#panel.is-hidden{transform:translateX(calc(-100% - 24px));opacity:0;pointer-events:none}
     h1{font-size:16px;margin:0 0 4px} p{font-size:11px;color:#a9beca;line-height:1.35;margin:5px 0 12px}.group{border-top:1px solid #29404d;padding-top:9px;margin-top:9px}.row{display:flex;align-items:center;gap:8px;margin:8px 0;font-size:13px;font-weight:650}.row input{width:16px;height:16px;accent-color:#19c9d4}.swatch{width:12px;height:12px;border-radius:50%;background:linear-gradient(135deg,#030107,#1b0d55,#3325a2,#155ed0,#08a7d3,#18d0cb);flex:none}.meta{font-size:10px;color:#8fa7b5;margin-left:32px;margin-top:-5px}.legend{height:11px;border-radius:4px;margin-top:7px;background:linear-gradient(90deg,#030107,#160a46,#31209a,#155ed0,#08a7d3,#18d0cb)}.legend-labels{display:flex;justify-content:space-between;color:#9cb1ba;font-size:9px;margin-top:2px}.badge{display:inline-block;padding:2px 5px;border-radius:4px;background:#153546;color:#9eeef0;font-size:10px;font-weight:800}#status{color:#8fdde0;font-size:10px;margin-top:10px}
     .legend-viridis{height:11px;border-radius:4px;margin-top:7px;background:linear-gradient(90deg,#440154,#3b528b,#21918c,#5ec962,#fde725)}
+    #readout{position:fixed;z-index:5;bottom:12px;right:12px;max-width:min(440px,calc(100vw - 24px));padding:9px 13px;border:1px solid #395263;border-radius:8px;background:rgba(5,14,22,.92);color:#e8f1f7;font:11px/1.45 ui-monospace,Menlo,Consolas,monospace;box-shadow:0 4px 16px #0008;backdrop-filter:blur(8px);pointer-events:none;white-space:pre-wrap}
+    #readout .coord{color:#fff;font-weight:700}
+    #readout .src{display:inline-block;min-width:74px;margin-right:4px;color:#19c9d4}
+    #readout .v{color:#fff;font-weight:700}
+    #readout .na{color:#5d7180}
   </style>
 </head>
 <body>
@@ -38,6 +43,7 @@
   <div class="group"><span class="badge">REFERENCE PALETTE</span><div class="legend"></div><div class="legend-labels"><span>−4500 m</span><span>deep</span><span>shallow</span><span>0 m</span></div></div>
   <div id="status">Zoom in to inspect survey texture.</div>
 </aside>
+<div id="readout"><span class="coord" id="r-coord">—</span><span id="r-depths"></span></div>
 <script>
 (() => {
   const root = 'https://data.fishedge.live/dev/bathy/v1/usec_md/';
@@ -81,6 +87,79 @@
   panelToggle.addEventListener('click',()=>{panel.classList.remove('is-hidden');panelToggle.setAttribute('aria-expanded','true');});
   const close=document.createElement('button'); close.type='button'; close.textContent='Hide'; close.style.cssText='float:right;border:1px solid #496879;border-radius:6px;background:#102734;color:#d7eef2;padding:4px 8px;font-weight:800;cursor:pointer';
   close.addEventListener('click',()=>{panel.classList.add('is-hidden');panelToggle.setAttribute('aria-expanded','false');}); panel.prepend(close);
+  // ---------- Cursor depth readout ----------
+  // Reference palette (matches .legend CSS gradient): linear interp between these stops
+  // over the depth range -4500m → 0m. We inverse-decode a tile pixel back to depth.
+  const palette = [
+    [0x03,0x01,0x07,-4500],[0x16,0x0a,0x46,-3600],[0x31,0x20,0x9a,-2700],
+    [0x15,0x5e,0xd0,-1800],[0x08,0xa7,0xd3,-900],[0x18,0xd0,0xcb,0]
+  ];
+  function colorToDepth(r,g,b){
+    let bI=0,bD=1e9,sI=0,sD=1e9;
+    for(let i=0;i<palette.length;i++){
+      const d=(palette[i][0]-r)*(palette[i][0]-r)+(palette[i][1]-g)*(palette[i][1]-g)+(palette[i][2]-b)*(palette[i][2]-b);
+      if(d<bD){sD=bD;sI=bI;bD=d;bI=i;} else if(d<sD){sD=d;sI=i;}
+    }
+    if(bD<36) return palette[bI][3]; // tight match: snap
+    // Inverse-distance interpolation between two closest stops (smooth reading between quanta)
+    const w0=Math.sqrt(sD),w1=Math.sqrt(bD);
+    return (palette[bI][3]*w0+palette[sI][3]*w1)/(w0+w1);
+  }
+  function tileDepth(layer, coord){
+    const source = layer.getSource();
+    const urls = source.getUrls ? source.getUrls() : null;
+    if(!urls || !urls.length) return Promise.resolve(null);
+    const view = map.getView();
+    const z = Math.max(5, Math.min(13, Math.round(view.getZoom())));
+    const tg = source.getTileGrid();
+    const tc = tg.getTileCoordForCoordAndZ(coord, z);
+    if(!tc) return Promise.resolve(null);
+    const url = urls[0]
+      .replace('{z}', tc[0])
+      .replace('{x}', tc[1])
+      .replace('{y}', (1<<tc[0]) - 1 - tc[2]); // TMS y -> XYZ y
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      const t = setTimeout(()=>resolve(null), 1500); // per-tile timeout
+      img.onload = () => {
+        try {
+          const c = document.createElement('canvas');
+          c.width = img.naturalWidth || 256; c.height = img.naturalHeight || 256;
+          const ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0);
+          const ext = tg.getTileCoordExtent(tc);
+          const xr = (coord[0] - ext[0]) / (ext[2] - ext[0]);
+          const yr = 1 - (coord[1] - ext[1]) / (ext[3] - ext[1]);
+          const px = Math.max(0, Math.min(c.width-1,  Math.floor(xr * c.width)));
+          const py = Math.max(0, Math.min(c.height-1, Math.floor(yr * c.height)));
+          const d = ctx.getImageData(px, py, 1, 1).data;
+          clearTimeout(t);
+          // Treat near-black as no-data (deep void fill)
+          if(d[0]<6 && d[1]<6 && d[2]<8) return resolve(null);
+          resolve(colorToDepth(d[0], d[1], d[2]));
+        } catch(e){ clearTimeout(t); resolve(null); }
+      };
+      img.onerror = () => { clearTimeout(t); resolve(null); };
+      img.src = url;
+    });
+  }
+  const rCoord = document.getElementById('r-coord');
+  const rDepths = document.getElementById('r-depths');
+  let reqId = 0;
+  map.on('pointermove', async (evt) => {
+    if(evt.dragging) return;
+    const ll = ol.proj.toLonLat(evt.coordinate);
+    rCoord.textContent = ll[1].toFixed(4) + '°N  ' + Math.abs(ll[0]).toFixed(4) + '°W';
+    const myReq = ++reqId;
+    const active = ['dem','bag','average','multibeam'].filter(n => layers[n] && layers[n].getVisible());
+    if(!active.length){ rDepths.innerHTML = ''; return; }
+    const results = await Promise.all(active.map(async n => [n, await tileDepth(layers[n], evt.coordinate)]));
+    if(myReq !== reqId) return; // stale
+    rDepths.innerHTML = '\n' + results.map(([n,d]) =>
+      d === null ? '<span class="src">' + n + '</span><span class="na">no data</span>'
+                 : '<span class="src">' + n + '</span><span class="v">' + (d>=0?'+':'') + d.toFixed(0) + ' m</span>'
+    ).join('\n');
+  });
   function update(){const active=Object.entries(layers).filter(([,l])=>l.getVisible()).map(([n])=>n); status.textContent=(active.length?active.join(' + ')+' · zoom '+map.getView().getZoom().toFixed(1):'No source selected')+' · same palette / same renderer';}
   document.querySelectorAll('[data-layer]').forEach(cb=>cb.addEventListener('change',()=>{layers[cb.dataset.layer].setVisible(cb.checked);update();}));
   map.getView().on('change:resolution',update); update();
