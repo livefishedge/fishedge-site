@@ -110,12 +110,13 @@
       // east/north orientation as WGS84).
       const segDx = p2[0] - p1[0];
       const segDy = p2[1] - p1[1];
-      let segAngle = Math.atan2(segDy, segDx);
-      // Readability flip: keep rotation in (-π/2, π/2] so the text is
-      // never upside-down. The label is still parallel to the line; the
-      // flip just changes the reading direction along it.
-      if (segAngle >  Math.PI / 2) segAngle -= Math.PI;
-      else if (segAngle <= -Math.PI / 2) segAngle += Math.PI;
+      // NO readability flip — text follows the line's actual direction.
+      // For our X lines (~78° NNE branch or ~-102° SSW branch) and Y
+      // lines (~0° horizontal), every rotation lands in (-π, π] and stays
+      // right-side-up readable (top of letters within ~80° of north).
+      // The prior flip made both X branches read NNE which "reversed"
+      // the SSW branch's reading direction — Mike's feedback.
+      const segAngle = Math.atan2(segDy, segDx);
 
       // Left edge (x = minX, west). Push anchor east (into the viewport).
       if ((p1[0] - minX) * (p2[0] - minX) < 0) {
