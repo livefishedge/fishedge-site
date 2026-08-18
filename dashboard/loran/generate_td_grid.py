@@ -43,6 +43,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 import time
 from typing import Sequence, Tuple
@@ -228,18 +229,46 @@ def _snap_levels(lo: float, hi: float, step: float) -> np.ndarray:
     return np.arange(n_lo * step, (n_hi + 1) * step, step)
 
 
+def _angle_at_centroid(coords: Sequence[Tuple[float, float]]) -> float:
+    """Tangent angle (radians, CCW from east) of the line at its centroid.
+
+    The dashboard's label layer uses this as `ol.style.Text.rotation` so the
+    numeric TD label sits parallel to the isoline. atan2(dlat, dlon) matches
+    OL's Text rotation convention for text aligned with a line in WGS84 /
+    Web Mercator (both are 'east-right, north-up' coordinate systems).
+    """
+    n = len(coords)
+    if n < 2:
+        return 0.0
+    cx = sum(c[0] for c in coords) / n
+    cy = sum(c[1] for c in coords) / n
+    # Find the closest vertex to the centroid
+    dists = [(c[0] - cx) ** 2 + (c[1] - cy) ** 2 for c in coords]
+    i = min(range(n), key=lambda j: dists[j])
+    # Use a small segment around the closest vertex for the tangent direction.
+    if i == 0:
+        a, b = coords[0], coords[1]
+    elif i == n - 1:
+        a, b = coords[-2], coords[-1]
+    else:
+        a, b = coords[i], coords[i + 1]
+    dlat = b[1] - a[1]
+    dlon = b[0] - a[0]
+    return math.atan2(dlat, dlon)
+
+
 def _extract_isolines(lon_mesh: np.ndarray,
                       lat_mesh: np.ndarray,
                       grid: np.ndarray,
                       levels: Sequence[float],
                       pair_name: str,
-                      line_type: str,
                       features: list) -> int:
-    """Run plt.contour at given levels, append LineString features. Returns count.
+    """Run plt.contour at given levels and append LineString features.
 
     Uses QuadContourSet.allsegs (the modern API; cs.collections was removed
-    in matplotlib 3.8+). allsegs is a list[list[np.ndarray]] indexed first by
-    level, then by segment within that level.
+    in matplotlib 3.8+). Each feature carries the TD value plus an
+    `angle_rad` property (tangent at the line centroid, radians CCW from
+    east) that the dashboard label layer reads for parallel-to-line rotation.
     """
     fig, ax = plt.subplots()
     try:
@@ -248,6 +277,7 @@ def _extract_isolines(lon_mesh: np.ndarray,
             for verts in segments:
                 if len(verts) < 2:
                     continue
+                angle = _angle_at_centroid(verts)
                 features.append({
                     "type": "Feature",
                     "geometry": {
@@ -257,7 +287,8 @@ def _extract_isolines(lon_mesh: np.ndarray,
                     "properties": {
                         "pair": pair_name,
                         "td": round(float(level), 2),
-                        "type": line_type,
+                        "type": "major",  # single step now (no minor)
+                        "angle_rad": round(angle, 6),
                     },
                 })
     finally:
@@ -270,15 +301,20 @@ def generate(bounds: Tuple[float, float, float, float],
              output_path: str,
              asf_x: float = 0.0,
              asf_y: float = 0.0,
-             x_step_major: float = 10.0,
-             x_step_minor: float = 5.0,
-             y_step_major: float = 10.0,
-             y_step_minor: float = 5.0,
+             step: float = 10.0,
              margin_us: float = 20.0,
              n_bounds_samples: int = 21) -> int:
-    """Build TD grid, extract isolines, write GeoJSON. Returns feature count."""
+    """Build TD grid, extract isolines at the configured step, write GeoJSON.
+
+    Single step (default 10 µs) per Mike's spec — all lines render as one
+    uniform weight on the dashboard. Each LineString feature carries the
+    `angle_rad` of its tangent at the centroid for parallel-to-line label
+    rotation.
+
+    Returns the total feature count written.
+    """
     t_start = time.time()
-    print(f"[td_grid] bounds={bounds} resolution={resolution}")
+    print(f"[td_grid] bounds={bounds} resolution={resolution} step={step} µs")
 
     # 1. Auto TD bounds from corner sampling (fixes upstream clipping bug)
     x_lo, x_hi, y_lo, y_hi = auto_compute_td_bounds(
@@ -307,29 +343,19 @@ def generate(bounds: Tuple[float, float, float, float],
           f"{time.time() - t_v:.2f}s "
           f"({resolution}×{resolution} × 2 Vincenty ops, vectorized)")
 
-    # 4. Snap level sets to step boundaries
-    levels_x_major = _snap_levels(x_lo, x_hi, x_step_major)
-    levels_x_minor = _snap_levels(x_lo, x_hi, x_step_minor)
-    levels_y_major = _snap_levels(y_lo, y_hi, y_step_major)
-    levels_y_minor = _snap_levels(y_lo, y_hi, y_step_minor)
-    print(f"[td_grid] 9960-X: {len(levels_x_major)} major / "
-          f"{len(levels_x_minor)} minor levels "
-          f"(steps {x_step_major} / {x_step_minor} µs)")
-    print(f"[td_grid] 9960-Y: {len(levels_y_major)} major / "
-          f"{len(levels_y_minor)} minor levels "
-          f"(steps {y_step_major} / {y_step_minor} µs)")
+    # 4. Snap level sets to step boundary
+    levels_x = _snap_levels(x_lo, x_hi, step)
+    levels_y = _snap_levels(y_lo, y_hi, step)
+    print(f"[td_grid] 9960-X: {len(levels_x)} levels @ {step} µs step")
+    print(f"[td_grid] 9960-Y: {len(levels_y)} levels @ {step} µs step")
 
-    # 5. Extract isolines
+    # 5. Extract isolines (single step, all thin — no major/minor split)
     features: list = []
     t_e = time.time()
-    _extract_isolines(lon_mesh, lat_mesh, grid_x, levels_x_major,
-                      "9960-X", "major", features)
-    _extract_isolines(lon_mesh, lat_mesh, grid_x, levels_x_minor,
-                      "9960-X", "minor", features)
-    _extract_isolines(lon_mesh, lat_mesh, grid_y, levels_y_major,
-                      "9960-Y", "major", features)
-    _extract_isolines(lon_mesh, lat_mesh, grid_y, levels_y_minor,
-                      "9960-Y", "minor", features)
+    _extract_isolines(lon_mesh, lat_mesh, grid_x, levels_x,
+                      "9960-X", features)
+    _extract_isolines(lon_mesh, lat_mesh, grid_y, levels_y,
+                      "9960-Y", features)
     print(f"[td_grid] Extracted {len(features)} isolines in "
           f"{time.time() - t_e:.2f}s")
 
@@ -341,6 +367,7 @@ def generate(bounds: Tuple[float, float, float, float],
             "gri": 9960,
             "region_bbox": list(bounds),
             "resolution": resolution,
+            "step_us": step,
             "asf_x_us": asf_x,
             "asf_y_us": asf_y,
             "td_ranges_us": {
@@ -354,10 +381,10 @@ def generate(bounds: Tuple[float, float, float, float],
         json.dump(geojson, f, separators=(",", ":"))
 
     elapsed = time.time() - t_start
-    major_count = sum(1 for f in features if f["properties"]["type"] == "major")
-    minor_count = sum(1 for f in features if f["properties"]["type"] == "minor")
+    xs = sum(1 for f in features if f["properties"]["pair"] == "9960-X")
+    ys = sum(1 for f in features if f["properties"]["pair"] == "9960-Y")
     print(f"[td_grid] Wrote {len(features)} features "
-          f"({major_count} major + {minor_count} minor) → {output_path} "
+          f"({xs} X + {ys} Y) → {output_path} "
           f"({elapsed:.1f}s total)")
     return len(features)
 
@@ -381,14 +408,9 @@ def parse_args() -> argparse.Namespace:
                    help="ASF offset for 9960-X in µs (regional correction)")
     p.add_argument("--asf-y", type=float, default=0.0,
                    help="ASF offset for 9960-Y in µs (regional correction)")
-    p.add_argument("--x-major", type=float, default=10.0,
-                   help="9960-X major step (µs, default 10)")
-    p.add_argument("--x-minor", type=float, default=5.0,
-                   help="9960-X minor step (µs, default 5)")
-    p.add_argument("--y-major", type=float, default=10.0,
-                   help="9960-Y major step (µs, default 10)")
-    p.add_argument("--y-minor", type=float, default=5.0,
-                   help="9960-Y minor step (µs, default 5)")
+    p.add_argument("--step", type=float, default=10.0,
+                   help="TD step in µs for both pairs (default: 10). "
+                        "All isolines render at this single interval.")
     p.add_argument("--margin", type=float, default=20.0,
                    help="TD bounds margin in µs past sampled extremes "
                         "(default 20)")
@@ -426,10 +448,7 @@ def main() -> int:
             output_path=args.output,
             asf_x=args.asf_x,
             asf_y=args.asf_y,
-            x_step_major=args.x_major,
-            x_step_minor=args.x_minor,
-            y_step_major=args.y_major,
-            y_step_minor=args.y_minor,
+            step=args.step,
             margin_us=args.margin,
             n_bounds_samples=args.n_bounds_samples,
         )

@@ -8,11 +8,11 @@
  * generate_td_grid.py currently produces a grid for).
  *
  * Two stacked layers:
- *   1. Line layer (zIndex 8): every isoline, major + minor.
- *   2. Label layer (zIndex 9): one Point per MAJOR line (every 10 µs step),
- *      placed at the line centroid, showing the TD value in µs. Hidden
- *      until the map zoom exceeds LABEL_MIN_ZOOM so the labels don't
- *      pile up at world-view zooms where the lines are <1 px apart.
+ *   1. Line layer (zIndex 8): all isolines, single 10 µs step, thin stroke.
+ *   2. Label layer (zIndex 9): one Point per line at the line's centroid,
+ *      showing the TD value in µs. Each label is rotated parallel to its
+ *      line (via the `angle_rad` property baked into each feature by the
+ *      generator). Hidden until map zoom exceeds LABEL_MIN_ZOOM.
  *
  * Single global: window.LoranTdController
  *
@@ -24,12 +24,12 @@
  *   LoranTdController.isEnabled()    — boolean.
  *   LoranTdController.isRegionSupported() — true if REGION_ID === "usec_md".
  *
- * Color conventions match the standalone viewer the user started from:
+ * Color conventions:
  *   9960-X (Nantucket):  #d9534f  (red)
  *   9960-Y (Cape Fear):  #0275d8  (blue)
- *   Major lines:         2.0 px, opacity 0.85   (every 10 µs step)
- *   Minor lines:         0.8 px, opacity 0.55   (every 5  µs step)
- *   Labels:              bold 11px monospace, line-color fill, dark halo
+ *   All lines:           0.8 px, opacity 0.65 (single weight per Mike spec)
+ *   Labels:              bold 11px monospace, line-color fill, dark halo,
+ *                        rotated parallel to the line direction.
  *
  * Branch: feat/loran-td-grid-usec-md
  */
@@ -48,20 +48,18 @@
       "9960-X": { color: "#d9534f" },
       "9960-Y": { color: "#0275d8" },
     },
-    MAJOR_WIDTH: 2.0,
-    MAJOR_OPACITY: 0.85,
-    MINOR_WIDTH: 0.8,
-    MINOR_OPACITY: 0.55,
+    LINE_WIDTH: 0.8,             // single uniform weight (Mike: "all thin")
+    LINE_OPACITY: 0.65,
   };
 
   // ── State ───────────────────────────────────────────────────────────
   const state = {
     enabled: false,
     loaded: false,
-    loading: null,        // Promise in flight (deduplicates concurrent enables)
-    lineLayer: null,      // ol.layer.Vector — isolines
-    lineSource: null,     // ol.source.Vector
-    labelLayer: null,     // ol.layer.Vector — TD value labels
+    loading: null,
+    lineLayer: null,
+    lineSource: null,
+    labelLayer: null,
     labelSource: null,
     fetchErr: null,
   };
@@ -80,13 +78,19 @@
     return [sx / n, sy / n];
   }
 
-  // Walk the loaded line features and emit one Point feature per major
-  // (10 µs step) line, carrying the TD value as a property so the label
-  // style can render it.
+  // The generator bakes `angle_rad` into each LineString feature (tangent at
+  // the centroid, radians CCW from east). For lines that go "downward"
+  // (|angle_rad| > π/2), flipping by π keeps the text right-side-up while
+  // still parallel to the line.
+  function readableRotation(angleRad) {
+    if (angleRad > Math.PI / 2) return angleRad - Math.PI;
+    if (angleRad < -Math.PI / 2) return angleRad + Math.PI;
+    return angleRad;
+  }
+
   function buildLabelFeatures(lineFeatures) {
     const labels = [];
     for (const f of lineFeatures) {
-      if (f.get("type") !== "major") continue;
       const coords = f.getGeometry().getCoordinates();
       if (!coords || coords.length < 2) continue;
       const pt = centroidOf(coords);
@@ -95,6 +99,7 @@
         geometry: new ol.geom.Point(pt),
         pair: f.get("pair"),
         td: f.get("td"),
+        angle_rad: f.get("angle_rad") || 0,
         kind: "td-label",
       }));
     }
@@ -105,26 +110,24 @@
   function lineStyleFor(feature) {
     const props = feature.getProperties();
     const cfg = CONFIG.STYLES[props.pair] || { color: "#888" };
-    const isMajor = props.type === "major";
     return new ol.style.Style({
       stroke: new ol.style.Stroke({
         color: cfg.color,
-        width: isMajor ? CONFIG.MAJOR_WIDTH : CONFIG.MINOR_WIDTH,
-        opacity: isMajor ? CONFIG.MAJOR_OPACITY : CONFIG.MINOR_OPACITY,
+        width: CONFIG.LINE_WIDTH,
+        opacity: CONFIG.LINE_OPACITY,
         lineCap: "round",
         lineJoin: "round",
       }),
     });
   }
 
-  // Style function for the label layer. Receives (feature, resolution).
-  // Returns null when zoom is at/below LABEL_MIN_ZOOM → labels disappear.
   function labelStyleFor(feature, resolution) {
     const zoom = resolutionToZoom(resolution);
     if (zoom <= CONFIG.LABEL_MIN_ZOOM) return null;
     const props = feature.getProperties();
     const cfg = CONFIG.STYLES[props.pair] || { color: "#888" };
     const td = Number(props.td || 0);
+    const rotation = readableRotation(Number(props.angle_rad || 0));
     return new ol.style.Style({
       text: new ol.style.Text({
         text: String(Math.round(td)),
@@ -141,6 +144,7 @@
         textBaseline: "middle",
         padding: [1, 2, 1, 2],
         offsetY: 0,
+        rotation: rotation,
       }),
     });
   }
@@ -206,7 +210,6 @@
       updateWhileAnimating: false,
       updateWhileInteracting: false,
     });
-    // Per-feature cursor hint on hover.
     layer.on("pointermove", (evt) => {
       if (evt.dragging) return;
       const hit = layer.getFeatures(evt.pixel);
@@ -225,7 +228,7 @@
       source,
       style: labelStyleFor,
       zIndex: CONFIG.LABEL_Z_INDEX,
-      declutter: true,             // OL resolves overlapping labels
+      declutter: true,
       updateWhileAnimating: false,
       updateWhileInteracting: false,
     });
@@ -259,7 +262,6 @@
       state.enabled = true;
       return true;
     } catch (err) {
-      // loadGeoJSON already logged; just surface the failure to the toggle.
       return false;
     }
   }

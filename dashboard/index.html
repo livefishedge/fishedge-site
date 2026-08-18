@@ -38,7 +38,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-init.js?v=20260806c"></script>
   <script src="canyon-charts.js?v=20260815h-static-data"></script>
-  <script src="loran-td.js?v=20260817-2"></script>
+  <script src="loran-td.js?v=20260817-3"></script>
   <script src="https://cdn.jsdelivr.net/npm/posthog-js@1.200.0/dist/array.js"></script>
 
 
@@ -898,7 +898,6 @@
     .dot-chl{ background:#1d8aff; }
     .dot-uv{ background:#00c8ff; }
     .dot-bathy{ background:#b25cff; }
-    .dot-loran-td{ background:#c4a8ff; }
     .dot-front{ background:#ff4040; }
     .dot-sst{ background:#ff8c00; }
     .combined-inline-legend{
@@ -1345,6 +1344,17 @@
         <line x1="16" y1="11" x2="20" y2="11" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
       </svg>
     </button>
+    <button id="captain-loran-td-tool" class="captain-tool-btn" title="Loran-C TD Grid (GRI 9960)" aria-label="Loran-C TD Grid (GRI 9960)" aria-pressed="false">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <line x1="6" y1="17" x2="14" y2="17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+        <line x1="10" y1="17" x2="10" y2="7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+        <circle cx="10" cy="5.5" r="1.6" fill="currentColor"/>
+        <path d="M6.5 8 Q4.5 10.5 6.5 13" stroke="currentColor" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+        <path d="M13.5 8 Q15.5 10.5 13.5 13" stroke="currentColor" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+        <path d="M4 6 Q0 10.5 4 15" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linecap="round" opacity="0.65"/>
+        <path d="M16 6 Q20 10.5 16 15" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linecap="round" opacity="0.65"/>
+      </svg>
+    </button>
   </div>
   <div id="captain-pts-panel" style="display:none;position:fixed;top:80px;left:8px;z-index:1150;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;width:280px;max-height:320px;overflow-y:auto;font-size:12px;color:var(--fg);">
     <div id="captain-pts-drag-handle" style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;">
@@ -1478,19 +1488,6 @@
         <button id="combined-bathy-unit-toggle" class="combined-unit-button" type="button">fathom</button>
       </div>
       <div id="combined-bathy-legend" class="combined-inline-legend"></div>
-      <div class="combined-product-row">
-        <label class="combined-toggle">
-          <input type="checkbox" id="chk-combined-loran-td">
-          <span class="box"></span>
-          <span class="combined-dot dot-loran-td"></span>
-          <span>Loran-C TD Grid (GRI 9960)</span>
-        </label>
-      </div>
-      <div id="combined-loran-td-legend" class="combined-inline-legend" style="font-size:11px;color:#9fb0c3;margin:2px 0 8px 28px;">
-        <span style="display:inline-block;width:14px;height:2px;background:#d9534f;vertical-align:middle;margin-right:4px;"></span>9960-X (Nantucket)
-        &nbsp;&nbsp;
-        <span style="display:inline-block;width:14px;height:2px;background:#0275d8;vertical-align:middle;margin-right:4px;"></span>9960-Y (Cape Fear)
-      </div>
     </div>
     <div id="combined-account-link" style="margin-top:auto;padding-top:12px;border-top:1px solid var(--border);text-align:center;">
       <a href="account.html" style="text-decoration:none;">MY ACCOUNT</a>
@@ -3433,16 +3430,27 @@ if (chkBathy) chkBathy.addEventListener("change", e => {
   const legend = document.getElementById("combined-bathy-legend");
   if (legend) legend.style.display = e.target.checked ? "" : "none";
 });
-// Loran-C GRI 9960 TD grid (navigation reference; usec_md only).
-const chkLoranTd = document.getElementById("chk-combined-loran-td");
-if (chkLoranTd) chkLoranTd.addEventListener("change", e => {
-  if (window.LoranTdController?.isRegionSupported?.() === false) {
-    e.target.checked = false;
+// Loran-C GRI 9960 TD grid (navigation reference; usec_md only). Toggled
+// via the antenna icon in #captain-tools — not a checkbox in the layer
+// list per Mike's UI request (2026-08-17).
+const loranTdTool = document.getElementById("captain-loran-td-tool");
+if (loranTdTool) loranTdTool.addEventListener("click", () => {
+  if (!window.LoranTdController) return;
+  if (window.LoranTdController.isRegionSupported &&
+      window.LoranTdController.isRegionSupported() === false) {
+    // Outside usec_md — console.info was already logged by the controller.
+    loranTdTool.setAttribute("title", "Loran-C TD Grid (GRI 9960) — not generated for this region");
     return;
   }
-  window.LoranTdController?.toggle?.(e.target.checked);
-  const legend = document.getElementById("combined-loran-td-legend");
-  if (legend) legend.style.display = e.target.checked ? "" : "none";
+  const turningOn = !window.LoranTdController.isEnabled();
+  window.LoranTdController.toggle(turningOn);
+  if (turningOn) {
+    loranTdTool.classList.add("active");
+    loranTdTool.setAttribute("aria-pressed", "true");
+  } else {
+    loranTdTool.classList.remove("active");
+    loranTdTool.setAttribute("aria-pressed", "false");
+  }
 });
 if (chkHeight) chkHeight.addEventListener("change", e => {
   if (window._combinedHeightLayer) {
