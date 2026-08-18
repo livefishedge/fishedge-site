@@ -192,7 +192,10 @@
       const intersections = computeEdgeIntersects(coords, map);
       for (const intersection of intersections) {
         const secKey = pair === "9960-X" ? "X" : "Y";
-        let rotation = trueTangentAt(
+        // trueTangentAt is expressed in EPSG:3857 (east-right,
+        // north-up). Canvas/OpenLayers text rotation is screen-space
+        // (east-right, down-positive), so negate the map angle here.
+        let rotation = -trueTangentAt(
           intersection.coord[0], intersection.coord[1], secKey,
           intersection.rotation,
         );
