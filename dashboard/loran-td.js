@@ -78,16 +78,6 @@
     return [sx / n, sy / n];
   }
 
-  // The generator bakes `angle_rad` into each LineString feature (tangent at
-  // the centroid, radians CCW from east). For lines that go "downward"
-  // (|angle_rad| > π/2), flipping by π keeps the text right-side-up while
-  // still parallel to the line.
-  function readableRotation(angleRad) {
-    if (angleRad > Math.PI / 2) return angleRad - Math.PI;
-    if (angleRad < -Math.PI / 2) return angleRad + Math.PI;
-    return angleRad;
-  }
-
   function buildLabelFeatures(lineFeatures) {
     const labels = [];
     for (const f of lineFeatures) {
@@ -99,7 +89,6 @@
         geometry: new ol.geom.Point(pt),
         pair: f.get("pair"),
         td: f.get("td"),
-        angle_rad: f.get("angle_rad") || 0,
         kind: "td-label",
       }));
     }
@@ -127,7 +116,6 @@
     const props = feature.getProperties();
     const cfg = CONFIG.STYLES[props.pair] || { color: "#888" };
     const td = Number(props.td || 0);
-    const rotation = readableRotation(Number(props.angle_rad || 0));
     return new ol.style.Style({
       text: new ol.style.Text({
         text: String(Math.round(td)),
@@ -144,7 +132,6 @@
         textBaseline: "middle",
         padding: [1, 2, 1, 2],
         offsetY: 0,
-        rotation: rotation,
       }),
     });
   }
