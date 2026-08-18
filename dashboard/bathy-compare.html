@@ -45,6 +45,14 @@
     <div class="meta">NOAA EM302 final grid · direct survey coverage across Baltimore Canyon</div>
     <label class="row"><input type="checkbox" data-layer="ex1903l2"><span class="swatch"></span>Okeanos EX1903L2 North <b>25 m</b></label>
     <div class="meta">NOAA EM302 final grid · direct survey coverage across Baltimore Canyon</div>
+    <label class="row"><input type="checkbox" data-layer="ex1404l3West"><span class="swatch"></span>Okeanos EX1404L3 West <b>50 m</b></label>
+    <div class="meta">NOAA EM302 final grid · broad USEC-MD survey coverage</div>
+    <label class="row"><input type="checkbox" data-layer="ex1404l3Hudson"><span class="swatch"></span>Okeanos EX1404L3 Hudson Canyon <b>15 m</b></label>
+    <div class="meta">NOAA EM302 final grid · dedicated Hudson Canyon survey</div>
+    <label class="row"><input type="checkbox" data-layer="ex1303Hudson"><span class="swatch"></span>Okeanos EX1303 Hudson Canyon <b>30 m</b></label>
+    <div class="meta">NOAA EM302 final grid · dedicated Hudson Canyon survey</div>
+    <label class="row"><input type="checkbox" data-layer="ex2203Transit3"><span class="swatch"></span>Okeanos EX2203 Transit 3 <b>25 m</b></label>
+    <div class="meta">NOAA EM302 final grid · transit-track coverage; separate quality label</div>
   </div>
   <div class="group"><span class="badge">REALNESS OVERLAY</span>
     <label class="row"><input type="checkbox" data-layer="realness"><span class="swatch" style="background:linear-gradient(135deg,#440154,#3b528b,#21918c,#5ec962,#fde725)"></span>Realness score (real vs interpolated)</label>
@@ -69,7 +77,11 @@
     bluetopoMeasured: extraRoot + 'bluetopo_measured/color/{z}/{x}/{y}.png?v=20260818-bluetopo1',
     okeanos: extraRoot + 'okeanos_ex1404l2/color/{z}/{x}/{y}.png?v=20260818-okeanos1',
     ex1302: './data/bathy/canyon_tiles/ex1302/color/{z}/{x}/{y}.png?v=20260818-canyon1',
-    ex1903l2: './data/bathy/canyon_tiles/ex1903l2/color/{z}/{x}/{y}.png?v=20260818-canyon1'
+    ex1903l2: './data/bathy/canyon_tiles/ex1903l2/color/{z}/{x}/{y}.png?v=20260818-canyon1',
+    ex1404l3West: './data/bathy/canyon_tiles/ex1404l3_west/color/{z}/{x}/{y}.png?v=20260818-canyon2',
+    ex1404l3Hudson: './data/bathy/canyon_tiles/ex1404l3_hudson/color/{z}/{x}/{y}.png?v=20260818-canyon2',
+    ex1303Hudson: './data/bathy/canyon_tiles/ex1303_hudson/color/{z}/{x}/{y}.png?v=20260818-canyon2',
+    ex2203Transit3: './data/bathy/canyon_tiles/ex2203_transit3/color/{z}/{x}/{y}.png?v=20260818-canyon2'
   };
   // Realness overlay: inline metadata for the Baltimore Canyon bbox (matches realness_meta.json).
   // Bounds are EPSG:4326: [southLat, westLon] to [northLat, eastLon].
@@ -169,7 +181,7 @@
     const ll = ol.proj.toLonLat(evt.coordinate);
     rCoord.textContent = ll[1].toFixed(4) + '°N  ' + Math.abs(ll[0]).toFixed(4) + '°W';
     const myReq = ++reqId;
-    const active = ['dem','bag','average','multibeam','bluetopo','bluetopoMeasured','okeanos','ex1302','ex1903l2'].filter(n => layers[n] && layers[n].getVisible());
+  const active = ['dem','bag','average','multibeam','bluetopo','bluetopoMeasured','okeanos','ex1302','ex1903l2','ex1404l3West','ex1404l3Hudson','ex1303Hudson','ex2203Transit3'].filter(n => layers[n] && layers[n].getVisible());
     if(!active.length){ rDepths.innerHTML = ''; return; }
     const results = await Promise.all(active.map(async n => [n, await tileDepth(layers[n], evt.coordinate)]));
     if(myReq !== reqId) return; // stale
@@ -188,6 +200,10 @@
     okeanos: 'NOAA Okeanos EX1404L2 · regional context only · 25 m',
     ex1302: 'NOAA Okeanos EX1302 · direct canyon survey · 50 m',
     ex1903l2: 'NOAA Okeanos EX1903L2 North · direct canyon survey · 25 m',
+    ex1404l3West: 'NOAA Okeanos EX1404L3 West · USEC-MD survey · 50 m',
+    ex1404l3Hudson: 'NOAA Okeanos EX1404L3 Hudson Canyon · dedicated survey · 15 m',
+    ex1303Hudson: 'NOAA Okeanos EX1303 Hudson Canyon · dedicated survey · 30 m',
+    ex2203Transit3: 'NOAA Okeanos EX2203 Transit 3 · transit survey · 25 m',
     realness: 'Realness score overlay'
   };
   const datasetLabel = document.getElementById('dataset-label');
