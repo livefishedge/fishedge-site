@@ -15,15 +15,21 @@
  *      line (the centroid angle baked into the GeoJSON by the generator)
  *      so labels on the same line are visually consistent.
  *
- * Rotation rule (Mike, #32126):
- *   - 9960-Y (horizontal lines): readability flip applied → text always
- *     reads east consistently regardless of which way matplotlib ordered
- *     the vertices.
- *   - 9960-X (vertical lines): NO flip → text reads along the line's
- *     actual direction. The NNE branch and SSW branch read in opposite
- *     directions (NNE vs SSW), each parallel to its own branch — which is
- *     what "rotate each grid label to be exactly in parallel with the line"
- *     requires.
+ * Rotation rule (Mike, #32126, #32139, #32142):
+ *   - Rotation source: per-segment edge angle (the local tangent at
+ *     the segment that crosses the viewport edge). NOT the centroid
+ *     angle baked into the GeoJSON — for curved hyperbolas the centroid
+ *     tangent can be ±37° off from the local tangent at the edge, which
+ *     Mike saw as labels that "are still wrong" in 7e4fe97.
+ *   - 9960-Y (horizontal lines, edge tangent ~0° or ~π): readability
+ *     flip applied → text always reads east consistently regardless of
+ *     which way matplotlib ordered the LineString vertices. Without
+ *     the flip (b6daa83), some Y labels read east, others read west.
+ *   - 9960-X (vertical lines, edge tangent ~±90°): NO flip → text
+ *     reads along the line's actual direction. NNE branch reads NNE,
+ *     SSW branch reads SSW, each parallel to its own branch — which
+ *     is what "all labels have to be in parallel with and on the line
+ *     of the line they're labeling" requires.
  *
  * Single global: window.LoranTdController
  *
@@ -65,9 +71,11 @@
   //
   // For each segment of the LineString, check the four viewport edges.
   // Emits one record per crossing with coord (pushed EDGE_PAD_PX inward
-  // in geo units so the text never clips) and the edge name. Rotation is
-  // NOT computed here — it comes from the LineString-level centroid angle
-  // baked into the GeoJSON (see buildEdgeIntersectionLabels).
+  // in geo units so the text never clips), the edge name, AND the
+  // segment's local tangent angle (radians CCW from east in EPSG:3857).
+  // This per-segment angle is what makes the label exactly parallel to
+  // the line AT THAT POINT — a centroid angle would be off by up to ±37°
+  // for X lines (which are nearly vertical) and ±17° for Y lines.
   function computeEdgeIntersects(lineCoords, map) {
     const view = map.getView();
     const extent = view.calculateExtent(map.getSize());
@@ -82,12 +90,20 @@
       const p2 = lineCoords[i + 1];
       if (!Number.isFinite(p1[0]) || !Number.isFinite(p2[0])) continue;
 
+      // Local segment tangent in EPSG:3857 (CCW from east axis; same as
+      // lat/lon locally because Web Mercator is conformal with the same
+      // east/north orientation as WGS84).
+      const segDx = p2[0] - p1[0];
+      const segDy = p2[1] - p1[1];
+      const segAngle = Math.atan2(segDy, segDx);
+
       // Left edge (x = minX, west). Push anchor east (into the viewport).
       if ((p1[0] - minX) * (p2[0] - minX) < 0) {
         const t = (minX - p1[0]) / (p2[0] - p1[0]);
         const y = p1[1] + t * (p2[1] - p1[1]);
         if (y >= minY && y <= maxY) {
-          out.push({ coord: [minX + paddingGeo, y], edge: "left" });
+          out.push({ coord: [minX + paddingGeo, y],
+                     edge: "left", rotation: segAngle });
         }
       }
       // Right edge (x = maxX, east). Push anchor west.
@@ -95,7 +111,8 @@
         const t = (maxX - p1[0]) / (p2[0] - p1[0]);
         const y = p1[1] + t * (p2[1] - p1[1]);
         if (y >= minY && y <= maxY) {
-          out.push({ coord: [maxX - paddingGeo, y], edge: "right" });
+          out.push({ coord: [maxX - paddingGeo, y],
+                     edge: "right", rotation: segAngle });
         }
       }
       // Bottom edge (y = minY, south). Push anchor north.
@@ -103,7 +120,8 @@
         const t = (minY - p1[1]) / (p2[1] - p1[1]);
         const x = p1[0] + t * (p2[0] - p1[0]);
         if (x >= minX && x <= maxX) {
-          out.push({ coord: [x, minY + paddingGeo], edge: "bottom" });
+          out.push({ coord: [x, minY + paddingGeo],
+                     edge: "bottom", rotation: segAngle });
         }
       }
       // Top edge (y = maxY, north). Push anchor south.
@@ -111,7 +129,8 @@
         const t = (maxY - p1[1]) / (p2[1] - p1[1]);
         const x = p1[0] + t * (p2[0] - p1[0]);
         if (x >= minX && x <= maxX) {
-          out.push({ coord: [x, maxY - paddingGeo], edge: "top" });
+          out.push({ coord: [x, maxY - paddingGeo],
+                     edge: "top", rotation: segAngle });
         }
       }
     }
@@ -127,32 +146,34 @@
       if (!coords || coords.length < 2) continue;
       const pair = lineFeature.get("pair");
 
-      // Per-LineString rotation: read the centroid angle baked into the
-      // GeoJSON by the generator. ONE rotation per line so all labels
-      // on the same line look identical (no per-edge drift).
-      let lineAngle = Number(lineFeature.get("angle_rad") || 0);
-
-      // Conditional readability flip:
-      //   - 9960-Y (horizontal lines, centroid near 0° or π): apply the
-      //     flip so the text always reads east consistently, regardless of
-      //     which way matplotlib ordered the LineString vertices.
-      //   - 9960-X (vertical lines, centroid near ±80°): NO flip. The
-      //     NNE-ordered branch keeps its +78° rotation (text reads NNE);
-      //     the SSW-ordered branch keeps its −102° rotation (text reads
-      //     SSW). Both read along their own branch — parallel to the line
-      //     as Mike asked for in #32102.
-      if (pair === "9960-Y") {
-        if (lineAngle > Math.PI / 2)        lineAngle -= Math.PI;
-        else if (lineAngle <= -Math.PI / 2) lineAngle += Math.PI;
-      }
-
       const intersections = computeEdgeIntersects(coords, map);
       for (const intersection of intersections) {
+        let rotation = intersection.rotation;
+
+        // Conditional readability flip — the key part of Mike's feedback.
+        //   - 9960-Y (horizontal lines, edge tangent ~0° or ~π): apply
+        //     the flip so text reads east consistently regardless of which
+        //     way matplotlib ordered the LineString vertices. Without
+        //     the flip, some Y labels read east, others read west
+        //     (inconsistent). Mike saw this in b6daa83.
+        //   - 9960-X (vertical lines, edge tangent ~±90°): NO flip. The
+        //     text must read along the line direction (parallel to the
+        //     line) as Mike asked for in #32102 / #32139 / #32142.
+        //     Without the flip, the NNE branch reads NNE and the SSW
+        //     branch reads SSW — each parallel to its own branch.
+        //     With the flip (be7396b), both branches read NNE — the SSW
+        //     branch's text was reversed relative to its line, which
+        //     Mike called 'tilt reversed' in #32114.
+        if (pair === "9960-Y") {
+          if (rotation > Math.PI / 2)        rotation -= Math.PI;
+          else if (rotation <= -Math.PI / 2) rotation += Math.PI;
+        }
+
         labels.push(new ol.Feature({
           geometry: new ol.geom.Point(intersection.coord),
           pair:        pair,
           td:          td,
-          rotation:    lineAngle,
+          rotation:    rotation,
           edge:        intersection.edge,
           kind:        "td-label",
         }));
