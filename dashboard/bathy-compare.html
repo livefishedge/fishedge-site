@@ -40,7 +40,11 @@
     <label class="row"><input type="checkbox" data-layer="bluetopoMeasured"><span class="swatch"></span>BlueTopo measured-only <b>8–16 m</b></label>
     <div class="meta">Only cells marked bathy_coverage=true by NOAA BlueTopo contributor metadata</div>
     <label class="row"><input type="checkbox" data-layer="okeanos"><span class="swatch"></span>Okeanos EX1404L2 <b>25 m</b></label>
-    <div class="meta">NOAA EM302 processed cruise grid · 27.18M good beams across 170 km</div>
+    <div class="meta">Regional context only · no valid cells in the Baltimore Canyon core</div>
+    <label class="row"><input type="checkbox" data-layer="ex1302"><span class="swatch"></span>Okeanos EX1302 <b>50 m</b></label>
+    <div class="meta">NOAA EM302 final grid · direct survey coverage across Baltimore Canyon</div>
+    <label class="row"><input type="checkbox" data-layer="ex1903l2"><span class="swatch"></span>Okeanos EX1903L2 North <b>25 m</b></label>
+    <div class="meta">NOAA EM302 final grid · direct survey coverage across Baltimore Canyon</div>
   </div>
   <div class="group"><span class="badge">REALNESS OVERLAY</span>
     <label class="row"><input type="checkbox" data-layer="realness"><span class="swatch" style="background:linear-gradient(135deg,#440154,#3b528b,#21918c,#5ec962,#fde725)"></span>Realness score (real vs interpolated)</label>
@@ -63,7 +67,9 @@
     multibeam: root + 'ncei_multibeam/color/{z}/{x}/{y}.png?v=20260818-wm-mask1',
     bluetopo: extraRoot + 'bluetopo_full/color/{z}/{x}/{y}.png?v=20260818-bluetopo1',
     bluetopoMeasured: extraRoot + 'bluetopo_measured/color/{z}/{x}/{y}.png?v=20260818-bluetopo1',
-    okeanos: extraRoot + 'okeanos_ex1404l2/color/{z}/{x}/{y}.png?v=20260818-okeanos1'
+    okeanos: extraRoot + 'okeanos_ex1404l2/color/{z}/{x}/{y}.png?v=20260818-okeanos1',
+    ex1302: './data/bathy/canyon_tiles/ex1302/color/{z}/{x}/{y}.png?v=20260818-canyon1',
+    ex1903l2: './data/bathy/canyon_tiles/ex1903l2/color/{z}/{x}/{y}.png?v=20260818-canyon1'
   };
   // Realness overlay: inline metadata for the Baltimore Canyon bbox (matches realness_meta.json).
   // Bounds are EPSG:4326: [southLat, westLon] to [northLat, eastLon].
@@ -163,7 +169,7 @@
     const ll = ol.proj.toLonLat(evt.coordinate);
     rCoord.textContent = ll[1].toFixed(4) + '°N  ' + Math.abs(ll[0]).toFixed(4) + '°W';
     const myReq = ++reqId;
-    const active = ['dem','bag','average','multibeam','bluetopo','bluetopoMeasured','okeanos'].filter(n => layers[n] && layers[n].getVisible());
+    const active = ['dem','bag','average','multibeam','bluetopo','bluetopoMeasured','okeanos','ex1302','ex1903l2'].filter(n => layers[n] && layers[n].getVisible());
     if(!active.length){ rDepths.innerHTML = ''; return; }
     const results = await Promise.all(active.map(async n => [n, await tileDepth(layers[n], evt.coordinate)]));
     if(myReq !== reqId) return; // stale
@@ -179,7 +185,9 @@
     multibeam: 'NCEI Multibeam Mosaic Combined · 3 arc-sec',
     bluetopo: 'NOAA BlueTopo · 8–16 m compilation',
     bluetopoMeasured: 'NOAA BlueTopo · measured-only · 8–16 m',
-    okeanos: 'NOAA Okeanos EX1404L2 · processed EM302 · 25 m',
+    okeanos: 'NOAA Okeanos EX1404L2 · regional context only · 25 m',
+    ex1302: 'NOAA Okeanos EX1302 · direct canyon survey · 50 m',
+    ex1903l2: 'NOAA Okeanos EX1903L2 North · direct canyon survey · 25 m',
     realness: 'Realness score overlay'
   };
   const datasetLabel = document.getElementById('dataset-label');
