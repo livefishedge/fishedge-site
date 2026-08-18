@@ -10,9 +10,7 @@
  * Two stacked layers:
  *   1. Line layer (zIndex 8): all isolines, single 10 µs step, thin stroke.
  *   2. Label layer (zIndex 9): one Point per line at the line's centroid,
- *      showing the TD value in µs. Each label is rotated parallel to its
- *      line (via the `angle_rad` property baked into each feature by the
- *      generator). Hidden until map zoom exceeds LABEL_MIN_ZOOM.
+ *      showing the TD value in µs. Hidden until map zoom exceeds LABEL_MIN_ZOOM.
  *
  * Single global: window.LoranTdController
  *
@@ -28,8 +26,7 @@
  *   9960-X (Nantucket):  #d9534f  (red)
  *   9960-Y (Cape Fear):  #0275d8  (blue)
  *   All lines:           0.8 px, opacity 0.65 (single weight per Mike spec)
- *   Labels:              bold 11px monospace, line-color fill, dark halo,
- *                        rotated parallel to the line direction.
+ *   Labels:              bold 11px monospace, line-color fill, dark halo.
  *
  * Branch: feat/loran-td-grid-usec-md
  */
