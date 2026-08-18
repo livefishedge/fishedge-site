@@ -48,6 +48,7 @@
       LINE_WIDTH:    0.8,
       LINE_OPACITY:  0.65,
       EDGE_PAD_PX:   32,
+      LABEL_ROTATION_CLOCKWISE_RAD: 20 * Math.PI / 180,
     };
 
   // ── State ───────────────────────────────────────────────────────────
@@ -200,7 +201,7 @@
     const props = feature.getProperties();
     const cfg = CONFIG.STYLES[props.pair] || { color: "#888" };
     const td = Number(props.td || 0);
-    const rotation = Number(props.rotation || 0);
+    const rotation = Number(props.rotation || 0) + CONFIG.LABEL_ROTATION_CLOCKWISE_RAD;
     return new ol.style.Style({
       text: new ol.style.Text({
         text: String(Math.round(td)),
