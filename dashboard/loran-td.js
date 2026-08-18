@@ -7,25 +7,29 @@
  * combined view. Region-scoped to usec_md (the only region the upstream
  * generate_td_grid.py currently produces a grid for).
  *
+ * Two stacked layers:
+ *   1. Line layer (zIndex 8): every isoline, major + minor.
+ *   2. Label layer (zIndex 9): one Point per MAJOR line (every 10 µs step),
+ *      placed at the line centroid, showing the TD value in µs. Hidden
+ *      until the map zoom exceeds LABEL_MIN_ZOOM so the labels don't
+ *      pile up at world-view zooms where the lines are <1 px apart.
+ *
  * Single global: window.LoranTdController
  *
  * API:
- *   LoranTdController.enable()       — fetch GeoJSON (if needed), add layer
- *                                       to map, set visible.
- *   LoranTdController.disable()      — remove layer from map (keeps cache).
+ *   LoranTdController.enable()       — fetch GeoJSON (if needed), add both
+ *                                       layers to map, set visible.
+ *   LoranTdController.disable()      — hide both layers (keeps cache).
  *   LoranTdController.toggle(visible)— show/hide without removing.
  *   LoranTdController.isEnabled()    — boolean.
+ *   LoranTdController.isRegionSupported() — true if REGION_ID === "usec_md".
  *
  * Color conventions match the standalone viewer the user started from:
  *   9960-X (Nantucket):  #d9534f  (red)
  *   9960-Y (Cape Fear):  #0275d8  (blue)
- *   Major lines:         2.0 px, opacity 0.85
- *   Minor lines:         0.8 px, opacity 0.55
- *
- * zIndex: 8 — below daily products (chl/sst at z=10), above the bathy
- *           reference layer (default 0). The TD grid is a navigation
- *           reference; captains want to see it overlayed but not block
- *           the daily chlorophyll / SST fronts they're reading for.
+ *   Major lines:         2.0 px, opacity 0.85   (every 10 µs step)
+ *   Minor lines:         0.8 px, opacity 0.55   (every 5  µs step)
+ *   Labels:              bold 11px monospace, line-color fill, dark halo
  *
  * Branch: feat/loran-td-grid-usec-md
  */
@@ -38,6 +42,8 @@
     GEOJSON_URL: "loran/td_grid_9960_usec_md.geojson",
     REGION: "usec_md",
     Z_INDEX: 8,
+    LABEL_Z_INDEX: 9,
+    LABEL_MIN_ZOOM: 5,           // hide labels at zoom <= this
     STYLES: {
       "9960-X": { color: "#d9534f" },
       "9960-Y": { color: "#0275d8" },
@@ -52,19 +58,54 @@
   const state = {
     enabled: false,
     loaded: false,
-    loading: null,    // Promise in flight (deduplicates concurrent enables)
-    layer: null,      // ol.layer.Vector
-    source: null,     // ol.source.Vector
+    loading: null,        // Promise in flight (deduplicates concurrent enables)
+    lineLayer: null,      // ol.layer.Vector — isolines
+    lineSource: null,     // ol.source.Vector
+    labelLayer: null,     // ol.layer.Vector — TD value labels
+    labelSource: null,
     fetchErr: null,
   };
 
-  // ── Style factory ───────────────────────────────────────────────────
-  function styleFor(feature) {
+  // ── Helpers ─────────────────────────────────────────────────────────
+  // Web Mercator: resolution = 156543.03390625 / 2^zoom
+  function resolutionToZoom(resolution) {
+    if (!resolution || resolution <= 0) return 0;
+    return Math.log2(156543.03390625 / resolution);
+  }
+
+  function centroidOf(coords) {
+    let sx = 0, sy = 0, n = 0;
+    for (const c of coords) { sx += c[0]; sy += c[1]; n++; }
+    if (n === 0) return null;
+    return [sx / n, sy / n];
+  }
+
+  // Walk the loaded line features and emit one Point feature per major
+  // (10 µs step) line, carrying the TD value as a property so the label
+  // style can render it.
+  function buildLabelFeatures(lineFeatures) {
+    const labels = [];
+    for (const f of lineFeatures) {
+      if (f.get("type") !== "major") continue;
+      const coords = f.getGeometry().getCoordinates();
+      if (!coords || coords.length < 2) continue;
+      const pt = centroidOf(coords);
+      if (!pt) continue;
+      labels.push(new ol.Feature({
+        geometry: new ol.geom.Point(pt),
+        pair: f.get("pair"),
+        td: f.get("td"),
+        kind: "td-label",
+      }));
+    }
+    return labels;
+  }
+
+  // ── Style factories ─────────────────────────────────────────────────
+  function lineStyleFor(feature) {
     const props = feature.getProperties();
-    const pair = props.pair;
-    const lineType = props.type; // "major" | "minor"
-    const cfg = CONFIG.STYLES[pair] || { color: "#888" };
-    const isMajor = lineType === "major";
+    const cfg = CONFIG.STYLES[props.pair] || { color: "#888" };
+    const isMajor = props.type === "major";
     return new ol.style.Style({
       stroke: new ol.style.Stroke({
         color: cfg.color,
@@ -76,10 +117,32 @@
     });
   }
 
-  function tdTooltip(feature) {
+  // Style function for the label layer. Receives (feature, resolution).
+  // Returns null when zoom is at/below LABEL_MIN_ZOOM → labels disappear.
+  function labelStyleFor(feature, resolution) {
+    const zoom = resolutionToZoom(resolution);
+    if (zoom <= CONFIG.LABEL_MIN_ZOOM) return null;
     const props = feature.getProperties();
-    const td = Number(props.td || 0).toFixed(1);
-    return `${props.pair}  ${td} µs  (${props.type})`;
+    const cfg = CONFIG.STYLES[props.pair] || { color: "#888" };
+    const td = Number(props.td || 0);
+    return new ol.style.Style({
+      text: new ol.style.Text({
+        text: String(Math.round(td)),
+        font: '600 11px ui-monospace, "SF Mono", "Menlo", "Consolas", monospace',
+        fill: new ol.style.Fill({ color: cfg.color }),
+        stroke: new ol.style.Stroke({
+          color: "rgba(0, 0, 0, 0.85)",
+          width: 2.5,
+          lineCap: "round",
+          lineJoin: "round",
+        }),
+        overflow: false,
+        textAlign: "center",
+        textBaseline: "middle",
+        padding: [1, 2, 1, 2],
+        offsetY: 0,
+      }),
+    });
   }
 
   // ── Region guard ────────────────────────────────────────────────────
@@ -103,7 +166,7 @@
 
   // ── Load GeoJSON once and cache ─────────────────────────────────────
   function loadGeoJSON() {
-    if (state.loaded) return Promise.resolve(state.source);
+    if (state.loaded) return Promise.resolve(state.lineSource);
     if (state.loading) return state.loading;
 
     state.loading = fetch(CONFIG.GEOJSON_URL, { cache: "force-cache" })
@@ -119,7 +182,7 @@
           featureProjection: "EPSG:3857",
         });
         const source = new ol.source.Vector({ features });
-        state.source = source;
+        state.lineSource = source;
         state.loaded = true;
         state.loading = null;
         return source;
@@ -134,16 +197,16 @@
     return state.loading;
   }
 
-  // ── Build the VectorLayer (after source loaded) ─────────────────────
-  function buildLayer(source) {
+  // ── Build the LineString layer ──────────────────────────────────────
+  function buildLineLayer(source) {
     const layer = new ol.layer.Vector({
       source,
-      style: styleFor,
+      style: lineStyleFor,
       zIndex: CONFIG.Z_INDEX,
       updateWhileAnimating: false,
       updateWhileInteracting: false,
     });
-    // Per-feature tooltip on hover (sticky follows the cursor).
+    // Per-feature cursor hint on hover.
     layer.on("pointermove", (evt) => {
       if (evt.dragging) return;
       const hit = layer.getFeatures(evt.pixel);
@@ -151,6 +214,21 @@
       if (target) target.style.cursor = hit ? "help" : "";
     });
     return layer;
+  }
+
+  // ── Build the label layer ───────────────────────────────────────────
+  function buildLabelLayer(lineSource) {
+    const labels = buildLabelFeatures(lineSource.getFeatures());
+    const source = new ol.source.Vector({ features: labels });
+    state.labelSource = source;
+    return new ol.layer.Vector({
+      source,
+      style: labelStyleFor,
+      zIndex: CONFIG.LABEL_Z_INDEX,
+      declutter: true,             // OL resolves overlapping labels
+      updateWhileAnimating: false,
+      updateWhileInteracting: false,
+    });
   }
 
   // ── Public API ──────────────────────────────────────────────────────
@@ -161,17 +239,23 @@
       console.warn("[loran-td] _combinedMap not present; deferring.");
       return false;
     }
-    if (state.enabled && state.layer) {
-      state.layer.setVisible(true);
+    if (state.enabled && state.lineLayer) {
+      state.lineLayer.setVisible(true);
+      if (state.labelLayer) state.labelLayer.setVisible(true);
       return true;
     }
     try {
       const source = await loadGeoJSON();
-      if (!state.layer) {
-        state.layer = buildLayer(source);
-        map.addLayer(state.layer);
+      if (!state.lineLayer) {
+        state.lineLayer = buildLineLayer(source);
+        map.addLayer(state.lineLayer);
       }
-      state.layer.setVisible(true);
+      if (!state.labelLayer) {
+        state.labelLayer = buildLabelLayer(source);
+        map.addLayer(state.labelLayer);
+      }
+      state.lineLayer.setVisible(true);
+      state.labelLayer.setVisible(true);
       state.enabled = true;
       return true;
     } catch (err) {
@@ -181,7 +265,8 @@
   }
 
   function disable() {
-    if (state.layer) state.layer.setVisible(false);
+    if (state.lineLayer) state.lineLayer.setVisible(false);
+    if (state.labelLayer) state.labelLayer.setVisible(false);
     state.enabled = false;
   }
 
@@ -194,7 +279,9 @@
   }
 
   function isEnabled() {
-    return Boolean(state.enabled && state.layer && state.layer.getVisible());
+    return Boolean(
+      state.enabled && state.lineLayer && state.lineLayer.getVisible()
+    );
   }
 
   function isRegionSupported() {
