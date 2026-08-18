@@ -29,6 +29,27 @@
       "quality": "EM302 transit-track grid; not dedicated canyon mapping",
       "bounds_wsen": [-77.1852, 31.7345, -71.7029, 39.7245],
       "source": "https://www.ngdc.noaa.gov/ships/okeanos_explorer/EX2203_mb.html"
+    },
+    "usgs_washington_accomac": {
+      "title": "USGS Reson 7160 Washington–Accomac Canyons",
+      "resolution_m": 25,
+      "quality": "processed MBES grid with published QA/QC",
+      "bounds_wsen": [-74.3465, 37.5024, -74.0095, 37.8568],
+      "source": "https://www.sciencebase.gov/catalog/item/5e7d1495e4b01d5092751d95"
+    },
+    "usgs_keller": {
+      "title": "USGS Reson 7160 Keller Canyon",
+      "resolution_m": 25,
+      "quality": "processed MBES grid with published QA/QC",
+      "bounds_wsen": [-74.8733, 35.4972, -74.7604, 35.7519],
+      "source": "https://www.sciencebase.gov/catalog/item/5e7d1495e4b01d5092751d95"
+    },
+    "usgs_norfolk": {
+      "title": "USGS Reson 7160 Norfolk Canyon",
+      "resolution_m": 25,
+      "quality": "processed MBES grid with published QA/QC",
+      "bounds_wsen": [-74.7601, 36.7500, -74.5668, 37.1159],
+      "source": "https://www.sciencebase.gov/catalog/item/5e7d1495e4b01d5092751d95"
     }
   }
 }

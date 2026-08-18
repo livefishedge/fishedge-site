@@ -53,6 +53,12 @@
     <div class="meta">NOAA EM302 final grid · dedicated Hudson Canyon survey</div>
     <label class="row"><input type="checkbox" data-layer="ex2203Transit3"><span class="swatch"></span>Okeanos EX2203 Transit 3 <b>25 m</b></label>
     <div class="meta">NOAA EM302 final grid · transit-track coverage; separate quality label</div>
+    <label class="row"><input type="checkbox" data-layer="usgsWashingtonAccomac"><span class="swatch"></span>USGS Reson 7160 Washington–Accomac <b>25 m</b></label>
+    <div class="meta">USGS 2017 MBES grid · documented QA/QC · direct canyon survey</div>
+    <label class="row"><input type="checkbox" data-layer="usgsKeller"><span class="swatch"></span>USGS Reson 7160 Keller Canyon <b>25 m</b></label>
+    <div class="meta">USGS 2017 MBES grid · documented QA/QC · direct canyon survey</div>
+    <label class="row"><input type="checkbox" data-layer="usgsNorfolk"><span class="swatch"></span>USGS Reson 7160 Norfolk Canyon <b>25 m</b></label>
+    <div class="meta">USGS 2017 MBES grid · documented QA/QC · direct canyon survey</div>
   </div>
   <div class="group"><span class="badge">REALNESS OVERLAY</span>
     <label class="row"><input type="checkbox" data-layer="realness"><span class="swatch" style="background:linear-gradient(135deg,#440154,#3b528b,#21918c,#5ec962,#fde725)"></span>Realness score (real vs interpolated)</label>
@@ -81,7 +87,10 @@
     ex1404l3West: './data/bathy/canyon_tiles/ex1404l3_west/color/{z}/{x}/{y}.png?v=20260818-canyon2',
     ex1404l3Hudson: './data/bathy/canyon_tiles/ex1404l3_hudson/color/{z}/{x}/{y}.png?v=20260818-canyon2',
     ex1303Hudson: './data/bathy/canyon_tiles/ex1303_hudson/color/{z}/{x}/{y}.png?v=20260818-canyon2',
-    ex2203Transit3: './data/bathy/canyon_tiles/ex2203_transit3/color/{z}/{x}/{y}.png?v=20260818-canyon2'
+    ex2203Transit3: './data/bathy/canyon_tiles/ex2203_transit3/color/{z}/{x}/{y}.png?v=20260818-canyon2',
+    usgsWashingtonAccomac: './data/bathy/canyon_tiles/usgs_washington_accomac/color/{z}/{x}/{y}.png?v=20260818-usgs1',
+    usgsKeller: './data/bathy/canyon_tiles/usgs_keller/color/{z}/{x}/{y}.png?v=20260818-usgs1',
+    usgsNorfolk: './data/bathy/canyon_tiles/usgs_norfolk/color/{z}/{x}/{y}.png?v=20260818-usgs1'
   };
   // Realness overlay: inline metadata for the Baltimore Canyon bbox (matches realness_meta.json).
   // Bounds are EPSG:4326: [southLat, westLon] to [northLat, eastLon].
@@ -182,7 +191,7 @@
     const ll = ol.proj.toLonLat(evt.coordinate);
     rCoord.textContent = ll[1].toFixed(4) + '°N  ' + Math.abs(ll[0]).toFixed(4) + '°W';
     const myReq = ++reqId;
-  const active = ['dem','bag','average','multibeam','bluetopo','bluetopoMeasured','okeanos','ex1302','ex1903l2','ex1404l3West','ex1404l3Hudson','ex1303Hudson','ex2203Transit3'].filter(n => layers[n] && layers[n].getVisible());
+  const active = ['dem','bag','average','multibeam','bluetopo','bluetopoMeasured','okeanos','ex1302','ex1903l2','ex1404l3West','ex1404l3Hudson','ex1303Hudson','ex2203Transit3','usgsWashingtonAccomac','usgsKeller','usgsNorfolk'].filter(n => layers[n] && layers[n].getVisible());
     if(!active.length){ rDepths.innerHTML = ''; return; }
     const results = await Promise.all(active.map(async n => [n, await tileDepth(layers[n], evt.coordinate)]));
     if(myReq !== reqId) return; // stale
@@ -205,6 +214,9 @@
     ex1404l3Hudson: 'NOAA Okeanos EX1404L3 Hudson Canyon · dedicated survey · 15 m',
     ex1303Hudson: 'NOAA Okeanos EX1303 Hudson Canyon · dedicated survey · 30 m',
     ex2203Transit3: 'NOAA Okeanos EX2203 Transit 3 · transit survey · 25 m',
+    usgsWashingtonAccomac: 'USGS Reson 7160 Washington–Accomac Canyons · 25 m',
+    usgsKeller: 'USGS Reson 7160 Keller Canyon · 25 m',
+    usgsNorfolk: 'USGS Reson 7160 Norfolk Canyon · 25 m',
     realness: 'Realness score overlay'
   };
   const datasetLabel = document.getElementById('dataset-label');
