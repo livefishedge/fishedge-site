@@ -36,9 +36,14 @@ def colorize(a, valid):
 
 for spec in sys.argv[1:]:
     name, raw_path = spec.split("=", 1)
+    if ":" in raw_path:
+        raw_path, raw_max_zoom = raw_path.rsplit(":", 1)
+        max_zoom = int(raw_max_zoom)
+    else:
+        max_zoom = 13
     path = Path(raw_path)
     with rasterio.open(path) as ds:
-        for z in range(5, 14):
+        for z in range(5, max_zoom + 1):
             n = 2 ** z
             minx = max(0, int(math.floor((ds.bounds.left + math.pi * R) / (2 * math.pi * R) * n)))
             maxx = min(n - 1, int(math.floor((ds.bounds.right + math.pi * R) / (2 * math.pi * R) * n)))

@@ -95,7 +95,8 @@
   const center = ol.proj.fromLonLat([-74.05, 38.22]);
   const layers = {};
   for (const [name,url] of Object.entries(urls)) {
-    layers[name] = new ol.layer.Tile({source:new ol.source.XYZ({url,crossOrigin:'anonymous',minZoom:5,maxZoom:13}),visible:name==='dem',opacity:.94,zIndex:10});
+    const maxZoom = (name === 'ex1404l3West' || name === 'ex2203Transit3') ? 11 : 13;
+    layers[name] = new ol.layer.Tile({source:new ol.source.XYZ({url,crossOrigin:'anonymous',minZoom:5,maxZoom}),visible:name==='dem',opacity:.94,zIndex:10});
   }
   // Realness overlay: static image covering the Baltimore Canyon bbox.
   const realnessSW = ol.proj.fromLonLat([realnessMeta.bboxSW[1], realnessMeta.bboxSW[0]]);
