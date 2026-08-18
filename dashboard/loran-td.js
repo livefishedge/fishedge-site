@@ -9,8 +9,11 @@
  *
  * Two stacked layers:
  *   1. Line layer (zIndex 8): all isolines, single 10 µs step, thin stroke.
- *   2. Label layer (zIndex 9): one Point per line at the line's centroid,
- *      showing the TD value in µs. Hidden until map zoom exceeds LABEL_MIN_ZOOM.
+ *   2. Label layer (zIndex 9): TD value labels at every 50 µs step,
+ *      positioned where each line crosses the current viewport edges
+ *      (top / bottom / left / right). Labels rotate to match their line's
+ *      tangent angle so they read parallel to the line. Recomputed on every
+ *      map moveend so they follow as the captain pans / zooms.
  *
  * Single global: window.LoranTdController
  *
@@ -26,7 +29,8 @@
  *   9960-X (Nantucket):  #d9534f  (red)
  *   9960-Y (Cape Fear):  #0275d8  (blue)
  *   All lines:           0.8 px, opacity 0.65 (single weight per Mike spec)
- *   Labels:              bold 11px monospace, line-color fill, dark halo.
+ *   Labels:              bold 11px monospace, line-color fill, dark halo,
+ *                        rotated parallel to the line direction.
  *
  * Branch: feat/loran-td-grid-usec-md
  */
@@ -35,59 +39,131 @@
 
   // ── Configuration ───────────────────────────────────────────────────
   const CONFIG = {
-    // Path is relative to /dashboard/ where index.html lives.
-    GEOJSON_URL: "loran/td_grid_9960_usec_md.geojson",
-    REGION: "usec_md",
-    Z_INDEX: 8,
-    LABEL_Z_INDEX: 9,
-    LABEL_MIN_ZOOM: 5,           // hide labels at zoom <= this
+    GEOJSON_URL:    "loran/td_grid_9960_usec_md.geojson",
+    REGION:         "usec_md",
+    Z_INDEX:        8,
+    LABEL_Z_INDEX:  9,
+    // Labels are at every 50 µs step (rounded numbers); lines are every 10 µs.
+    LABEL_STEP_US:  50,
     STYLES: {
       "9960-X": { color: "#d9534f" },
       "9960-Y": { color: "#0275d8" },
     },
-    LINE_WIDTH: 0.8,             // single uniform weight (Mike: "all thin")
-    LINE_OPACITY: 0.65,
+    LINE_WIDTH:    0.8,
+    LINE_OPACITY:  0.65,
+    // Padding (px) inward from the viewport edge so the label isn't clipped
+    // by the map's letterboxing. Per-edge offset uses offsetX/offsetY.
+    EDGE_PAD_PX:   8,
   };
 
   // ── State ───────────────────────────────────────────────────────────
   const state = {
-    enabled: false,
-    loaded: false,
-    loading: null,
-    lineLayer: null,
-    lineSource: null,
-    labelLayer: null,
-    labelSource: null,
-    fetchErr: null,
+    enabled:       false,
+    loaded:        false,
+    loading:       null,
+    lineLayer:     null,
+    lineSource:    null,
+    labelLayer:    null,
+    labelSource:   null,
+    attachedMap:   null,
+    fetchErr:      null,
   };
 
   // ── Helpers ─────────────────────────────────────────────────────────
-  // Web Mercator: resolution = 156543.03390625 / 2^zoom
-  function resolutionToZoom(resolution) {
-    if (!resolution || resolution <= 0) return 0;
-    return Math.log2(156543.03390625 / resolution);
+  // Generator bakes `angle_rad` into each LineString feature (tangent at the
+  // centroid, radians CCW from east). For lines that go "downward"
+  // (|angle_rad| > π/2), flipping by π keeps the text right-side-up while
+  // still parallel to the line.
+  function readableRotation(angleRad) {
+    if (angleRad >  Math.PI / 2) return angleRad - Math.PI;
+    if (angleRad < -Math.PI / 2) return angleRad + Math.PI;
+    return angleRad;
   }
 
-  function centroidOf(coords) {
-    let sx = 0, sy = 0, n = 0;
-    for (const c of coords) { sx += c[0]; sy += c[1]; n++; }
-    if (n === 0) return null;
-    return [sx / n, sy / n];
+  // Find where a LineString crosses the 4 viewport edges. Returns up to 4
+  // intersections (one per edge that the line actually crosses). Each
+  // intersection is the geographic coordinate of the crossing point and the
+  // edge name ('top' / 'bottom' / 'left' / 'right') — used for text padding.
+  //
+  // Both inputs are in EPSG:3857 (Web Mercator meters).
+  function computeEdgeIntersects(lineCoords, extent) {
+    const [minX, minY, maxX, maxY] = extent;
+    const out = [];
+
+    for (let i = 0; i < lineCoords.length - 1; i++) {
+      const [x1, y1] = lineCoords[i];
+      const [x2, y2] = lineCoords[i + 1];
+      if (!Number.isFinite(x1) || !Number.isFinite(x2)) continue;
+
+      // Left edge (x = minX)
+      if ((x1 - minX) * (x2 - minX) < 0) {
+        const t = (minX - x1) / (x2 - x1);
+        const y = y1 + t * (y2 - y1);
+        if (y >= minY && y <= maxY) {
+          out.push({ coord: [minX, y], edge: "left" });
+        }
+      }
+      // Right edge (x = maxX)
+      if ((x1 - maxX) * (x2 - maxX) < 0) {
+        const t = (maxX - x1) / (x2 - x1);
+        const y = y1 + t * (y2 - y1);
+        if (y >= minY && y <= maxY) {
+          out.push({ coord: [maxX, y], edge: "right" });
+        }
+      }
+      // Bottom edge (y = minY)
+      if ((y1 - minY) * (y2 - minY) < 0) {
+        const t = (minY - y1) / (y2 - y1);
+        const x = x1 + t * (x2 - x1);
+        if (x >= minX && x <= maxX) {
+          out.push({ coord: [x, minY], edge: "bottom" });
+        }
+      }
+      // Top edge (y = maxY)
+      if ((y1 - maxY) * (y2 - maxY) < 0) {
+        const t = (maxY - y1) / (y2 - y1);
+        const x = x1 + t * (x2 - x1);
+        if (x >= minX && x <= maxX) {
+          out.push({ coord: [x, maxY], edge: "top" });
+        }
+      }
+    }
+    return out;
   }
 
-  function buildLabelFeatures(lineFeatures) {
+  // Per-edge padding offset for the text. Edges are named relative to the
+  // label's screen position — left/right edges push horizontally inward,
+  // top/bottom push vertically inward.
+  function edgePadding(edge) {
+    const p = CONFIG.EDGE_PAD_PX;
+    switch (edge) {
+      case "left":   return [ p, 0];   // push right (away from edge)
+      case "right":  return [-p, 0];   // push left
+      case "top":    return [0,  p];   // push down
+      case "bottom": return [0, -p];   // push up
+      default:       return [0, 0];
+    }
+  }
+
+  function buildEdgeIntersectionLabels(lineSource, map) {
+    const extent = map.getView().calculateExtent(map.getSize());
     const labels = [];
-    for (const f of lineFeatures) {
-      const coords = f.getGeometry().getCoordinates();
+    for (const lineFeature of lineSource.getFeatures()) {
+      const td = lineFeature.get("td");
+      if (Math.round(td) % CONFIG.LABEL_STEP_US !== 0) continue;
+      const coords = lineFeature.getGeometry().getCoordinates();
       if (!coords || coords.length < 2) continue;
-      const pt = centroidOf(coords);
-      if (!pt) continue;
-      labels.push(new ol.Feature({
-        geometry: new ol.geom.Point(pt),
-        pair: f.get("pair"),
-        td: f.get("td"),
-        kind: "td-label",
-      }));
+      const intersections = computeEdgeIntersects(coords, extent);
+      for (const intersection of intersections) {
+        labels.push(new ol.Feature({
+          geometry: new ol.geom.Point(intersection.coord),
+          pair: lineFeature.get("pair"),
+          td: td,
+          angle_rad: lineFeature.get("angle_rad") || 0,
+          edge: intersection.edge,
+          kind: "td-label",
+        }));
+      }
     }
     return labels;
   }
@@ -107,12 +183,12 @@
     });
   }
 
-  function labelStyleFor(feature, resolution) {
-    const zoom = resolutionToZoom(resolution);
-    if (zoom <= CONFIG.LABEL_MIN_ZOOM) return null;
+  function labelStyleFor(feature) {
     const props = feature.getProperties();
     const cfg = CONFIG.STYLES[props.pair] || { color: "#888" };
     const td = Number(props.td || 0);
+    const rotation = readableRotation(Number(props.angle_rad || 0));
+    const [offX, offY] = edgePadding(props.edge);
     return new ol.style.Style({
       text: new ol.style.Text({
         text: String(Math.round(td)),
@@ -127,8 +203,10 @@
         overflow: false,
         textAlign: "center",
         textBaseline: "middle",
-        padding: [1, 2, 1, 2],
-        offsetY: 0,
+        padding: [2, 3, 2, 3],
+        offsetX: offX,
+        offsetY: offY,
+        rotation: rotation,
       }),
     });
   }
@@ -204,9 +282,8 @@
   }
 
   // ── Build the label layer ───────────────────────────────────────────
-  function buildLabelLayer(lineSource) {
-    const labels = buildLabelFeatures(lineSource.getFeatures());
-    const source = new ol.source.Vector({ features: labels });
+  function buildLabelLayer() {
+    const source = new ol.source.Vector({});
     state.labelSource = source;
     return new ol.layer.Vector({
       source,
@@ -216,6 +293,16 @@
       updateWhileAnimating: false,
       updateWhileInteracting: false,
     });
+  }
+
+  // ── Refresh labels based on current viewport ─────────────────────────
+  function refreshEdgeLabels() {
+    if (!state.attachedMap || !state.lineSource || !state.labelSource) return;
+    const labels = buildEdgeIntersectionLabels(
+      state.lineSource, state.attachedMap,
+    );
+    state.labelSource.clear(true);
+    state.labelSource.addFeatures(labels);
   }
 
   // ── Public API ──────────────────────────────────────────────────────
@@ -229,6 +316,7 @@
     if (state.enabled && state.lineLayer) {
       state.lineLayer.setVisible(true);
       if (state.labelLayer) state.labelLayer.setVisible(true);
+      refreshEdgeLabels();
       return true;
     }
     try {
@@ -238,9 +326,15 @@
         map.addLayer(state.lineLayer);
       }
       if (!state.labelLayer) {
-        state.labelLayer = buildLabelLayer(source);
+        state.labelLayer = buildLabelLayer();
         map.addLayer(state.labelLayer);
       }
+      // First-time attach: bind the map, listen for viewport changes.
+      if (!state.attachedMap) {
+        state.attachedMap = map;
+        map.on("moveend", refreshEdgeLabels);
+      }
+      refreshEdgeLabels();
       state.lineLayer.setVisible(true);
       state.labelLayer.setVisible(true);
       state.enabled = true;
@@ -257,11 +351,8 @@
   }
 
   function toggle(visible) {
-    if (visible) {
-      enable();
-    } else {
-      disable();
-    }
+    if (visible) enable();
+    else disable();
   }
 
   function isEnabled() {
@@ -282,6 +373,6 @@
     isEnabled,
     isRegionSupported,
     CONFIG,
-    _state: state, // exposed for debugging only; do not depend on shape
+    _state: state,
   };
 })(window);

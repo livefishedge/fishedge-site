@@ -229,6 +229,34 @@ def _snap_levels(lo: float, hi: float, step: float) -> np.ndarray:
     return np.arange(n_lo * step, (n_hi + 1) * step, step)
 
 
+def _angle_at_centroid(coords: Sequence[Tuple[float, float]]) -> float:
+    """Tangent angle (radians, CCW from east) of the line at its centroid.
+
+    The dashboard's label layer uses this as `ol.style.Text.rotation` so the
+    numeric TD label sits parallel to the isoline. atan2(dlat, dlon) matches
+    OL's Text rotation convention for text aligned with a line in WGS84 /
+    Web Mercator (both are 'east-right, north-up' coordinate systems).
+    """
+    n = len(coords)
+    if n < 2:
+        return 0.0
+    cx = sum(c[0] for c in coords) / n
+    cy = sum(c[1] for c in coords) / n
+    # Find the closest vertex to the centroid
+    dists = [(c[0] - cx) ** 2 + (c[1] - cy) ** 2 for c in coords]
+    i = min(range(n), key=lambda j: dists[j])
+    # Use a small segment around the closest vertex for the tangent direction.
+    if i == 0:
+        a, b = coords[0], coords[1]
+    elif i == n - 1:
+        a, b = coords[-2], coords[-1]
+    else:
+        a, b = coords[i], coords[i + 1]
+    dlat = b[1] - a[1]
+    dlon = b[0] - a[0]
+    return math.atan2(dlat, dlon)
+
+
 def _extract_isolines(lon_mesh: np.ndarray,
                       lat_mesh: np.ndarray,
                       grid: np.ndarray,
@@ -238,8 +266,9 @@ def _extract_isolines(lon_mesh: np.ndarray,
     """Run plt.contour at given levels and append LineString features.
 
     Uses QuadContourSet.allsegs (the modern API; cs.collections was removed
-    in matplotlib 3.8+). Each feature carries the TD value and the `type`
-    marker; the dashboard reads `pair`, `td`, and `type` directly.
+    in matplotlib 3.8+). Each feature carries the TD value and an
+    `angle_rad` property (tangent at the line centroid, radians CCW from
+    east) that the dashboard label layer reads for parallel-to-line rotation.
     """
     fig, ax = plt.subplots()
     try:
@@ -248,6 +277,7 @@ def _extract_isolines(lon_mesh: np.ndarray,
             for verts in segments:
                 if len(verts) < 2:
                     continue
+                angle = _angle_at_centroid(verts)
                 features.append({
                     "type": "Feature",
                     "geometry": {
@@ -258,6 +288,7 @@ def _extract_isolines(lon_mesh: np.ndarray,
                         "pair": pair_name,
                         "td": round(float(level), 2),
                         "type": "major",  # single step now (no minor)
+                        "angle_rad": round(angle, 6),
                     },
                 })
     finally:
