@@ -13,19 +13,28 @@
  *      positioned on the line just inside the current viewport edges
  *      (top / bottom / left / right).
  *
- * Rotation rule (Mike, #32126, #32139, #32142):
+ * Rotation rule (Mike, #32126, #32139, #32142, #32262):
+ *   - Labels are parallel to the local segment tangent at every label
+ *     position. TD isolines are hyperbolic curves — the tangent direction
+ *     varies continuously along the line, so NO fixed per-pair rotation
+ *     offset is applied. Adding a fixed offset (e.g. +15° X / +9° Y)
+ *     drifts the label off the line wherever the curve bends. The
+ *     +15°/+9° values from commits 998e6ed → db384c3 were removed in
+ *     #32262 (2026-08-18).
  *   - Rotation source: the actual rendered LineString segment that holds
  *     the label. NOT the centroid angle baked into the GeoJSON, and NOT
  *     an analytic tangent that can differ from the simplified polyline.
- *   - 9960-Y (horizontal lines, edge tangent ~0° or ~π): readability
- *     flip applied → text always reads east consistently regardless of
- *     which way matplotlib ordered the LineString vertices. Without
- *     the flip (b6daa83), some Y labels read east, others read west.
- *   - 9960-X (vertical lines, edge tangent ~±90°): NO flip → text
- *     reads along the line's actual direction. NNE branch reads NNE,
- *     SSW branch reads SSW, each parallel to its own branch — which
- *     is what "all labels have to be in parallel with and on the line
- *     of the line they're labeling" requires.
+ *   - Readability flip (separate concern from parallelism — this is about
+ *     text reading direction east vs west, not about parallelism):
+ *       9960-Y (horizontal lines, edge tangent ~0° or ~π): flip applied
+ *       → text always reads east regardless of which way matplotlib
+ *       ordered the LineString vertices. Without the flip (b6daa83),
+ *       some Y labels read east, others read west.
+ *       9960-X (vertical lines, edge tangent ~±90°): NO flip → NNE
+ *       branch reads NNE, SSW branch reads SSW, each parallel to its
+ *       own branch. Flipping vertical lines (be7396b) makes both
+ *       branches read in the same compass direction — Mike called
+ *       this "tilt reversed".
  *
  * Single global: window.LoranTdController
  *
@@ -48,10 +57,10 @@
       LINE_WIDTH:    0.8,
       LINE_OPACITY:  0.65,
       EDGE_PAD_PX:   32,
-      LABEL_ROTATION_CLOCKWISE_RAD: {
-        "9960-X": 15 * Math.PI / 180,
-        "9960-Y": 9 * Math.PI / 180,
-      },
+      // LABEL_ROTATION_CLOCKWISE_RAD removed: TD isolines are hyperbolic
+      // curves, not straight lines, so a fixed per-pair offset breaks
+      // parallelism. Labels now use the local segment tangent only.
+      // (Mike, 2026-08-18 #32262)
     };
 
   // ── State ───────────────────────────────────────────────────────────
@@ -205,8 +214,12 @@
     const props = feature.getProperties();
     const cfg = CONFIG.STYLES[props.pair] || { color: "#888" };
     const td = Number(props.td || 0);
-    const rotationOffset = CONFIG.LABEL_ROTATION_CLOCKWISE_RAD[props.pair] || 0;
-    const rotation = Number(props.rotation || 0) + rotationOffset;
+    // Labels are parallel to the local segment tangent at the edge
+    // intersection (set in buildEdgeIntersectionLabels as feature.rotation).
+    // TD isolines are hyperbolic curves — tangent varies continuously
+    // along the curve, so NO fixed per-pair rotation offset is applied.
+    // (Mike, 2026-08-18 #32262)
+    const rotation = Number(props.rotation || 0);
     return new ol.style.Style({
       text: new ol.style.Text({
         text: String(Math.round(td)),
