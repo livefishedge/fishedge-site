@@ -7,6 +7,7 @@ Priority is explicit: Okeanos survey > NOS/BAG > BlueTopo > NCEI mosaic.
 import json, math, sys
 from pathlib import Path
 import numpy as np
+import cv2
 import rasterio
 from rasterio.crs import CRS
 from rasterio.transform import from_bounds, Affine
@@ -60,6 +61,62 @@ def load_source(path, transform, shape):
                   resampling=Resampling.bilinear)
     valid=np.isfinite(dst) & (dst < -0.001) & (dst > -12000)
     return dst, valid
+
+def correct_scan_seams(arr, valid):
+    """Correct only long, sharp scan-edge steps; preserve morphology.
+
+    A real canyon wall is not treated as an artifact merely because it is
+    steep. The gate requires a long straight edge in the raster plus a stable
+    cross-edge level jump. The correction is confined to a narrow ramp around
+    that edge, leaving the terrain on either side unchanged.
+    """
+    h,w=arr.shape; scale=max(1,int(round(max(h,w)/1200)))
+    sh=max(1,h//scale); sw=max(1,w//scale)
+    small=np.full((sh,sw),0.0,dtype='float32')
+    small_valid=cv2.resize(valid.astype('uint8'),(sw,sh),interpolation=cv2.INTER_AREA)>0.5
+    small_values=cv2.resize(np.where(valid,arr,0.0).astype('float32'),(sw,sh),interpolation=cv2.INTER_AREA)
+    small[small_valid]=small_values[small_valid]
+    finite=small[small_valid]
+    if finite.size < 1000: return arr,0
+    lo,hi=np.percentile(finite,[2,98])
+    image=np.clip((small-lo)/(hi-lo+1e-6)*255,0,255).astype('uint8')
+    image[~small_valid]=0
+    edges=cv2.Canny(image,30,90)
+    lines=cv2.HoughLinesP(edges,1,np.pi/180,threshold=50,
+                          minLineLength=max(150,min(sh,sw)//6),maxLineGap=25)
+    if lines is None: return arr,0
+    out=np.array(arr,copy=True); corrected=0
+    for q in lines[:,0]:
+        x1,y1,x2,y2=(int(v*scale) for v in q)
+        length=float(np.hypot(x2-x1,y2-y1))
+        if length < 150*scale: continue
+        tx=(x2-x1)/length; ty=(y2-y1)/length
+        nx=-ty; ny=tx
+        minus=[]; plus=[]
+        for t in np.linspace(.08,.92,80):
+            x=x1+t*(x2-x1); y=y1+t*(y2-y1)
+            for d in (12,18,24):
+                for side,bag in ((-1,minus),(1,plus)):
+                    xx=int(round(x+side*nx*d)); yy=int(round(y+side*ny*d))
+                    if 0<=xx<w and 0<=yy<h and valid[yy,xx] and np.isfinite(arr[yy,xx]): bag.append(float(arr[yy,xx]))
+        if len(minus)<100 or len(plus)<100: continue
+        step=float(np.median(minus)-np.median(plus))
+        if abs(step)<8.0 or abs(step)>120.0: continue
+        width=30.0
+        xlo=max(0,int(min(x1,x2)-width)); xhi=min(w,int(max(x1,x2)+width+1))
+        ylo=max(0,int(min(y1,y2)-width)); yhi=min(h,int(max(y1,y2)+width+1))
+        X,Y=np.meshgrid(np.arange(xlo,xhi,dtype='float32'),np.arange(ylo,yhi,dtype='float32'))
+        signed=(X-x1)*ny-(Y-y1)*nx
+        along=(X-x1)*tx+(Y-y1)*ty
+        band=(np.abs(signed)<=width)&(along>=-width)&(along<=length+width)
+        alpha=np.clip(1-np.abs(signed)/width,0,1)
+        # Bring the plus side to the minus-side level, tapering to zero
+        # within the seam corridor rather than altering either survey interior.
+        corr=np.where(signed>=0,step*alpha,0.0)
+        sub=out[ylo:yhi,xlo:xhi]; vm=valid[ylo:yhi,xlo:xhi]&band
+        sub[vm]+=corr[vm].astype('float32'); out[ylo:yhi,xlo:xhi]=sub
+        corrected+=1
+    return out,corrected
 
 def harmonize(arrays, masks, infos):
     """Put every source on one local vertical level before precedence selection.
@@ -172,7 +229,18 @@ def build(region):
     arrays=[]; masks=[]; infos=[]
     for name,path,priority,confidence,label in cfg['sources']:
         if not path.exists(): print('SKIP missing',path); continue
-        a,m=load_source(path,transform,(height,width)); arrays.append(a); masks.append(m); infos.append((name,path,priority,confidence,label)); print(name,'valid',int(m.sum()),flush=True)
+        a,m=load_source(path,transform,(height,width))
+        if priority == 4:
+            a,seam_count=correct_scan_seams(a,m)
+            print(name,'valid',int(m.sum()),'scan_seams_corrected',seam_count,flush=True)
+        arrays.append(a); masks.append(m); infos.append((name,path,priority,confidence,label)); print(name,'valid',int(m.sum()),flush=True)
+        if priority == 4:
+            # The raw Okeanos grids contain interpolation/sounding fans at
+            # their outer swath edges. Keep the surveyed interior and allow
+            # lower-tier surfaces to fill this narrow fringe instead of
+            # presenting those edge artifacts as real seafloor structure.
+            edge_cells=20  # 20 x 30 m target cells ~= 600 m
+            m &= distance_transform_edt(m) > edge_cells
     offsets=harmonize(arrays,masks,infos)
     composite=np.full((height,width),np.nan,dtype='float32'); prov=np.zeros((height,width),dtype='uint8'); conf=np.zeros((height,width),dtype='float32'); conflict=np.zeros((height,width),dtype='float32')
     # Highest evidence wins. Equal-priority survey patches are feathered by
