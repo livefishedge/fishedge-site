@@ -53,6 +53,22 @@
     <div class="meta">NOAA EM302 final grid · dedicated Hudson Canyon survey</div>
     <label class="row"><input type="checkbox" data-layer="ex2203Transit3"><span class="swatch"></span>Okeanos EX2203 Transit 3 <b>25 m</b></label>
     <div class="meta">NOAA EM302 final grid · transit-track coverage; separate quality label</div>
+    <label class="row"><input type="checkbox" data-layer="ex1106Baltimore"><span class="swatch"></span>Okeanos EX1106 Baltimore Canyons <b>25 m</b></label>
+    <div class="meta">NOAA EM302 final grid · named Baltimore Canyon product</div>
+    <label class="row"><input type="checkbox" data-layer="ex1106Keller"><span class="swatch"></span>Okeanos EX1106 Keller Canyon <b>25 m</b></label>
+    <div class="meta">NOAA EM302 final grid · named Keller Canyon product</div>
+    <label class="row"><input type="checkbox" data-layer="ex1201Hendrickson"><span class="swatch"></span>Okeanos EX1201 Hendrickson/Toms/Berkeley <b>25 m</b></label>
+    <label class="row"><input type="checkbox" data-layer="ex1201McMaster"><span class="swatch"></span>Okeanos EX1201 McMaster/Ryan Canyons <b>25 m</b></label>
+    <label class="row"><input type="checkbox" data-layer="ex1205Hudson"><span class="swatch"></span>Okeanos EX1205L2 Hudson Canyon <b>25 m</b></label>
+    <label class="row"><input type="checkbox" data-layer="ex1904VaNy"><span class="swatch"></span>Okeanos EX1904 Virginia–New York <b>20 m</b></label>
+    <label class="row"><input type="checkbox" data-layer="ex1904NyRi"><span class="swatch"></span>Okeanos EX1904 New York–Rhode Island <b>20 m</b></label>
+    <label class="row"><input type="checkbox" data-layer="ex1904Rov"><span class="swatch"></span>Okeanos EX1904 ROV grid <b>30 m</b></label>
+    <label class="row"><input type="checkbox" data-layer="ex1906North"><span class="swatch"></span>Okeanos EX1906 North <b>25 m</b></label>
+    <label class="row"><input type="checkbox" data-layer="ex2103Canyons"><span class="swatch"></span>Okeanos EX2103 Canyons <b>20 m</b></label>
+    <label class="row"><input type="checkbox" data-layer="ex2105Transit"><span class="swatch"></span>Okeanos EX2105 Transit <b>25 m</b></label>
+    <label class="row"><input type="checkbox" data-layer="ex2205Transit1"><span class="swatch"></span>Okeanos EX2205 Transit 1 <b>50 m</b></label>
+    <label class="row"><input type="checkbox" data-layer="ex2205Transit2"><span class="swatch"></span>Okeanos EX2205 Transit 2 <b>50 m</b></label>
+    <div class="meta">Additional named NOAA/Okeanos canyon and transit grids found in the exhaustive catalog search</div>
     <label class="row"><input type="checkbox" data-layer="usgsWashingtonAccomac"><span class="swatch"></span>USGS Reson 7160 Washington–Accomac <b>25 m</b></label>
     <div class="meta">USGS 2017 MBES grid · documented QA/QC · direct canyon survey</div>
     <label class="row"><input type="checkbox" data-layer="usgsKeller"><span class="swatch"></span>USGS Reson 7160 Keller Canyon <b>25 m</b></label>
@@ -101,6 +117,19 @@
     ex1404l3Hudson: './data/bathy/canyon_tiles/ex1404l3_hudson/color/{z}/{x}/{y}.png?v=20260818-canyon2',
     ex1303Hudson: './data/bathy/canyon_tiles/ex1303_hudson/color/{z}/{x}/{y}.png?v=20260818-canyon2',
     ex2203Transit3: './data/bathy/canyon_tiles/ex2203_transit3/color/{z}/{x}/{y}.png?v=20260818-canyon2',
+    ex1106Baltimore: './data/bathy/canyon_tiles/ex1106_baltimore_25m/color/{z}/{x}/{y}.png?v=20260818-exhaustive1',
+    ex1106Keller: './data/bathy/canyon_tiles/ex1106_keller_25m/color/{z}/{x}/{y}.png?v=20260818-exhaustive1',
+    ex1201Hendrickson: './data/bathy/canyon_tiles/ex1201_hendrickson_toms_25m/color/{z}/{x}/{y}.png?v=20260818-exhaustive1',
+    ex1201McMaster: './data/bathy/canyon_tiles/ex1201_mcmaster_ryan_25m/color/{z}/{x}/{y}.png?v=20260818-exhaustive1',
+    ex1205Hudson: './data/bathy/canyon_tiles/ex1205l2_hudson_25m/color/{z}/{x}/{y}.png?v=20260818-exhaustive1',
+    ex1904VaNy: './data/bathy/canyon_tiles/ex1904_va_ny_20m/color/{z}/{x}/{y}.png?v=20260818-exhaustive1',
+    ex1904NyRi: './data/bathy/canyon_tiles/ex1904_ny_ri_20m/color/{z}/{x}/{y}.png?v=20260818-exhaustive1',
+    ex1904Rov: './data/bathy/canyon_tiles/ex1904_rov_30m/color/{z}/{x}/{y}.png?v=20260818-exhaustive1',
+    ex1906North: './data/bathy/canyon_tiles/ex1906_north_25m/color/{z}/{x}/{y}.png?v=20260818-exhaustive1',
+    ex2103Canyons: './data/bathy/canyon_tiles/ex2103_canyons_20m/color/{z}/{x}/{y}.png?v=20260818-exhaustive1',
+    ex2105Transit: './data/bathy/canyon_tiles/ex2105_transit_25m/color/{z}/{x}/{y}.png?v=20260818-exhaustive1',
+    ex2205Transit1: './data/bathy/canyon_tiles/ex2205_transit1_50m/color/{z}/{x}/{y}.png?v=20260818-exhaustive1',
+    ex2205Transit2: './data/bathy/canyon_tiles/ex2205_transit2_50m/color/{z}/{x}/{y}.png?v=20260818-exhaustive1',
     usgsWashingtonAccomac: './data/bathy/canyon_tiles/usgs_washington_accomac/color/{z}/{x}/{y}.png?v=20260818-usgs1',
     usgsKeller: './data/bathy/canyon_tiles/usgs_keller/color/{z}/{x}/{y}.png?v=20260818-usgs1',
     usgsNorfolk: './data/bathy/canyon_tiles/usgs_norfolk/color/{z}/{x}/{y}.png?v=20260818-usgs1',
@@ -119,7 +148,7 @@
   const center = ol.proj.fromLonLat([-74.05, 38.22]);
   const layers = {};
   for (const [name,url] of Object.entries(urls)) {
-    const maxZoom = (name === 'ex1404l3West' || name === 'ex2203Transit3' || name === 'knox17rr') ? 11 : 13;
+    const maxZoom = (name === 'ex1404l3West' || name === 'ex2203Transit3' || name === 'knox17rr' || name === 'ex1904VaNy' || name === 'ex1904NyRi' || name === 'ex1904Rov' || name === 'ex1906North' || name === 'ex2105Transit' || name === 'ex2205Transit1' || name === 'ex2205Transit2') ? 10 : 13;
     layers[name] = new ol.layer.Tile({source:new ol.source.XYZ({url,crossOrigin:'anonymous',minZoom:5,maxZoom}),visible:name==='dem',opacity:.94,zIndex:10});
   }
   // Realness overlay: static image covering the Baltimore Canyon bbox.
@@ -229,6 +258,19 @@
     ex1404l3Hudson: 'NOAA Okeanos EX1404L3 Hudson Canyon · dedicated survey · 15 m',
     ex1303Hudson: 'NOAA Okeanos EX1303 Hudson Canyon · dedicated survey · 30 m',
     ex2203Transit3: 'NOAA Okeanos EX2203 Transit 3 · transit survey · 25 m',
+    ex1106Baltimore: 'NOAA Okeanos EX1106 Baltimore Canyons · named canyon grid · 25 m',
+    ex1106Keller: 'NOAA Okeanos EX1106 Keller Canyon · named canyon grid · 25 m',
+    ex1201Hendrickson: 'NOAA Okeanos EX1201 Hendrickson/Toms/Berkeley Canyons · 25 m',
+    ex1201McMaster: 'NOAA Okeanos EX1201 McMaster/Ryan Canyons · 25 m',
+    ex1205Hudson: 'NOAA Okeanos EX1205L2 Hudson Canyon · 25 m',
+    ex1904VaNy: 'NOAA Okeanos EX1904 Virginia–New York · 20 m',
+    ex1904NyRi: 'NOAA Okeanos EX1904 New York–Rhode Island · 20 m',
+    ex1904Rov: 'NOAA Okeanos EX1904 ROV grid · 30 m',
+    ex1906North: 'NOAA Okeanos EX1906 North · 25 m',
+    ex2103Canyons: 'NOAA Okeanos EX2103 Canyons · dedicated canyon grid · 20 m',
+    ex2105Transit: 'NOAA Okeanos EX2105 Transit · 25 m',
+    ex2205Transit1: 'NOAA Okeanos EX2205 Transit 1 · 50 m',
+    ex2205Transit2: 'NOAA Okeanos EX2205 Transit 2 · 50 m',
     usgsWashingtonAccomac: 'USGS Reson 7160 Washington–Accomac Canyons · 25 m',
     usgsKeller: 'USGS Reson 7160 Keller Canyon · 25 m',
     usgsNorfolk: 'USGS Reson 7160 Norfolk Canyon · 25 m',

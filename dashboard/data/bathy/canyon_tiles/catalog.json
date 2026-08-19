@@ -147,6 +147,97 @@
       "title": "KN193-06",
       "quality": "processed SeaBeam 3012 swath files; not yet gridded in DEV",
       "source": "https://www.marine-geo.org/tools/search/Files.php?data_set_uid=19883"
+    },
+    "ex1106_baltimore_25m": {
+      "title": "NOAA Okeanos EX1106 Baltimore Canyons",
+      "resolution_m": 25,
+      "quality": "named EM302 canyon grid; NOAA catalog object 68",
+      "bounds_wsen": [-73.90671, 37.84152, -73.13796, 38.57802],
+      "source": "https://www.ngdc.noaa.gov/ships/okeanos_explorer/EX1106_mb.html"
+    },
+    "ex1106_keller_25m": {
+      "title": "NOAA Okeanos EX1106 Keller Canyon",
+      "resolution_m": 25,
+      "quality": "named EM302 canyon grid; NOAA catalog object 66",
+      "bounds_wsen": [-74.86099, 35.26602, -74.07824, 35.66777],
+      "source": "https://www.ngdc.noaa.gov/ships/okeanos_explorer/EX1106_mb.html"
+    },
+    "ex1201_hendrickson_toms_25m": {
+      "title": "NOAA Okeanos EX1201 Hendrickson/Toms/Berkeley Canyons",
+      "resolution_m": 25,
+      "quality": "named EM302 canyon grid; NOAA catalog object 69",
+      "bounds_wsen": [-73.03639, 38.69887, -72.22589, 39.32837],
+      "source": "https://www.ngdc.noaa.gov/ships/okeanos_explorer/EX1201_mb.html"
+    },
+    "ex1201_mcmaster_ryan_25m": {
+      "title": "NOAA Okeanos EX1201 McMaster/Ryan Canyons",
+      "resolution_m": 25,
+      "quality": "named EM302 canyon grid; NOAA catalog object 70",
+      "bounds_wsen": [-71.74852, 39.65667, -71.15377, 39.96392],
+      "source": "https://www.ngdc.noaa.gov/ships/okeanos_explorer/EX1201_mb.html"
+    },
+    "ex1205l2_hudson_25m": {
+      "title": "NOAA Okeanos EX1205L2 Hudson Canyon",
+      "resolution_m": 25,
+      "quality": "named EM302 canyon grid; NOAA catalog object 88",
+      "bounds_wsen": [-72.45026, 39.27031, -71.99451, 39.65456],
+      "source": "https://www.ngdc.noaa.gov/ships/okeanos_explorer/EX1205L2_mb.html"
+    },
+    "ex1904_va_ny_20m": {
+      "title": "NOAA Okeanos EX1904 Virginia–New York",
+      "resolution_m": 20,
+      "quality": "processed EM302 regional survey grid; NOAA catalog object 260",
+      "bounds_wsen": [-75.63723, 36.96674, -72.54703, 39.68874],
+      "source": "https://www.ngdc.noaa.gov/ships/okeanos_explorer/EX1904_mb.html"
+    },
+    "ex1904_ny_ri_20m": {
+      "title": "NOAA Okeanos EX1904 New York–Rhode Island",
+      "resolution_m": 20,
+      "quality": "processed EM302 regional survey grid; NOAA catalog object 258",
+      "bounds_wsen": [-72.47225, 39.69081, -69.64686, 41.27341],
+      "source": "https://www.ngdc.noaa.gov/ships/okeanos_explorer/EX1904_mb.html"
+    },
+    "ex1904_rov_30m": {
+      "title": "NOAA Okeanos EX1904 ROV grid",
+      "resolution_m": 30,
+      "quality": "processed ROV/EM302 grid; NOAA catalog object 259",
+      "bounds_wsen": [-71.61292, 38.92167, -67.16002, 41.36577],
+      "source": "https://www.ngdc.noaa.gov/ships/okeanos_explorer/EX1904_mb.html"
+    },
+    "ex1906_north_25m": {
+      "title": "NOAA Okeanos EX1906 North",
+      "resolution_m": 25,
+      "quality": "processed EM302 survey grid; NOAA catalog object 265",
+      "bounds_wsen": [-78.38573, 32.30291, -71.47823, 40.89466],
+      "source": "https://www.ngdc.noaa.gov/ships/okeanos_explorer/EX1906_mb.html"
+    },
+    "ex2103_canyons_20m": {
+      "title": "NOAA Okeanos EX2103 Canyons",
+      "resolution_m": 20,
+      "quality": "named canyon EM304 grid; NOAA catalog object 278",
+      "bounds_wsen": [-72.64360, 38.99543, -71.67000, 39.79142],
+      "source": "https://www.ngdc.noaa.gov/ships/okeanos_explorer/EX2103_mb.html"
+    },
+    "ex2105_transit_25m": {
+      "title": "NOAA Okeanos EX2105 Transit",
+      "resolution_m": 25,
+      "quality": "transit EM304 grid; NOAA catalog object 290",
+      "bounds_wsen": [-78.99961, 29.50795, -71.43461, 40.77470],
+      "source": "https://www.ngdc.noaa.gov/ships/okeanos_explorer/EX2105_mb.html"
+    },
+    "ex2205_transit1_50m": {
+      "title": "NOAA Okeanos EX2205 Transit 1",
+      "resolution_m": 50,
+      "quality": "transit EM304 grid; NOAA catalog object 311",
+      "bounds_wsen": [-73.60565, 38.26352, -71.83215, 39.46402],
+      "source": "https://www.ngdc.noaa.gov/ships/okeanos_explorer/EX2205_mb.html"
+    },
+    "ex2205_transit2_50m": {
+      "title": "NOAA Okeanos EX2205 Transit 2",
+      "resolution_m": 50,
+      "quality": "transit EM304 grid; NOAA catalog object 312",
+      "bounds_wsen": [-71.87080, 39.43386, -65.91430, 40.59287],
+      "source": "https://www.ngdc.noaa.gov/ships/okeanos_explorer/EX2205_mb.html"
     }
   }
 }
