@@ -99,7 +99,11 @@
     const transit = makeStubSegment('transit', 'Transit corridor',     opts.target.lonlat);
     const ret     = makeStubSegment('return',  'Return route',         opts.home_inlet.lonlat);
 
-    return Object.freeze({
+    return {
+      // NOTE: outer adapter is intentionally NOT frozen — the decision engine
+      // and reconciler stamp `decision` / `obs_vs_model_disagreement` on it
+      // after evaluation. The segments sub-object stays frozen so segment
+      // identity can't be reassigned (only its nested fields can be filled).
       schema: 'captain-conditions-v1',
       build_marker: 'FISHEDGE_TRIP_PLANNER_BUILD=dev-mvp',
       request: {
@@ -118,7 +122,7 @@
       async refresh() {
         return { segments: this.segments, request: this.request };
       },
-    });
+    };
   }
 
   const api = Object.freeze({
