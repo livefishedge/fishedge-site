@@ -1,0 +1,42 @@
+{
+  "region": "hudson",
+  "bbox_wsen": [
+    -72.8,
+    38.9,
+    -71.1,
+    40.15
+  ],
+  "resolution_m": 30.0,
+  "shape": [
+    6014,
+    6309
+  ],
+  "offsets_m": {
+    "ex1303": 0.0,
+    "ex1404l3": 0.0,
+    "bluetopo": 0.0
+  },
+  "sources": [
+    {
+      "name": "ex1303",
+      "priority": 4,
+      "confidence": 0.95,
+      "label": "Okeanos EX1303 Hudson Canyon",
+      "path": "/home/gzheng/.openclaw/workspace-cto/bathy-research/canyon_products/new_wm/ex1303_hudson_30m_wm.tif"
+    },
+    {
+      "name": "ex1404l3",
+      "priority": 4,
+      "confidence": 0.95,
+      "label": "Okeanos EX1404L3 Hudson Canyon",
+      "path": "/home/gzheng/.openclaw/workspace-cto/bathy-research/canyon_products/new_wm/ex1404l3_hudson_15m_wm.tif"
+    },
+    {
+      "name": "bluetopo",
+      "priority": 2,
+      "confidence": 0.48,
+      "label": "NOAA BlueTopo compilation",
+      "path": "/home/gzheng/.openclaw/workspace-cto/bathy-research/bluetopo_elevation_wm.tif"
+    }
+  ]
+}

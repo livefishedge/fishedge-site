@@ -1,0 +1,58 @@
+{
+  "region": "baltimore",
+  "bbox_wsen": [
+    -74.3,
+    37.45,
+    -73.1,
+    38.65
+  ],
+  "resolution_m": 30.0,
+  "shape": [
+    5655,
+    4453
+  ],
+  "offsets_m": {
+    "ex1302": 0.0,
+    "ex1903l2": 0.0,
+    "bag": 0.5159,
+    "bluetopo": 1.0387,
+    "multibeam": -0.1694
+  },
+  "sources": [
+    {
+      "name": "ex1302",
+      "priority": 4,
+      "confidence": 0.95,
+      "label": "Okeanos EX1302 raw/processed survey",
+      "path": "/home/gzheng/.openclaw/workspace-cto/bathy-research/canyon_products/ex1302_01_raw.tif"
+    },
+    {
+      "name": "ex1903l2",
+      "priority": 4,
+      "confidence": 0.95,
+      "label": "Okeanos EX1903L2 North raw/processed survey",
+      "path": "/home/gzheng/.openclaw/workspace-cto/bathy-research/canyon_products/ex1903_north_raw.tif"
+    },
+    {
+      "name": "bag",
+      "priority": 3,
+      "confidence": 0.7,
+      "label": "NOS BAG survey mosaic",
+      "path": "/home/gzheng/.openclaw/workspace-cto/bathy-research/ncei_bag_wm.tif"
+    },
+    {
+      "name": "bluetopo",
+      "priority": 2,
+      "confidence": 0.48,
+      "label": "NOAA BlueTopo compilation",
+      "path": "/home/gzheng/.openclaw/workspace-cto/bathy-research/bluetopo_elevation_wm.tif"
+    },
+    {
+      "name": "multibeam",
+      "priority": 1,
+      "confidence": 0.32,
+      "label": "NCEI multibeam mosaic",
+      "path": "/home/gzheng/.openclaw/workspace-cto/bathy-research/ncei_multibeam_wm.tif"
+    }
+  ]
+}

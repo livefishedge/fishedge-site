@@ -35,6 +35,10 @@
     <div class="meta">Valid-overlap average used by the earlier comparison</div>
     <label class="row"><input type="checkbox" data-layer="multibeam"><span class="swatch"></span>Multibeam Mosaic Combined <b>3 arc-sec</b></label>
     <div class="meta">NCEI combined multibeam product · nominal ~90 m grid</div>
+    <label class="row"><input type="checkbox" data-layer="surveyFirstBaltimore"><span class="swatch"></span>Survey-first Baltimore composite <b>30 m grid</b></label>
+    <div class="meta">Okeanos first; NOS BAG → BlueTopo → NCEI fallback. Conflicting elevations are preserved, not averaged.</div>
+    <label class="row"><input type="checkbox" data-layer="surveyEvidenceBaltimore"><span class="swatch" style="background:linear-gradient(90deg,#1f50a0,#0fafa0,#f09628,#f0e146)"></span>Baltimore source evidence</label>
+    <div class="meta">Blue = NCEI · cyan = BlueTopo · orange = BAG · yellow = Okeanos</div>
     <label class="row"><input type="checkbox" data-layer="bluetopo"><span class="swatch"></span>NOAA BlueTopo <b>8–16 m</b></label>
     <div class="meta">BlueTopo elevation compilation · includes measured and interpolated cells</div>
     <label class="row"><input type="checkbox" data-layer="bluetopoMeasured"><span class="swatch"></span>BlueTopo measured-only <b>8–16 m</b></label>
@@ -49,6 +53,9 @@
     <div class="meta">NOAA EM302 final grid · dedicated Hudson Canyon survey</div>
     <label class="row"><input type="checkbox" data-layer="ex1303Hudson"><span class="swatch"></span>Okeanos EX1303 Hudson Canyon <b>30 m</b></label>
     <div class="meta">NOAA EM302 final grid · dedicated Hudson Canyon survey</div>
+    <label class="row"><input type="checkbox" data-layer="surveyFirstHudson"><span class="swatch"></span>Survey-first Hudson composite <b>15–30 m grid</b></label>
+    <div class="meta">Okeanos EX1404L3/EX1303 precedence; lower-tier sources fill only valid gaps.</div>
+    <label class="row"><input type="checkbox" data-layer="surveyEvidenceHudson"><span class="swatch" style="background:linear-gradient(90deg,#1f50a0,#0fafa0,#f09628,#f0e146)"></span>Hudson source evidence</label>
     <label class="row"><input type="checkbox" data-layer="ex2203Transit3"><span class="swatch"></span>Okeanos EX2203 Transit 3 <b>25 m</b></label>
     <div class="meta">NOAA EM302 final grid · transit-track coverage; separate quality label</div>
     <label class="row"><input type="checkbox" data-layer="ex1106Baltimore"><span class="swatch"></span>Okeanos EX1106 Baltimore Canyons <b>25 m</b></label>
@@ -67,12 +74,6 @@
     <label class="row"><input type="checkbox" data-layer="ex2205Transit1"><span class="swatch"></span>Okeanos EX2205 Transit 1 <b>50 m</b></label>
     <label class="row"><input type="checkbox" data-layer="ex2205Transit2"><span class="swatch"></span>Okeanos EX2205 Transit 2 <b>50 m</b></label>
     <div class="meta">Additional named NOAA/Okeanos canyon and transit grids found in the exhaustive catalog search</div>
-    <label class="row"><input type="checkbox" data-layer="usgsWashingtonAccomac"><span class="swatch"></span>USGS Reson 7160 Washington–Accomac <b>25 m</b></label>
-    <div class="meta">USGS 2017 MBES grid · documented QA/QC · direct canyon survey</div>
-    <label class="row"><input type="checkbox" data-layer="usgsKeller"><span class="swatch"></span>USGS Reson 7160 Keller Canyon <b>25 m</b></label>
-    <div class="meta">USGS 2017 MBES grid · documented QA/QC · direct canyon survey</div>
-    <label class="row"><input type="checkbox" data-layer="usgsNorfolk"><span class="swatch"></span>USGS Reson 7160 Norfolk Canyon <b>25 m</b></label>
-    <div class="meta">USGS 2017 MBES grid · documented QA/QC · direct canyon survey</div>
     <label class="row"><input type="checkbox" data-layer="at29Auv"><span class="swatch"></span>AT29-04 near-bottom AUV <b>~1 m</b></label>
     <div class="meta">Processed NetCDF grids · separate local AUV footprints; patchy coverage</div>
     <label class="row"><input type="checkbox" data-layer="knox17rr"><span class="swatch"></span>KNOX17RR Atlantic-margin grid <b>~100 m</b></label>
@@ -106,6 +107,8 @@
     bag: root + 'ncei_bag/color/{z}/{x}/{y}.png?v=20260818-wm-mask1',
     average: root + 'ncei_multibeam/color/{z}/{x}/{y}.png?v=20260818-wm-mask1',
     multibeam: root + 'ncei_multibeam/color/{z}/{x}/{y}.png?v=20260818-wm-mask1',
+    surveyFirstBaltimore: './data/bathy/survey_first/baltimore/tiles/depth/{z}/{x}/{y}.png?v=20260818-surveyfirst1',
+    surveyEvidenceBaltimore: './data/bathy/survey_first/baltimore/tiles/provenance/{z}/{x}/{y}.png?v=20260818-surveyfirst1',
     bluetopo: extraRoot + 'bluetopo_full/color/{z}/{x}/{y}.png?v=20260818-bluetopo1',
     bluetopoMeasured: extraRoot + 'bluetopo_measured/color/{z}/{x}/{y}.png?v=20260818-bluetopo1',
     ex1302: './data/bathy/canyon_tiles/ex1302/color/{z}/{x}/{y}.png?v=20260818-canyon1',
@@ -113,6 +116,8 @@
     ex1404l3West: './data/bathy/canyon_tiles/ex1404l3_west/color/{z}/{x}/{y}.png?v=20260818-canyon2',
     ex1404l3Hudson: './data/bathy/canyon_tiles/ex1404l3_hudson/color/{z}/{x}/{y}.png?v=20260818-canyon2',
     ex1303Hudson: './data/bathy/canyon_tiles/ex1303_hudson/color/{z}/{x}/{y}.png?v=20260818-canyon2',
+    surveyFirstHudson: './data/bathy/survey_first/hudson/tiles/depth/{z}/{x}/{y}.png?v=20260818-surveyfirst1',
+    surveyEvidenceHudson: './data/bathy/survey_first/hudson/tiles/provenance/{z}/{x}/{y}.png?v=20260818-surveyfirst1',
     ex2203Transit3: './data/bathy/canyon_tiles/ex2203_transit3/color/{z}/{x}/{y}.png?v=20260818-canyon2',
     ex1106Baltimore: './data/bathy/canyon_tiles/ex1106_baltimore_25m/color/{z}/{x}/{y}.png?v=20260818-exhaustive1',
     ex1106Keller: './data/bathy/canyon_tiles/ex1106_keller_25m/color/{z}/{x}/{y}.png?v=20260818-exhaustive1',
@@ -127,9 +132,6 @@
     ex2105Transit: './data/bathy/canyon_tiles/ex2105_transit_25m/color/{z}/{x}/{y}.png?v=20260818-exhaustive1',
     ex2205Transit1: './data/bathy/canyon_tiles/ex2205_transit1_50m/color/{z}/{x}/{y}.png?v=20260818-exhaustive1',
     ex2205Transit2: './data/bathy/canyon_tiles/ex2205_transit2_50m/color/{z}/{x}/{y}.png?v=20260818-exhaustive1',
-    usgsWashingtonAccomac: './data/bathy/canyon_tiles/usgs_washington_accomac/color/{z}/{x}/{y}.png?v=20260818-usgs1',
-    usgsKeller: './data/bathy/canyon_tiles/usgs_keller/color/{z}/{x}/{y}.png?v=20260818-usgs1',
-    usgsNorfolk: './data/bathy/canyon_tiles/usgs_norfolk/color/{z}/{x}/{y}.png?v=20260818-usgs1',
     at29Auv: './data/bathy/canyon_tiles/at29_04_auv/color/{z}/{x}/{y}.png?v=20260818-mgds1',
     knox17rr: './data/bathy/canyon_tiles/knox17rr/color/{z}/{x}/{y}.png?v=20260818-mgds1'
   };
@@ -145,8 +147,8 @@
   const center = ol.proj.fromLonLat([-74.05, 38.22]);
   const layers = {};
   for (const [name,url] of Object.entries(urls)) {
-    const maxZoom = (name === 'ex1404l3West' || name === 'ex2203Transit3' || name === 'knox17rr' || name === 'ex1904VaNy' || name === 'ex1904NyRi' || name === 'ex1904Rov' || name === 'ex1906North' || name === 'ex2105Transit' || name === 'ex2205Transit1' || name === 'ex2205Transit2') ? (name === 'ex2205Transit2' ? 9 : 10) : 13;
-    layers[name] = new ol.layer.Tile({source:new ol.source.XYZ({url,crossOrigin:'anonymous',minZoom:5,maxZoom}),visible:name==='dem',opacity:.94,zIndex:10});
+    const maxZoom = (name === 'surveyFirstBaltimore' || name === 'surveyEvidenceBaltimore' || name === 'surveyFirstHudson' || name === 'surveyEvidenceHudson' || name === 'ex1404l3West' || name === 'ex2203Transit3' || name === 'knox17rr' || name === 'ex1904VaNy' || name === 'ex1904NyRi' || name === 'ex1904Rov' || name === 'ex1906North' || name === 'ex2105Transit' || name === 'ex2205Transit1' || name === 'ex2205Transit2') ? (name === 'ex2205Transit2' ? 9 : 10) : 13;
+    layers[name] = new ol.layer.Tile({source:new ol.source.XYZ({url,crossOrigin:'anonymous',minZoom:5,maxZoom}),visible:name==='dem',opacity:name.startsWith('surveyEvidence')?.78:.94,zIndex:name.startsWith('surveyEvidence')?18:10});
   }
   // Realness overlay: static image covering the Baltimore Canyon bbox.
   const realnessSW = ol.proj.fromLonLat([realnessMeta.bboxSW[1], realnessMeta.bboxSW[0]]);
@@ -232,7 +234,7 @@
     const ll = ol.proj.toLonLat(evt.coordinate);
     rCoord.textContent = ll[1].toFixed(4) + '°N  ' + Math.abs(ll[0]).toFixed(4) + '°W';
     const myReq = ++reqId;
-    const active = ['dem','bag','average','multibeam','bluetopo','bluetopoMeasured','okeanos','ex1302','ex1903l2','ex1404l3West','ex1404l3Hudson','ex1303Hudson','ex2203Transit3','usgsWashingtonAccomac','usgsKeller','usgsNorfolk','at29Auv','knox17rr'].filter(n => layers[n] && layers[n].getVisible());
+    const active = ['dem','bag','average','multibeam','bluetopo','bluetopoMeasured','surveyFirstBaltimore','surveyFirstHudson','ex1302','ex1903l2','ex1404l3West','ex1404l3Hudson','ex1303Hudson','ex2203Transit3','at29Auv','knox17rr'].filter(n => layers[n] && layers[n].getVisible());
     if(!active.length){ rDepths.innerHTML = ''; return; }
     const results = await Promise.all(active.map(async n => [n, await tileDepth(layers[n], evt.coordinate)]));
     if(myReq !== reqId) return; // stale
@@ -246,6 +248,8 @@
     bag: 'NOS BAG Mosaic · survey-dependent 1 arc-sec',
     average: 'DEM + BAG average',
     multibeam: 'NCEI Multibeam Mosaic Combined · 3 arc-sec',
+    surveyFirstBaltimore: 'Survey-first Baltimore composite · Okeanos > BAG > BlueTopo > NCEI · 30 m grid',
+    surveyEvidenceBaltimore: 'Baltimore source evidence · Okeanos / BAG / BlueTopo / NCEI',
     bluetopo: 'NOAA BlueTopo · 8–16 m compilation',
     bluetopoMeasured: 'NOAA BlueTopo · measured-only · 8–16 m',
     ex1302: 'NOAA Okeanos EX1302 · direct canyon survey · 50 m',
@@ -253,6 +257,8 @@
     ex1404l3West: 'NOAA Okeanos EX1404L3 West · USEC-MD survey · 50 m',
     ex1404l3Hudson: 'NOAA Okeanos EX1404L3 Hudson Canyon · dedicated survey · 15 m',
     ex1303Hudson: 'NOAA Okeanos EX1303 Hudson Canyon · dedicated survey · 30 m',
+    surveyFirstHudson: 'Survey-first Hudson composite · Okeanos EX1404L3/EX1303 · 15–30 m grid',
+    surveyEvidenceHudson: 'Hudson source evidence · Okeanos / BAG / BlueTopo / NCEI',
     ex2203Transit3: 'NOAA Okeanos EX2203 Transit 3 · transit survey · 25 m',
     ex1106Baltimore: 'NOAA Okeanos EX1106 Baltimore Canyons · named canyon grid · 25 m',
     ex1106Keller: 'NOAA Okeanos EX1106 Keller Canyon · named canyon grid · 25 m',
@@ -267,9 +273,6 @@
     ex2105Transit: 'NOAA Okeanos EX2105 Transit · 25 m',
     ex2205Transit1: 'NOAA Okeanos EX2205 Transit 1 · 50 m',
     ex2205Transit2: 'NOAA Okeanos EX2205 Transit 2 · 50 m',
-    usgsWashingtonAccomac: 'USGS Reson 7160 Washington–Accomac Canyons · 25 m',
-    usgsKeller: 'USGS Reson 7160 Keller Canyon · 25 m',
-    usgsNorfolk: 'USGS Reson 7160 Norfolk Canyon · 25 m',
     at29Auv: 'AT29-04 near-bottom AUV bathymetry · ~1 m local grids',
     knox17rr: 'KNOX17RR processed EM120 Atlantic-margin grid · ~100 m',
     realness: 'Realness score overlay'
