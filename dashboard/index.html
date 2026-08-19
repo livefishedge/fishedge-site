@@ -5179,6 +5179,7 @@ function clearUvContourLayer(state) {
 // Render ADT contours as OL vectors so width is measured in screen pixels,
 // not low-resolution raster pixels. This is the authoritative Currents/Sea Level path.
 function buildUvContourLayer(dataObj, gridInfo, map) {
+  if (!map || !map.getSize || map.getSize()[0] === 0 || map.getSize()[1] === 0) return null;
   const d = (dataObj?.data && !Array.isArray(dataObj.data)) ? dataObj.data : dataObj;
   const zMeters = d?.adt || d?.z;
   const z = is2D(zMeters) ? zMeters.map(row => row.map(v => metersToHeight(v))) : zMeters;
@@ -6617,6 +6618,7 @@ async function renderCombinedMode() {
 // ── Helpers for combined mode ──────────────────────────────────────────────
 
 function buildBathyContourLayer(bathyData, gridInfo, map) {
+  if (!map || !map.getSize || map.getSize()[0] === 0 || map.getSize()[1] === 0) return null;
   const source = new ol.source.Vector({ wrapX: false, projection: "EPSG:4326" });
   const layer = new ol.layer.Vector({
     source,
@@ -6646,6 +6648,7 @@ function scheduleCombinedBathyContourUpdate(map) {
 }
 
 function updateBathyContoursForMap(map) {
+  if (!map || !map.getSize || map.getSize()[0] === 0 || map.getSize()[1] === 0) return;
   const bd = window._bathyData;
   const source = window._bathyContourSource;
   if (!bd || !source || !map) return;

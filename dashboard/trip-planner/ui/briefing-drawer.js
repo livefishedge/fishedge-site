@@ -74,8 +74,8 @@
 
   function renderHeader(plan) {
     const d = plan.decision || { decision: 'UNKNOWN', reasons: [], confidence: 'low' };
-    const reasons = (d.reasons || []).map(r =>
-      `<li><code>${r.code}</code> — ${r.field}${r.value != null ? ` = ${fmtVal(r.value)}` : ''}${r.threshold != null ? ` (threshold ${fmtVal(r.threshold)})` : ''}</li>`
+    const reasons = (d.reasons || []).filter((r) => r && r.code).map(r =>
+      `<li><code>${r.code}</code> — ${r.field || '?'}${r.value != null ? ` = ${fmtVal(r.value)}` : ''}${r.threshold != null ? ` (threshold ${fmtVal(r.threshold)})` : ''}</li>`
     ).join('') || '<li>No rule triggers.</li>';
     const conf = d.confidence || 'low';
     const missing = (d.missing_required_inputs || []).map(m => `${m.field} (${m.reason})`).join(', ') || '—';
@@ -102,9 +102,12 @@
       if (seg && Array.isArray(seg.alerts)) alerts.push(...seg.alerts);
     }
     if (!alerts.length) return '';
-    const items = alerts.map(a =>
-      `<div class="bd-alert"><b>${a.event}</b> (${a.severity}) — ${a.headline || ''}</div>`
-    ).join('');
+    // Filter out malformed entries so we don't render 'undefined' strings.
+    const items = alerts
+      .filter((a) => a && a.event && a.severity)
+      .map((a) => `<div class="bd-alert"><b>${a.event}</b> (${a.severity}) — ${a.headline || ''}</div>`)
+      .join('');
+    if (!items) return '';
     return `<div class="bd-section"><h3>Active Marine Alerts</h3>${items}</div>`;
   }
 
