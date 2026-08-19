@@ -18,6 +18,7 @@
     "bluetopo": 1.9413,
     "multibeam": 0.9067
   },
+  "edge_blend_cells": 100,
   "sources": [
     {
       "name": "ex1302",

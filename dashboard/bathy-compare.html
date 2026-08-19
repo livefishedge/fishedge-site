@@ -107,8 +107,8 @@
     bag: root + 'ncei_bag/color/{z}/{x}/{y}.png?v=20260818-wm-mask1',
     average: root + 'ncei_multibeam/color/{z}/{x}/{y}.png?v=20260818-wm-mask1',
     multibeam: root + 'ncei_multibeam/color/{z}/{x}/{y}.png?v=20260818-wm-mask1',
-    surveyFirstBaltimore: './data/bathy/survey_first/baltimore/tiles/depth/{z}/{x}/{y}.png?v=20260819-surveyfirst7',
-    surveyEvidenceBaltimore: './data/bathy/survey_first/baltimore/tiles/provenance/{z}/{x}/{y}.png?v=20260819-surveyfirst7',
+    surveyFirstBaltimore: './data/bathy/survey_first/baltimore/tiles/depth/{z}/{x}/{y}.png?v=20260819-surveyfirst8',
+    surveyEvidenceBaltimore: './data/bathy/survey_first/baltimore/tiles/provenance/{z}/{x}/{y}.png?v=20260819-surveyfirst8',
     bluetopo: extraRoot + 'bluetopo_full/color/{z}/{x}/{y}.png?v=20260818-bluetopo1',
     bluetopoMeasured: extraRoot + 'bluetopo_measured/color/{z}/{x}/{y}.png?v=20260818-bluetopo1',
     ex1302: './data/bathy/canyon_tiles/ex1302/color/{z}/{x}/{y}.png?v=20260818-canyon1',
@@ -302,7 +302,7 @@
     realness: 'Realness score overlay'
   };
   const datasetLabel = document.getElementById('dataset-label');
-  titles.surveyFootprints = 'Survey footprints + survey IDs · catalog bounds';
+  titles.surveyFootprints = 'Survey footprints + survey IDs · alpha-mask coverage';
   function update(){const active=Object.entries(layers).filter(([,l])=>l.getVisible()).map(([n])=>n); datasetLabel.textContent=active.length?active.map(n=>titles[n]||n).join('  |  '):'No dataset selected'; status.textContent=(active.length?active.join(' + ')+' · zoom '+map.getView().getZoom().toFixed(1):'No source selected')+' · same palette / same renderer';}
   document.querySelectorAll('[data-layer]').forEach(cb=>cb.addEventListener('change',()=>{layers[cb.dataset.layer].setVisible(cb.checked);update();}));
   map.getView().on('change:resolution',update); update();
