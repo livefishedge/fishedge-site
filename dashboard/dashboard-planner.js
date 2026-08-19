@@ -176,6 +176,18 @@
         setView(tab.dataset.view);
       });
     });
+
+    // Initial view from URL param (?view=planner or ?view=map) so the
+    // homepage Planner link can deep-link straight to the planner tab.
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const view = params.get('view');
+      if (view === 'planner' || view === 'map') {
+        setView(view);
+      }
+    } catch (e) {
+      console.warn('[dashboard-planner] URL param parse failed:', e);
+    }
   }
 
   // Script is in <head> — wait for the body before wiring tabs.
