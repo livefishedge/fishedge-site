@@ -61,19 +61,56 @@ def load_source(path, transform, shape):
     return dst, valid
 
 def harmonize(arrays, masks, infos):
-    """Estimate robust offsets against the strongest available survey source."""
-    ref=np.full(arrays[0].shape,np.nan,dtype='float32')
-    for a,m,i in zip(arrays,masks,infos):
-        if i[2] == 4: ref[m & ~np.isfinite(ref)] = a[m & ~np.isfinite(ref)]
-    offsets={}
-    for a,m,i in zip(arrays,masks,infos):
-        if i[2] == 4: offsets[i[0]]=0.0; continue
-        overlap=m & np.isfinite(ref)
-        d=ref[overlap]-a[overlap]
+    """Put every source on one local vertical level before precedence selection.
+
+    The old implementation made a reference mosaic from the first survey and
+    left the other equal-priority survey untouched.  That creates a step at a
+    survey-footprint edge even when the two rasters overlap.  Solve offsets
+    between sources of the same priority first, using robust overlap medians,
+    then anchor lower-priority sources to the harmonized strongest tier.
+    """
+    offsets={i[0]: 0.0 for i in infos}
+
+    def robust_offset(reference, candidate, overlap):
+        d=reference[overlap]-candidate[overlap]
         d=d[np.isfinite(d) & (np.abs(d)<200)]
-        off=float(np.median(d)) if d.size >= 100 else 0.0
-        offsets[i[0]]=round(off,4)
-        a[m] += off
+        if d.size < 100:
+            return 0.0
+        # Trim extreme terrain/geolocation mismatches before taking the
+        # median.  This estimates the vertical datum/level bias, not canyon
+        # morphology, and is stable against a few bad overlap cells.
+        lo,hi=np.percentile(d,[5,95])
+        trimmed=d[(d>=lo)&(d<=hi)]
+        return float(np.median(trimmed if trimmed.size else d))
+
+    priorities=sorted({i[2] for i in infos}, reverse=True)
+    ref=np.full(arrays[0].shape,np.nan,dtype='float32')
+    for priority in priorities:
+        members=[k for k,i in enumerate(infos) if i[2] == priority]
+        if not members:
+            continue
+        # The first source is the deterministic anchor for an evidence tier.
+        anchor=members[0]
+        for k in members[1:]:
+            overlap=masks[anchor] & masks[k]
+            off=robust_offset(arrays[anchor],arrays[k],overlap)
+            arrays[k][masks[k]] += off
+            offsets[infos[k][0]]=round(off,4)
+
+        # Add this tier to the reference only after its members share a level.
+        for k in members:
+            take=masks[k] & ~np.isfinite(ref)
+            ref[take]=arrays[k][take]
+
+        # Lower tiers are aligned to the harmonized strongest available
+        # reference, but never alter the reference itself.
+        for k,i in enumerate(infos):
+            if i[2] >= priority or offsets[i[0]] != 0.0:
+                continue
+            overlap=masks[k] & np.isfinite(ref)
+            off=robust_offset(ref,arrays[k],overlap)
+            arrays[k][masks[k]] += off
+            offsets[i[0]]=round(off,4)
     return offsets
 
 def write_tiles(region, data, prov, transform, max_zoom=13):
