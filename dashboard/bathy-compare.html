@@ -28,7 +28,7 @@
   <p>Toggle one source at a time at the same zoom and palette. This isolates source coverage and texture from the renderer. The Realness overlay shows where each cell is supported by real survey soundings vs interpolated fill.</p>
   <div class="group"><span class="badge">DATA SOURCES</span>
     <label class="row"><input type="checkbox" data-layer="surveyFootprints" checked><span class="swatch" style="background:transparent;border:2px solid #ffcc66;border-radius:2px"></span>Survey footprints + IDs</label>
-    <div class="meta">Catalog bounding footprints for each mapped survey; labels remain above the bathymetry rasters.</div>
+    <div class="meta">Actual occupied-pixel coverage footprints derived from survey tile alpha masks; labels remain above the bathymetry rasters.</div>
     <label class="row"><input type="checkbox" data-layer="dem" checked><span class="swatch"></span>DEM Global Mosaic <b>1 arc-sec</b></label>
     <div class="meta">NCEI DEM Global Mosaic · native 1 arc-sec grid</div>
     <label class="row"><input type="checkbox" data-layer="bag"><span class="swatch"></span>NOS BAG Mosaic <b>1 arc-sec</b></label>
@@ -148,39 +148,8 @@
     const maxZoom = (name === 'surveyFirstBaltimore' || name === 'surveyEvidenceBaltimore' || name === 'surveyFirstHudson' || name === 'surveyEvidenceHudson' || name === 'ex1404l3West' || name === 'knox17rr' || name === 'ex1904VaNy' || name === 'ex1904NyRi' || name === 'ex1904Rov' || name === 'ex1906North' || name === 'ex2205Transit1' || name === 'ex2205Transit2') ? ((name === 'ex2205Transit2' || name === 'knox17rr') ? 9 : 10) : 13;
     layers[name] = new ol.layer.Tile({source:new ol.source.XYZ({url,crossOrigin:'anonymous',minZoom:5,maxZoom}),visible:name==='dem',opacity:name.startsWith('surveyEvidence')?.78:.94,zIndex:name.startsWith('surveyEvidence')?18:10});
   }
-  // Survey footprint overlay. These are catalog bounding footprints, kept
-  // separate from raster pixels so the map shows which survey supplied each
-  // source area. Survey IDs are labels on the vector layer itself.
-  const surveyFootprints = [
-    ['EX1404L3 West', [-74.8401,37.2501,-71.1794,40.4154]],
-    ['EX1404L3 Hudson', [-72.3744,39.4438,-72.1654,39.5353]],
-    ['EX1303 Hudson', [-72.526,39.0541,-71.4157,39.8092]],
-    ['EX2203 Transit 3', [-77.1852,31.7345,-71.7029,39.7245]],
-    ['KNOX17RR', [-74.15,32.9,-67.7,37.8]],
-    ['EX1106 Baltimore', [-73.90671,37.84152,-73.13796,38.57802]],
-    ['EX1106 Keller', [-74.86099,35.26602,-74.07824,35.66777]],
-    ['EX1201 Hendrickson/Toms/Berkeley', [-73.03639,38.69887,-72.22589,39.32837]],
-    ['EX1201 McMaster/Ryan', [-71.74852,39.65667,-71.15377,39.96392]],
-    ['EX1205L2 Hudson', [-72.45026,39.27031,-71.99451,39.65456]],
-    ['EX1904 Virginia–New York', [-75.63723,36.96674,-72.54703,39.68874]],
-    ['EX1904 New York–Rhode Island', [-72.47225,39.69081,-69.64686,41.27341]],
-    ['EX1904 ROV', [-71.61292,38.92167,-67.16002,41.36577]],
-    ['EX1906 North', [-78.38573,32.30291,-71.47823,40.89466]],
-    ['EX2103 Canyons', [-72.64360,38.99543,-71.67000,39.79142]],
-    ['EX2105 Transit', [-78.99961,29.50795,-71.43461,40.77470]],
-    ['EX2205 Transit 1', [-73.60565,38.26352,-71.83215,39.46402]],
-    ['EX2205 Transit 2', [-71.87080,39.43386,-65.91430,40.59287]]
-  ];
-  const footprintFeatures = surveyFootprints.map(([id,b]) => {
-    const sw = ol.proj.fromLonLat([b[0], b[1]]);
-    const ne = ol.proj.fromLonLat([b[2], b[3]]);
-    return new ol.Feature({
-      geometry: ol.geom.Polygon.fromExtent([sw[0], sw[1], ne[0], ne[1]]),
-      survey_id: id
-    });
-  });
   layers.surveyFootprints = new ol.layer.Vector({
-    source: new ol.source.Vector({features: footprintFeatures, wrapX: false}),
+    source: new ol.source.Vector({wrapX: false}),
     visible: true,
     zIndex: 100,
     style: feature => new ol.style.Style({
@@ -194,6 +163,19 @@
       })
     })
   });
+  // Load actual occupied-pixel footprints from the survey tile alpha masks.
+  // These polygons are deliberately separate from the color rasters.
+  fetch('./data/bathy/survey_footprints.geojson?v=20260819-footprints2')
+    .then(res => { if (!res.ok) throw new Error('footprint GeoJSON HTTP ' + res.status); return res.json(); })
+    .then(gj => {
+      const features = new ol.format.GeoJSON().readFeatures(gj, {
+        dataProjection: 'EPSG:4326', featureProjection: 'EPSG:3857'
+      });
+      layers.surveyFootprints.getSource().addFeatures(features);
+      status.textContent = `Loaded ${features.length} actual survey coverage footprints · alpha-mask derived`;
+      update();
+    })
+    .catch(err => console.warn('[survey-footprints] load failed:', err));
   // Realness overlay: static image covering the Baltimore Canyon bbox.
   const realnessSW = ol.proj.fromLonLat([realnessMeta.bboxSW[1], realnessMeta.bboxSW[0]]);
   const realnessNE = ol.proj.fromLonLat([realnessMeta.bboxNE[1], realnessMeta.bboxNE[0]]);
