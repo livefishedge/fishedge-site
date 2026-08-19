@@ -133,7 +133,7 @@
 
     function rebuild() {
       currentPlans = build5DayPlans('ocean_city_normal', picker.getInlet());
-      UI.FiveDayOutlook.render(document.getElementById('fishedge-five-day-outlook'), currentPlans, {
+      UI.FiveDayOutlook.mount(document.getElementById('fishedge-five-day-outlook'), currentPlans, {
         onDayClick: (idx) => openBriefing(currentPlans[idx]),
       });
       UI.CompactStrip.mount(document.getElementById('fishedge-compact-strip-host'), {
@@ -151,7 +151,7 @@
 
     try {
       currentPlans = build5DayPlans('ocean_city_normal', picker.getInlet());
-      UI.FiveDayOutlook.render(document.getElementById('fishedge-five-day-outlook'), currentPlans, {
+      UI.FiveDayOutlook.mount(document.getElementById('fishedge-five-day-outlook'), currentPlans, {
         onDayClick: (idx) => openBriefing(currentPlans[idx]),
       });
       UI.CompactStrip.mount(document.getElementById('fishedge-compact-strip-host'), {
