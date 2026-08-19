@@ -323,7 +323,12 @@ def build(region):
         if info[2] != 4: continue
         raw=raw_masks[i]
         dist=distance_transform_edt(raw)
-        feather_cells=100.0  # 3 km at the 30 m composite resolution
+        # EX1903L2 has a much longer, thinner occupied fringe than EX1302:
+        # its edge residual remains elevated several kilometres inward.  Use
+        # a wider transition for that source only; the survey residual (and
+        # therefore its real canyon morphology) is still restored at full
+        # weight in the interior of the corridor.
+        feather_cells=180.0 if info[0] == 'ex1903l2' else 100.0
         near=raw & (dist < feather_cells) & np.isfinite(lower_ref)
         if not near.any(): continue
         survey_broad=normalized_blur(arrays[i],raw,sigma=25.0)
@@ -344,7 +349,7 @@ def build(region):
     with rasterio.open(target/'composite.tif','w',**profile) as dst:
         dst.write(composite,1); dst.write(prov.astype('float32'),2); dst.write(conf,3); dst.write(conflict,4)
         dst.set_band_description(1,'elevation_harmonized_m'); dst.set_band_description(2,'source_priority'); dst.set_band_description(3,'confidence'); dst.set_band_description(4,'max_overlap_conflict_m')
-    meta={'region':region,'bbox_wsen':cfg['bbox'],'resolution_m':res,'shape':[height,width],'offsets_m':offsets,'edge_blend_cells':100,'sources':[{'name':i[0],'priority':i[2],'confidence':i[3],'label':i[4],'path':str(i[1])} for i in infos]}
+    meta={'region':region,'bbox_wsen':cfg['bbox'],'resolution_m':res,'shape':[height,width],'offsets_m':offsets,'edge_blend_cells_by_source':{'ex1302':100,'ex1903l2':180},'sources':[{'name':i[0],'priority':i[2],'confidence':i[3],'label':i[4],'path':str(i[1])} for i in infos]}
     (target/'metadata.json').write_text(json.dumps(meta,indent=2)); write_tiles(region,composite,prov,transform)
     print(json.dumps({'region':region,'shape':[height,width],'valid':int(np.isfinite(composite).sum()),'sources':meta['sources'],'offsets':offsets},indent=2))
 
