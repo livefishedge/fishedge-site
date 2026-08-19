@@ -19,6 +19,11 @@
     });
     const overlay = document.getElementById('fishedge-planner-overlay');
     if (overlay) overlay.setAttribute('aria-hidden', view === 'planner' ? 'false' : 'true');
+    // Belt-and-suspenders hide of the dashboard hamburger under the planner
+    // view. The CSS rule exists too, but if a later style override ever
+    // wins the cascade, the JS still removes it from the layout.
+    const hamburger = document.getElementById('hamburger-btn');
+    if (hamburger) hamburger.style.display = (view === 'planner') ? 'none' : '';
     if (view === 'planner' && !global.__FISHEDGE_PLANNER_MOUNTED__) {
       mountPlanner();
     }
