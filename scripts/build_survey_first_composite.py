@@ -76,7 +76,7 @@ def harmonize(arrays, masks, infos):
         a[m] += off
     return offsets
 
-def write_tiles(region, data, prov, transform, max_zoom=10):
+def write_tiles(region, data, prov, transform, max_zoom=13):
     out=OUT/region/'tiles'; out.mkdir(parents=True,exist_ok=True)
     h,w=data.shape; left=transform.c; top=transform.f; right=left+w*transform.a; bottom=top+h*transform.e
     for z in range(5,max_zoom+1):
@@ -96,9 +96,10 @@ def write_tiles(region, data, prov, transform, max_zoom=10):
                 q=np.clip((safe+2500)/2500,0,1)*5; lo=np.floor(q).astype(int); hi=np.minimum(lo+1,5); f=(q-lo)[...,None]
                 rgb=(DEPTH_COLORS[lo]*(1-f)+DEPTH_COLORS[hi]*f).astype('uint8'); rgba=np.concatenate([rgb,(np.isfinite(a).astype('uint8')*255)[...,None]],axis=2)
                 d=out/'depth'/str(z)/str(x); d.mkdir(parents=True,exist_ok=True); Image.fromarray(rgba,'RGBA').save(d/f'{y}.png',optimize=True)
-                pc=np.zeros((256,256,4),dtype='uint8')
-                for code,color in PROV_COLORS.items(): pc[p==code,:3]=color; pc[p==code,3]=210
-                d=out/'provenance'/str(z)/str(x); d.mkdir(parents=True,exist_ok=True); Image.fromarray(pc,'RGBA').save(d/f'{y}.png',optimize=True)
+                if z <= 10:
+                    pc=np.zeros((256,256,4),dtype='uint8')
+                    for code,color in PROV_COLORS.items(): pc[p==code,:3]=color; pc[p==code,3]=210
+                    d=out/'provenance'/str(z)/str(x); d.mkdir(parents=True,exist_ok=True); Image.fromarray(pc,'RGBA').save(d/f'{y}.png',optimize=True)
 
 def build(region):
     cfg=REGIONS[region]; w,s,e,n=cfg['bbox']; left,bottom=wm(w,s); right,top=wm(e,n); res=30.0
