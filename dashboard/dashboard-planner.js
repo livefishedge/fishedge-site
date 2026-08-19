@@ -24,27 +24,33 @@
     // the hamburger regardless of CSS or inline-style !important. The only thing
     // that beats that is removing the element from the DOM entirely. Pair with
     // a MutationObserver below to catch any re-add by the dashboard's chrome JS.
-    const hamburger = document.getElementById('hamburger-btn');
-    if (hamburger) {
-      if (view === 'planner') {
-        if (!hamburger.dataset.removedByPlanner) {
-          hamburger.dataset.removedByPlanner = '1';
-          hamburger.parentNode.removeChild(hamburger);
-        }
-      } else if (hamburger.dataset.removedByPlanner) {
-        delete hamburger.dataset.removedByPlanner;
-        document.body.appendChild(hamburger);
+    //
+    // IMPORTANT: there are TWO hamburger-style buttons — #hamburger-btn (the
+    // product-menu one, target of the dashboardChrome code) AND
+    // #combined-menu-btn (the sidebar toggle Mike actually sees). Hide both.
+    function hideDashboardHamburger(btn) {
+      if (btn && !btn.dataset.removedByPlanner) {
+        btn.dataset.removedByPlanner = '1';
+        btn.parentNode.removeChild(btn);
       }
     }
+    function restoreDashboardHamburger(btn) {
+      if (btn && btn.dataset.removedByPlanner) {
+        delete btn.dataset.removedByPlanner;
+        document.body.appendChild(btn);
+      }
+    }
+    const hamburgerIds = ['hamburger-btn', 'combined-menu-btn'];
+    hamburgerIds.forEach((id) => {
+      const btn = document.getElementById(id);
+      if (view === 'planner') hideDashboardHamburger(btn);
+      else restoreDashboardHamburger(btn);
+    });
     // Set up the observer once. It only acts when the planner is active.
     if (!global.__fishedgeHamburgerObserver) {
       global.__fishedgeHamburgerObserver = new MutationObserver(() => {
         if (!document.body.classList.contains('fishedge-view-planner')) return;
-        const hb = document.getElementById('hamburger-btn');
-        if (hb && !hb.dataset.removedByPlanner) {
-          hb.dataset.removedByPlanner = '1';
-          hb.parentNode.removeChild(hb);
-        }
+        hamburgerIds.forEach((id) => hideDashboardHamburger(document.getElementById(id)));
       });
       global.__fishedgeHamburgerObserver.observe(document.body, { childList: true, subtree: true });
     }
