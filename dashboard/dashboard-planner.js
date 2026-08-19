@@ -138,6 +138,13 @@
       fetchCoopsTides(inletMeta.station_id),
       fetchNwsAlerts(inletMeta.lat, inletMeta.lon),
     ]);
+    console.info('[planner] real-data fetch results:', {
+      inlet: inletKey,
+      marine: marine ? 'OK (' + (marine.hourly && marine.hourly.time && marine.hourly.time.length) + ' hours)' : 'FAILED',
+      weather: weather ? 'OK (' + (weather.hourly && weather.hourly.time && weather.hourly.time.length) + ' hours)' : 'FAILED',
+      tides: tides && tides.predictions ? 'OK (' + tides.predictions.length + ' rows)' : 'FAILED',
+      alerts: alertsRaw && alertsRaw.features ? 'OK (' + alertsRaw.features.length + ')' : 'FAILED',
+    });
 
     // Need at least one source to bother — otherwise fall through to fixture.
     if (!marine && !weather && !tides && !alertsRaw) return null;
