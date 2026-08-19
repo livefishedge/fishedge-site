@@ -5,6 +5,11 @@
  * toggles the view and mounts the planner on first Planner-tab activation.
  *
  * Loaded by dashboard/index.html with cache-bust v=20260819-1.
+ *
+ * Real-data build (2026-08-19): planner now calls live public APIs
+ * (Open-Meteo Marine, Open-Meteo Weather, CO-OPS Tides, NWS Alerts) via
+ * the existing adapters. Fixtures remain as a graceful fallback when
+ * a network fetch fails.
  */
 (function attachDashboardPlanner(global) {
   'use strict';
@@ -59,15 +64,208 @@
     }
   }
 
+  // ===========================================================================
+  // Real-data fetchers — CORS-friendly public APIs. Each returns null on
+  // any failure (network, CORS, parse) so the caller can fall back gracefully.
+  // ===========================================================================
+
+  async function fetchJson(url) {
+    try {
+      const r = await fetch(url, { cache: 'no-store' });
+      if (!r.ok) return null;
+      return await r.json();
+    } catch (e) {
+      console.warn('[planner] fetch failed:', url, e && e.message);
+      return null;
+    }
+  }
+
+  async function fetchOpenMeteoMarine(lat, lon) {
+    return fetchJson(
+      'https://marine-api.open-meteo.com/v1/marine'
+      + '?latitude=' + lat + '&longitude=' + lon
+      + '&hourly=wave_height,wave_direction,wave_period,wind_wave_height,wind_wave_direction,wind_wave_period,swell_wave_height,swell_wave_direction,swell_wave_period'
+      + '&timezone=America%2FNew_York&forecast_days=5'
+    );
+  }
+
+  async function fetchOpenMeteoWeather(lat, lon) {
+    return fetchJson(
+      'https://api.open-meteo.com/v1/forecast'
+      + '?latitude=' + lat + '&longitude=' + lon
+      + '&hourly=wind_speed_10m,wind_direction_10m,wind_gusts_10m,pressure_msl,temperature_2m,visibility,precipitation,weather_code'
+      + '&timezone=America%2FNew_York&forecast_days=5'
+    );
+  }
+
+  async function fetchCoopsTides(stationId) {
+    const fmt = (d) => d.toISOString().slice(0, 10).replace(/-/g, '');
+    const begin = fmt(new Date());
+    const end   = fmt(new Date(Date.now() + 5 * 86400 * 1000));
+    return fetchJson(
+      'https://api.tidesandcurrents.noaa.gov/api/prod/datagetter'
+      + '?station=' + stationId
+      + '&product=predictions&datum=MLLW&time_zone=lst_ldt&units=english&format=json'
+      + '&begin_date=' + begin + '&end_date=' + end + '&interval=hilo'
+    );
+  }
+
+  async function fetchNwsAlerts(lat, lon) {
+    return fetchJson('https://api.weather.gov/alerts/active?point=' + lat + ',' + lon);
+  }
+
+  function dirDegToCardinal(deg) {
+    if (deg == null) return null;
+    const dirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+    return dirs[Math.round(((deg % 360) + 360) % 360 / 22.5) % 16];
+  }
+
+  async function buildRealPlan(inletKey, targetId) {
+    const UI = global.FishEdgeTripPlannerUI || {};
+    const canyonTargets = UI.InletPicker && UI.InletPicker.CANYON_TARGETS || {};
+    const inletMeta = (global.CoopsTides && global.CoopsTides.INLET_STATION_TABLE && global.CoopsTides.INLET_STATION_TABLE[inletKey])
+      || { station_id: '8570283', label: 'Ocean City Inlet, MD', lat: 38.3286, lon: -75.0919 };
+    const target = canyonTargets[targetId] || canyonTargets.baltimore_canyon_line;
+    if (!inletMeta || !target || !target.lookup_points || !target.lookup_points.length) return null;
+
+    // Show "fetching live conditions" message in the 5-day slot while we wait.
+    const outlookHost = document.getElementById('fishedge-five-day-outlook');
+    if (outlookHost) outlookHost.innerHTML = '<div class="fdo-loading">Fetching live conditions from Open-Meteo, CO-OPS, NWS…</div>';
+
+    const [marine, weather, tides, alertsRaw] = await Promise.all([
+      fetchOpenMeteoMarine(inletMeta.lat, inletMeta.lon),
+      fetchOpenMeteoWeather(inletMeta.lat, inletMeta.lon),
+      fetchCoopsTides(inletMeta.station_id),
+      fetchNwsAlerts(inletMeta.lat, inletMeta.lon),
+    ]);
+
+    // Need at least one source to bother — otherwise fall through to fixture.
+    if (!marine && !weather && !tides && !alertsRaw) return null;
+
+    const adapter = Tp_buildTripPlannerAdapter({
+      home_inlet: { id: inletKey || 'ocean-city-md', label: inletMeta.label, lonlat: [inletMeta.lon, inletMeta.lat] },
+      target: Object.assign({}, target, { anchor_lonlat: target.lookup_points[0] }),
+      departure_iso: '2026-08-19T04:00:00-04:00',
+      return_iso:    '2026-08-19T14:00:00-04:00',
+      tz: 'America/New_York',
+    });
+
+    // Open-Meteo Marine → trip_window.hourly + now.wave
+    if (marine && global.OpenMeteoMarine) {
+      try {
+        const rows = global.OpenMeteoMarine.parseHourly(marine, 'EDT', -14400) || [];
+        if (rows.length) {
+          adapter.segments.target.trip_window.hourly = rows.map((r) => {
+            const c = Object.assign({}, r);
+            if (r.iso) c.iso = r.iso.replace(/-\d{2}:\d{2}$/, '-04:00');
+            return c;
+          });
+          const first = rows[0];
+          if (first && first.wave_height != null) {
+            adapter.segments.target.now.wave = {
+              value: {
+                height: first.wave_height,
+                dominant_period: first.wave_period,
+                dir_cardinal: dirDegToCardinal(first.wave_direction),
+              },
+              source: { provider: 'Open-Meteo Marine', station_id: inletMeta.lat.toFixed(2) + ',' + inletMeta.lon.toFixed(2), age_minutes: 0 },
+              freshness: 'MODEL_FORECAST',
+            };
+          }
+        }
+      } catch (e) { console.warn('[planner] OpenMeteoMarine parse failed:', e && e.message); }
+    }
+
+    // Open-Meteo Weather → now.wind / now.pressure / now.visibility / now.precipitation / now.weather_code
+    if (weather && global.OpenMeteoWeather) {
+      try {
+        const wrows = global.OpenMeteoWeather.parseHourly(weather) || [];
+        if (wrows[0]) {
+          const w = wrows[0];
+          const src = w.source || { provider: 'Open-Meteo', station_id: inletMeta.lat.toFixed(2) + ',' + inletMeta.lon.toFixed(2), age_minutes: 0 };
+          const fresh = w.freshness || 'MODEL_FORECAST';
+          if (w.wind_speed_kt != null) {
+            adapter.segments.target.now.wind = {
+              value: {
+                speed: w.wind_speed_kt,
+                gust:  w.wind_gust_kt,
+                dir_cardinal: dirDegToCardinal(w.wind_dir_deg),
+              },
+              source: src, freshness: fresh,
+            };
+          }
+          if (w.pressure_inHg != null) {
+            adapter.segments.target.now.pressure = {
+              value: { pressure: w.pressure_inHg },
+              source: src, freshness: fresh,
+            };
+          }
+          if (w.visibility_nm != null) {
+            adapter.segments.target.now.visibility = { value: w.visibility_nm, source: src, freshness: fresh };
+          }
+          if (w.precipitation_mm != null) {
+            adapter.segments.target.now.precipitation = { value: w.precipitation_mm, source: src, freshness: fresh };
+          }
+          if (w.weather_code != null) {
+            adapter.segments.target.now.weather_code = { value: w.weather_code, source: src, freshness: fresh };
+          }
+        }
+      } catch (e) { console.warn('[planner] OpenMeteoWeather parse failed:', e && e.message); }
+    }
+
+    // CO-OPS Tides → now.tide (next high / next low)
+    if (tides && tides.predictions && tides.predictions.length && global.CoopsTides) {
+      try {
+        const trows = global.CoopsTides.parseHourly(tides, 'EDT', -14400) || [];
+        if (trows.length) {
+          const now = Date.now();
+          let nextHigh = null, nextLow = null;
+          for (let i = 0; i < trows.length; i++) {
+            const t = trows[i];
+            if (new Date(t.iso).getTime() < now) continue;
+            if (t.type === 'H' && !nextHigh) nextHigh = t;
+            else if (t.type === 'L' && !nextLow) nextLow = t;
+            if (nextHigh && nextLow) break;
+          }
+          if (nextHigh || nextLow) {
+            adapter.segments.target.now.tide = {
+              value: {
+                next_high: nextHigh ? { iso: nextHigh.iso, value: nextHigh.height_ft } : null,
+                next_low:  nextLow  ? { iso: nextLow.iso,  value: nextLow.height_ft  } : null,
+              },
+              source: { provider: 'CO-OPS Tides', station_id: inletMeta.station_id, age_minutes: 0 },
+              freshness: 'DETERMINISTIC',
+            };
+          }
+        }
+      } catch (e) { console.warn('[planner] CoopsTides parse failed:', e && e.message); }
+    }
+
+    // NWS Alerts → segment.alerts
+    if (alertsRaw && global.NwsAlerts) {
+      try {
+        const alerts = global.NwsAlerts.normalizeAlerts(alertsRaw, inletMeta.lat, inletMeta.lon) || [];
+        for (const k of Object.keys(adapter.segments)) adapter.segments[k].alerts = alerts;
+      } catch (e) { console.warn('[planner] NwsAlerts parse failed:', e && e.message); }
+    }
+
+    global.TripDecisionEngine.evaluateTripPlan(adapter);
+    return adapter;
+
+    // Local alias to keep call sites readable.
+    function Tp_buildTripPlannerAdapter(opts) {
+      return global.FishEdgeTripPlanner.buildTripPlannerAdapter(opts);
+    }
+  }
+
   function mountPlanner() {
-    const Tp  = global.FishEdgeTripPlanner;
     const UI  = global.FishEdgeTripPlannerUI || {};
     const Dec = global.TripDecisionEngine;
     const Rec = global.TripReconciler;
     const Fx  = global.FishEdgeTripPlannerFixtures;
     const Sto = global.FishEdgeTripStorage;
 
-    if (!Tp || !UI.InletPicker || !UI.FiveDayOutlook || !UI.CompactStrip || !UI.BriefingDrawer || !UI.MyTripsSidebar || !Dec || !Rec || !Fx) {
+    if (!global.FishEdgeTripPlanner || !UI.InletPicker || !UI.FiveDayOutlook || !UI.CompactStrip || !UI.BriefingDrawer || !UI.MyTripsSidebar || !Dec || !Rec || !Fx) {
       console.warn('[dashboard-planner] backbone missing');
       return;
     }
@@ -75,12 +273,13 @@
     const canyonTargets = UI.InletPicker.CANYON_TARGETS || {};
     const defaultTarget = canyonTargets.baltimore_canyon_line;
 
+    // Fixture-only fallback path (real-data path is async and tried first).
     function buildFixturePlan(fixName, inletKey, targetId) {
       const fix = Fx.FIXTURES[fixName];
       const inletMeta = (global.CoopsTides.INLET_STATION_TABLE && global.CoopsTides.INLET_STATION_TABLE[inletKey])
         || { station_id: '8570283', label: 'Ocean City Inlet, MD', lat: 38.3286, lon: -75.0919 };
       const target = canyonTargets[targetId] || defaultTarget;
-      const adapter = Tp.buildTripPlannerAdapter({
+      const adapter = global.FishEdgeTripPlanner.buildTripPlannerAdapter({
         home_inlet: { id: inletKey || 'ocean-city-md', label: inletMeta.label, lonlat: [inletMeta.lon, inletMeta.lat] },
         target:     Object.assign({}, target, { anchor_lonlat: target.lookup_points[0] }),
         departure_iso: '2026-08-19T04:00:00-04:00',
@@ -147,8 +346,20 @@
       return adapter;
     }
 
-    function build5DayPlans(fixName, inletKey) {
-      const today = buildFixturePlan(fixName, inletKey);
+    // Wraps real-data fetch (preferred) + fixture fallback. Returns an
+    // adapter either way so downstream code stays sync-shaped.
+    async function buildPlan(fixName, inletKey, targetId) {
+      try {
+        const real = await buildRealPlan(inletKey, targetId);
+        if (real) return real;
+      } catch (e) {
+        console.warn('[planner] buildRealPlan failed, falling back to fixture:', e && e.message);
+      }
+      return buildFixturePlan(fixName, inletKey, targetId);
+    }
+
+    async function build5DayPlans(fixName, inletKey) {
+      const today = await buildPlan(fixName, inletKey);
       const plans = [today];
       for (let i = 1; i < 5; i++) {
         const clone = JSON.parse(JSON.stringify(today));
@@ -182,8 +393,8 @@
       });
     } catch (e) { console.error('[dashboard-planner] InletPicker.mount failed:', e); throw e; }
 
-    function rebuild() {
-      currentPlans = build5DayPlans('ocean_city_normal', picker.getInlet(), picker.getSnapshot().target_id);
+    async function rebuild() {
+      currentPlans = await build5DayPlans('ocean_city_normal', picker.getInlet(), picker.getSnapshot().target_id);
       UI.FiveDayOutlook.mount(document.getElementById('fishedge-five-day-outlook'), currentPlans, {
         onDayClick: (idx) => openBriefing(currentPlans[idx]),
       });
@@ -202,24 +413,25 @@
       });
     }
 
-    try {
-      currentPlans = build5DayPlans('ocean_city_normal', picker.getInlet(), picker.getSnapshot().target_id);
-      UI.FiveDayOutlook.mount(document.getElementById('fishedge-five-day-outlook'), currentPlans, {
-        onDayClick: (idx) => openBriefing(currentPlans[idx]),
-      });
-      UI.CompactStrip.mount(currentPlans[0], {
-        onOpen: () => openBriefing(currentPlans[0]),
-        host: document.getElementById('fishedge-compact-strip-host'),
-      });
-      rebuildMyTrips();
-    } catch (e) {
-      console.error('[dashboard-planner] initial-render failed:', e);
-      throw e;
-    }
-
-    global.__FISHEDGE_PLANNER_DEV__ = { plans: currentPlans, picker, Sto, rebuild };
-    global.__FISHEDGE_PLANNER_MOUNTED__ = true;
-    console.info('[dashboard-planner] mounted', { plans: currentPlans.length });
+    // Initial mount — fire and forget; build5DayPlans is async.
+    (async () => {
+      try {
+        currentPlans = await build5DayPlans('ocean_city_normal', picker.getInlet(), picker.getSnapshot().target_id);
+        UI.FiveDayOutlook.mount(document.getElementById('fishedge-five-day-outlook'), currentPlans, {
+          onDayClick: (idx) => openBriefing(currentPlans[idx]),
+        });
+        UI.CompactStrip.mount(currentPlans[0], {
+          onOpen: () => openBriefing(currentPlans[0]),
+          host: document.getElementById('fishedge-compact-strip-host'),
+        });
+        rebuildMyTrips();
+        global.__FISHEDGE_PLANNER_DEV__ = { plans: currentPlans, picker, Sto, rebuild };
+        global.__FISHEDGE_PLANNER_MOUNTED__ = true;
+        console.info('[dashboard-planner] mounted', { plans: currentPlans.length });
+      } catch (e) {
+        console.error('[dashboard-planner] initial-render failed:', e);
+      }
+    })();
   }
 
   function wireTabs() {
