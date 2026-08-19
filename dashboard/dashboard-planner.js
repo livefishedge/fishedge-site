@@ -22,7 +22,8 @@
     // The dashboard has its own dashboardChrome.hamburger.style.display = 'block'
     // path (lines ~3241 in dashboard.html) that runs AFTER setView and re-shows
     // the hamburger regardless of CSS or inline-style !important. The only thing
-    // that beats that is removing the element from the DOM entirely.
+    // that beats that is removing the element from the DOM entirely. Pair with
+    // a MutationObserver below to catch any re-add by the dashboard's chrome JS.
     const hamburger = document.getElementById('hamburger-btn');
     if (hamburger) {
       if (view === 'planner') {
@@ -34,6 +35,18 @@
         delete hamburger.dataset.removedByPlanner;
         document.body.appendChild(hamburger);
       }
+    }
+    // Set up the observer once. It only acts when the planner is active.
+    if (!global.__fishedgeHamburgerObserver) {
+      global.__fishedgeHamburgerObserver = new MutationObserver(() => {
+        if (!document.body.classList.contains('fishedge-view-planner')) return;
+        const hb = document.getElementById('hamburger-btn');
+        if (hb && !hb.dataset.removedByPlanner) {
+          hb.dataset.removedByPlanner = '1';
+          hb.parentNode.removeChild(hb);
+        }
+      });
+      global.__fishedgeHamburgerObserver.observe(document.body, { childList: true, subtree: true });
     }
     if (view === 'planner' && !global.__FISHEDGE_PLANNER_MOUNTED__) {
       mountPlanner();
