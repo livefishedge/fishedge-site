@@ -19,15 +19,21 @@
     });
     const overlay = document.getElementById('fishedge-planner-overlay');
     if (overlay) overlay.setAttribute('aria-hidden', view === 'planner' ? 'false' : 'true');
-    // Belt-and-suspenders hide of the dashboard hamburger under the planner
-    // view. The CSS rule exists too, but if a later style override ever
-    // wins the cascade, the JS still removes it from the layout. Use
-    // setProperty('display','none','important') so the inline style wins
-    // against any CSS rule (including those with !important).
+    // The dashboard has its own dashboardChrome.hamburger.style.display = 'block'
+    // path (lines ~3241 in dashboard.html) that runs AFTER setView and re-shows
+    // the hamburger regardless of CSS or inline-style !important. The only thing
+    // that beats that is removing the element from the DOM entirely.
     const hamburger = document.getElementById('hamburger-btn');
     if (hamburger) {
-      if (view === 'planner') hamburger.style.setProperty('display', 'none', 'important');
-      else hamburger.style.removeProperty('display');
+      if (view === 'planner') {
+        if (!hamburger.dataset.removedByPlanner) {
+          hamburger.dataset.removedByPlanner = '1';
+          hamburger.parentNode.removeChild(hamburger);
+        }
+      } else if (hamburger.dataset.removedByPlanner) {
+        delete hamburger.dataset.removedByPlanner;
+        document.body.appendChild(hamburger);
+      }
     }
     if (view === 'planner' && !global.__FISHEDGE_PLANNER_MOUNTED__) {
       mountPlanner();
