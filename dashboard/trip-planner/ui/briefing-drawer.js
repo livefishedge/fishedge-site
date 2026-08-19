@@ -116,6 +116,7 @@
   }
 
   function renderSegmentSection(seg) {
+    try {
     const now = seg.now || {};
     const cells = [
       { label: 'Wind (now)', v: now.wind && now.wind.value ? `${Math.round(now.wind.value.speed)}kt ${now.wind.value.dir_cardinal || ''} G${now.wind.value.gust ? Math.round(now.wind.value.gust) : '?'}` : '—',
@@ -147,9 +148,14 @@
       `<div class="bd-cell"><b>${c.label}</b>${c.v}<div class="bd-freshness">${c.freshness || ''} · ${c.src || ''}</div></div>`
     ).join('');
     return `<div class="bd-section"><h3>Data layers — observed + forecast blend</h3><div class="bd-row">${html}</div></div>`;
+    } catch (e) {
+      console.warn('[briefing-drawer] renderSegmentSection failed:', e && e.message);
+      return `<div class="bd-section"><h3>Data layers</h3><div class="bd-freshness">Segment render skipped — partial fixture data.</div></div>`;
+    }
   }
 
   function renderTimeline(seg) {
+    try {
     const tw = seg.trip_window || {};
     const hourly = Array.isArray(tw.hourly) ? tw.hourly : [];
     if (!hourly.length) return `<div class="bd-section"><h3>Trip timeline</h3><div class="bd-freshness">No model hourly available.</div></div>`;
@@ -174,9 +180,14 @@
         </table>
       </div>
     `;
+    } catch (e) {
+      console.warn('[briefing-drawer] renderTimeline failed:', e && e.message);
+      return `<div class="bd-section"><h3>Trip timeline</h3><div class="bd-freshness">Timeline render skipped.</div></div>`;
+    }
   }
 
   function renderObsVsModel(seg) {
+    try {
     const now = seg.now || {};
     const ob = now.wave && now.wave.value;
     const modelRow = (seg.trip_window && Array.isArray(seg.trip_window.hourly) && seg.trip_window.hourly.length) ? seg.trip_window.hourly[0] : null;
@@ -196,6 +207,10 @@
         </div>
       </div>
     `;
+    } catch (e) {
+      console.warn('[briefing-drawer] renderObsVsModel failed:', e && e.message);
+      return `<div class="bd-section"><h3>Now: observation vs model</h3><div class="bd-freshness">Obs-vs-model render skipped.</div></div>`;
+    }
   }
 
   function render(plan) {
