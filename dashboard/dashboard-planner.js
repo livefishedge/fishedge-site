@@ -21,9 +21,14 @@
     if (overlay) overlay.setAttribute('aria-hidden', view === 'planner' ? 'false' : 'true');
     // Belt-and-suspenders hide of the dashboard hamburger under the planner
     // view. The CSS rule exists too, but if a later style override ever
-    // wins the cascade, the JS still removes it from the layout.
+    // wins the cascade, the JS still removes it from the layout. Use
+    // setProperty('display','none','important') so the inline style wins
+    // against any CSS rule (including those with !important).
     const hamburger = document.getElementById('hamburger-btn');
-    if (hamburger) hamburger.style.display = (view === 'planner') ? 'none' : '';
+    if (hamburger) {
+      if (view === 'planner') hamburger.style.setProperty('display', 'none', 'important');
+      else hamburger.style.removeProperty('display');
+    }
     if (view === 'planner' && !global.__FISHEDGE_PLANNER_MOUNTED__) {
       mountPlanner();
     }
