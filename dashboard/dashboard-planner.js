@@ -24,13 +24,6 @@
     }
   }
 
-  function failVisible(host, where, err) {
-    if (!host) return;
-    host.innerHTML = '<div style="padding:16px;color:#ff6b6b;font:14px-system-ui;background:#1a0808;border:1px solid #ff6b6b;border-radius:6px;">'
-      + '<strong>Trip Planner failed at ' + where + ':</strong> ' + (err && err.message ? err.message : String(err))
-      + '</div>';
-  }
-
   function mountPlanner() {
     const Tp  = global.FishEdgeTripPlanner;
     const UI  = global.FishEdgeTripPlannerUI || {};
@@ -39,11 +32,8 @@
     const Fx  = global.FishEdgeTripPlannerFixtures;
     const Sto = global.FishEdgeTripStorage;
 
-    const failAt = (where, err) => failVisible(document.getElementById('fishedge-five-day-outlook'), where, err);
-
     if (!Tp || !UI.InletPicker || !UI.FiveDayOutlook || !UI.CompactStrip || !UI.BriefingDrawer || !UI.MyTripsSidebar || !Dec || !Rec || !Fx) {
       console.warn('[dashboard-planner] backbone missing');
-      failAt('backbone-check', new Error('Tp/UI/Dec/Rec/Fx not all loaded'));
       return;
     }
 
@@ -155,21 +145,23 @@
         onChange: (inletKey) => { Sto.setSavedInlet(inletKey); rebuild(); },
         onSave:   (tripPlan) => { Sto.saveTrip(tripPlan); rebuildMyTrips(); },
       });
-    } catch (e) { failAt('InletPicker.mount', e); throw e; }
+    } catch (e) { console.error('[dashboard-planner] InletPicker.mount failed:', e); throw e; }
 
     function rebuild() {
       currentPlans = build5DayPlans('ocean_city_normal', picker.getInlet(), picker.getSnapshot().target_id);
       UI.FiveDayOutlook.mount(document.getElementById('fishedge-five-day-outlook'), currentPlans, {
         onDayClick: (idx) => openBriefing(currentPlans[idx]),
       });
-      UI.CompactStrip.mount(document.getElementById('fishedge-compact-strip-host'), {
-        plan: currentPlans[0],
+      // CompactStrip API: mount(plan, { onOpen, host })
+      UI.CompactStrip.mount(currentPlans[0], {
         onOpen: () => openBriefing(currentPlans[0]),
+        host: document.getElementById('fishedge-compact-strip-host'),
       });
     }
 
     function rebuildMyTrips() {
-      UI.MyTripsSidebar.render(document.getElementById('fishedge-my-trips'), {
+      // MyTripsSidebar API: mount(host, opts)
+      UI.MyTripsSidebar.mount(document.getElementById('fishedge-my-trips'), {
         trips: Sto.listTrips(),
         onLoad: (trip) => console.info('[planner] load trip', trip),
       });
@@ -180,13 +172,13 @@
       UI.FiveDayOutlook.mount(document.getElementById('fishedge-five-day-outlook'), currentPlans, {
         onDayClick: (idx) => openBriefing(currentPlans[idx]),
       });
-      UI.CompactStrip.mount(document.getElementById('fishedge-compact-strip-host'), {
-        plan: currentPlans[0],
+      UI.CompactStrip.mount(currentPlans[0], {
         onOpen: () => openBriefing(currentPlans[0]),
+        host: document.getElementById('fishedge-compact-strip-host'),
       });
       rebuildMyTrips();
     } catch (e) {
-      failAt('initial-render', e);
+      console.error('[dashboard-planner] initial-render failed:', e);
       throw e;
     }
 
