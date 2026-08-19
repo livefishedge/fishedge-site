@@ -111,7 +111,7 @@
   function renderTabs(plan) {
     const segs = Object.keys(plan.segments || {});
     return segs.map((k, i) =>
-      `<button class="bd-tab${i === 0 ? ' active' : ''}" data-segment="${k}">${plan.segments[k].segment.label}</button>`
+      `<button class="bd-tab${i === 0 ? ' active' : ''}" data-segment="${k}">${plan.segments[k].label}</button>`
     ).join('');
   }
 
