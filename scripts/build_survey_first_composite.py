@@ -119,15 +119,15 @@ def correct_scan_seams(arr, valid):
     return out,corrected
 
 def harmonize(arrays, masks, infos):
-    """Put every source on one local vertical level before precedence selection.
+    """Solve a crossover/block vertical adjustment before precedence selection.
 
-    The old implementation made a reference mosaic from the first survey and
-    left the other equal-priority survey untouched.  That creates a step at a
-    survey-footprint edge even when the two rasters overlap.  Solve offsets
-    between sources of the same priority first, using robust overlap medians,
-    then anchor lower-priority sources to the harmonized strongest tier.
+    Each overlapping source pair supplies an equation for the relative level
+    between the two surfaces.  Solving the connected overlap graph together
+    prevents the result from depending on whichever raster happened to be
+    listed first.  BlueTopo is used as the anchor when it has valid overlap;
+    otherwise the first connected survey is the local datum anchor.  A smooth
+    residual correction is then applied only where crossover support exists.
     """
-    offsets={i[0]: 0.0 for i in infos}
 
     def robust_offset(reference, candidate, overlap):
         d=reference[overlap]-candidate[overlap]
@@ -141,50 +141,50 @@ def harmonize(arrays, masks, infos):
         trimmed=d[(d>=lo)&(d<=hi)]
         return float(np.median(trimmed if trimmed.size else d))
 
-    priorities=sorted({i[2] for i in infos}, reverse=True)
-    ref=np.full(arrays[0].shape,np.nan,dtype='float32')
-    for priority in priorities:
-        members=[k for k,i in enumerate(infos) if i[2] == priority]
-        if not members:
-            continue
-        # The first source is the deterministic anchor for an evidence tier.
-        anchor=members[0]
-        for k in members[1:]:
-            overlap=masks[anchor] & masks[k]
-            off=robust_offset(arrays[anchor],arrays[k],overlap)
-            arrays[k][masks[k]] += off
-            # A constant datum shift is not enough when the two survey
-            # surfaces retain a broad, spatially varying ramp. Estimate that
-            # residual only from shared cells and at a kilometer-scale blur;
-            # this cannot chase individual soundings or canyon channels.
-            if overlap.sum() >= 10000:
-                residual=arrays[anchor]-arrays[k]
-                support=overlap.astype('float32')
-                residual=np.where(overlap,residual,0.0).astype('float32')
-                smooth_residual=gaussian_filter(residual, sigma=25, mode='nearest')
-                smooth_support=gaussian_filter(support, sigma=25, mode='nearest')
-                local=np.divide(smooth_residual, smooth_support,
-                                out=np.full_like(smooth_residual,np.nan),
-                                where=smooth_support > 0.15)
-                correction=local
-                apply=masks[k] & np.isfinite(correction) & (smooth_support > 0.15)
-                arrays[k][apply] += correction[apply]
-            offsets[infos[k][0]]=round(off,4)
+    edges=[]
+    for i in range(len(infos)):
+        for j in range(i+1,len(infos)):
+            overlap=masks[i] & masks[j]
+            if int(overlap.sum()) < 10000: continue
+            d=arrays[i][overlap]-arrays[j][overlap]
+            d=d[np.isfinite(d) & (np.abs(d)<200)]
+            if d.size < 10000: continue
+            lo,hi=np.percentile(d,[5,95]); trimmed=d[(d>=lo)&(d<=hi)]
+            if trimmed.size < 1000: continue
+            med=float(np.median(trimmed)); spread=float(np.std(trimmed))
+            weight=np.sqrt(min(float(trimmed.size),500000.0)/500000.0) / max(spread,1.0)
+            edges.append((i,j,med,weight,overlap))
 
-        # Add this tier to the reference only after its members share a level.
-        for k in members:
-            take=masks[k] & ~np.isfinite(ref)
-            ref[take]=arrays[k][take]
+    if not edges:
+        return {i[0]:0.0 for i in infos}
+    anchor=next((i for i,x in enumerate(infos) if x[0]=='bluetopo' and any(e[0]==i or e[1]==i for e in edges)), edges[0][0])
+    A=[]; y=[]
+    for i,j,d,weight,_ in edges:
+        row=np.zeros(len(infos),dtype='float64'); row[i]=-weight; row[j]=weight
+        A.append(row); y.append(weight*d)
+    row=np.zeros(len(infos),dtype='float64'); row[anchor]=100.0; A.append(row); y.append(0.0)
+    solution=np.linalg.lstsq(np.asarray(A),np.asarray(y),rcond=None)[0]
+    offsets={infos[i][0]:round(float(solution[i]),4) for i in range(len(infos))}
+    for i in range(len(infos)):
+        arrays[i][masks[i]] += solution[i]
 
-        # Lower tiers are aligned to the harmonized strongest available
-        # reference, but never alter the reference itself.
-        for k,i in enumerate(infos):
-            if i[2] >= priority or offsets[i[0]] != 0.0:
-                continue
-            overlap=masks[k] & np.isfinite(ref)
-            off=robust_offset(ref,arrays[k],overlap)
-            arrays[k][masks[k]] += off
-            offsets[i[0]]=round(off,4)
+    # Apply only a low-frequency crossover residual where multiple sources
+    # actually support the correction. This captures a broad survey ramp or
+    # block bias without following individual canyon morphology.
+    for i in range(len(infos)):
+        residual_sum=np.zeros(arrays[i].shape,dtype='float32')
+        support_sum=np.zeros(arrays[i].shape,dtype='float32')
+        for j in range(len(infos)):
+            if i==j: continue
+            overlap=masks[i]&masks[j]
+            if int(overlap.sum()) < 10000: continue
+            d=np.where(overlap,arrays[j]-arrays[i],0.0).astype('float32')
+            support=overlap.astype('float32')
+            residual_sum += gaussian_filter(d,sigma=25,mode='nearest')
+            support_sum += gaussian_filter(support,sigma=25,mode='nearest')
+        local=np.divide(residual_sum,support_sum,out=np.full_like(residual_sum,np.nan),where=support_sum>0.15)
+        apply=masks[i]&np.isfinite(local)&(support_sum>0.15)
+        arrays[i][apply] += local[apply]
     return offsets
 
 def write_tiles(region, data, prov, transform, max_zoom=13):
@@ -342,7 +342,7 @@ def build(region):
     with rasterio.open(target/'composite.tif','w',**profile) as dst:
         dst.write(composite,1); dst.write(prov.astype('float32'),2); dst.write(conf,3); dst.write(conflict,4)
         dst.set_band_description(1,'elevation_harmonized_m'); dst.set_band_description(2,'source_priority'); dst.set_band_description(3,'confidence'); dst.set_band_description(4,'max_overlap_conflict_m')
-    meta={'region':region,'bbox_wsen':cfg['bbox'],'resolution_m':res,'shape':[height,width],'offsets_m':offsets,'edge_transition_m':50,'edge_blend_cells':2,'sources':[{'name':i[0],'priority':i[2],'confidence':i[3],'label':i[4],'path':str(i[1])} for i in infos]}
+    meta={'region':region,'bbox_wsen':cfg['bbox'],'resolution_m':res,'shape':[height,width],'offsets_m':offsets,'vertical_adjustment_method':'pairwise robust crossover graph with low-frequency overlap residuals','vertical_anchor':'BlueTopo when valid overlap exists; otherwise first connected survey','edge_transition_m':50,'edge_blend_cells':2,'sources':[{'name':i[0],'priority':i[2],'confidence':i[3],'label':i[4],'path':str(i[1])} for i in infos]}
     (target/'metadata.json').write_text(json.dumps(meta,indent=2)); write_tiles(region,composite,prov,transform)
     print(json.dumps({'region':region,'shape':[height,width],'valid':int(np.isfinite(composite).sum()),'sources':meta['sources'],'offsets':offsets},indent=2))
 

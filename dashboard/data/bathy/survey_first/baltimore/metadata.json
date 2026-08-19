@@ -12,12 +12,14 @@
     4453
   ],
   "offsets_m": {
-    "ex1302": 0.0,
-    "ex1903l2": 4.4651,
-    "bag": 2.3855,
-    "bluetopo": 2.8486,
-    "multibeam": 1.64
+    "ex1302": -1.8191,
+    "ex1903l2": 0.8089,
+    "bag": -0.7535,
+    "bluetopo": 0.0,
+    "multibeam": -0.9152
   },
+  "vertical_adjustment_method": "pairwise robust crossover graph with low-frequency overlap residuals",
+  "vertical_anchor": "BlueTopo when valid overlap exists; otherwise first connected survey",
   "edge_transition_m": 50,
   "edge_blend_cells": 2,
   "sources": [
