@@ -298,9 +298,11 @@ def build(region):
         take=masks[i] & ~np.isfinite(composite); composite[take]=arrays[i][take]; prov[take]=infos[i][2]; conf[take]=infos[i][3]; owner[take]=i
 
     # Remove edge steps for every source, not just the two Okeanos surveys.
-    # The transition is deliberately only 50 m (about 1.67 cells at the
-    # 30 m composite resolution): enough to avoid a one-cell discontinuity,
-    # short enough that real canyon morphology is not blurred.
+    # Use seam-line leveling rather than pixel blending: estimate the local
+    # cross-edge vertical bias, subtract that bias from the source fringe,
+    # and ramp the correction to zero over 50 m.  This is the standard
+    # survey-mosaic treatment for a strip/swath level step and preserves the
+    # source's slopes, ridges, fans, and channels.
     def normalized_blur(values, valid, sigma=25.0):
         support=valid.astype('float32')
         smooth_support=gaussian_filter(support, sigma=sigma, mode='nearest')
@@ -318,17 +320,21 @@ def build(region):
         feather_cells=50.0 / 30.0
         near=raw & (owner == i) & (dist <= feather_cells) & np.isfinite(alternate)
         if not near.any(): continue
-        survey_broad=normalized_blur(arrays[i],raw,sigma=25.0)
-        fallback_broad=normalized_blur(alternate,np.isfinite(alternate),sigma=25.0)
-        t=np.clip(dist/feather_cells,0.0,1.0)
-        # Smoothstep avoids a visible slope break at either end.
-        weight=t*t*(3.0-2.0*t)
-        detail=arrays[i]-survey_broad
-        valid=near & np.isfinite(survey_broad) & np.isfinite(fallback_broad)
-        blended=fallback_broad*(1.0-weight)+survey_broad*weight+np.where(np.isfinite(detail),detail,0.0)*weight
-        composite[valid]=blended[valid]
-        prov[valid]=np.where(weight[valid] >= 0.5, info[2], np.maximum(prov[valid],1)).astype('uint8')
-        print(info[0],'edge_blend_cells',int(valid.sum()),'transition_m',50,flush=True)
+        # Estimate a smoothly varying local level difference from a slightly
+        # wider diagnostic ring, but modify only the 50 m source fringe.
+        # Gaussian normalization avoids treating nodata as zero.
+        sample=raw & (owner == i) & (dist <= 8.0) & np.isfinite(alternate)
+        delta=np.where(sample,arrays[i]-alternate,0.0).astype('float32')
+        local_bias=normalized_blur(delta,sample,sigma=2.0)
+        # At the first valid source cell apply the full level correction; at
+        # the inner edge of the 50 m corridor it is exactly zero.  No source
+        # morphology is blended or filtered.
+        u=np.clip((dist-1.0)/(feather_cells-1.0),0.0,1.0)
+        fade=1.0-(u*u*(3.0-2.0*u))
+        valid=near & np.isfinite(local_bias)
+        corrected=composite-np.where(np.isfinite(local_bias),local_bias,0.0)*fade
+        composite[valid]=corrected[valid]
+        print(info[0],'edge_level_corrected_cells',int(valid.sum()),'transition_m',50,flush=True)
     for i in range(len(arrays)):
         overlap=np.isfinite(composite)&masks[i]; conflict[overlap]=np.maximum(conflict[overlap],np.abs(composite[overlap]-arrays[i][overlap]))
     target=OUT/region; target.mkdir(parents=True,exist_ok=True)
