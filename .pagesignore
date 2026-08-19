@@ -1,0 +1,4 @@
+# Numeric fusion artifacts are retained in git for COG/R2 ingestion but are
+# too large for Cloudflare Pages' per-file upload limit. The browser consumes
+# the generated depth and provenance tile caches below these directories.
+dashboard/data/bathy/survey_first/*/composite.tif
