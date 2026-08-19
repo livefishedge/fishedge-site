@@ -13,7 +13,7 @@ from rasterio.transform import from_bounds, Affine
 from rasterio.warp import reproject, Resampling
 from rasterio.windows import from_bounds as window_from_bounds
 from PIL import Image
-from scipy.ndimage import distance_transform_edt
+from scipy.ndimage import distance_transform_edt, gaussian_filter
 
 ROOT = Path(__file__).resolve().parents[1]
 RESEARCH = Path('/home/gzheng/.openclaw/workspace-cto/bathy-research')
@@ -96,6 +96,22 @@ def harmonize(arrays, masks, infos):
             overlap=masks[anchor] & masks[k]
             off=robust_offset(arrays[anchor],arrays[k],overlap)
             arrays[k][masks[k]] += off
+            # A constant datum shift is not enough when the two survey
+            # surfaces retain a broad, spatially varying ramp. Estimate that
+            # residual only from shared cells and at a kilometer-scale blur;
+            # this cannot chase individual soundings or canyon channels.
+            if overlap.sum() >= 10000:
+                residual=arrays[anchor]-arrays[k]
+                support=overlap.astype('float32')
+                residual=np.where(overlap,residual,0.0).astype('float32')
+                smooth_residual=gaussian_filter(residual, sigma=25, mode='nearest')
+                smooth_support=gaussian_filter(support, sigma=25, mode='nearest')
+                local=np.divide(smooth_residual, smooth_support,
+                                out=np.full_like(smooth_residual,np.nan),
+                                where=smooth_support > 0.15)
+                correction=local
+                apply=masks[k] & np.isfinite(correction) & (smooth_support > 0.15)
+                arrays[k][apply] += correction[apply]
             offsets[infos[k][0]]=round(off,4)
 
         # Add this tier to the reference only after its members share a level.
@@ -175,19 +191,41 @@ def build(region):
             union |= masks[i]
             weights.append(distance_transform_edt(masks[i]).astype('float32'))
         denom=np.zeros(composite.shape,dtype='float32')
-        blended=np.zeros(composite.shape,dtype='float32')
+        lowpasses=[]
         for i,weight in zip(members,weights):
             valid=masks[i]
             denom[valid] += weight[valid]
-            blended[valid] += weight[valid] * arrays[i][valid]
-        take=union & (denom > 0) & ~np.isfinite(composite)
-        composite[take]=blended[take]/denom[take]
+            # Only the broad terrain level is blended. Fine morphology stays
+            # with the locally dominant survey, avoiding doubled ridges and
+            # parallel ghost bands where the two surfaces disagree.
+            support=valid.astype('float32')
+            smooth_support=gaussian_filter(support, sigma=12, mode='nearest')
+            smooth_values=gaussian_filter(np.where(valid,arrays[i],0.0).astype('float32'), sigma=12, mode='nearest')
+            lowpasses.append(np.divide(smooth_values,smooth_support,
+                                       out=np.array(arrays[i],copy=True),
+                                       where=smooth_support > 0.15))
+        blended=np.zeros(composite.shape,dtype='float32')
+        low_denom=np.zeros(composite.shape,dtype='float32')
         winner=np.zeros(composite.shape,dtype='uint8')
         winner_weight=np.full(composite.shape,-1.0,dtype='float32')
-        for i,weight in zip(members,weights):
+        winner_index=np.full(composite.shape,-1,dtype='int16')
+        for pos,(i,weight,lowpass) in enumerate(zip(members,weights,lowpasses)):
+            valid=masks[i] & np.isfinite(lowpass)
+            blended[valid] += weight[valid] * lowpass[valid]
+            low_denom[valid] += weight[valid]
             better=masks[i] & (weight > winner_weight)
             winner[better]=np.uint8(infos[i][2])
             winner_weight[better]=weight[better]
+            winner_index[better]=pos
+        blended=np.divide(blended,low_denom,out=np.full_like(blended,np.nan),where=low_denom>0)
+        take=union & (denom > 0) & ~np.isfinite(composite)
+        # Restore the dominant source's fine-scale residual after low-pass
+        # blending. This is a seam-leveling operation, not a raster average.
+        for pos,(i,lowpass) in enumerate(zip(members,lowpasses)):
+            detail=arrays[i]-lowpass
+            use=take & (winner_index==pos) & np.isfinite(detail)
+            blended[use] += detail[use]
+        composite[take]=blended[take]
         prov[take]=winner[take]
         conf[take]=max(infos[i][3] for i in members)
         handled.update(members)
