@@ -13,6 +13,7 @@ from rasterio.transform import from_bounds, Affine
 from rasterio.warp import reproject, Resampling
 from rasterio.windows import from_bounds as window_from_bounds
 from PIL import Image
+from scipy.ndimage import distance_transform_edt
 
 ROOT = Path(__file__).resolve().parents[1]
 RESEARCH = Path('/home/gzheng/.openclaw/workspace-cto/bathy-research')
@@ -158,9 +159,41 @@ def build(region):
         a,m=load_source(path,transform,(height,width)); arrays.append(a); masks.append(m); infos.append((name,path,priority,confidence,label)); print(name,'valid',int(m.sum()),flush=True)
     offsets=harmonize(arrays,masks,infos)
     composite=np.full((height,width),np.nan,dtype='float32'); prov=np.zeros((height,width),dtype='uint8'); conf=np.zeros((height,width),dtype='float32'); conflict=np.zeros((height,width),dtype='float32')
-    # Highest evidence wins. For equal evidence, finer source resolution is preferred by order in config.
+    # Highest evidence wins. Equal-priority survey patches are feathered by
+    # distance from their footprint edges so a patch boundary cannot become a
+    # visible diagonal step. A patch dominates in its interior; only the
+    # shared footprint transition is blended.
     order=sorted(range(len(infos)),key=lambda i: infos[i][2],reverse=True)
+    handled=set()
+    for priority in sorted({i[2] for i in infos}, reverse=True):
+        members=[i for i in order if infos[i][2] == priority]
+        if len(members) < 2:
+            continue
+        union=np.zeros(composite.shape,dtype=bool)
+        weights=[]
+        for i in members:
+            union |= masks[i]
+            weights.append(distance_transform_edt(masks[i]).astype('float32'))
+        denom=np.zeros(composite.shape,dtype='float32')
+        blended=np.zeros(composite.shape,dtype='float32')
+        for i,weight in zip(members,weights):
+            valid=masks[i]
+            denom[valid] += weight[valid]
+            blended[valid] += weight[valid] * arrays[i][valid]
+        take=union & (denom > 0) & ~np.isfinite(composite)
+        composite[take]=blended[take]/denom[take]
+        winner=np.zeros(composite.shape,dtype='uint8')
+        winner_weight=np.full(composite.shape,-1.0,dtype='float32')
+        for i,weight in zip(members,weights):
+            better=masks[i] & (weight > winner_weight)
+            winner[better]=np.uint8(infos[i][2])
+            winner_weight[better]=weight[better]
+        prov[take]=winner[take]
+        conf[take]=max(infos[i][3] for i in members)
+        handled.update(members)
     for i in order:
+        if i in handled:
+            continue
         take=masks[i] & ~np.isfinite(composite); composite[take]=arrays[i][take]; prov[take]=infos[i][2]; conf[take]=infos[i][3]
     for i in range(len(arrays)):
         overlap=np.isfinite(composite)&masks[i]; conflict[overlap]=np.maximum(conflict[overlap],np.abs(composite[overlap]-arrays[i][overlap]))
