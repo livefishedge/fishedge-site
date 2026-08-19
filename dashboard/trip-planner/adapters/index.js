@@ -53,37 +53,35 @@
   function makeStubSegment(segmentId, label, lonlat) {
     const nowRetrieved = '2026-08-18T20:01:00-04:00';
     return {
-      segment: {
-        id: segmentId,                 // 'inlet' | 'transit' | 'target' | 'return'
-        label: label,
-        lonlat: lonlat,
-        now: {
-          wind:    { value: null, missing_reason: MISSING_REASON.NO_NEARBY_OBSERVATION },
-          wave:    { value: null, missing_reason: MISSING_REASON.NO_NEARBY_OBSERVATION },
-          pressure:{ value: null, missing_reason: MISSING_REASON.NO_NEARBY_OBSERVATION },
-          air_temperature:  { value: null, missing_reason: MISSING_REASON.NO_NEARBY_OBSERVATION },
-          water_temperature:{ value: null, missing_reason: MISSING_REASON.NO_NEARBY_OBSERVATION },
-          humidity:        { value: null, missing_reason: MISSING_REASON.FIELD_NOT_SUPPORTED_AT_SOURCE },
-          visibility:      { value: null, missing_reason: MISSING_REASON.FIELD_NOT_SUPPORTED_AT_SOURCE },
-          precipitation:   { value: null, missing_reason: MISSING_REASON.FIELD_NOT_SUPPORTED_AT_SOURCE },
-          weather_code:    { value: null, missing_reason: MISSING_REASON.FIELD_NOT_SUPPORTED_AT_SOURCE },
-          tide:    { value: null, missing_reason: MISSING_REASON.NO_SUPPORTED_TIDE_STATION },
-          current: { value: null, missing_reason: MISSING_REASON.NO_SUPPORTED_CURRENT_STATION },
-          moon:    { value: null, missing_reason: MISSING_REASON.FIELD_NOT_SUPPORTED_AT_SOURCE },
-          alerts:  [],
-        },
-        trip_window: {
-          departure_iso: '2026-08-19T04:00:00-04:00',
-          return_iso:    '2026-08-19T14:00:00-04:00',
-          hourly: [],                         // populated by model adapters
-          worst_window: null,                 // populated by decision engine
-          obs_vs_model_disagreement: null,    // populated by reconciler
-        },
-        alerts: [],
-        // Adapters stamp their retrieval wall-time so the UI can show age.
-        _retrieved_at: nowRetrieved,
-        _schema: 'captain-conditions-v1',
+      id: segmentId,                 // 'inlet' | 'transit' | 'target' | 'return'
+      label: label,
+      lonlat: lonlat,
+      now: {
+        wind:    { value: null, missing_reason: MISSING_REASON.NO_NEARBY_OBSERVATION },
+        wave:    { value: null, missing_reason: MISSING_REASON.NO_NEARBY_OBSERVATION },
+        pressure:{ value: null, missing_reason: MISSING_REASON.NO_NEARBY_OBSERVATION },
+        air_temperature:  { value: null, missing_reason: MISSING_REASON.NO_NEARBY_OBSERVATION },
+        water_temperature:{ value: null, missing_reason: MISSING_REASON.NO_NEARBY_OBSERVATION },
+        humidity:        { value: null, missing_reason: MISSING_REASON.FIELD_NOT_SUPPORTED_AT_SOURCE },
+        visibility:      { value: null, missing_reason: MISSING_REASON.FIELD_NOT_SUPPORTED_AT_SOURCE },
+        precipitation:   { value: null, missing_reason: MISSING_REASON.FIELD_NOT_SUPPORTED_AT_SOURCE },
+        weather_code:    { value: null, missing_reason: MISSING_REASON.FIELD_NOT_SUPPORTED_AT_SOURCE },
+        tide:    { value: null, missing_reason: MISSING_REASON.NO_SUPPORTED_TIDE_STATION },
+        current: { value: null, missing_reason: MISSING_REASON.NO_SUPPORTED_CURRENT_STATION },
+        moon:    { value: null, missing_reason: MISSING_REASON.FIELD_NOT_SUPPORTED_AT_SOURCE },
+        alerts:  [],
       },
+      trip_window: {
+        departure_iso: '2026-08-19T04:00:00-04:00',
+        return_iso:    '2026-08-19T14:00:00-04:00',
+        hourly: [],                         // populated by model adapters
+        worst_window: null,                 // populated by decision engine
+        obs_vs_model_disagreement: null,    // populated by reconciler
+      },
+      alerts: [],
+      // Adapters stamp their retrieval wall-time so the UI can show age.
+      _retrieved_at: nowRetrieved,
+      _schema: 'captain-conditions-v1',
     };
   }
 

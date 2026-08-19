@@ -203,7 +203,7 @@
       const seg = plan.segments[key];
       seg.decision = decideSegment(seg, opts);
     }
-    plan.decision = rollUp(Object.values(plan.segments).map(s => Object.assign({ segment_id: s.segment && s.segment.id }, s.decision)));
+    plan.decision = rollUp(Object.values(plan.segments).map(s => Object.assign({ segment_id: s.id }, s.decision)));
     return plan;
   }
 
