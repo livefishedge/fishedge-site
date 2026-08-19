@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 import rasterio
 from rasterio.crs import CRS
-from rasterio.transform import from_bounds
+from rasterio.transform import from_bounds, Affine
 from rasterio.warp import reproject, Resampling
 from rasterio.windows import from_bounds as window_from_bounds
 from PIL import Image
@@ -90,8 +90,19 @@ def write_tiles(region, data, prov, transform, max_zoom=13):
                 r1=min(h,int(math.ceil(win.row_off+win.height))); c1=min(w,int(math.ceil(win.col_off+win.width)))
                 if r1<=r0 or c1<=c0: continue
                 sub=data[r0:r1,c0:c1]; ps=prov[r0:r1,c0:c1]
-                yy=np.linspace(0,sub.shape[0]-1,256).astype(int); xx=np.linspace(0,sub.shape[1]-1,256).astype(int)
-                a=sub[np.ix_(yy,xx)]; p=ps[np.ix_(yy,xx)]
+                # Reproject into the tile's actual geographic extent. Do not
+                # stretch a clipped edge window across the whole tile: that
+                # creates zoom-dependent displacement/distortion at footprints.
+                src_transform=transform * Affine.translation(c0,r0)
+                dst_transform=from_bounds(*b,256,256)
+                a=np.full((256,256),np.nan,dtype='float32')
+                p=np.zeros((256,256),dtype='uint8')
+                reproject(sub,a,src_transform=src_transform,src_crs=CRS.from_epsg(3857),
+                          dst_transform=dst_transform,dst_crs=CRS.from_epsg(3857),
+                          src_nodata=np.nan,dst_nodata=np.nan,resampling=Resampling.bilinear)
+                reproject(ps,p,src_transform=src_transform,src_crs=CRS.from_epsg(3857),
+                          dst_transform=dst_transform,dst_crs=CRS.from_epsg(3857),
+                          src_nodata=0,dst_nodata=0,resampling=Resampling.nearest)
                 valid=np.isfinite(a); safe=np.where(valid,a,-2500.0)
                 q=np.clip((safe+2500)/2500,0,1)*5; lo=np.floor(q).astype(int); hi=np.minimum(lo+1,5); f=(q-lo)[...,None]
                 rgb=(DEPTH_COLORS[lo]*(1-f)+DEPTH_COLORS[hi]*f).astype('uint8'); rgba=np.concatenate([rgb,(np.isfinite(a).astype('uint8')*255)[...,None]],axis=2)
