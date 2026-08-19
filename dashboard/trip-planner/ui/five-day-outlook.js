@@ -44,11 +44,12 @@
         ? `Worst ${new Date(ww.start_iso).toLocaleTimeString('en-US', { hour: 'numeric', hour12: true })}: ${ww.max_wave_height}ft / G${ww.max_wind_gust}kt`
         : '—';
       return `
-        <button class="fdo-day" data-day="${i}" aria-label="${dayLabel(plan, i)} decision ${decision}">
+        <button class="fdo-day" data-day="${i}" aria-label="Open ${dayLabel(plan, i)} ${decision} details">
           <div class="fdo-when">${dayLabel(plan, i)}</div>
           <span class="fdo-decision ${decision}">${decision.replace('_', '-')}</span>
           <div class="fdo-summary">${fmtWindHour(plan)} · ${fmtWaveHour(plan)}</div>
           <div class="fdo-meta">${worstTxt}${reasonCount ? ` · ${reasonCount} flag${reasonCount === 1 ? '' : 's'}` : ''}</div>
+          <div class="fdo-open">Open layers and decision details ›</div>
         </button>`;
     }).join('');
     return `<div id="fishedge-five-day-grid">${cards}</div>`;

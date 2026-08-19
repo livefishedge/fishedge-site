@@ -79,10 +79,15 @@
     ).join('') || '<li>No rule triggers.</li>';
     const conf = d.confidence || 'low';
     const missing = (d.missing_required_inputs || []).map(m => `${m.field} (${m.reason})`).join(', ') || '—';
+    const target = plan.request && plan.request.target_area;
+    const targetLine = target
+      ? `<div class="bd-area"><b>Operating area:</b> ${target.label} · ${target.description || 'corridor target'}<br/><span class="bd-freshness">${target.geometry && target.geometry.type === 'LineString' ? 'Line corridor — conditions are sampled across the area, not a single point.' : 'Area target'}</span></div>`
+      : '';
     return `
       <div class="bd-header">
         <button class="bd-close" aria-label="Close briefing">×</button>
         <h2>Captain Briefing — ${plan.request && plan.request.home_inlet_label || 'Trip'}</h2>
+        ${targetLine}
         <div>Decision: <b>${d.decision}</b> · Confidence: <b>${conf}</b></div>
         <div>Missing required inputs: ${missing}</div>
         <ul class="bd-reasons">${reasons}</ul>
@@ -125,6 +130,15 @@
       { label: 'Water temp', v: now.water_temperature && now.water_temperature.value ? `${now.water_temperature.value.toFixed(1)}°F` : '—',
         src: now.water_temperature && now.water_temperature.source ? `${now.water_temperature.source.provider}` : '—',
         freshness: now.water_temperature && now.water_temperature.freshness },
+      { label: 'Visibility', v: now.visibility && now.visibility.value != null ? `${fmtVal(now.visibility.value, 1)}nm` : '—',
+        src: now.visibility && now.visibility.source ? `${now.visibility.source.provider || ''}` : '—',
+        freshness: now.visibility && now.visibility.freshness },
+      { label: 'Precipitation', v: now.precipitation && now.precipitation.value != null ? `${fmtVal(now.precipitation.value, 1)}mm` : '—',
+        src: now.precipitation && now.precipitation.source ? `${now.precipitation.source.provider || ''}` : '—',
+        freshness: now.precipitation && now.precipitation.freshness },
+      { label: 'Weather code', v: now.weather_code && now.weather_code.value != null ? String(now.weather_code.value) : '—',
+        src: now.weather_code && now.weather_code.source ? `${now.weather_code.source.provider || ''}` : '—',
+        freshness: now.weather_code && now.weather_code.freshness },
       { label: 'Next tide', v: now.tide && now.tide.value ? `${now.tide.value.next_high ? 'H' : ''} ${now.tide.value.next_high ? new Date(now.tide.value.next_high.iso).toLocaleTimeString('en-US',{hour:'numeric',hour12:true}) : ''} ${now.tide.value.next_high ? now.tide.value.next_high.value.toFixed(1) + 'ft' : ''} · ${now.tide.value.next_low ? 'L' : ''} ${now.tide.value.next_low ? new Date(now.tide.value.next_low.iso).toLocaleTimeString('en-US',{hour:'numeric',hour12:true}) : ''}` : '—',
         src: now.tide && now.tide.source ? `${now.tide.source.provider} ${now.tide.source.station_id || ''}` : '—',
         freshness: now.tide && now.tide.freshness },
@@ -132,7 +146,7 @@
     const html = cells.map(c =>
       `<div class="bd-cell"><b>${c.label}</b>${c.v}<div class="bd-freshness">${c.freshness || ''} · ${c.src || ''}</div></div>`
     ).join('');
-    return `<div class="bd-section"><h3>Now (observed + forecast blend)</h3><div class="bd-row">${html}</div></div>`;
+    return `<div class="bd-section"><h3>Data layers — observed + forecast blend</h3><div class="bd-row">${html}</div></div>`;
   }
 
   function renderTimeline(seg) {

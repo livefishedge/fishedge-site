@@ -50,12 +50,13 @@
    * The skeleton deliberately returns SK nulls so the UI can prove it
    * never displays a fabricated value.
    */
-  function makeStubSegment(segmentId, label, lonlat) {
+  function makeStubSegment(segmentId, label, lonlat, area) {
     const nowRetrieved = '2026-08-18T20:01:00-04:00';
     return {
       id: segmentId,                 // 'inlet' | 'transit' | 'target' | 'return'
       label: label,
-      lonlat: lonlat,
+      ...(lonlat ? { lonlat } : {}),
+      ...(area ? { area } : {}),
       now: {
         wind:    { value: null, missing_reason: MISSING_REASON.NO_NEARBY_OBSERVATION },
         wave:    { value: null, missing_reason: MISSING_REASON.NO_NEARBY_OBSERVATION },
@@ -94,9 +95,17 @@
       throw new Error('buildTripPlannerAdapter: home_inlet and target are required');
     }
     const inlet  = makeStubSegment('inlet',   opts.home_inlet.label, opts.home_inlet.lonlat);
-    const target = makeStubSegment('target',  opts.target.label,      opts.target.lonlat);
-    // Transit and return mirror target geometry until Phase 6 wires corridor sampling.
-    const transit = makeStubSegment('transit', 'Transit corridor',     opts.target.lonlat);
+    const targetAnchor = opts.target.anchor_lonlat || opts.target.lonlat;
+    const targetArea = opts.target.geometry ? {
+      id: opts.target.id,
+      label: opts.target.label,
+      kind: opts.target.kind,
+      geometry: opts.target.geometry,
+      lookup_points: opts.target.lookup_points || [],
+      description: opts.target.description,
+    } : null;
+    const target = makeStubSegment('target', opts.target.label, targetAnchor, targetArea);
+    const transit = makeStubSegment('transit', 'Transit corridor', targetAnchor, targetArea);
     const ret     = makeStubSegment('return',  'Return route',         opts.home_inlet.lonlat);
 
     return {
@@ -112,7 +121,8 @@
         home_inlet_lonlat: opts.home_inlet.lonlat,
         departure_iso:     opts.departure_iso,
         return_iso:        opts.return_iso,
-        target_lonlat:     opts.target.lonlat,
+        target_area:       targetArea,
+        target_lookup_points: opts.target.lookup_points || (targetAnchor ? [targetAnchor] : []),
         tz:                opts.tz || 'America/New_York',
         units:             opts.units || { wind: 'kt', wave_height: 'ft', wave_period: 's', pressure: 'inHg', temperature: 'F' },
       },

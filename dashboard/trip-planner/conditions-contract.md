@@ -21,7 +21,12 @@ If a field cannot be filled with provenance, it MUST be `null` with an explicit 
     "home_inlet_lonlat": [-75.0919, 38.3302],
     "departure_iso": "2026-08-19T04:00:00-04:00",
     "return_iso": "2026-08-19T14:00:00-04:00",
-    "target_lonlat": [-74.5, 38.5],
+    "target_area": {
+      "id": "baltimore-canyon-line",
+      "kind": "corridor",
+      "geometry": { "type": "LineString", "coordinates": [[-74.78, 38.08], [-74.17, 38.30]] },
+      "lookup_points": [[-74.78, 38.08], [-74.17, 38.30]]
+    },
     "transit_corridor_lonlats": [[-75.06, 38.45], [-74.85, 38.50], [-74.6, 38.50]],
     "tz": "America/New_York",
     "units": { "wind": "kt", "wave_height": "ft", "wave_period": "s", "pressure": "inHg", "temperature": "F" }

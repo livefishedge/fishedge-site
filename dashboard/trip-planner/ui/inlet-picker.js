@@ -1,6 +1,6 @@
 /*!
  * Inlet picker — top-of-planner control for selecting home inlet,
- * default departure/return times, and a target grounds lat/lon.
+ * default departure/return times, and a named canyon-area corridor.
  *
  * Source of truth for inlet metadata: coops-tides.js INLET_STATION_TABLE.
  * If the bootstrap (or any caller) hasn't loaded that table yet, we fall
@@ -17,6 +17,28 @@
     'chesapeake-bay-bt':     { station_id: '8573364', label: 'Chesapeake Bay Bridge Tunnel, VA', lat: 36.9667, lon: -76.1133 },
     'solomons-island-md':    { station_id: '8577330', label: 'Solomons Island, MD',    lat: 38.3172, lon: -76.4511 },
   };
+
+  // Targets are operational areas, not single fishing points.  The line is
+  // what the captain sees; lookup_points are only sampling anchors for the
+  // weather/observation adapters and are deliberately not exposed as the
+  // target identity.
+  const CANYON_TARGETS = Object.freeze({
+    baltimore_canyon_line: Object.freeze({
+      id: 'baltimore-canyon-line',
+      label: 'Baltimore Canyon line',
+      kind: 'corridor',
+      geometry: Object.freeze({
+        type: 'LineString',
+        coordinates: Object.freeze([
+          Object.freeze([-74.78, 38.08]),
+          Object.freeze([-74.48, 38.18]),
+          Object.freeze([-74.17, 38.30]),
+        ]),
+      }),
+      lookup_points: Object.freeze([[-74.78, 38.08], [-74.17, 38.30]]),
+      description: 'A broad operating corridor along the Baltimore Canyon system.',
+    }),
+  });
 
   function todayIso() {
     const d = new Date();
@@ -48,11 +70,10 @@
           <input id="ip-return" type="datetime-local" value="${state.return}" />
         </div>
         <div class="ip-field">
-          <label for="ip-target-lat">Target lat / lon</label>
-          <div style="display:flex;gap:4px;">
-            <input id="ip-target-lat" type="number" step="0.0001" placeholder="38.5" value="${state.target_lat}" style="flex:1;" />
-            <input id="ip-target-lon" type="number" step="0.0001" placeholder="-74.5" value="${state.target_lon}" style="flex:1;" />
-          </div>
+          <label for="ip-target">Target area</label>
+          <select id="ip-target">${Object.entries(CANYON_TARGETS).map(([k, v]) =>
+            `<option value="${k}"${k === state.target ? ' selected' : ''}>${v.label}</option>`
+          ).join('')}</select>
         </div>
         <button class="ip-save" id="ip-save">Save trip</button>
         <button class="ip-cta" id="ip-cta">Update</button>
@@ -66,30 +87,22 @@
       inlet: opts.initialInlet || Object.keys(INLETS)[0],
       departure: opts.initialDeparture || todayIso(),
       return: opts.initialReturn || plus10hIso(),
-      target_lat: opts.initialTarget ? opts.initialTarget[1] : 38.5,
-      target_lon: opts.initialTarget ? opts.initialTarget[0] : -74.5,
+      target: opts.initialTargetId || 'baltimore_canyon_line',
     };
     host.innerHTML = render(state);
 
     const inlet = host.querySelector('#ip-inlet');
     const dep = host.querySelector('#ip-departure');
     const ret = host.querySelector('#ip-return');
-    const lat = host.querySelector('#ip-target-lat');
-    const lon = host.querySelector('#ip-target-lon');
+    const target = host.querySelector('#ip-target');
     const save = host.querySelector('#ip-save');
     const cta = host.querySelector('#ip-cta');
 
     inlet.addEventListener('change', () => {
       state.inlet = inlet.value;
-      // Snap target to the inlet + a small offset for "15 nm offshore" demo.
-      const meta = INLETS[state.inlet];
-      if (meta && (!lat.value || !lon.value)) {
-        lat.value = (meta.lat - 0.20).toFixed(4);
-        lon.value = (meta.lon + 0.30).toFixed(4);
-      }
       opts.onChange && opts.onChange(state.inlet, snapshot());
     });
-    [dep, ret, lat, lon].forEach(el => el.addEventListener('change', () => opts.onChange && opts.onChange(state.inlet, snapshot())));
+    [dep, ret, target].forEach(el => el.addEventListener('change', () => opts.onChange && opts.onChange(state.inlet, snapshot())));
 
     cta.addEventListener('click', () => opts.onChange && opts.onChange(state.inlet, snapshot()));
 
@@ -104,7 +117,8 @@
       const retIso = ret.value ? new Date(ret.value).toISOString() : null;
       return {
         inlet_key: state.inlet,
-        target_lonlat: [Number(lon.value), Number(lat.value)],
+        target_id: target.value,
+        target_area: CANYON_TARGETS[target.value],
         departure_iso: depIso,
         return_iso: retIso,
       };
@@ -117,7 +131,7 @@
     });
   }
 
-  const api = Object.freeze({ mount, render, INLETS });
+  const api = Object.freeze({ mount, render, INLETS, CANYON_TARGETS });
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (typeof global !== 'undefined') global.FishEdgeTripPlannerUI = Object.assign(global.FishEdgeTripPlannerUI || {}, { InletPicker: api });
 })(typeof globalThis !== 'undefined' ? globalThis : this);

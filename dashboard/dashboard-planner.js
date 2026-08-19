@@ -47,13 +47,17 @@
       return;
     }
 
-    function buildFixturePlan(fixName, inletKey) {
+    const canyonTargets = UI.InletPicker.CANYON_TARGETS || {};
+    const defaultTarget = canyonTargets.baltimore_canyon_line;
+
+    function buildFixturePlan(fixName, inletKey, targetId) {
       const fix = Fx.FIXTURES[fixName];
       const inletMeta = (global.CoopsTides.INLET_STATION_TABLE && global.CoopsTides.INLET_STATION_TABLE[inletKey])
         || { station_id: '8570283', label: 'Ocean City Inlet, MD', lat: 38.3286, lon: -75.0919 };
+      const target = canyonTargets[targetId] || defaultTarget;
       const adapter = Tp.buildTripPlannerAdapter({
         home_inlet: { id: inletKey || 'ocean-city-md', label: inletMeta.label, lonlat: [inletMeta.lon, inletMeta.lat] },
-        target:     { id: 'cigar-minus-15',         label: 'Cigar — 15 nm SE', lonlat: [inletMeta.lon + 0.30, inletMeta.lat - 0.20] },
+        target:     Object.assign({}, target, { anchor_lonlat: target.lookup_points[0] }),
         departure_iso: '2026-08-19T04:00:00-04:00',
         return_iso:    '2026-08-19T14:00:00-04:00',
         tz: 'America/New_York',
@@ -90,7 +94,29 @@
           adapter.segments.target.trip_window.hourly[0],
         );
       }
-      const alerts = global.NwsAlerts.normalizeAlerts(fix.nws_alerts_active, fix.lat, fix.lon);
+      if (fix.open_meteo_weather_first_row && global.OpenMeteoWeather) {
+        const weather = global.OpenMeteoWeather.parseHourly({
+          hourly: Object.fromEntries(Object.entries({
+            time: [fix.open_meteo_weather_first_row.time],
+            wind_speed_10m: [fix.open_meteo_weather_first_row.wind_speed_10m],
+            wind_gusts_10m: [fix.open_meteo_weather_first_row.wind_gusts_10m],
+            wind_direction_10m: [fix.open_meteo_weather_first_row.wind_direction_10m],
+            pressure_msl: [fix.open_meteo_weather_first_row.pressure_msl],
+            relative_humidity_2m: [fix.open_meteo_weather_first_row.relative_humidity_2m],
+            visibility: [fix.open_meteo_weather_first_row.visibility],
+            precipitation: [fix.open_meteo_weather_first_row.precipitation],
+            weather_code: [fix.open_meteo_weather_first_row.weather_code],
+          }).filter(([, values]) => values[0] != null)),
+        });
+        const row = weather[0];
+        if (row) {
+          const source = row.source;
+          adapter.segments.target.now.visibility = { value: row.visibility_nm, source, freshness: row.freshness };
+          adapter.segments.target.now.precipitation = { value: row.precipitation, source, freshness: row.freshness };
+          adapter.segments.target.now.weather_code = { value: row.weather_code, source, freshness: row.freshness };
+        }
+      }
+      const alerts = global.NwsAlerts.normalizeAlerts(fix.nws_alerts_active, target.lookup_points[0][1], target.lookup_points[0][0]);
       for (const k of Object.keys(adapter.segments)) adapter.segments[k].alerts = alerts;
       Dec.evaluateTripPlan(adapter);
       return adapter;
@@ -132,7 +158,7 @@
     } catch (e) { failAt('InletPicker.mount', e); throw e; }
 
     function rebuild() {
-      currentPlans = build5DayPlans('ocean_city_normal', picker.getInlet());
+      currentPlans = build5DayPlans('ocean_city_normal', picker.getInlet(), picker.getSnapshot().target_id);
       UI.FiveDayOutlook.mount(document.getElementById('fishedge-five-day-outlook'), currentPlans, {
         onDayClick: (idx) => openBriefing(currentPlans[idx]),
       });
@@ -150,7 +176,7 @@
     }
 
     try {
-      currentPlans = build5DayPlans('ocean_city_normal', picker.getInlet());
+      currentPlans = build5DayPlans('ocean_city_normal', picker.getInlet(), picker.getSnapshot().target_id);
       UI.FiveDayOutlook.mount(document.getElementById('fishedge-five-day-outlook'), currentPlans, {
         onDayClick: (idx) => openBriefing(currentPlans[idx]),
       });

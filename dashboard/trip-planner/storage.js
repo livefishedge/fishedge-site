@@ -6,7 +6,7 @@
  *   fishedge:planner:trips        → JSON array of saved TripPlan shapes
  *
  * Trip shape:
- *   { id, name, inlet_key, target_lonlat, departure_iso, return_iso,
+ *   { id, name, inlet_key, target_id, target_area, departure_iso, return_iso,
  *     created_iso, last_opened_iso }
  *
  * Phase 4+ will add server-side persistence via Supabase (per-user).
@@ -62,7 +62,8 @@
       id: genId(),
       name: 'Untitled trip',
       inlet_key: null,
-      target_lonlat: null,
+      target_id: 'baltimore_canyon_line',
+      target_area: null,
       departure_iso: null,
       return_iso: null,
       created_iso: now,
