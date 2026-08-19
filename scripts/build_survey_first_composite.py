@@ -234,15 +234,8 @@ def build(region):
             a,seam_count=correct_scan_seams(a,m)
             print(name,'valid',int(m.sum()),'scan_seams_corrected',seam_count,flush=True)
         arrays.append(a); masks.append(m); raw_masks.append(m.copy()); infos.append((name,path,priority,confidence,label)); print(name,'valid',int(m.sum()),flush=True)
-        if priority == 4:
-            # The raw Okeanos grids contain interpolation/sounding fans at
-            # their outer swath edges. Keep the surveyed interior and allow
-            # lower-tier surfaces to fill this narrow fringe instead of
-            # presenting those edge artifacts as real seafloor structure.
-            edge_cells=20  # 20 x 30 m target cells ~= 600 m
-            m &= distance_transform_edt(m) > edge_cells
     offsets=harmonize(arrays,masks,infos)
-    composite=np.full((height,width),np.nan,dtype='float32'); prov=np.zeros((height,width),dtype='uint8'); conf=np.zeros((height,width),dtype='float32'); conflict=np.zeros((height,width),dtype='float32')
+    composite=np.full((height,width),np.nan,dtype='float32'); prov=np.zeros((height,width),dtype='uint8'); conf=np.zeros((height,width),dtype='float32'); conflict=np.zeros((height,width),dtype='float32'); owner=np.full((height,width),-1,dtype='int16')
     # Highest evidence wins. Equal-priority survey patches are feathered by
     # distance from their footprint edges so a patch boundary cannot become a
     # visible diagonal step. A patch dominates in its interior; only the
@@ -296,17 +289,18 @@ def build(region):
         composite[take]=blended[take]
         prov[take]=winner[take]
         conf[take]=max(infos[i][3] for i in members)
+        for pos,i in enumerate(members):
+            owner[take & (winner_index == pos)] = i
         handled.update(members)
     for i in order:
         if i in handled:
             continue
-        take=masks[i] & ~np.isfinite(composite); composite[take]=arrays[i][take]; prov[take]=infos[i][2]; conf[take]=infos[i][3]
+        take=masks[i] & ~np.isfinite(composite); composite[take]=arrays[i][take]; prov[take]=infos[i][2]; conf[take]=infos[i][3]; owner[take]=i
 
-    # Do not leave a hard priority boundary where a high-evidence survey
-    # meets a lower-tier fallback. EX1302's raw footprint has a visible edge
-    # step even after its 600 m erosion. Build a lower-tier reference and
-    # taper only the broad terrain level plus the high-frequency residual
-    # across a 3 km corridor. Interior survey morphology remains unchanged.
+    # Remove edge steps for every source, not just the two Okeanos surveys.
+    # The transition is deliberately only 50 m (about 1.67 cells at the
+    # 30 m composite resolution): enough to avoid a one-cell discontinuity,
+    # short enough that real canyon morphology is not blurred.
     def normalized_blur(values, valid, sigma=25.0):
         support=valid.astype('float32')
         smooth_support=gaussian_filter(support, sigma=sigma, mode='nearest')
@@ -314,25 +308,18 @@ def build(region):
         return np.divide(smooth_values, smooth_support,
                          out=np.full_like(smooth_values,np.nan), where=smooth_support > 0.15)
 
-    lower_ref=np.full(composite.shape,np.nan,dtype='float32')
-    for i in sorted(order,key=lambda k: infos[k][2],reverse=True):
-        if infos[i][2] >= 4: continue
-        take=masks[i] & np.isfinite(arrays[i]) & ~np.isfinite(lower_ref)
-        lower_ref[take]=arrays[i][take]
     for i,info in enumerate(infos):
-        if info[2] != 4: continue
         raw=raw_masks[i]
         dist=distance_transform_edt(raw)
-        # EX1903L2 has a much longer, thinner occupied fringe than EX1302:
-        # its edge residual remains elevated several kilometres inward.  Use
-        # a wider transition for that source only; the survey residual (and
-        # therefore its real canyon morphology) is still restored at full
-        # weight in the interior of the corridor.
-        feather_cells=180.0 if info[0] == 'ex1903l2' else 100.0
-        near=raw & (dist < feather_cells) & np.isfinite(lower_ref)
+        alternate=np.full(composite.shape,np.nan,dtype='float32')
+        for j in sorted([j for j in order if j != i],key=lambda k: infos[k][2],reverse=True):
+            take=masks[j] & np.isfinite(arrays[j]) & ~np.isfinite(alternate)
+            alternate[take]=arrays[j][take]
+        feather_cells=50.0 / 30.0
+        near=raw & (owner == i) & (dist <= feather_cells) & np.isfinite(alternate)
         if not near.any(): continue
         survey_broad=normalized_blur(arrays[i],raw,sigma=25.0)
-        fallback_broad=normalized_blur(lower_ref,np.isfinite(lower_ref),sigma=25.0)
+        fallback_broad=normalized_blur(alternate,np.isfinite(alternate),sigma=25.0)
         t=np.clip(dist/feather_cells,0.0,1.0)
         # Smoothstep avoids a visible slope break at either end.
         weight=t*t*(3.0-2.0*t)
@@ -341,7 +328,7 @@ def build(region):
         blended=fallback_broad*(1.0-weight)+survey_broad*weight+np.where(np.isfinite(detail),detail,0.0)*weight
         composite[valid]=blended[valid]
         prov[valid]=np.where(weight[valid] >= 0.5, info[2], np.maximum(prov[valid],1)).astype('uint8')
-        print(info[0],'edge_blend_cells',int(valid.sum()),'feather_cells',int(feather_cells),flush=True)
+        print(info[0],'edge_blend_cells',int(valid.sum()),'transition_m',50,flush=True)
     for i in range(len(arrays)):
         overlap=np.isfinite(composite)&masks[i]; conflict[overlap]=np.maximum(conflict[overlap],np.abs(composite[overlap]-arrays[i][overlap]))
     target=OUT/region; target.mkdir(parents=True,exist_ok=True)
@@ -349,7 +336,7 @@ def build(region):
     with rasterio.open(target/'composite.tif','w',**profile) as dst:
         dst.write(composite,1); dst.write(prov.astype('float32'),2); dst.write(conf,3); dst.write(conflict,4)
         dst.set_band_description(1,'elevation_harmonized_m'); dst.set_band_description(2,'source_priority'); dst.set_band_description(3,'confidence'); dst.set_band_description(4,'max_overlap_conflict_m')
-    meta={'region':region,'bbox_wsen':cfg['bbox'],'resolution_m':res,'shape':[height,width],'offsets_m':offsets,'edge_blend_cells_by_source':{'ex1302':100,'ex1903l2':180},'sources':[{'name':i[0],'priority':i[2],'confidence':i[3],'label':i[4],'path':str(i[1])} for i in infos]}
+    meta={'region':region,'bbox_wsen':cfg['bbox'],'resolution_m':res,'shape':[height,width],'offsets_m':offsets,'edge_transition_m':50,'edge_blend_cells':2,'sources':[{'name':i[0],'priority':i[2],'confidence':i[3],'label':i[4],'path':str(i[1])} for i in infos]}
     (target/'metadata.json').write_text(json.dumps(meta,indent=2)); write_tiles(region,composite,prov,transform)
     print(json.dumps({'region':region,'shape':[height,width],'valid':int(np.isfinite(composite).sum()),'sources':meta['sources'],'offsets':offsets},indent=2))
 

@@ -13,9 +13,11 @@
   ],
   "offsets_m": {
     "ex1303": 0.0,
-    "ex1404l3": 0.0,
+    "ex1404l3": 0.3342,
     "bluetopo": 0.0
   },
+  "edge_transition_m": 50,
+  "edge_blend_cells": 2,
   "sources": [
     {
       "name": "ex1303",
