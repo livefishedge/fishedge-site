@@ -15,18 +15,37 @@
  */
 (function attachPlannerBootstrap(global) {
   'use strict';
-  const Tp  = global.FishEdgeTripPlanner;
-  const UI  = global.FishEdgeTripPlannerUI || {};
-  const Dec = global.TripDecisionEngine;
-  const Rec = global.TripReconciler;
-  const Fx  = global.FishEdgeTripPlannerFixtures;
-  const Sto = global.FishEdgeTripStorage;
 
-  if (!Tp || !UI.TabSwitcher || !UI.InletPicker || !UI.FiveDayOutlook || !UI.CompactStrip || !UI.BriefingDrawer || !UI.MyTripsSidebar || !Dec || !Rec || !Fx) {
-    // Backbone not loaded yet — defer.
-    console.warn('[planner] backbone missing — deferring');
-    return;
-  }
+  // The bootstrap script tag lives in <head>, so the body is unparsed when
+  // this IIFE runs synchronously. getElementById('fishedge-tab-switcher')
+  // would return null and the mount would throw. Wait for DOMContentLoaded.
+  function run() {
+    const Tp  = global.FishEdgeTripPlanner;
+    const UI  = global.FishEdgeTripPlannerUI || {};
+    const Dec = global.TripDecisionEngine;
+    const Rec = global.TripReconciler;
+    const Fx  = global.FishEdgeTripPlannerFixtures;
+    const Sto = global.FishEdgeTripStorage;
+
+    if (!Tp || !UI.TabSwitcher || !UI.InletPicker || !UI.FiveDayOutlook || !UI.CompactStrip || !UI.BriefingDrawer || !UI.MyTripsSidebar || !Dec || !Rec || !Fx) {
+      console.warn('[planner] backbone missing — deferring');
+      const host = document.getElementById('fishedge-planner-main');
+      if (host) host.innerHTML = '<div style="padding:20px;color:#ff6b6b;font:14px-system-ui;">Trip Planner backbone failed to load. Refresh the page.</div>';
+      return;
+    }
+
+    // Show a load-failed banner if any mount call throws. Better than a
+    // silently empty page.
+    function mountFailure(component, err) {
+      console.error('[planner] mount failed:', component, err);
+      const host = document.getElementById('fishedge-planner-main');
+      if (host) host.innerHTML = '<div style="padding:20px;color:#ff6b6b;font:14px-system-ui;">Trip Planner "' + component + '" failed to render: ' + (err && err.message ? err.message : String(err)) + '. Refresh the page.</div>';
+    }
+
+    function safeMount(name, fn) {
+      try { return fn(); } catch (e) { mountFailure(name, e); throw e; }
+    }
+
 
   /**
    * Build a TripPlan for a given inlet/target combo. Currently fixture-driven;
@@ -167,6 +186,13 @@
   // 6. My Trips sidebar
   rebuildMyTrips();
 
-  // Expose for ad-hoc inspection.
-  global.__FISHEDGE_PLANNER_DEV__ = { plans: currentPlans, picker, Sto, rebuild };
+    // Expose for ad-hoc inspection.
+    global.__FISHEDGE_PLANNER_DEV__ = { plans: currentPlans, picker, Sto, rebuild };
+  } // end run()
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', run);
+  } else {
+    run();
+  }
 })(typeof globalThis !== 'undefined' ? globalThis : this);
