@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Briefing Viewer — <span id="title-date">…</span></title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@10.2.1/ol.css">
+  <style>
+    :root { color-scheme: dark; }
+    html, body { margin: 0; height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0a1929; color: #b3e5fc; }
+    .bv-header {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 20;
+      display: flex; align-items: center; gap: 16px;
+      padding: 10px 18px; background: rgba(10, 25, 41, 0.95);
+      border-bottom: 1px solid #1b2836; backdrop-filter: blur(6px);
+    }
+    .bv-back { color: #4fc3f7; text-decoration: none; font-size: 14px; padding: 4px 10px; border: 1px solid #2a3a4d; border-radius: 4px; }
+    .bv-back:hover { background: #1b2836; }
+    .bv-title { margin: 0; font-size: 16px; font-weight: 600; color: #e3f2fd; }
+    .bv-subtitle { font-size: 12px; color: #6b7d92; margin-left: 4px; }
+    .bv-layers { display: flex; gap: 12px; margin-left: auto; }
+    .bv-layers label { font-size: 12px; color: #b3e5fc; cursor: pointer; display: flex; align-items: center; gap: 4px; }
+    .bv-layers input { accent-color: #4fc3f7; }
+    .bv-layers .badge { font-size: 10px; padding: 1px 6px; border-radius: 3px; background: #1b2836; color: #9fb0c3; font-family: monospace; }
+    .bv-layers .badge.om { color: #ffeb3b; }
+    .bv-layers .badge.cmems { color: #ff6f00; }
+    .bv-map { position: absolute; top: 52px; left: 0; right: 0; bottom: 0; }
+    .ol-attribution { color: #6b7d92 !important; background: rgba(10, 25, 41, 0.8) !important; }
+    .ol-attribution ul { color: #6b7d92 !important; }
+    .ol-control button { background-color: rgba(10, 25, 41, 0.8) !important; color: #b3e5fc !important; }
+    .ol-control button:hover { background-color: #1b2836 !important; }
+    .ol-zoom { top: auto; bottom: 0.5em; right: 0.5em; left: auto; }
+    .bv-legend {
+      position: fixed; bottom: 0.5em; left: 0.5em; z-index: 10;
+      background: rgba(10, 25, 41, 0.92); border: 1px solid #1b2836; border-radius: 4px;
+      padding: 8px 10px; font-size: 11px; color: #9fb0c3; max-width: 320px;
+      font-family: monospace; line-height: 1.4;
+    }
+    .bv-legend b { color: #e3f2fd; }
+    .bv-legend .row { display: flex; align-items: center; gap: 6px; margin: 2px 0; }
+    .bv-legend .swatch { display: inline-block; width: 14px; height: 10px; border: 1px solid #1b2836; }
+  </style>
+</head>
+<body>
+  <div class="bv-header">
+    <a class="bv-back" href="javascript:history.back()">← Back to briefing</a>
+    <div>
+      <h1 class="bv-title" id="bv-title">7-Day Spatial Outlook</h1>
+      <div class="bv-subtitle" id="bv-subtitle">Click + drag to pan · scroll to zoom</div>
+    </div>
+    <div class="bv-layers" id="bv-layers">
+      <label><input type="radio" name="src" value="om" checked> Open-Meteo <span class="badge om">atmo</span></label>
+      <label><input type="radio" name="src" value="cmems"> CMEMS <span class="badge cmems">ocean</span></label>
+    </div>
+  </div>
+  <div id="bv-map" class="bv-map"></div>
+  <div class="bv-legend" id="bv-legend">
+    <b>Raster layers</b> are pre-rendered PNGs served from <code>data.fishedge.live</code>.
+    They overlay the same geographic bbox as the captain's dashboard. Pan/zoom to inspect.
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/ol@10.2.1/dist/ol.js"></script>
+  <script>
+    (function () {
+      // Parse query params
+      const params = new URLSearchParams(window.location.search);
+      const date = params.get('date') || new Date().toISOString().slice(0, 10);
+      const region = params.get('region') || 'usec_md';
+      const initialSource = params.get('source') === 'cmems' ? 'cmems' : 'om';
+
+      // usec_md bbox: [-77, 36, -72, 40] (W, S, E, N) in EPSG:4326
+      const BBOXES = {
+        usec_md:   [-77.0, 36.0, -72.0, 40.0],
+        usec_south:[-81.0, 31.0, -73.0, 36.0],
+      };
+      const bbox = BBOXES[region] || BBOXES.usec_md;
+      const center = [(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2];
+
+      // Pre-rendered raster URLs (built nightly by /home/gzheng/pipelines/briefing/)
+      const rasterUrl = (source) => `https://data.fishedge.live/${region}/briefing/${source}_${date}.png`;
+      const OM_URL    = rasterUrl('raster');
+      const CMEMS_URL = rasterUrl('cmems_raster');
+
+      // Header
+      document.getElementById('title-date').textContent = date;
+      document.title = `Briefing Viewer — ${date}`;
+      const dow = new Date(date + 'T12:00:00Z').toLocaleDateString('en-US', { weekday: 'short' });
+      document.getElementById('bv-title').textContent = `${date} (${dow}) — 7-Day Outlook`;
+      document.getElementById('bv-subtitle').textContent =
+        `Region: ${region} · bbox: [${bbox.map(x => x.toFixed(1)).join(', ')}] · click + drag to pan · scroll to zoom`;
+
+      // OpenLayers layers — ImageStatic over the rasters
+      const rasterProjection = 'EPSG:4326';
+      const omSource = new ol.source.ImageStatic({
+        url: OM_URL,
+        projection: rasterProjection,
+        imageExtent: bbox,
+        crossOrigin: 'anonymous',
+      });
+      const cmemsSource = new ol.source.ImageStatic({
+        url: CMEMS_URL,
+        projection: rasterProjection,
+        imageExtent: bbox,
+        crossOrigin: 'anonymous',
+      });
+
+      // Optional dark canvas base (subtle) — kept very dim so the raster is the star
+      const baseLayer = new ol.layer.Tile({
+        source: new ol.source.XYZ({
+          url: 'https://basemap.aad.gov.au/v2/epsg4326/{z}/{x}/{y}.png', // placeholder dark
+          attributions: '© Antarctic Australian Antarctic Division',
+          maxZoom: 12,
+          visible: false, // hidden by default — rasters are the primary content
+        }),
+      });
+
+      const omLayer    = new ol.layer.Image({ source: omSource,    visible: initialSource === 'om'    });
+      const cmemsLayer = new ol.layer.Image({ source: cmemsSource, visible: initialSource === 'cmems' });
+
+      // Map
+      const map = new ol.Map({
+        target: 'bv-map',
+        layers: [baseLayer, omLayer, cmemsLayer],
+        view: new ol.View({
+          projection: rasterProjection,
+          center: center,
+          zoom: 5.5,
+          minZoom: 4,
+          maxZoom: 12,
+          extent: [bbox[0] - 1, bbox[1] - 1, bbox[2] + 1, bbox[3] + 1],
+        }),
+        controls: ol.control.defaults({ attribution: false, rotate: false }).extend([
+          new ol.control.Attribution({ collapsible: false }),
+          new ol.control.ScaleLine(),
+        ]),
+      });
+
+      // Layer toggle (radio buttons)
+      document.querySelectorAll('input[name="src"]').forEach(radio => {
+        radio.checked = (radio.value === initialSource);
+        radio.addEventListener('change', e => {
+          const v = e.target.value;
+          omLayer.setVisible(v === 'om');
+          cmemsLayer.setVisible(v === 'cmems');
+          // Reflect in URL for sharing
+          const u = new URL(window.location.href);
+          u.searchParams.set('source', v);
+          history.replaceState(null, '', u.toString());
+        });
+      });
+
+      // Click-to-zoom (double-click zooms in by default; we add a single-click
+      // to fly-to the bounding extent of the raster)
+      map.getView().fit(bbox, { padding: [20, 20, 20, 20] });
+    })();
+  </script>
+</body>
+</html>
