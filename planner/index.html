@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <title>Captain's Planner — FishEdge</title>
+  <!-- 2026-08-19: Planner peer route restored at Mike's request (commit history
+       shows it as a tab on the dashboard from 0ff414ee onward; Mike wants
+       /planner/ as a standalone URL). Build marker: FISHEDGE_TRIP_PLANNER_BUILD=dev-mvp. -->
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="../dashboard/trip-planner/ui/planner-shell.css?v=20260819-3">
+
+  <!-- Auth + Analytics (shared backbone with dashboard) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../dashboard/supabase-init.js?v=20260806c"></script>
+  <script src="https://cdn.jsdelivr.net/npm/posthog-js@1.200.0/dist/array.js"></script>
+
+  <!-- Trip Planner backbone (adapters, decision engine, reconciler, fixtures) -->
+  <script src="../dashboard/trip-planner/adapters/index.js?v=20260819-3"></script>
+  <script src="../dashboard/trip-planner/adapters/ndbc-realtime.js?v=20260819-3"></script>
+  <script src="../dashboard/trip-planner/adapters/open-meteo-marine.js?v=20260819-3"></script>
+  <script src="../dashboard/trip-planner/adapters/open-meteo-weather.js?v=20260819-3"></script>
+  <script src="../dashboard/trip-planner/adapters/coops-tides.js?v=20260819-3"></script>
+  <script src="../dashboard/trip-planner/adapters/nws-alerts.js?v=20260819-3"></script>
+  <script src="../dashboard/trip-planner/reconciler.js?v=20260819-3"></script>
+  <script src="../dashboard/trip-planner/decision-engine.js?v=20260819-3"></script>
+  <script src="../dashboard/trip-planner/storage.js?v=20260819-3"></script>
+  <script src="../dashboard/trip-planner/fixtures/ocean-city-normal.js?v=20260819-3"></script>
+
+  <!-- Trip Planner UI components -->
+  <script src="../dashboard/trip-planner/ui/tab-switcher.js?v=20260819-3"></script>
+  <script src="../dashboard/trip-planner/ui/inlet-picker.js?v=20260819-3"></script>
+  <script src="../dashboard/trip-planner/ui/compact-strip.js?v=20260819-3"></script>
+  <script src="../dashboard/trip-planner/ui/briefing-drawer.js?v=20260819-3"></script>
+  <script src="../dashboard/trip-planner/ui/five-day-outlook.js?v=20260819-3"></script>
+  <script src="../dashboard/trip-planner/ui/my-trips-sidebar.js?v=20260819-3"></script>
+
+  <!-- Planner bootstrap (mounts the planner UI on this peer route) -->
+  <script src="planner-bootstrap.js?v=20260819-3"></script>
+</head>
+<body>
+  <!-- Tab switcher mounts at the very top -->
+  <nav id="fishedge-tab-switcher" aria-label="Primary"></nav>
+
+  <!-- Inlet picker strip sits below the tabs -->
+  <header id="fishedge-inlet-picker"></header>
+
+  <!-- Main planner body: 5-day outlook (left) + My Trips (sidebar on desktop, drawer on mobile) -->
+  <main id="fishedge-planner-main">
+    <section id="fishedge-five-day-outlook" aria-label="5-day outlook"></section>
+    <aside id="fishedge-my-trips" aria-label="Saved trips"></aside>
+  </main>
+
+  <!-- Compact conditions strip mounts bottom-right (mobile) or top-right (desktop) -->
+  <div id="fishedge-compact-strip-host"></div>
+
+  <!-- Briefing drawer mounts as a portal overlay -->
+  <div id="fishedge-briefing-host"></div>
+
+  <noscript>
+    <div style="padding:20px;color:#e0e6ee;background:#050b10;font:14px-system-ui;">
+      JavaScript is required for the Captain's Planner. The Map Dashboard at
+      <a href="/dashboard/" style="color:#4d7dff">/dashboard/</a> is also affected.
+    </div>
+  </noscript>
+</body>
+</html>
