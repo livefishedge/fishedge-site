@@ -69,9 +69,14 @@
   // any failure (network, CORS, parse) so the caller can fall back gracefully.
   // ===========================================================================
 
+  // CORS proxy: dev branch preview is on *.pages.dev which Open-Meteo /
+  // CO-OPS / NWS CORS configs don't accept. Route through corsproxy.io
+  // (free public CORS proxy) so the browser preflight succeeds.
+  const CORS_PROXY = 'https://corsproxy.io/?';
+
   async function fetchJson(url) {
     try {
-      const r = await fetch(url, { cache: 'no-store' });
+      const r = await fetch(CORS_PROXY + encodeURIComponent(url), { cache: 'no-store' });
       if (!r.ok) return null;
       return await r.json();
     } catch (e) {
