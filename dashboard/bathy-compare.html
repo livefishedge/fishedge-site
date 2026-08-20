@@ -59,6 +59,14 @@
     <div class="meta">Okeanos EX1404L3/EX1303 precedence; lower-tier sources fill only valid gaps.</div>
     <label class="row"><input type="checkbox" data-layer="surveyEvidenceHudson"><span class="swatch" style="background:linear-gradient(90deg,#1f50a0,#0fafa0,#f09628,#f0e146)"></span>Hudson source evidence</label>
     <div class="meta">NOAA EM302 final grid · transit-track coverage; separate quality label</div>
+    <label class="row"><input type="checkbox" data-layer="surveyFirstNorfolk"><span class="swatch"></span>Survey-first Norfolk Canyon <b>25 m grid</b></label>
+    <div class="meta">USGS Reson 7160 survey first; NOS BAG → BlueTopo → NCEI fallback. 50 m edge correction.</div>
+    <label class="row"><input type="checkbox" data-layer="surveyFirstWashington"><span class="swatch"></span>Survey-first Washington–Accomac Canyons <b>25 m grid</b></label>
+    <div class="meta">USGS Reson 7160 survey first; empirical crossover adjustment and 50 m edge correction.</div>
+    <label class="row"><input type="checkbox" data-layer="surveyFirstKeller"><span class="swatch"></span>Survey-first Keller Canyon <b>25 m grid</b></label>
+    <div class="meta">USGS Reson 7160 Keller survey; no alternate valid overlap in this build.</div>
+    <label class="row"><input type="checkbox" data-layer="surveyFirstWilmington"><span class="swatch"></span>Survey-first Wilmington/Baltimore Canyons <b>25 m grid</b></label>
+    <div class="meta">Dedicated NOAA EX1106 SWilm/Baltimore canyon survey footprint; single-survey product pending numeric regridding.</div>
     <label class="row"><input type="checkbox" data-layer="surveyFirstUsecMd" checked><span class="swatch"></span>Survey-first USEC-MD composite <b>90 m regional grid</b></label>
     <div class="meta">All available USEC-MD survey grids first; NOS BAG → BlueTopo → NCEI fallback. Source-wide crossover adjustment; 50 m edge correction.</div>
     <label class="row"><input type="checkbox" data-layer="surveyEvidenceUsecMd"><span class="swatch" style="background:linear-gradient(90deg,#1f50a0,#0fafa0,#f09628,#f0e146)"></span>USEC-MD source evidence</label>
@@ -122,6 +130,10 @@
     ex1303Hudson: './data/bathy/canyon_tiles/ex1303_hudson/color/{z}/{x}/{y}.png?v=20260818-canyon2',
     surveyFirstHudson: './data/bathy/survey_first/hudson/tiles/depth/{z}/{x}/{y}.png?v=20260818-surveyfirst3',
     surveyEvidenceHudson: './data/bathy/survey_first/hudson/tiles/provenance/{z}/{x}/{y}.png?v=20260818-surveyfirst3',
+    surveyFirstNorfolk: './data/bathy/survey_first/norfolk/tiles/depth/{z}/{x}/{y}.png?v=20260820-norfolk1',
+    surveyFirstWashington: './data/bathy/survey_first/washington_accomac/tiles/depth/{z}/{x}/{y}.png?v=20260820-washington1',
+    surveyFirstKeller: './data/bathy/survey_first/keller/tiles/depth/{z}/{x}/{y}.png?v=20260820-keller1',
+    surveyFirstWilmington: './data/bathy/canyon_tiles/ex1106_baltimore_25m/color/{z}/{x}/{y}.png?v=20260820-wilmington1',
     surveyFirstUsecMd: './data/bathy/survey_first/usec_md/tiles/depth/{z}/{x}/{y}.png?v=20260819-usecmd2',
     surveyEvidenceUsecMd: './data/bathy/survey_first/usec_md/tiles/provenance/{z}/{x}/{y}.png?v=20260819-usecmd2',
     ex1106Baltimore: './data/bathy/canyon_tiles/ex1106_baltimore_25m/color/{z}/{x}/{y}.png?v=20260818-exhaustive1',
@@ -151,7 +163,7 @@
   const center = ol.proj.fromLonLat([-74.05, 38.22]);
   const layers = {};
   for (const [name,url] of Object.entries(urls)) {
-    const maxZoom = (name === 'surveyFirstBaltimore' || name === 'surveyEvidenceBaltimore' || name === 'surveyFirstHudson' || name === 'surveyEvidenceHudson' || name === 'surveyFirstUsecMd' || name === 'surveyEvidenceUsecMd' || name === 'ex1404l3West' || name === 'knox17rr' || name === 'ex1904VaNy' || name === 'ex1904NyRi' || name === 'ex1904Rov' || name === 'ex1906North' || name === 'ex2205Transit1' || name === 'ex2205Transit2') ? ((name === 'ex2205Transit2' || name === 'knox17rr') ? 9 : 10) : 13;
+    const maxZoom = (name === 'surveyFirstBaltimore' || name === 'surveyEvidenceBaltimore' || name === 'surveyFirstHudson' || name === 'surveyEvidenceHudson' || name === 'surveyFirstNorfolk' || name === 'surveyFirstWashington' || name === 'surveyFirstKeller' || name === 'surveyFirstUsecMd' || name === 'surveyEvidenceUsecMd' || name === 'ex1404l3West' || name === 'knox17rr' || name === 'ex1904VaNy' || name === 'ex1904NyRi' || name === 'ex1904Rov' || name === 'ex1906North' || name === 'ex2205Transit1' || name === 'ex2205Transit2') ? ((name === 'ex2205Transit2' || name === 'knox17rr') ? 9 : 10) : 13;
     layers[name] = new ol.layer.Tile({source:new ol.source.XYZ({url,crossOrigin:'anonymous',minZoom:5,maxZoom}),visible:name==='dem',opacity:name.startsWith('surveyEvidence')?.78:.94,zIndex:name.startsWith('surveyEvidence')?18:10});
   }
   layers.surveyFootprints = new ol.layer.Vector({
@@ -266,7 +278,7 @@
     const ll = ol.proj.toLonLat(evt.coordinate);
     rCoord.textContent = ll[1].toFixed(4) + '°N  ' + Math.abs(ll[0]).toFixed(4) + '°W';
     const myReq = ++reqId;
-    const active = ['dem','bag','average','multibeam','bluetopo','bluetopoMeasured','surveyFirstBaltimore','surveyFirstHudson','surveyFirstUsecMd','ex1302','ex1903l2','ex1404l3West','ex1404l3Hudson','ex1303Hudson','at29Auv','knox17rr'].filter(n => layers[n] && layers[n].getVisible());
+    const active = ['dem','bag','average','multibeam','bluetopo','bluetopoMeasured','surveyFirstBaltimore','surveyFirstHudson','surveyFirstNorfolk','surveyFirstWashington','surveyFirstKeller','surveyFirstWilmington','surveyFirstUsecMd','ex1302','ex1903l2','ex1404l3West','ex1404l3Hudson','ex1303Hudson','at29Auv','knox17rr'].filter(n => layers[n] && layers[n].getVisible());
     if(!active.length){ rDepths.innerHTML = ''; return; }
     const results = await Promise.all(active.map(async n => [n, await tileDepth(layers[n], evt.coordinate)]));
     if(myReq !== reqId) return; // stale
@@ -291,6 +303,10 @@
     ex1303Hudson: 'NOAA Okeanos EX1303 Hudson Canyon · dedicated survey · 30 m',
     surveyFirstHudson: 'Survey-first Hudson composite · Okeanos EX1404L3/EX1303 · 15–30 m grid',
     surveyEvidenceHudson: 'Hudson source evidence · Okeanos / BAG / BlueTopo / NCEI',
+    surveyFirstNorfolk: 'Survey-first Norfolk Canyon · USGS Reson 7160 > BAG > BlueTopo > NCEI · 25 m grid',
+    surveyFirstWashington: 'Survey-first Washington–Accomac Canyons · USGS Reson 7160 > BAG > BlueTopo > NCEI · 25 m grid',
+    surveyFirstKeller: 'Survey-first Keller Canyon · USGS Reson 7160 · 25 m grid',
+    surveyFirstWilmington: 'Survey-first Wilmington/Baltimore Canyons · NOAA EX1106 dedicated survey · 25 m',
     surveyFirstUsecMd: 'Survey-first USEC-MD composite · all available surveys > BAG > BlueTopo > NCEI · 90 m regional grid',
     surveyEvidenceUsecMd: 'USEC-MD source evidence · surveys / BAG / BlueTopo / NCEI',
     ex1106Baltimore: 'NOAA Okeanos EX1106 Baltimore Canyons · named canyon grid · 25 m',

@@ -1,0 +1,54 @@
+{
+  "region": "washington_accomac",
+  "bbox_wsen": [
+    -74.55,
+    37.3,
+    -73.8,
+    38.05
+  ],
+  "resolution_m": 25.0,
+  "shape": [
+    4220,
+    3340
+  ],
+  "offsets_m": {
+    "usgs_reson7160_washington_accomac": 1.5488,
+    "bag": -1.2204,
+    "bluetopo": -0.0,
+    "multibeam": -1.5273
+  },
+  "vertical_adjustment_method": "pairwise robust crossover graph with low-frequency overlap residuals",
+  "vertical_anchor": "BlueTopo when valid overlap exists; otherwise first connected survey",
+  "edge_transition_m": 50,
+  "edge_blend_cells": 2.0,
+  "sources": [
+    {
+      "name": "usgs_reson7160_washington_accomac",
+      "priority": 4,
+      "confidence": 0.9,
+      "label": "USGS Reson 7160 Washington-Accomac Canyons survey",
+      "path": "/home/gzheng/.openclaw/workspace-cto/bathy-research/usgs_reson7160/wm/washington_accomac_25m_wm.tif"
+    },
+    {
+      "name": "bag",
+      "priority": 3,
+      "confidence": 0.7,
+      "label": "NOS BAG survey mosaic",
+      "path": "/home/gzheng/.openclaw/workspace-cto/bathy-research/ncei_bag_wm.tif"
+    },
+    {
+      "name": "bluetopo",
+      "priority": 2,
+      "confidence": 0.48,
+      "label": "NOAA BlueTopo compilation",
+      "path": "/home/gzheng/.openclaw/workspace-cto/bathy-research/bluetopo_elevation_wm.tif"
+    },
+    {
+      "name": "multibeam",
+      "priority": 1,
+      "confidence": 0.32,
+      "label": "NCEI multibeam mosaic",
+      "path": "/home/gzheng/.openclaw/workspace-cto/bathy-research/ncei_multibeam_wm.tif"
+    }
+  ]
+}

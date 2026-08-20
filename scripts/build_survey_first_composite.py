@@ -69,6 +69,36 @@ REGIONS = {
       ('ex1404l3', RESEARCH/'canyon_products/new_wm/ex1404l3_hudson_15m_wm.tif', 4, .95, 'Okeanos EX1404L3 Hudson Canyon'),
       ('bluetopo', RESEARCH/'bluetopo_elevation_wm.tif', 2, .48, 'NOAA BlueTopo compilation'),
     ]
+  },
+  'norfolk': {
+    'bbox': (-74.95, 36.55, -74.35, 37.35),
+    'resolution_m': 25.0,
+    'sources': [
+      ('usgs_reson7160_norfolk', RESEARCH/'usgs_reson7160/wm/norfolk_25m_wm.tif', 4, .90, 'USGS Reson 7160 Norfolk Canyon survey'),
+      ('bag', RESEARCH/'ncei_bag_wm.tif', 3, .70, 'NOS BAG survey mosaic'),
+      ('bluetopo', RESEARCH/'bluetopo_elevation_wm.tif', 2, .48, 'NOAA BlueTopo compilation'),
+      ('multibeam', RESEARCH/'ncei_multibeam_wm.tif', 1, .32, 'NCEI multibeam mosaic'),
+    ]
+  },
+  'washington_accomac': {
+    'bbox': (-74.55, 37.30, -73.80, 38.05),
+    'resolution_m': 25.0,
+    'sources': [
+      ('usgs_reson7160_washington_accomac', RESEARCH/'usgs_reson7160/wm/washington_accomac_25m_wm.tif', 4, .90, 'USGS Reson 7160 Washington-Accomac Canyons survey'),
+      ('bag', RESEARCH/'ncei_bag_wm.tif', 3, .70, 'NOS BAG survey mosaic'),
+      ('bluetopo', RESEARCH/'bluetopo_elevation_wm.tif', 2, .48, 'NOAA BlueTopo compilation'),
+      ('multibeam', RESEARCH/'ncei_multibeam_wm.tif', 1, .32, 'NCEI multibeam mosaic'),
+    ]
+  },
+  'keller': {
+    'bbox': (-75.05, 35.10, -73.95, 35.90),
+    'resolution_m': 25.0,
+    'sources': [
+      ('usgs_reson7160_keller', RESEARCH/'usgs_reson7160/wm/keller_25m_wm.tif', 4, .90, 'USGS Reson 7160 Keller Canyon survey'),
+      ('bag', RESEARCH/'ncei_bag_wm.tif', 3, .70, 'NOS BAG survey mosaic'),
+      ('bluetopo', RESEARCH/'bluetopo_elevation_wm.tif', 2, .48, 'NOAA BlueTopo compilation'),
+      ('multibeam', RESEARCH/'ncei_multibeam_wm.tif', 1, .32, 'NCEI multibeam mosaic'),
+    ]
   }
 }
 
