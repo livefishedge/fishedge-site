@@ -34,9 +34,6 @@
   <script src="../dashboard/trip-planner/ui/briefing-drawer.js?v=20260819-3"></script>
   <script src="../dashboard/trip-planner/ui/five-day-outlook.js?v=20260819-3"></script>
   <script src="../dashboard/trip-planner/ui/my-trips-sidebar.js?v=20260819-3"></script>
-
-  <!-- Planner bootstrap (mounts the planner UI on this peer route) -->
-  <script src="planner-bootstrap.js?v=20260819-3"></script>
 </head>
 <body>
   <!-- Tab switcher mounts at the very top -->
@@ -63,5 +60,11 @@
       <a href="/dashboard/" style="color:#4d7dff">/dashboard/</a> is also affected.
     </div>
   </noscript>
+
+  <!-- Planner bootstrap must run AFTER the body mount points exist.
+       Adapter / UI scripts above only register globals; this one mounts
+       the UI into the DOM nodes defined above. Placed at the end of body
+       so document.getElementById() calls inside find their targets. -->
+  <script src="planner-bootstrap.js?v=20260819-3"></script>
 </body>
 </html>
