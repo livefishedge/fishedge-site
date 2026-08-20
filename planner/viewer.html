@@ -23,13 +23,13 @@
   </aside>
   <div class="legend"><b>Captain units</b><br>Wave / swell: feet · Wind / current: knots<br>SST: °F · Current animation: CMEMS model flow</div>
   <script type="module">
-    import Map from 'https://cdn.jsdelivr.net/npm/ol@10.2.1/Map.js';
-    import View from 'https://cdn.jsdelivr.net/npm/ol@10.2.1/View.js';
-    import TileLayer from 'https://cdn.jsdelivr.net/npm/ol@10.2.1/layer/Tile.js';
-    import ImageLayer from 'https://cdn.jsdelivr.net/npm/ol@10.2.1/layer/Image.js';
-    import OSM from 'https://cdn.jsdelivr.net/npm/ol@10.2.1/source/OSM.js';
-    import ImageStatic from 'https://cdn.jsdelivr.net/npm/ol@10.2.1/source/ImageStatic.js';
-    import {fromLonLat,transformExtent} from 'https://cdn.jsdelivr.net/npm/ol@10.2.1/proj.js';
+    import Map from 'https://cdn.jsdelivr.net/npm/ol@10.2.1/Map.js/+esm';
+    import View from 'https://cdn.jsdelivr.net/npm/ol@10.2.1/View.js/+esm';
+    import TileLayer from 'https://cdn.jsdelivr.net/npm/ol@10.2.1/layer/Tile.js/+esm';
+    import ImageLayer from 'https://cdn.jsdelivr.net/npm/ol@10.2.1/layer/Image.js/+esm';
+    import OSM from 'https://cdn.jsdelivr.net/npm/ol@10.2.1/source/OSM.js/+esm';
+    import ImageStatic from 'https://cdn.jsdelivr.net/npm/ol@10.2.1/source/ImageStatic.js/+esm';
+    import {fromLonLat,transformExtent} from 'https://cdn.jsdelivr.net/npm/ol@10.2.1/proj.js/+esm';
     const q=new URLSearchParams(location.search),date=q.get('date')||new Date().toISOString().slice(0,10),region=q.get('region')||'usec_md';
     const bbox=[-77,36,-72,40],extent=transformExtent(bbox,'EPSG:4326','EPSG:3857'),base='https://data.fishedge.live/'+region+'/briefing/';
     document.getElementById('date').textContent=date;
