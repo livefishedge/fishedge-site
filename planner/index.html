@@ -1,70 +1,20 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-  <title>Captain's Planner — FishEdge</title>
-  <!-- 2026-08-19: Planner peer route restored at Mike's request (commit history
-       shows it as a tab on the dashboard from 0ff414ee onward; Mike wants
-       /planner/ as a standalone URL). Build marker: FISHEDGE_TRIP_PLANNER_BUILD=dev-mvp. -->
-  <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="../dashboard/trip-planner/ui/planner-shell.css?v=20260819-3">
-
-  <!-- Auth + Analytics (shared backbone with dashboard) -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="../dashboard/supabase-init.js?v=20260806c"></script>
-  <script src="https://cdn.jsdelivr.net/npm/posthog-js@1.200.0/dist/array.js"></script>
-
-  <!-- Trip Planner backbone (adapters, decision engine, reconciler, fixtures) -->
-  <script src="../dashboard/trip-planner/adapters/index.js?v=20260819-3"></script>
-  <script src="../dashboard/trip-planner/adapters/ndbc-realtime.js?v=20260819-3"></script>
-  <script src="../dashboard/trip-planner/adapters/open-meteo-marine.js?v=20260819-3"></script>
-  <script src="../dashboard/trip-planner/adapters/open-meteo-weather.js?v=20260819-3"></script>
-  <script src="../dashboard/trip-planner/adapters/coops-tides.js?v=20260819-3"></script>
-  <script src="../dashboard/trip-planner/adapters/nws-alerts.js?v=20260819-3"></script>
-  <script src="../dashboard/trip-planner/reconciler.js?v=20260819-3"></script>
-  <script src="../dashboard/trip-planner/decision-engine.js?v=20260819-3"></script>
-  <script src="../dashboard/trip-planner/storage.js?v=20260819-3"></script>
-  <script src="../dashboard/trip-planner/fixtures/ocean-city-normal.js?v=20260819-3"></script>
-
-  <!-- Trip Planner UI components -->
-  <script src="../dashboard/trip-planner/ui/tab-switcher.js?v=20260819-3"></script>
-  <script src="../dashboard/trip-planner/ui/inlet-picker.js?v=20260819-3"></script>
-  <script src="../dashboard/trip-planner/ui/compact-strip.js?v=20260819-3"></script>
-  <script src="../dashboard/trip-planner/ui/briefing-drawer.js?v=20260819-3"></script>
-  <script src="../dashboard/trip-planner/ui/five-day-outlook.js?v=20260819-3"></script>
-  <script src="../dashboard/trip-planner/ui/my-trips-sidebar.js?v=20260819-3"></script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>FishEdge Forecast Planner</title>
+  <style>
+    :root{color-scheme:dark}*{box-sizing:border-box}html,body{margin:0;background:#07111d;color:#dcecf7;font:14px system-ui,-apple-system,Segoe UI,sans-serif}a{color:inherit}.top{padding:18px 24px;border-bottom:1px solid #1d3447;background:#0a1929;display:flex;align-items:center;gap:18px}.top h1{margin:0;font-size:20px;color:#e8f7ff}.top span{color:#81a6bd}.back{margin-left:auto;color:#66d9ff;text-decoration:none}.wrap{max-width:1500px;margin:auto;padding:22px}.intro{display:flex;justify-content:space-between;gap:20px;align-items:end;margin-bottom:18px}.intro h2{margin:0 0 5px;font-size:24px}.intro p{margin:0;color:#8da8b9}.stamp{color:#8da8b9;font:12px ui-monospace,monospace;text-align:right}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}.card{display:block;text-decoration:none;background:#0c1d2d;border:1px solid #24445a;border-radius:8px;overflow:hidden;transition:.15s transform,.15s border-color,.15s box-shadow}.card:hover{transform:translateY(-2px);border-color:#57d7ff;box-shadow:0 0 0 1px #57d7ff,0 10px 30px #0008}.card img{display:block;width:100%;background:#07111d;aspect-ratio:16/10;object-fit:cover}.label{padding:11px 13px;display:flex;justify-content:space-between;color:#9fdcf1}.label small{color:#7695a8}.note{margin-top:18px;color:#7895a7;font-size:12px}.empty{padding:40px;border:1px dashed #31546b;border-radius:8px;color:#94adbd}@media(max-width:600px){.wrap{padding:14px}.top{padding:14px}.intro{display:block}.stamp{text-align:left;margin-top:10px}}
+  </style>
 </head>
 <body>
-  <!-- Tab switcher mounts at the very top -->
-  <nav id="fishedge-tab-switcher" aria-label="Primary"></nav>
-
-  <!-- Inlet picker strip sits below the tabs -->
-  <header id="fishedge-inlet-picker"></header>
-
-  <!-- Main planner body: 5-day outlook (left) + My Trips (sidebar on desktop, drawer on mobile) -->
-  <main id="fishedge-planner-main">
-    <section id="fishedge-five-day-outlook" aria-label="5-day outlook"></section>
-    <aside id="fishedge-my-trips" aria-label="Saved trips"></aside>
+  <header class="top"><h1>FishEdge</h1><span>Forecast Planner</span><a class="back" href="/">Home</a></header>
+  <main class="wrap">
+    <section class="intro"><div><h2>USEC Mid-Atlantic forecast</h2><p>Interactive seven-day spatial outlook · raster products from Open-Meteo and CMEMS</p></div><div class="stamp" id="stamp">Loading forecast run…</div></section>
+    <section id="cards" class="cards" aria-label="Seven day forecast"></section>
+    <p class="note">Click a day to open the navigable OpenLayers viewer. Open-Meteo shows wind and wave structure; CMEMS shows SST and ocean current structure. Units are captain-facing: °F, kt, and ft.</p>
   </main>
-
-  <!-- Compact conditions strip mounts bottom-right (mobile) or top-right (desktop) -->
-  <div id="fishedge-compact-strip-host"></div>
-
-  <!-- Briefing drawer mounts as a portal overlay -->
-  <div id="fishedge-briefing-host"></div>
-
-  <noscript>
-    <div style="padding:20px;color:#e0e6ee;background:#050b10;font:14px-system-ui;">
-      JavaScript is required for the Captain's Planner. The Map Dashboard at
-      <a href="/dashboard/" style="color:#4d7dff">/dashboard/</a> is also affected.
-    </div>
-  </noscript>
-
-  <!-- Planner bootstrap must run AFTER the body mount points exist.
-       Adapter / UI scripts above only register globals; this one mounts
-       the UI into the DOM nodes defined above. Placed at the end of body
-       so document.getElementById() calls inside find their targets. -->
-  <script src="planner-bootstrap.js?v=20260819-3"></script>
+  <script src="forecast-planner.js?v=20260820-1"></script>
 </body>
 </html>
