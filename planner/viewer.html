@@ -1,6 +1,43 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>FishEdge Forecast Viewer</title><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@10.2.1/ol.css"><style>html,body{margin:0;height:100%;background:#07111d;color:#dcecf7;font:14px system-ui}#map{position:absolute;inset:54px 0 0}.bar{height:54px;display:flex;align-items:center;gap:16px;padding:0 16px;background:#0a1929;border-bottom:1px solid #23445a;position:relative;z-index:2}.bar a{color:#66d9ff;text-decoration:none}.bar h1{font-size:16px;margin:0}.bar label{margin-left:auto;color:#c8e9f5}.bar input{accent-color:#55d9ff}.ol-control button{background:#0a1929!important;color:#dcecf7!important}.legend{position:absolute;z-index:3;left:12px;bottom:12px;background:#0a1929e8;border:1px solid #31546b;padding:9px 11px;border-radius:5px;color:#9fdcf1;font-size:12px}</style></head><body><header class="bar"><a href="/planner/">← Forecast Planner</a><h1 id="title">Forecast Viewer</h1><label><input id="layer" type="checkbox"> CMEMS ocean layer</label></header><div id="map"></div><div class="legend">Pan / zoom · raster bbox USEC Mid-Atlantic<br>Open-Meteo: wind + waves · CMEMS: SST + currents</div><script type="module">
-import Map from 'https://cdn.jsdelivr.net/npm/ol@10.2.1/Map.js';import View from 'https://cdn.jsdelivr.net/npm/ol@10.2.1/View.js';import ImageLayer from 'https://cdn.jsdelivr.net/npm/ol@10.2.1/layer/Image.js';import ImageStatic from 'https://cdn.jsdelivr.net/npm/ol@10.2.1/source/ImageStatic.js';import {Projection} from 'https://cdn.jsdelivr.net/npm/ol@10.2.1/proj.js';import {fromLonLat,transformExtent} from 'https://cdn.jsdelivr.net/npm/ol@10.2.1/proj.js';
-const q=new URLSearchParams(location.search),date=q.get('date')||new Date().toISOString().slice(0,10),region=q.get('region')||'usec_md',bbox=[-77,36,-72,40],extent=transformExtent(bbox,'EPSG:4326','EPSG:3857'),base='https://data.fishedge.live/'+region+'/briefing/';document.getElementById('title').textContent='Forecast Viewer · '+date;
-const projection=new Projection({code:'EPSG:3857'}),om=new ImageLayer({source:new ImageStatic({url:base+'raster_'+date+'.png',imageExtent:extent,projection})}),cm=new ImageLayer({source:new ImageStatic({url:base+'cmems_raster_'+date+'.png',imageExtent:extent,projection}),visible:false});const map=new Map({target:'map',layers:[om,cm],view:new View({center:fromLonLat([-74.5,38]),zoom:7,minZoom:5,maxZoom:13})});document.getElementById('layer').addEventListener('change',e=>{om.setVisible(!e.target.checked);cm.setVisible(e.target.checked)});
-</script></body></html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>FishEdge Forecast Dashboard</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@10.2.1/ol.css">
+  <style>
+    :root{color-scheme:dark}*{box-sizing:border-box}html,body{margin:0;height:100%;background:#07111d;color:#dcecf7;font:14px system-ui,-apple-system,Segoe UI,sans-serif}
+    #map{position:absolute;inset:58px 0 0}.top{height:58px;display:flex;align-items:center;gap:16px;padding:0 18px;background:#0a1929;border-bottom:1px solid #24465d;position:relative;z-index:4}.top a{color:#67d9ff;text-decoration:none}.top h1{font-size:17px;margin:0;color:#edfaff}.top .date{color:#91afc0;font:12px ui-monospace,monospace}.top .live{margin-left:auto;color:#7de4b0;font-size:11px}.panel{position:absolute;z-index:5;top:76px;right:14px;width:285px;background:#0a1929ed;border:1px solid #31546b;border-radius:7px;box-shadow:0 8px 30px #0008;padding:14px}.panel h2{font-size:13px;margin:0 0 12px;color:#b9eaff}.row{display:flex;align-items:center;justify-content:space-between;margin:10px 0;color:#b5cfdd;font-size:12px}.row input[type=range]{width:130px;accent-color:#5bdcff}.row input[type=checkbox]{accent-color:#5bdcff}.source{border-top:1px solid #24465d;margin-top:12px;padding-top:10px;color:#7898aa;font-size:11px;line-height:1.5}.legend{position:absolute;z-index:5;bottom:16px;left:16px;background:#0a1929ed;border:1px solid #31546b;border-radius:6px;padding:10px 12px;color:#a9dbea;font-size:11px;line-height:1.55}.legend b{color:#edfaff}.ol-control button{background:#0a1929!important;color:#dcecf7!important}.ol-control button:hover{background:#18344a!important}.ol-attribution{background:#0a1929cc!important;color:#8ba8b8!important}.ol-zoom{top:auto;right:auto;left:12px;bottom:100px}
+    @media(max-width:700px){.top{padding:0 11px;gap:9px}.top h1{font-size:14px}.top .live{display:none}.panel{top:68px;right:8px;width:245px}.legend{left:8px;bottom:8px}.row input[type=range]{width:105px}}
+  </style>
+</head>
+<body>
+  <header class="top"><a href="/planner/">← Planner</a><h1>Forecast Dashboard</h1><span class="date" id="date"></span><span class="live">● DEV FORECAST</span></header>
+  <div id="map" aria-label="Interactive forecast map"></div>
+  <aside class="panel">
+    <h2>Forecast layers</h2>
+    <div class="row"><span>Open-Meteo atmosphere + waves</span><input id="om" type="checkbox" checked></div>
+    <div class="row"><span>CMEMS SST + currents</span><input id="cmems" type="checkbox"></div>
+    <div class="row"><span>Animated current particles</span><input id="animate" type="checkbox" checked></div>
+    <div class="row"><span>Data opacity</span><input id="opacity" type="range" min="0" max="1" step=".05" value="1"></div>
+    <div class="source"><b id="status">Loading model rasters…</b><br>OpenLayers 10.2.1 · pan, zoom, inspect layers<br>Region: USEC Mid-Atlantic · [-77, 36, -72, 40]</div>
+  </aside>
+  <div class="legend"><b>Captain units</b><br>Wave / swell: feet · Wind / current: knots<br>SST: °F · Current animation: CMEMS model flow</div>
+  <script type="module">
+    import Map from 'https://cdn.jsdelivr.net/npm/ol@10.2.1/Map.js';
+    import View from 'https://cdn.jsdelivr.net/npm/ol@10.2.1/View.js';
+    import TileLayer from 'https://cdn.jsdelivr.net/npm/ol@10.2.1/layer/Tile.js';
+    import ImageLayer from 'https://cdn.jsdelivr.net/npm/ol@10.2.1/layer/Image.js';
+    import OSM from 'https://cdn.jsdelivr.net/npm/ol@10.2.1/source/OSM.js';
+    import ImageStatic from 'https://cdn.jsdelivr.net/npm/ol@10.2.1/source/ImageStatic.js';
+    import {fromLonLat,transformExtent} from 'https://cdn.jsdelivr.net/npm/ol@10.2.1/proj.js';
+    const q=new URLSearchParams(location.search),date=q.get('date')||new Date().toISOString().slice(0,10),region=q.get('region')||'usec_md';
+    const bbox=[-77,36,-72,40],extent=transformExtent(bbox,'EPSG:4326','EPSG:3857'),base='https://data.fishedge.live/'+region+'/briefing/';
+    document.getElementById('date').textContent=date;
+    const street=new TileLayer({source:new OSM(),opacity:.28}),om=new ImageLayer({source:new ImageStatic({url:base+'raster_'+date+'.png',imageExtent:extent}),opacity:1}),cmems=new ImageLayer({source:new ImageStatic({url:base+'cmems_raster_'+date+'.gif',imageExtent:extent}),visible:false,opacity:1});
+    const map=new Map({target:'map',layers:[street,om,cmems],view:new View({center:fromLonLat([-74.5,38]),zoom:7,minZoom:5,maxZoom:13})});
+    const omCtl=document.getElementById('om'),cmCtl=document.getElementById('cmems'),anim=document.getElementById('animate'),opacity=document.getElementById('opacity');
+    function sync(){om.setVisible(omCtl.checked);cmems.setVisible(cmCtl.checked);om.setOpacity(+opacity.value);cmems.setOpacity(+opacity.value);document.getElementById('status').textContent=cmCtl.checked&&anim.checked?'CMEMS animated currents active':'Forecast rasters loaded';}
+    omCtl.addEventListener('change',sync);cmCtl.addEventListener('change',sync);anim.addEventListener('change',()=>{cmems.setVisible(cmCtl.checked&&anim.checked);sync()});opacity.addEventListener('input',sync);sync();
+  </script>
+</body>
+</html>
