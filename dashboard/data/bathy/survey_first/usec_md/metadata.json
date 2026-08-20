@@ -1,0 +1,142 @@
+{
+  "region": "usec_md",
+  "bbox_wsen": [
+    -76.5,
+    35.5,
+    -71.5,
+    40.5
+  ],
+  "resolution_m": 90.0,
+  "shape": [
+    7854,
+    6185
+  ],
+  "offsets_m": {
+    "ex1302_01": -1.3103,
+    "ex1302_02": -2.2045,
+    "ex1903l2_north": 1.0414,
+    "ex1404l2": 62.7094,
+    "ex1303_hudson": -1.4473,
+    "ex1404l3_hudson": -1.1249,
+    "ex1404l3_west": -1.9437,
+    "ex2203_transit3": 0.7687,
+    "usgs_reson7160_washington_accomac": 1.7622,
+    "usgs_reson7160_norfolk": 0.5281,
+    "usgs_reson7160_keller": 2.0863,
+    "bag": -0.5709,
+    "bluetopo": -0.0,
+    "multibeam": -0.4271,
+    "dem_global": -2.0294
+  },
+  "vertical_adjustment_method": "pairwise robust crossover graph with low-frequency overlap residuals",
+  "vertical_anchor": "BlueTopo when valid overlap exists; otherwise first connected survey",
+  "edge_transition_m": 50,
+  "edge_blend_cells": 0.5555555555555556,
+  "sources": [
+    {
+      "name": "ex1302_01",
+      "priority": 4,
+      "confidence": 0.95,
+      "label": "Okeanos EX1302 survey patch 01",
+      "path": "/home/gzheng/.openclaw/workspace-cto/bathy-research/canyon_products/ex1302_01_raw.tif"
+    },
+    {
+      "name": "ex1302_02",
+      "priority": 4,
+      "confidence": 0.95,
+      "label": "Okeanos EX1302 survey patch 02",
+      "path": "/home/gzheng/.openclaw/workspace-cto/bathy-research/canyon_products/ex1302_02_raw.tif"
+    },
+    {
+      "name": "ex1903l2_north",
+      "priority": 4,
+      "confidence": 0.95,
+      "label": "Okeanos EX1903L2 North survey",
+      "path": "/home/gzheng/.openclaw/workspace-cto/bathy-research/canyon_products/ex1903_north_raw.tif"
+    },
+    {
+      "name": "ex1404l2",
+      "priority": 4,
+      "confidence": 0.95,
+      "label": "Okeanos EX1404L2 survey",
+      "path": "/home/gzheng/.openclaw/workspace-cto/bathy-research/okeanos/ex1404l2_25m.tif"
+    },
+    {
+      "name": "ex1303_hudson",
+      "priority": 4,
+      "confidence": 0.95,
+      "label": "Okeanos EX1303 Hudson Canyon",
+      "path": "/home/gzheng/.openclaw/workspace-cto/bathy-research/canyon_products/new_wm/ex1303_hudson_30m_wm.tif"
+    },
+    {
+      "name": "ex1404l3_hudson",
+      "priority": 4,
+      "confidence": 0.95,
+      "label": "Okeanos EX1404L3 Hudson Canyon",
+      "path": "/home/gzheng/.openclaw/workspace-cto/bathy-research/canyon_products/new_wm/ex1404l3_hudson_15m_wm.tif"
+    },
+    {
+      "name": "ex1404l3_west",
+      "priority": 4,
+      "confidence": 0.95,
+      "label": "Okeanos EX1404L3 western USEC survey",
+      "path": "/home/gzheng/.openclaw/workspace-cto/bathy-research/canyon_products/new_wm/ex1404l3_west_50m_wm.tif"
+    },
+    {
+      "name": "ex2203_transit3",
+      "priority": 4,
+      "confidence": 0.95,
+      "label": "Okeanos EX2203 TRANSIT3 regional survey",
+      "path": "/home/gzheng/.openclaw/workspace-cto/bathy-research/canyon_products/new_wm/ex2203_t3_25m_wm.tif"
+    },
+    {
+      "name": "usgs_reson7160_washington_accomac",
+      "priority": 4,
+      "confidence": 0.9,
+      "label": "USGS Reson 7160 Washington-Accomac survey",
+      "path": "/home/gzheng/.openclaw/workspace-cto/bathy-research/usgs_reson7160/wm/washington_accomac_25m_wm.tif"
+    },
+    {
+      "name": "usgs_reson7160_norfolk",
+      "priority": 4,
+      "confidence": 0.9,
+      "label": "USGS Reson 7160 Norfolk Canyon survey",
+      "path": "/home/gzheng/.openclaw/workspace-cto/bathy-research/usgs_reson7160/wm/norfolk_25m_wm.tif"
+    },
+    {
+      "name": "usgs_reson7160_keller",
+      "priority": 4,
+      "confidence": 0.9,
+      "label": "USGS Reson 7160 Keller Canyon survey",
+      "path": "/home/gzheng/.openclaw/workspace-cto/bathy-research/usgs_reson7160/wm/keller_25m_wm.tif"
+    },
+    {
+      "name": "bag",
+      "priority": 3,
+      "confidence": 0.7,
+      "label": "NOS BAG survey mosaic",
+      "path": "/home/gzheng/.openclaw/workspace-cto/data/ncei_extract/usec_md/nos_bag_mosaic.vrt"
+    },
+    {
+      "name": "bluetopo",
+      "priority": 2,
+      "confidence": 0.48,
+      "label": "NOAA BlueTopo compilation",
+      "path": "/home/gzheng/.openclaw/workspace-cto/bathy-research/bluetopo_elevation_wm.tif"
+    },
+    {
+      "name": "multibeam",
+      "priority": 1,
+      "confidence": 0.32,
+      "label": "NCEI multibeam mosaic",
+      "path": "/home/gzheng/.openclaw/workspace-cto/data/ncei_extract/usec_md/multibeam_mosaic_combined/color_work/multibeam.vrt"
+    },
+    {
+      "name": "dem_global",
+      "priority": 0,
+      "confidence": 0.18,
+      "label": "NOAA global DEM low-priority background",
+      "path": "/home/gzheng/.openclaw/workspace-cto/data/ncei_extract/usec_md/dem_global_mosaic.vrt"
+    }
+  ]
+}

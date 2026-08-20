@@ -18,12 +18,40 @@ from scipy.ndimage import distance_transform_edt, gaussian_filter
 
 ROOT = Path(__file__).resolve().parents[1]
 RESEARCH = Path('/home/gzheng/.openclaw/workspace-cto/bathy-research')
+USEC_MD = Path('/home/gzheng/.openclaw/workspace-cto/data/ncei_extract/usec_md')
 OUT = ROOT / 'dashboard/data/bathy/survey_first'
 R = 6378137.0
 DEPTH_COLORS = np.array([[3,1,7],[22,10,70],[49,32,154],[21,94,208],[8,167,211],[24,208,203]], dtype=np.float32)
 PROV_COLORS = {1:(31,80,160), 2:(15,175,190), 3:(240,150,40), 4:(240,225,70)}
 
 REGIONS = {
+  'usec_md': {
+    # USEC-MD working area: Virginia/North Carolina shelf through the New
+    # York Bight and Hudson Canyon. This is an area, not a point target.
+    'bbox': (-76.50, 35.50, -71.50, 40.50),
+    'resolution_m': 90.0,
+    'sources': [
+      # Survey-first sources. The regional transit and west products are
+      # retained alongside the individual canyon surveys; precedence and
+      # crossover adjustment decide where they overlap.
+      ('ex1302_01', RESEARCH/'canyon_products/ex1302_01_raw.tif', 4, .95, 'Okeanos EX1302 survey patch 01'),
+      ('ex1302_02', RESEARCH/'canyon_products/ex1302_02_raw.tif', 4, .95, 'Okeanos EX1302 survey patch 02'),
+      ('ex1903l2_north', RESEARCH/'canyon_products/ex1903_north_raw.tif', 4, .95, 'Okeanos EX1903L2 North survey'),
+      ('ex1404l2', RESEARCH/'okeanos/ex1404l2_25m.tif', 4, .95, 'Okeanos EX1404L2 survey'),
+      ('ex1303_hudson', RESEARCH/'canyon_products/new_wm/ex1303_hudson_30m_wm.tif', 4, .95, 'Okeanos EX1303 Hudson Canyon'),
+      ('ex1404l3_hudson', RESEARCH/'canyon_products/new_wm/ex1404l3_hudson_15m_wm.tif', 4, .95, 'Okeanos EX1404L3 Hudson Canyon'),
+      ('ex1404l3_west', RESEARCH/'canyon_products/new_wm/ex1404l3_west_50m_wm.tif', 4, .95, 'Okeanos EX1404L3 western USEC survey'),
+      ('ex2203_transit3', RESEARCH/'canyon_products/new_wm/ex2203_t3_25m_wm.tif', 4, .95, 'Okeanos EX2203 TRANSIT3 regional survey'),
+      ('usgs_reson7160_washington_accomac', RESEARCH/'usgs_reson7160/wm/washington_accomac_25m_wm.tif', 4, .90, 'USGS Reson 7160 Washington-Accomac survey'),
+      ('usgs_reson7160_norfolk', RESEARCH/'usgs_reson7160/wm/norfolk_25m_wm.tif', 4, .90, 'USGS Reson 7160 Norfolk Canyon survey'),
+      ('usgs_reson7160_keller', RESEARCH/'usgs_reson7160/wm/keller_25m_wm.tif', 4, .90, 'USGS Reson 7160 Keller Canyon survey'),
+      # Fallback surfaces, ordered by evidence tier.
+      ('bag', USEC_MD/'nos_bag_mosaic.vrt', 3, .70, 'NOS BAG survey mosaic'),
+      ('bluetopo', RESEARCH/'bluetopo_elevation_wm.tif', 2, .48, 'NOAA BlueTopo compilation'),
+      ('multibeam', USEC_MD/'multibeam_mosaic_combined/color_work/multibeam.vrt', 1, .32, 'NCEI multibeam mosaic'),
+      ('dem_global', USEC_MD/'dem_global_mosaic.vrt', 0, .18, 'NOAA global DEM low-priority background'),
+    ]
+  },
   'baltimore': {
     'bbox': (-74.30, 37.45, -73.10, 38.65),
     'sources': [
@@ -141,12 +169,21 @@ def harmonize(arrays, masks, infos):
         trimmed=d[(d>=lo)&(d<=hi)]
         return float(np.median(trimmed if trimmed.size else d))
 
+    # Regional grids can contain tens of millions of cells. Crossover
+    # statistics do not need every cell: use a deterministic capped sample
+    # for pairwise robust offsets, while retaining the full masks for the
+    # final precedence composite.
+    large_grid = arrays[0].size > 20_000_000
     edges=[]
     for i in range(len(infos)):
         for j in range(i+1,len(infos)):
             overlap=masks[i] & masks[j]
             if int(overlap.sum()) < 10000: continue
-            d=arrays[i][overlap]-arrays[j][overlap]
+            idx=np.flatnonzero(overlap)
+            if idx.size > 500_000:
+                idx=idx[::int(np.ceil(idx.size/500_000))]
+            ai=arrays[i].ravel()[idx]; aj=arrays[j].ravel()[idx]
+            d=ai-aj
             d=d[np.isfinite(d) & (np.abs(d)<200)]
             if d.size < 10000: continue
             lo,hi=np.percentile(d,[5,95]); trimmed=d[(d>=lo)&(d<=hi)]
@@ -171,6 +208,11 @@ def harmonize(arrays, masks, infos):
     # Apply only a low-frequency crossover residual where multiple sources
     # actually support the correction. This captures a broad survey ramp or
     # block bias without following individual canyon morphology.
+    if large_grid:
+        # At regional scale the source-wide block adjustment is the reliable
+        # estimate. A full-resolution Gaussian residual would be both
+        # needlessly expensive and too easy to mistake for morphology.
+        return offsets
     for i in range(len(infos)):
         residual_sum=np.zeros(arrays[i].shape,dtype='float32')
         support_sum=np.zeros(arrays[i].shape,dtype='float32')
@@ -224,7 +266,7 @@ def write_tiles(region, data, prov, transform, max_zoom=13):
                     d=out/'provenance'/str(z)/str(x); d.mkdir(parents=True,exist_ok=True); Image.fromarray(pc,'RGBA').save(d/f'{y}.png',optimize=True)
 
 def build(region):
-    cfg=REGIONS[region]; w,s,e,n=cfg['bbox']; left,bottom=wm(w,s); right,top=wm(e,n); res=30.0
+    cfg=REGIONS[region]; w,s,e,n=cfg['bbox']; left,bottom=wm(w,s); right,top=wm(e,n); res=float(cfg.get('resolution_m',30.0))
     width=int(math.ceil((right-left)/res)); height=int(math.ceil((top-bottom)/res)); transform=from_bounds(left,bottom,right,top,width,height)
     arrays=[]; masks=[]; raw_masks=[]; infos=[]
     for name,path,priority,confidence,label in cfg['sources']:
@@ -317,7 +359,7 @@ def build(region):
         for j in sorted([j for j in order if j != i],key=lambda k: infos[k][2],reverse=True):
             take=masks[j] & np.isfinite(arrays[j]) & ~np.isfinite(alternate)
             alternate[take]=arrays[j][take]
-        feather_cells=50.0 / 30.0
+        feather_cells=50.0 / res
         near=raw & (owner == i) & (dist <= feather_cells) & np.isfinite(alternate)
         if not near.any(): continue
         # Estimate a smoothly varying local level difference from a slightly
@@ -342,7 +384,7 @@ def build(region):
     with rasterio.open(target/'composite.tif','w',**profile) as dst:
         dst.write(composite,1); dst.write(prov.astype('float32'),2); dst.write(conf,3); dst.write(conflict,4)
         dst.set_band_description(1,'elevation_harmonized_m'); dst.set_band_description(2,'source_priority'); dst.set_band_description(3,'confidence'); dst.set_band_description(4,'max_overlap_conflict_m')
-    meta={'region':region,'bbox_wsen':cfg['bbox'],'resolution_m':res,'shape':[height,width],'offsets_m':offsets,'vertical_adjustment_method':'pairwise robust crossover graph with low-frequency overlap residuals','vertical_anchor':'BlueTopo when valid overlap exists; otherwise first connected survey','edge_transition_m':50,'edge_blend_cells':2,'sources':[{'name':i[0],'priority':i[2],'confidence':i[3],'label':i[4],'path':str(i[1])} for i in infos]}
+    meta={'region':region,'bbox_wsen':cfg['bbox'],'resolution_m':res,'shape':[height,width],'offsets_m':offsets,'vertical_adjustment_method':'pairwise robust crossover graph with low-frequency overlap residuals','vertical_anchor':'BlueTopo when valid overlap exists; otherwise first connected survey','edge_transition_m':50,'edge_blend_cells':50.0/res,'sources':[{'name':i[0],'priority':i[2],'confidence':i[3],'label':i[4],'path':str(i[1])} for i in infos]}
     (target/'metadata.json').write_text(json.dumps(meta,indent=2)); write_tiles(region,composite,prov,transform)
     print(json.dumps({'region':region,'shape':[height,width],'valid':int(np.isfinite(composite).sum()),'sources':meta['sources'],'offsets':offsets},indent=2))
 
