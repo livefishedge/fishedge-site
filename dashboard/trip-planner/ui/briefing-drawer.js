@@ -67,8 +67,10 @@
     #fishedge-briefing-drawer .bd-raster-section { margin: 14px 0 6px 0; padding: 8px 0; border-top: 1px solid #1b2836; }
     #fishedge-briefing-drawer .bd-raster-section h3 { font-size: 13px; margin: 0 0 8px 0; color: #b3e5fc; font-weight: 600; letter-spacing: 0.3px; }
     #fishedge-briefing-drawer .bd-raster-grid { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; }
-    #fishedge-briefing-drawer .bd-raster-day { flex: 0 0 auto; min-width: 260px; max-width: 300px; }
+    #fishedge-briefing-drawer .bd-raster-day { display: block; flex: 0 0 auto; min-width: 260px; max-width: 300px; text-decoration: none; color: inherit; cursor: pointer; transition: border-color 0.15s, box-shadow 0.15s; }
+    #fishedge-briefing-drawer .bd-raster-day:hover { border-color: #4fc3f7; box-shadow: 0 0 0 1px #4fc3f7; }
     #fishedge-briefing-drawer .bd-raster-day img { width: 100%; display: block; border-radius: 4px; background: #0a1929; border: 1px solid #1b2836; }
+    #fishedge-briefing-drawer .bd-raster-day .bd-raster-label { color: #4fc3f7; }
     #fishedge-briefing-drawer .bd-raster-label { font-size: 11px; color: #9fb0c3; text-align: center; margin-top: 4px; font-family: monospace; }
   `;
 
@@ -277,11 +279,11 @@
     const omBase    = `https://data.fishedge.live/${region}/briefing/raster_`;
     const cmemsBase = `https://data.fishedge.live/${region}/briefing/cmems_raster_`;
     const cards = dates.map((d, i) =>
-      `<div class="bd-raster-day">
+      `<a class="bd-raster-day" href="briefing-viewer.html?date=${d}&region=usec_md">
           <img src="${omBase}${d}.png" alt="Open-Meteo Day ${i+1} (${d})" loading="lazy" onerror="this.style.display='none'">
           <img src="${cmemsBase}${d}.png" alt="CMEMS Day ${i+1} (${d})" loading="lazy" onerror="this.style.display='none'">
-          <div class="bd-raster-label">Day ${i+1} · ${d}</div>
-        </div>`
+          <div class="bd-raster-label">Day ${i+1} · ${d} →</div>
+        </a>`
     ).join('');
     return `
         <div class="bd-raster-section">
