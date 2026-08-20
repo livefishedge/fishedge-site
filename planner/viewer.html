@@ -15,29 +15,27 @@
   <div id="map" aria-label="Interactive forecast map"></div>
   <aside class="panel">
     <h2>Forecast layers</h2>
-    <div class="row"><span>Open-Meteo atmosphere + waves</span><input id="om" type="checkbox" checked></div>
-    <div class="row"><span>CMEMS SST + currents</span><input id="cmems" type="checkbox"></div>
+    <div class="row"><span>Open-Meteo wind + waves</span><input name="bg" value="om" type="radio" checked></div>
+    <div class="row"><span>CMEMS SST background</span><input name="bg" value="cmems" type="radio"></div>
     <div class="row"><span>Animated current particles</span><input id="animate" type="checkbox" checked></div>
     <div class="row"><span>Data opacity</span><input id="opacity" type="range" min="0" max="1" step=".05" value="1"></div>
     <div class="source"><b id="status">Loading model rasters…</b><br>OpenLayers 10.2.1 · pan, zoom, inspect layers<br>Region: USEC Mid-Atlantic · [-77, 36, -72, 40]</div>
   </aside>
   <div class="legend"><b>Captain units</b><br>Wave / swell: feet · Wind / current: knots<br>SST: °F · Current animation: CMEMS model flow</div>
-  <script type="module">
-    import {Map,View} from 'https://cdn.jsdelivr.net/npm/ol@10.2.1/+esm';
-    import TileLayer from 'https://cdn.jsdelivr.net/npm/ol@10.2.1/layer/Tile.js/+esm';
-    import ImageLayer from 'https://cdn.jsdelivr.net/npm/ol@10.2.1/layer/Image.js/+esm';
-    import OSM from 'https://cdn.jsdelivr.net/npm/ol@10.2.1/source/OSM.js/+esm';
-    import ImageStatic from 'https://cdn.jsdelivr.net/npm/ol@10.2.1/source/ImageStatic.js/+esm';
-    import {fromLonLat,transformExtent} from 'https://cdn.jsdelivr.net/npm/ol@10.2.1/proj.js/+esm';
-    const q=new URLSearchParams(location.search),date=q.get('date')||new Date().toISOString().slice(0,10),region=q.get('region')||'usec_md';
-    const bbox=[-77,36,-72,40],extent=transformExtent(bbox,'EPSG:4326','EPSG:3857'),base='https://data.fishedge.live/'+region+'/briefing/';
+  <canvas id="particles" aria-hidden="true"></canvas>
+  <script src="https://cdn.jsdelivr.net/npm/ol@10.2.1/dist/ol.js"></script>
+  <script>
+    const q=new URLSearchParams(location.search),date=q.get('date')||new Date().toISOString().slice(0,10),region=q.get('region')||'usec_md',bbox=[-77,36,-72,40],extent=ol.proj.transformExtent(bbox,'EPSG:4326','EPSG:3857'),base='https://data.fishedge.live/'+region+'/briefing/';
     document.getElementById('date').textContent=date;
-    const street=new TileLayer({source:new OSM(),opacity:.28}),omSource=new ImageStatic({url:base+'raster_'+date+'.png',imageExtent:extent,projection:'EPSG:3857'}),cmemsSource=new ImageStatic({url:base+'cmems_raster_'+date+'.gif',imageExtent:extent,projection:'EPSG:3857'}),om=new ImageLayer({source:omSource,opacity:1}),cmems=new ImageLayer({source:cmemsSource,visible:false,opacity:1});
-    const map=new Map({target:'map',layers:[street,om,cmems],view:new View({center:fromLonLat([-74.5,38]),zoom:7,minZoom:5,maxZoom:13})});
-    const omCtl=document.getElementById('om'),cmCtl=document.getElementById('cmems'),anim=document.getElementById('animate'),opacity=document.getElementById('opacity');
-    function sync(){om.setVisible(omCtl.checked);cmems.setVisible(cmCtl.checked);om.setOpacity(+opacity.value);cmems.setOpacity(+opacity.value);document.getElementById('status').textContent=cmCtl.checked&&anim.checked?'CMEMS animated currents active':'Forecast rasters loaded';}
-    omSource.on('imageloadend',()=>{document.getElementById('status').textContent='Open-Meteo raster loaded'});omSource.on('imageloaderror',()=>{document.getElementById('status').textContent='Open-Meteo raster failed to load'});cmemsSource.on('imageloadend',()=>{if(cmCtl.checked)document.getElementById('status').textContent='CMEMS animated currents loaded'});cmemsSource.on('imageloaderror',()=>{document.getElementById('status').textContent='CMEMS raster failed to load'});
-    omCtl.addEventListener('change',sync);cmCtl.addEventListener('change',sync);anim.addEventListener('change',()=>{cmems.setVisible(cmCtl.checked&&anim.checked);sync()});opacity.addEventListener('input',sync);sync();
+    const street=new ol.layer.Tile({source:new ol.source.OSM(),opacity:.28}),omSource=new ol.source.ImageStatic({url:base+'raster_'+date+'.png',imageExtent:extent,projection:'EPSG:3857'}),sstSource=new ol.source.ImageStatic({url:base+'cmems/sst_'+date+'.png',imageExtent:extent,projection:'EPSG:3857'}),om=new ol.layer.Image({source:omSource,opacity:1}),sst=new ol.layer.Image({source:sstSource,visible:false,opacity:1});
+    const map=new ol.Map({target:'map',layers:[street,om,sst],view:new ol.View({projection:'EPSG:3857',center:ol.proj.fromLonLat([-74.5,38]),zoom:7,minZoom:5,maxZoom:13})});
+    const canvas=document.getElementById('particles'),ctx=canvas.getContext('2d'),animCtl=document.getElementById('animate'),opacity=document.getElementById('opacity'),status=document.getElementById('status');let field=null,particles=[],last=performance.now(),frame=0;
+    function resize(){const r=document.getElementById('map').getBoundingClientRect();canvas.width=r.width;canvas.height=r.height;canvas.style.cssText='position:absolute;inset:58px 0 0;width:100%;height:calc(100% - 58px);pointer-events:none;z-index:3';}window.addEventListener('resize',resize);resize();
+    function initParticles(){particles=Array.from({length:180},()=>({lon:bbox[0]+Math.random()*(bbox[2]-bbox[0]),lat:bbox[1]+Math.random()*(bbox[3]-bbox[1]),life:Math.random()}));}
+    function vectorAt(lon,lat){if(!field)return[0,0];const ix=Math.max(0,Math.min(field.lons.length-1,Math.round((lon-field.lons[0])/(field.lons[1]-field.lons[0])))),iy=Math.max(0,Math.min(field.lats.length-1,Math.round((lat-field.lats[0])/(field.lats[1]-field.lats[0]))));const u=field.frames[frame%field.frames.length].u_kn[iy][ix],v=field.frames[frame%field.frames.length].v_kn[iy][ix];return[Number(u)||0,Number(v)||0];}
+    function draw(now){const dt=Math.min(.08,(now-last)/1000);last=now;ctx.clearRect(0,0,canvas.width,canvas.height);if(animCtl.checked&&field){frame=Math.floor(now/900)%field.frames.length;for(const p of particles){const [u,v]=vectorAt(p.lon,p.lat),speed=Math.hypot(u,v),meters=.514444*dt;p.lon+=(u*meters)/(111320*Math.max(.25,Math.cos(p.lat*Math.PI/180)));p.lat+=(v*meters)/111320;if(p.lon>bbox[2]||p.lon<bbox[0]||p.lat>bbox[3]||p.lat<bbox[1]||++p.life>1){p.lon=bbox[0]+Math.random()*(bbox[2]-bbox[0]);p.lat=bbox[1]+Math.random()*(bbox[3]-bbox[1]);p.life=0}const px=map.getPixelFromCoordinate(ol.proj.fromLonLat([p.lon,p.lat]));if(!px)continue;const alpha=.35+.65*(1-p.life);ctx.fillStyle=`rgba(112,238,214,${alpha})`;ctx.beginPath();ctx.arc(px[0],px[1],speed>1.5?2.4:1.6,0,Math.PI*2);ctx.fill();}}requestAnimationFrame(draw);}requestAnimationFrame(draw);
+    function sync(){const cm=document.querySelector('input[name=bg]:checked').value==='cmems';om.setVisible(!cm);sst.setVisible(cm);om.setOpacity(+opacity.value);sst.setOpacity(+opacity.value);canvas.style.display=animCtl.checked?'block':'none';status.textContent=cm?'CMEMS SST background + current vectors':'Open-Meteo wind/wave raster';}
+    document.querySelectorAll('input[name=bg]').forEach(x=>x.addEventListener('change',sync));animCtl.addEventListener('change',sync);opacity.addEventListener('input',sync);omSource.on('imageloadend',()=>{status.textContent='Open-Meteo wind/wave raster loaded'});sstSource.on('imageloadend',()=>{status.textContent='CMEMS SST raster loaded'});fetch(base+'cmems/currents.json').then(r=>r.json()).then(x=>{field=x;initParticles();status.textContent='Forecast raster + CMEMS current vectors loaded'}).catch(()=>{status.textContent='Raster loaded; current vectors unavailable'});sync();
   </script>
 </body>
 </html>
