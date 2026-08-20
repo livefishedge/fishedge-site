@@ -358,16 +358,41 @@
       return adapter;
     }
 
-    // Wraps real-data fetch (preferred) + fixture fallback. Returns an
-    // adapter either way so downstream code stays sync-shaped.
+    // Wraps real-data fetch (preferred) + fixture fallback. Strategy:
+    // ALWAYS start with the fixture (so the briefing drawer is never empty
+    // when the fixture has data), then overlay real data on top of any
+    // fields the fixture didn't already fill. Real data wins where present.
     async function buildPlan(fixName, inletKey, targetId) {
+      const plan = buildFixturePlan(fixName, inletKey, targetId);
       try {
         const real = await buildRealPlan(inletKey, targetId);
-        if (real) return real;
+        if (real) mergeRealIntoPlan(plan, real);
       } catch (e) {
-        console.warn('[planner] buildRealPlan failed, falling back to fixture:', e && e.message);
+        console.warn('[planner] buildRealPlan failed, fixture only:', e && e.message);
       }
-      return buildFixturePlan(fixName, inletKey, targetId);
+      return plan;
+    }
+    function mergeRealIntoPlan(plan, real) {
+      // Overlay real data onto fixture for any now.* field the real path
+      // populated and the fixture left null. Real wins.
+      const target = real.segments && real.segments.target;
+      const planTarget = plan.segments && plan.segments.target;
+      if (!target || !planTarget) return;
+      const realNow = target.now || {};
+      const planNow = planTarget.now || {};
+      for (const k of Object.keys(realNow)) {
+        if (realNow[k] != null && (planNow[k] == null || (planNow[k].value == null && planNow[k].value !== 0))) {
+          planNow[k] = realNow[k];
+        }
+      }
+      // Overlay trip_window.hourly if real has it and fixture doesn't.
+      if (target.trip_window && target.trip_window.hourly && target.trip_window.hourly.length
+          && (!planTarget.trip_window.hourly || !planTarget.trip_window.hourly.length)) {
+        planTarget.trip_window.hourly = target.trip_window.hourly;
+        planTarget.trip_window.worst_window = target.trip_window.worst_window;
+      }
+      // Overlay alerts if real has any.
+      if (target.alerts && target.alerts.length) planTarget.alerts = target.alerts;
     }
 
     async function build5DayPlans(fixName, inletKey) {

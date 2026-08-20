@@ -239,3 +239,32 @@ html, body {
   color: #88aacc;
   border: 1px solid #2a4d70;
 }
+
+/* Compact current-conditions strip in the briefing drawer header */
+.bd-now-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(78px, 1fr));
+  gap: 4px;
+  margin: 6px 0 8px;
+}
+.bd-now-cell {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 5px 7px;
+  text-align: center;
+}
+.bd-now-label {
+  display: block;
+  font-size: 9px;
+  color: var(--dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.bd-now-value {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--fg);
+  margin-top: 2px;
+}

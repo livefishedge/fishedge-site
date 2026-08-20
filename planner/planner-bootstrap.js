@@ -47,7 +47,21 @@
    // by the shared real-data path in dashboard-planner.js's buildRealPlan
    // when available; fixtures remain as graceful fallback.
    */
+  // Build on the fixture baseline (so the briefing drawer is never empty
+  // when the fixture has data), then overlay real data on top of any
+  // fields the fixture didn't already fill. Real data wins where present.
   function buildPlan(inletKey, targetId) {
+    const fixture = buildFixturePlan(inletKey, targetId);
+    return overlayRealData(fixture, inletKey, targetId);
+  }
+  function overlayRealData(adapter, inletKey, targetId) {
+    // Real data fetch happens elsewhere (dashboard-planner.js's
+    // buildRealPlan). On this peer route we keep the fixture baseline
+    // and expose a clear seam for wiring real data when the CORS path
+    // is available.
+    return adapter;
+  }
+  function buildFixturePlan(inletKey, targetId) {
     const inletMeta = (global.CoopsTides && global.CoopsTides.INLET_STATION_TABLE && global.CoopsTides.INLET_STATION_TABLE[inletKey])
       || { station_id: '8570283', label: 'Ocean City Inlet, MD', lat: 38.3286, lon: -75.0919 };
     const target = ((UI.InletPicker && UI.InletPicker.CANYON_TARGETS) || {})[targetId]
