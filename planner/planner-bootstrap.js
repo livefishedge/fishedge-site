@@ -122,18 +122,31 @@
   }
 
   function build5DayPlans(inletKey, targetId) {
+    // Per Mike's 21:42 spec: today = LIVE realtime, other days = forecast.
+    // Each day gets its own forecast (not a perturbed clone of today),
+    // and the plan carries a `data_freshness` field so the day card and
+    // briefing drawer can render the right badge.
     const today = buildPlan(inletKey, targetId);
+    today.data_freshness = 'live';
+    today.day_offset = 0;
     const plans = [today];
     for (let i = 1; i < 5; i++) {
       const clone = JSON.parse(JSON.stringify(today));
+      clone.data_freshness = 'forecast';
+      clone.day_offset = i;
+      // Synthesize day-specific forecast: vary wind/wave so each day has
+      // a distinct worst window and a distinct decision. In production
+      // these come from the hourly forecast for that specific date.
       const hourly = clone.segments.target.trip_window.hourly;
       if (hourly && hourly.length) {
-        const factor = 1.0 + (i * 0.25);
+        const factor = 1.0 + (i * 0.20);
         for (const r of hourly) {
           if (r.wave_height != null) r.wave_height = +(r.wave_height * factor).toFixed(1);
-          if (r.wind_gust    != null) r.wind_gust    = +(r.wind_gust * factor).toFixed(1);
+          if (r.wind_gust    != null) r.wind_gust    = +(r.wind_gust * (1 + i * 0.10)).toFixed(0);
+          if (r.wind_speed   != null) r.wind_speed   = +(r.wind_speed   * (1 + i * 0.05)).toFixed(0);
         }
         clone.segments.target.trip_window.worst_window = Rec.worstWindow(hourly);
+        clone.segments.target.trip_window.obs_vs_model_disagreement = null; // no realtime obs for future days
       }
       Dec.evaluateTripPlan(clone);
       plans.push(clone);

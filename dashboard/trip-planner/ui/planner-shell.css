@@ -196,3 +196,46 @@ html, body {
   position: fixed; inset: 0; pointer-events: none; z-index: 9500;
 }
 #fishedge-briefing-host > * { pointer-events: auto; }
+
+/* Data freshness badge (LIVE / FORECAST) on the 5-day card */
+.fdo-freshness {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  margin-top: 2px;
+  margin-bottom: 4px;
+  vertical-align: middle;
+}
+.fdo-freshness.live {
+  background: #5a1212;
+  color: #ff8a8a;
+  border: 1px solid #c8364a;
+}
+.fdo-freshness.forecast {
+  background: #1a2e44;
+  color: #88aacc;
+  border: 1px solid #2a4d70;
+}
+/* Data freshness badge in the briefing drawer header */
+.bd-freshness-badge {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  margin: 4px 0 8px;
+}
+.bd-freshness-badge.live {
+  background: #5a1212;
+  color: #ff8a8a;
+  border: 1px solid #c8364a;
+}
+.bd-freshness-badge.forecast {
+  background: #1a2e44;
+  color: #88aacc;
+  border: 1px solid #2a4d70;
+}

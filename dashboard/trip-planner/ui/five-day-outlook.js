@@ -46,6 +46,7 @@
       return `
         <button class="fdo-day" data-day="${i}" aria-label="Open ${dayLabel(plan, i)} ${decision} details">
           <div class="fdo-when">${dayLabel(plan, i)}</div>
+          <span class="fdo-freshness ${plan.data_freshness || 'forecast'}">${plan.data_freshness === 'live' ? '🔴 LIVE' : '📊 FORECAST'}</span>
           <span class="fdo-decision ${decision}">${decision.replace('_', '-')}</span>
           <div class="fdo-summary">${fmtWindHour(plan)} · ${fmtWaveHour(plan)}</div>
           <div class="fdo-meta">${worstTxt}${reasonCount ? ` · ${reasonCount} flag${reasonCount === 1 ? '' : 's'}` : ''}</div>

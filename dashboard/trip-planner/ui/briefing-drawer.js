@@ -87,6 +87,7 @@
       <div class="bd-header">
         <button class="bd-close" aria-label="Close briefing">×</button>
         <h2>Captain Briefing — ${plan.request && plan.request.home_inlet_label || 'Trip'}</h2>
+        <div class="bd-freshness-badge ${plan.data_freshness || 'forecast'}">${(plan.data_freshness || 'forecast') === 'live' ? '🔴 REALTIME — at-dock verification' : '📊 FORECAST — model output'}</div>
         ${targetLine}
         <div>Decision: <b>${d.decision}</b> · Confidence: <b>${conf}</b></div>
         <div>Missing required inputs: ${missing}</div>
