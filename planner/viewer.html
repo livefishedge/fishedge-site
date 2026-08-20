@@ -33,10 +33,11 @@
     const q=new URLSearchParams(location.search),date=q.get('date')||new Date().toISOString().slice(0,10),region=q.get('region')||'usec_md';
     const bbox=[-77,36,-72,40],extent=transformExtent(bbox,'EPSG:4326','EPSG:3857'),base='https://data.fishedge.live/'+region+'/briefing/';
     document.getElementById('date').textContent=date;
-    const street=new TileLayer({source:new OSM(),opacity:.28}),om=new ImageLayer({source:new ImageStatic({url:base+'raster_'+date+'.png',imageExtent:extent}),opacity:1}),cmems=new ImageLayer({source:new ImageStatic({url:base+'cmems_raster_'+date+'.gif',imageExtent:extent}),visible:false,opacity:1});
+    const street=new TileLayer({source:new OSM(),opacity:.28}),omSource=new ImageStatic({url:base+'raster_'+date+'.png',imageExtent:extent,projection:'EPSG:3857'}),cmemsSource=new ImageStatic({url:base+'cmems_raster_'+date+'.gif',imageExtent:extent,projection:'EPSG:3857'}),om=new ImageLayer({source:omSource,opacity:1}),cmems=new ImageLayer({source:cmemsSource,visible:false,opacity:1});
     const map=new Map({target:'map',layers:[street,om,cmems],view:new View({center:fromLonLat([-74.5,38]),zoom:7,minZoom:5,maxZoom:13})});
     const omCtl=document.getElementById('om'),cmCtl=document.getElementById('cmems'),anim=document.getElementById('animate'),opacity=document.getElementById('opacity');
     function sync(){om.setVisible(omCtl.checked);cmems.setVisible(cmCtl.checked);om.setOpacity(+opacity.value);cmems.setOpacity(+opacity.value);document.getElementById('status').textContent=cmCtl.checked&&anim.checked?'CMEMS animated currents active':'Forecast rasters loaded';}
+    omSource.on('imageloadend',()=>{document.getElementById('status').textContent='Open-Meteo raster loaded'});omSource.on('imageloaderror',()=>{document.getElementById('status').textContent='Open-Meteo raster failed to load'});cmemsSource.on('imageloadend',()=>{if(cmCtl.checked)document.getElementById('status').textContent='CMEMS animated currents loaded'});cmemsSource.on('imageloaderror',()=>{document.getElementById('status').textContent='CMEMS raster failed to load'});
     omCtl.addEventListener('change',sync);cmCtl.addEventListener('change',sync);anim.addEventListener('change',()=>{cmems.setVisible(cmCtl.checked&&anim.checked);sync()});opacity.addEventListener('input',sync);sync();
   </script>
 </body>
