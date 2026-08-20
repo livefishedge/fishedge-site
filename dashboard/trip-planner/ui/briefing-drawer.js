@@ -88,6 +88,13 @@
         <button class="bd-close" aria-label="Close briefing">×</button>
         <h2>Captain Briefing — ${plan.request && plan.request.home_inlet_label || 'Trip'}</h2>
         <div class="bd-freshness-badge ${plan.data_freshness || 'forecast'}">${(plan.data_freshness || 'forecast') === 'live' ? '🔴 REALTIME — at-dock verification' : '📊 FORECAST — model output'}</div>
+        <div class="bd-now-strip">
+          <div class="bd-now-cell"><span class="bd-now-label">Wind</span><span class="bd-now-value">${fmtWindBrief(plan)}</span></div>
+          <div class="bd-now-cell"><span class="bd-now-label">Wave</span><span class="bd-now-value">${fmtWaveBrief(plan)}</span></div>
+          <div class="bd-now-cell"><span class="bd-now-label">Pressure</span><span class="bd-now-value">${fmtPressBrief(plan)}</span></div>
+          <div class="bd-now-cell"><span class="bd-now-label">Water</span><span class="bd-now-value">${fmtWaterBrief(plan)}</span></div>
+          <div class="bd-now-cell"><span class="bd-now-label">Tide</span><span class="bd-now-value">${fmtTideBrief(plan)}</span></div>
+        </div>
         ${targetLine}
         <div>Decision: <b>${d.decision}</b> · Confidence: <b>${conf}</b></div>
         <div>Missing required inputs: ${missing}</div>
@@ -215,6 +222,40 @@
       console.warn('[briefing-drawer] renderObsVsModel failed:', e && e.message);
       return `<div class="bd-section"><h3>Now: observation vs model</h3><div class="bd-freshness">Obs-vs-model render skipped.</div></div>`;
     }
+  }
+
+  function fmtWindBrief(plan) {
+    const seg = plan && plan.segments && plan.segments.target;
+    const w = seg && seg.now && seg.now.wind && seg.now.wind.value;
+    if (!w || w.speed == null) return '—';
+    return `${Math.round(w.speed)}kt ${w.dir_cardinal || ''} G${w.gust != null ? Math.round(w.gust) : '?'}`;
+  }
+  function fmtWaveBrief(plan) {
+    const seg = plan && plan.segments && plan.segments.target;
+    const wa = seg && seg.now && seg.now.wave && seg.now.wave.value;
+    if (!wa || wa.height == null) return '—';
+    return `${wa.height.toFixed(1)}ft @ ${wa.dominant_period ? Math.round(wa.dominant_period) : '?'}s`;
+  }
+  function fmtPressBrief(plan) {
+    const seg = plan && plan.segments && plan.segments.target;
+    const p = seg && seg.now && seg.now.pressure && seg.now.pressure.value;
+    if (!p || p.pressure == null) return '—';
+    return `${p.pressure.toFixed(2)} inHg`;
+  }
+  function fmtWaterBrief(plan) {
+    const seg = plan && plan.segments && plan.segments.target;
+    const w = seg && seg.now && seg.now.water_temperature && seg.now.water_temperature.value;
+    if (!w) return '—';
+    return `${(+w).toFixed(1)}°F`;
+  }
+  function fmtTideBrief(plan) {
+    const seg = plan && plan.segments && plan.segments.target;
+    const t = seg && seg.now && seg.now.tide && seg.now.tide.value;
+    if (!t) return '—';
+    const parts = [];
+    if (t.next_high) parts.push(`H ${t.next_high.value != null ? t.next_high.value.toFixed(1) + 'ft' : ''}`);
+    if (t.next_low)  parts.push(`L ${t.next_low.value  != null ? t.next_low.value.toFixed(1)  + 'ft' : ''}`);
+    return parts.join(' / ') || '—';
   }
 
   function render(plan) {
