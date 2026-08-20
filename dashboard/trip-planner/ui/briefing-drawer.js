@@ -64,6 +64,12 @@
       background: transparent; border: 1px solid #2a3a4d; color: #9fb0c3;
       border-radius: 4px; cursor: pointer; padding: 2px 8px; font-size: 12px;
     }
+    #fishedge-briefing-drawer .bd-raster-section { margin: 14px 0 6px 0; padding: 8px 0; border-top: 1px solid #1b2836; }
+    #fishedge-briefing-drawer .bd-raster-section h3 { font-size: 13px; margin: 0 0 8px 0; color: #b3e5fc; font-weight: 600; letter-spacing: 0.3px; }
+    #fishedge-briefing-drawer .bd-raster-grid { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; }
+    #fishedge-briefing-drawer .bd-raster-day { flex: 0 0 auto; min-width: 260px; max-width: 300px; }
+    #fishedge-briefing-drawer .bd-raster-day img { width: 100%; display: block; border-radius: 4px; background: #0a1929; border: 1px solid #1b2836; }
+    #fishedge-briefing-drawer .bd-raster-label { font-size: 11px; color: #9fb0c3; text-align: center; margin-top: 4px; font-family: monospace; }
   `;
 
   function fmtVal(v, digits) {
@@ -258,6 +264,33 @@
     return parts.join(' / ') || '—';
   }
 
+  function renderRasters(plan) {
+    // 7-day spatial outlook — loads pre-rendered rasters from data.fishedge.live
+    // (built nightly by /home/gzheng/pipelines/briefing/{build_briefing,render_cmems_briefing}.py)
+    const today = new Date();
+    const dates = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(today.getTime() + i * 86400000);
+      dates.push(d.toISOString().slice(0, 10));
+    }
+    const region = 'usec_md';
+    const omBase    = `https://data.fishedge.live/${region}/briefing/raster_`;
+    const cmemsBase = `https://data.fishedge.live/${region}/briefing/cmems_raster_`;
+    const cards = dates.map((d, i) =>
+      `<div class="bd-raster-day">
+          <img src="${omBase}${d}.png" alt="Open-Meteo Day ${i+1} (${d})" loading="lazy" onerror="this.style.display='none'">
+          <img src="${cmemsBase}${d}.png" alt="CMEMS Day ${i+1} (${d})" loading="lazy" onerror="this.style.display='none'">
+          <div class="bd-raster-label">Day ${i+1} · ${d}</div>
+        </div>`
+    ).join('');
+    return `
+        <div class="bd-raster-section">
+          <h3>7-Day Spatial Outlook — Open-Meteo (atmosphere) + CMEMS (ocean)</h3>
+          <div class="bd-raster-grid">${cards}</div>
+        </div>
+      `;
+  }
+
   function render(plan) {
     const segs = Object.keys(plan.segments || {});
     if (!segs.length) return '<div id="fishedge-briefing-drawer" class="open"><div class="bd-section">No segments.</div></div>';
@@ -273,6 +306,7 @@
       <div id="fishedge-briefing-drawer">
         ${renderHeader(plan)}
         ${renderAlerts(plan)}
+        ${renderRasters(plan)}
         <div class="bd-tabs">${renderTabs(plan)}</div>
         ${segmentPanels}
         <div class="bd-disclaimer">Decision support only. Not a substitute for official marine forecasts, notices, seamanship, or Coast Guard guidance.</div>
