@@ -3371,16 +3371,31 @@ const chkBathy = document.getElementById("chk-combined-bathy");
 const chkFront = document.getElementById("chk-combined-front");
 const chkFishing = document.getElementById("chk-combined-fishing");
 const chkFishingPolygons = document.getElementById("chk-combined-fishing-polygons");
+function syncFishingGroundControls() {
+  if (!chkFishingPolygons) return;
+  const visible = typeof window.fishedgeUnderwater?.isVisible === "function"
+    ? Boolean(window.fishedgeUnderwater.isVisible())
+    : Boolean(chkFishing?.checked);
+  chkFishingPolygons.disabled = !visible;
+  chkFishingPolygons.checked = visible && typeof window.fishedgeUnderwater?.isFullPolygons === "function"
+    ? Boolean(window.fishedgeUnderwater.isFullPolygons())
+    : false;
+}
 if (chkFishing) chkFishing.addEventListener("change", e => {
   const visible = window.fishedgeUnderwater?.setVisible?.(e.target.checked);
   if (typeof visible === "boolean" && chkFishingPolygons) {
     chkFishingPolygons.disabled = !visible;
     chkFishingPolygons.checked = visible ? Boolean(window.fishedgeUnderwater?.isFullPolygons?.()) : false;
   }
+  syncFishingGroundControls();
 });
 if (chkFishingPolygons) chkFishingPolygons.addEventListener("change", e => {
   window.fishedgeUnderwater?.setFullPolygons?.(e.target.checked);
 });
+// canyon-charts.js is deferred and can initialize before these listeners.
+// Reconcile after both scripts exist so this control works on first load.
+syncFishingGroundControls();
+[100, 500, 1500].forEach(delay => setTimeout(syncFishingGroundControls, delay));
 if (chkChl) chkChl.addEventListener("change", async e => {
   const checked = e.target.checked;
   if (window._combinedChlLayer) window._combinedChlLayer.setVisible(checked);
@@ -5619,13 +5634,18 @@ function updateBathyContours(map, bd, layer) {
   const maxDepth = depthMaxInExtent(bd, extent, sx, sy);
   const levels = generateContourLevels(maxDepth);
 
+  const segments = [];
   for (const level of levels) {
     const segs = extractContourSegments(bd, level, sx, sy, extent);
-    for (const seg of segs) {
-      const feat = new ol.Feature({ geometry: new ol.geom.LineString(seg), depth: level });
-      feat.getGeometry().transform("EPSG:4326", "EPSG:3857");
-      source.addFeature(feat);
-    }
+    segments.push(...segs.map(segment => ({ level, segment })));
+  }
+  // Stitch marching-squares cell segments before creating OL features. The
+  // old single-product path added each cell independently, which looked like
+  // a dashed contour even though the stroke itself was solid.
+  for (const path of stitchContourSegments(segments)) {
+    const feat = new ol.Feature({ geometry: new ol.geom.LineString(path.segment), depth: path.level });
+    feat.getGeometry().transform("EPSG:4326", "EPSG:3857");
+    source.addFeature(feat);
   }
 }
 
@@ -11485,6 +11505,7 @@ window.addEventListener('fishedge-underwater-visibility', (event) => {
   const polygons = document.getElementById('chk-combined-fishing-polygons');
   if (fishing) fishing.checked = visible;
   if (polygons) polygons.disabled = !visible;
+  syncFishingGroundControls();
 });
 
 window.addEventListener('fishedge-fishing-ground-polygons', (event) => {
