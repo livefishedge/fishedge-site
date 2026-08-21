@@ -10759,11 +10759,19 @@ async function initDashboard() {
     // fetch and may end up loading usec_south frames while the BBOX is
     // usec_md (the "stuck loading dashboard" symptom).
     if (window.__profileReady) {
-      // The map shell must not be held hostage by profile/entitlement APIs.
-      // A resolved profile still wins; otherwise boot with the URL/default
-      // region and apply a later region change in one serialized pass.
-      const safeTimeout = new Promise(r => setTimeout(() => r(null), 750));
+      // An explicit URL region is authoritative and can boot immediately.
+      // Without one, the saved profile region must resolve before the first
+      // index fetch; otherwise the default South index can render briefly
+      // before a Mid-Atlantic profile switches the page underneath it.
+      const hasExplicitRegion = QUERY_PARAMS.has('region');
+      const safeTimeout = new Promise(r => setTimeout(() => r(null), hasExplicitRegion ? 750 : 3000));
       await Promise.race([window.__profileReady, safeTimeout]);
+    }
+    // The profile callback is serialized while booting. Apply its resolved
+    // region before loadIndex() so the very first data request is correct.
+    if (window.__pendingAuthRegion && window.__pendingAuthRegion !== REGION_ID) {
+      setActiveRegion(window.__pendingAuthRegion);
+      window.__pendingAuthRegion = null;
     }
     // Combined mode keeps bathymetry opt-in. The old unconditional land-mask
     // preparation downloaded and parsed the ~13 MB bathy grid before the map
