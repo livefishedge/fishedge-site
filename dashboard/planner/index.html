@@ -3,18 +3,375 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>FishEdge Forecast Planner</title>
+  <title>FishEdge Trip Planner</title>
+  <link rel="icon" href="data:,">
   <style>
-    :root{color-scheme:dark}*{box-sizing:border-box}html,body{margin:0;background:#07111d;color:#dcecf7;font:14px system-ui,-apple-system,Segoe UI,sans-serif}a{color:inherit}.top{padding:18px 24px;border-bottom:1px solid #1d3447;background:#0a1929;display:flex;align-items:center;gap:18px}.top h1{margin:0;font-size:20px;color:#e8f7ff}.top span{color:#81a6bd}.back{margin-left:auto;color:#66d9ff;text-decoration:none}.wrap{max-width:1500px;margin:auto;padding:22px}.intro{display:flex;justify-content:space-between;gap:20px;align-items:end;margin-bottom:18px}.intro h2{margin:0 0 5px;font-size:24px}.intro p{margin:0;color:#8da8b9}.stamp{color:#8da8b9;font:12px ui-monospace,monospace;text-align:right}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}.card{display:block;text-decoration:none;background:#0c1d2d;border:1px solid #24445a;border-radius:8px;overflow:hidden;transition:.15s transform,.15s border-color,.15s box-shadow}.card:hover{transform:translateY(-2px);border-color:#57d7ff;box-shadow:0 0 0 1px #57d7ff,0 10px 30px #0008}.card-map{height:145px;background:radial-gradient(circle at 60% 35%,#1d6075 0 2px,transparent 3px),linear-gradient(135deg,#0c2637,#07111d);display:flex;flex-direction:column;justify-content:center;align-items:center;gap:8px;color:#64e4d0;border-bottom:1px solid #24445a;letter-spacing:.08em;font:11px ui-monospace,monospace}.card-map b{color:#c7edf5;font:12px system-ui,sans-serif;letter-spacing:0}.label{padding:11px 13px;display:flex;justify-content:space-between;color:#9fdcf1}.label small{color:#7695a8}.note{margin-top:18px;color:#7895a7;font-size:12px}.empty{padding:40px;border:1px dashed #31546b;border-radius:8px;color:#94adbd}@media(max-width:600px){.wrap{padding:14px}.top{padding:14px}.intro{display:block}.stamp{text-align:left;margin-top:10px}}
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; min-height: 100%;
+      background: #07111d; color: #dcecf7;
+      font: 14px system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+
+    .top {
+      height: 58px; display: flex; align-items: center; gap: 16px;
+      padding: 0 18px; background: #0a1929;
+      border-bottom: 1px solid #24465d;
+      position: sticky; top: 0; z-index: 4;
+    }
+    .top h1 { font-size: 17px; margin: 0; color: #edfaff; }
+    .top a { color: #67d9ff; text-decoration: none; }
+    .tabs { display: flex; gap: 6px; margin-left: auto; }
+    .tabs a {
+      padding: 6px 12px; border: 1px solid #31546b; border-radius: 6px;
+      font-size: 12px; color: #91afc0;
+    }
+    .tabs a.active {
+      background: #15324a; color: #edfaff; border-color: #67d9ff;
+      box-shadow: 0 0 0 1px #67d9ff inset;
+    }
+    .account { color: #91afc0; font-size: 12px; }
+    .account a { color: #67d9ff; }
+
+    main {
+      max-width: 1100px; margin: auto; padding: 24px 18px 60px;
+    }
+
+    h2 {
+      font-size: 13px; color: #b9eaff; letter-spacing: .4px;
+      text-transform: uppercase; margin: 28px 0 12px;
+    }
+
+    /* Inlet picker */
+    .inlet-picker {
+      display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+      padding: 14px 16px; background: #0a1929; border: 1px solid #24465d;
+      border-radius: 8px;
+    }
+    .inlet-picker label { color: #91afc0; font-size: 12px; }
+    .inlet-picker select {
+      background: #15324a; color: #edfaff; border: 1px solid #31546b;
+      padding: 6px 10px; border-radius: 4px; font: inherit; min-width: 240px;
+    }
+
+    /* Day strip — 5 cards in a row */
+    .day-strip {
+      display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px;
+    }
+    .day-card {
+      background: #0a1929; border: 1px solid #24465d; border-radius: 8px;
+      padding: 14px 12px; cursor: pointer; text-align: left;
+      transition: border-color .15s, transform .15s;
+      color: inherit; font: inherit;
+    }
+    .day-card:hover { border-color: #67d9ff; transform: translateY(-2px); }
+    .day-card.selected {
+      border-color: #67d9ff;
+      box-shadow: 0 0 0 1px #67d9ff inset, 0 4px 12px rgba(103,217,255,.15);
+    }
+    .day-card .day-when { font-size: 13px; color: #edfaff; font-weight: 600; }
+    .day-card .day-date { font-size: 11px; color: #6b7d92; font-family: ui-monospace, monospace; }
+    .day-badge {
+      display: inline-block; padding: 3px 10px; border-radius: 4px;
+      font-size: 11px; font-weight: 700; letter-spacing: .5px;
+      margin: 8px 0;
+    }
+    .day-badge.go      { background: #1e6e3a; color: #fff; }
+    .day-badge.caution { background: #a36d10; color: #fff; }
+    .day-badge.no-go   { background: #9b1c1c; color: #fff; }
+    .day-card .day-summary {
+      font-size: 11px; color: #a9dbea; line-height: 1.5;
+    }
+
+    /* Briefing card */
+    .briefing {
+      background: #0a1929; border: 1px solid #24465d; border-radius: 8px;
+      padding: 18px 20px;
+    }
+    .briefing h3 { margin: 0 0 10px; font-size: 16px; color: #edfaff; }
+    .briefing .briefing-summary { font-size: 14px; line-height: 1.55; margin: 0 0 12px; }
+    .briefing .briefing-detail {
+      font-size: 12px; color: #91afc0; margin: 0;
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    }
+    .briefing .map-link {
+      display: inline-block; margin-top: 14px; padding: 8px 14px;
+      background: #15324a; border: 1px solid #67d9ff; color: #edfaff;
+      border-radius: 4px; text-decoration: none; font-size: 13px;
+    }
+    .briefing .map-link:hover { background: #1d4666; }
+
+    /* My trips */
+    .my-trips {
+      background: #0a1929; border: 1px solid #24465d; border-radius: 8px;
+      padding: 16px;
+    }
+    .my-trips-empty { color: #7898aa; font-size: 12px; }
+    .my-trip-item {
+      padding: 10px 12px; background: #07111d; border: 1px solid #24465d;
+      border-radius: 4px; margin-top: 8px; font-size: 12px;
+    }
+
+    /* Layout grid */
+    .row-2col {
+      display: grid; grid-template-columns: 2fr 1fr; gap: 18px;
+    }
+
+    @media (max-width: 800px) {
+      .day-strip { grid-template-columns: repeat(5, minmax(110px, 1fr)); overflow-x: auto; padding-bottom: 6px; }
+      .row-2col { grid-template-columns: 1fr; }
+      .top h1 { font-size: 14px; }
+      .tabs a { font-size: 11px; padding: 5px 8px; }
+    }
   </style>
 </head>
 <body>
-  <header class="top"><h1>FishEdge</h1><span>Forecast Planner</span><a class="back" href="/">Home</a></header>
-  <main class="wrap">
-    <section class="intro"><div><h2>USEC Mid-Atlantic forecast</h2><p>Interactive seven-day spatial outlook · structured forecast grids from Open-Meteo and CMEMS</p></div><div class="stamp" id="stamp">Loading forecast run…</div></section>
-    <section id="cards" class="cards" aria-label="Seven day forecast"></section>
-    <p class="note">Click a day to open the navigable OpenLayers viewer. The map reads JSON grids directly: wind, swell, and waves from Open-Meteo; SST raster plus current vectors from CMEMS. Units are captain-facing: °F, kt, and ft.</p>
+  <header class="top">
+    <h1>⚓ Trip Planner</h1>
+    <nav class="tabs">
+      <a href="/dashboard/">🗺️ Dashboard</a>
+      <a href="/planner/" class="active">⚓ Planner</a>
+    </nav>
+    <span class="account"><a href="/dashboard/account.html">Account</a></span>
+  </header>
+
+  <main>
+    <h2>Where from?</h2>
+    <div class="inlet-picker">
+      <label for="inlet">Home inlet:</label>
+      <select id="inlet">
+        <option value="ocean-city-md">Ocean City Inlet, MD</option>
+        <option value="indian-river-inlet-de">Indian River Inlet, DE</option>
+        <option value="cape-may-nj">Cape May, NJ</option>
+        <option value="lewes-de">Lewes, DE</option>
+        <option value="chesapeake-bay-bt">Chesapeake Bay Bridge Tunnel, VA</option>
+        <option value="solomons-island-md">Solomons Island, MD</option>
+      </select>
+      <span style="color:#7898aa;font-size:11px;">Target area: <strong style="color:#edfaff">Baltimore Canyon line</strong></span>
+    </div>
+
+    <h2>Five-day outlook</h2>
+    <div class="day-strip" id="dayStrip">
+      <div class="day-card" style="color:#7898aa">Loading forecast…</div>
+    </div>
+
+    <div class="row-2col" style="margin-top:24px">
+      <section class="briefing" id="briefing">
+        <h3>Briefing</h3>
+        <p class="briefing-summary" style="color:#7898aa">Loading…</p>
+      </section>
+      <aside class="my-trips">
+        <h2 style="margin:0 0 10px">My Trips</h2>
+        <div id="tripsList" class="my-trips-empty">
+          No saved trips yet. Set a trip above and tap "Save trip" (coming soon).
+        </div>
+      </aside>
+    </div>
   </main>
-  <script src="forecast-planner.js?v=20260820-2"></script>
+
+  <script>
+  // ============================================================
+  // FishEdge Trip Planner — /planner/ peer route
+  // Self-contained rebuild (2026-08-21, major overhaul).
+  //
+  // Mike's directive: 'the planner needs a major overhaul'.
+  //
+  //   Old version: 7-card stub linking to /planner/viewer.html —
+  //   meteorologist view, no GO/NO-GO, no inlet context, no
+  //   decision support.
+  //
+  //   New version: captain-facing trip planner:
+  //     - Day strip with computed GO/CAUTION/NO-GO per day
+  //     - Plain-English briefing card for selected day
+  //     - Inlet picker (saved in localStorage)
+  //     - My Trips sidebar (localStorage-backed)
+  //     - "View on map" link to /planner/viewer.html?date=...
+  //
+  //   Data: forecast.json (17x21 grid, 56 frames, 3-hourly).
+  //   Decision thresholds:
+  //     GO       wind < 15kt AND wave < 3ft
+  //     CAUTION  wind 15-25kt OR wave 3-6ft
+  //     NO-GO    wind > 25kt OR wave > 6ft
+  //
+  //   No dependency on dashboard-planner.js or planner-bootstrap.js —
+  //   both reference globals that aren't actually exposed, so the old
+  //   bootstrap would throw on first mount.
+  // ============================================================
+  const DATA_BASE = 'https://data.fishedge.live/usec_md/briefing/';
+  const INLET_STORAGE_KEY = 'fishedge:saved_inlet';
+  const TRIPS_STORAGE_KEY = 'fishedge:saved_trips';
+
+  let forecast = null;
+  let selectedDayIdx = 0;
+  let dayAggregates = [];
+
+  // ---- helpers ----
+  function decision(maxWindKt, maxWaveFt) {
+    if (maxWindKt > 25 || maxWaveFt > 6) return 'NO-GO';
+    if (maxWindKt >= 15 || maxWaveFt >= 3) return 'CAUTION';
+    return 'GO';
+  }
+  function badgeClass(d) {
+    return { GO: 'go', CAUTION: 'caution', 'NO-GO': 'no-go' }[d] || 'caution';
+  }
+  function dayLabel(dateStr, idx) {
+    const d = new Date(dateStr + 'T12:00:00Z');
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const diff = Math.round((d - today) / 86400000);
+    if (diff === 0) return 'Today';
+    if (diff === 1) return 'Tomorrow';
+    return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  }
+  function windDesc(kt) {
+    if (kt < 5)  return 'calm';
+    if (kt < 10) return 'light';
+    if (kt < 15) return 'gentle';
+    if (kt < 20) return 'moderate';
+    if (kt < 25) return 'fresh';
+    return 'strong';
+  }
+  function waveDesc(ft) {
+    if (ft < 1) return 'glassy';
+    if (ft < 2) return 'flat';
+    if (ft < 4) return 'light chop';
+    if (ft < 6) return 'choppy';
+    return 'rough';
+  }
+  function fmtDate(d) {
+    return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  }
+  function gather(arr2d) {
+    const out = [];
+    for (const row of (arr2d || [])) for (const v of row) if (Number.isFinite(v)) out.push(v);
+    return out;
+  }
+
+  // ---- aggregate forecast frames into per-day stats ----
+  function aggregateByDay() {
+    const days = {};
+    for (const f of forecast.frames || []) {
+      const d = String(f.time || '').slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) continue;
+      if (!days[d]) days[d] = { winds: [], waves: [], swells: [], times: 0 };
+      days[d].winds.push(...gather(f.wind_speed_kn));
+      days[d].waves.push(...gather(f.wave_height_ft));
+      days[d].swells.push(...gather(f.swell_height_ft));
+      days[d].times++;
+    }
+    const sortedDates = Object.keys(days).sort().slice(0, 5);
+    return sortedDates.map(date => {
+      const d = days[date];
+      const maxWind = d.winds.length ? Math.max(...d.winds) : 0;
+      const maxWave = d.waves.length ? Math.max(...d.waves) : 0;
+      const maxSwell = d.swells.length ? Math.max(...d.swells) : 0;
+      return {
+        date,
+        maxWind: Math.round(maxWind),
+        maxWave: +maxWave.toFixed(1),
+        maxSwell: +maxSwell.toFixed(1),
+        decision: decision(maxWind, maxWave),
+      };
+    });
+  }
+
+  // ---- render day strip ----
+  function renderDayStrip() {
+    const html = dayAggregates.map((d, i) => `
+      <button class="day-card ${i === selectedDayIdx ? 'selected' : ''}" data-idx="${i}">
+        <div class="day-when">${dayLabel(d.date, i)}</div>
+        <div class="day-date">${d.date}</div>
+        <div class="day-badge ${badgeClass(d.decision)}">${d.decision}</div>
+        <div class="day-summary">
+          Wind ${d.maxWind}kt · Seas ${d.maxWave}ft${d.maxSwell > 0.5 ? ` · Swell ${d.maxSwell}ft` : ''}
+        </div>
+      </button>
+    `).join('');
+    document.getElementById('dayStrip').innerHTML = html;
+    document.querySelectorAll('.day-card').forEach(el => {
+      el.addEventListener('click', () => {
+        selectedDayIdx = +el.dataset.idx;
+        renderDayStrip();
+        renderBriefing();
+      });
+    });
+  }
+
+  // ---- render briefing card ----
+  function renderBriefing() {
+    const d = dayAggregates[selectedDayIdx];
+    if (!d) {
+      document.getElementById('briefing').innerHTML = '<h3>Briefing</h3><p style="color:#7898aa">No forecast data.</p>';
+      return;
+    }
+    const when = dayLabel(d.date, selectedDayIdx);
+    const advice = d.decision === 'GO' ? 'Good day to fish — go.' :
+                   d.decision === 'CAUTION' ? 'Workable, but watch conditions.' :
+                   'Stay in — conditions exceed safe limits.';
+    document.getElementById('briefing').innerHTML = `
+      <h3>${when} briefing — ${fmtDate(new Date(d.date + 'T12:00:00Z'))}</h3>
+      <p class="briefing-summary">
+        ${windDesc(d.maxWind)} winds to <strong>${d.maxWind}kt</strong>.
+        Seas ${waveDesc(d.maxWave)}, peaking at <strong>${d.maxWave}ft</strong>${d.maxSwell > 0.5 ? `, with swell up to <strong>${d.maxSwell}ft</strong>` : ''}.
+        <br><strong>${advice}</strong>
+      </p>
+      <p class="briefing-detail">
+        <span class="day-badge ${badgeClass(d.decision)}">${d.decision}</span>
+        Wind ${d.maxWind}kt · Seas ${d.maxWave}ft${d.maxSwell > 0.5 ? ` · Swell ${d.maxSwell}ft` : ''}
+      </p>
+      <a class="map-link" href="/planner/viewer.html?date=${d.date}&region=usec_md">View on full map →</a>
+    `;
+  }
+
+  // ---- my trips (localStorage) ----
+  function renderMyTrips() {
+    try {
+      const trips = JSON.parse(localStorage.getItem(TRIPS_STORAGE_KEY) || '[]');
+      const el = document.getElementById('tripsList');
+      if (!trips.length) {
+        el.className = 'my-trips-empty';
+        el.innerHTML = 'No saved trips yet. Saved trips will show up here.';
+        return;
+      }
+      el.className = '';
+      el.innerHTML = trips.map(t => `
+        <div class="my-trip-item">
+          <div style="color:#edfaff;font-weight:600">${t.name || 'Untitled trip'}</div>
+          <div style="color:#91afc0;font-size:11px">${t.inlet_key || 'unknown'} · ${t.departure_iso ? new Date(t.departure_iso).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric'}) : 'no departure'}</div>
+        </div>
+      `).join('');
+    } catch (_) { /* ignore */ }
+  }
+
+  // ---- load forecast + render ----
+  async function loadForecast() {
+    try {
+      const r = await fetch(DATA_BASE + 'forecast.json');
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      forecast = await r.json();
+      dayAggregates = aggregateByDay();
+      if (dayAggregates.length === 0) throw new Error('No daily aggregates');
+      selectedDayIdx = 0;
+      renderDayStrip();
+      renderBriefing();
+    } catch (e) {
+      document.getElementById('dayStrip').innerHTML = `<div class="day-card" style="color:#ff8080;border-color:#9b1c1c">Failed to load forecast: ${e.message}</div>`;
+    }
+  }
+
+  // ---- inlet picker (saved in localStorage) ----
+  const inletSelect = document.getElementById('inlet');
+  try {
+    const saved = localStorage.getItem(INLET_STORAGE_KEY);
+    if (saved) inletSelect.value = saved;
+  } catch (_) { /* ignore */ }
+  inletSelect.addEventListener('change', () => {
+    try { localStorage.setItem(INLET_STORAGE_KEY, inletSelect.value); } catch (_) { /* ignore */ }
+  });
+
+  renderMyTrips();
+  loadForecast();
+  </script>
 </body>
 </html>
