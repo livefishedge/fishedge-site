@@ -1414,7 +1414,7 @@
       <div id="combined-sst-scan-time" style="font-size:11px;color:#ff8c00;margin-left:28px;margin-bottom:8px;"></div>
       <div class="combined-product-row">
         <label class="combined-toggle">
-          <input type="checkbox" id="chk-combined-front" checked>
+          <input type="checkbox" id="chk-combined-front">
           <span class="box"></span>
           <span class="combined-dot dot-front"></span>
           <span>Thermal Fronts</span>
@@ -1433,7 +1433,7 @@
       </select>
       <div id="combined-thermal-scan-time" style="font-size:11px;color:#ff6666;margin-left:28px;margin-bottom:4px;"></div>
       <label class="combined-toggle">
-        <input type="checkbox" id="chk-combined-uv" checked>
+        <input type="checkbox" id="chk-combined-uv">
         <span class="box"></span>
         <span class="combined-dot dot-uv"></span>
         <span>Currents</span>
@@ -1458,7 +1458,7 @@
       </div>
       <div class="combined-product-row">
         <label class="combined-toggle">
-          <input type="checkbox" id="chk-combined-sla" checked>
+          <input type="checkbox" id="chk-combined-sla">
           <span class="box"></span>
           <span class="combined-dot dot-front"></span>
           <span>Sea Level Anomaly</span>
@@ -1479,7 +1479,7 @@
       </label>
       <div class="combined-product-row">
         <label class="combined-toggle">
-          <input type="checkbox" id="chk-combined-bathy" checked>
+        <input type="checkbox" id="chk-combined-bathy">
           <span class="box"></span>
           <span class="combined-dot dot-bathy"></span>
           <span>Bathymetry</span>
@@ -3424,7 +3424,10 @@ if (chkUv) chkUv.addEventListener("change", async e => {
   }
 });
 
-if (chkBathy) chkBathy.addEventListener("change", e => {
+if (chkBathy) chkBathy.addEventListener("change", async e => {
+  if (e.target.checked && window._combinedMap) {
+    await ensureCombinedBathyLayer(window._combinedMap);
+  }
   if (window._combinedBathyLayer) window._combinedBathyLayer.setVisible(e.target.checked);
   const legend = document.getElementById("combined-bathy-legend");
   if (legend) legend.style.display = e.target.checked ? "" : "none";
@@ -3472,7 +3475,10 @@ if (chkSla) chkSla.addEventListener("change", async e => {
     setContourLabelsVisible(window._combinedSlaContourLayer, true, "__slaLabelOverlays");
   }
 });
-if (chkFront) chkFront.addEventListener("change", e => {
+if (chkFront) chkFront.addEventListener("change", async e => {
+  if (e.target.checked && window._combinedMap) {
+    await ensureCombinedFrontLayers(window._combinedMap);
+  }
   if (window._combinedFrontDensityLayer) window._combinedFrontDensityLayer.setVisible(e.target.checked);
   if (window._combinedFrontLineLayer) window._combinedFrontLineLayer.setVisible(e.target.checked);
 });
@@ -4735,12 +4741,58 @@ function frontLabelTrace(frontData, label) {
 
 /* ===== Bathymetry (.nc) ===== */
 /* ===== Improved Bathymetry Loader ===== */
+let __fishedgeDataWorker = null;
+let __fishedgeWorkerSeq = 0;
+const __fishedgeWorkerPending = new Map();
+
+function getFishedgeDataWorker() {
+  if (__fishedgeDataWorker || typeof Worker === "undefined") return __fishedgeDataWorker;
+  try {
+    __fishedgeDataWorker = new Worker(new URL("data-worker.js", document.baseURI));
+    __fishedgeDataWorker.onmessage = event => {
+      const { id, ok, result, error } = event.data || {};
+      const pending = __fishedgeWorkerPending.get(id);
+      if (!pending) return;
+      __fishedgeWorkerPending.delete(id);
+      if (ok) pending.resolve(result);
+      else pending.reject(new Error(error || "Data worker failed"));
+    };
+    __fishedgeDataWorker.onerror = () => {
+      for (const pending of __fishedgeWorkerPending.values()) pending.reject(new Error("Data worker unavailable"));
+      __fishedgeWorkerPending.clear();
+      __fishedgeDataWorker?.terminate();
+      __fishedgeDataWorker = null;
+    };
+  } catch (_) { __fishedgeDataWorker = null; }
+  return __fishedgeDataWorker;
+}
+
+function runFishedgeWorker(message) {
+  const worker = getFishedgeDataWorker();
+  if (!worker) return Promise.reject(new Error("Web Worker unavailable"));
+  const id = ++__fishedgeWorkerSeq;
+  return new Promise((resolve, reject) => {
+    __fishedgeWorkerPending.set(id, { resolve, reject });
+    worker.postMessage({ id, ...message });
+  });
+}
+
+async function fetchJson(url, options = {}) {
+  try {
+    return await runFishedgeWorker({ type: "fetch-json", url, cache: options.cache || "default" });
+  } catch (workerError) {
+    // Safari/private browsing can block Workers. Preserve functionality with
+    // a main-thread fallback rather than making a layer unavailable.
+    const res = await fetch(url, options);
+    if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+    return res.json();
+  }
+}
+
 async function loadBathymetryJson(url) {
   if (gridCache.__bathy_json) return gridCache.__bathy_json;
 
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Failed to load bathy JSON: ${url}`);
-  const data = await res.json();
+  const data = await fetchJson(url);
 
   // Validate structure
   if (!data.xAxis || !data.yAxis || !data.depth) {
@@ -6364,65 +6416,31 @@ async function renderCombinedMode() {
     if (sstScanTimeDiv) sstScanTimeDiv.textContent = "";
   }
 
-  // ── Layer: Bathymetry contours ───────────────────────────────────────
-  // Bathymetry is an optional product. A missing/temporarily unavailable
-  // regional artifact must not abort the rest of combined-mode startup;
-  // previously this rejection stopped UV and thermal-front layers from
-  // being created as well.
-  let bathyData = null;
-  try {
-    bathyData = await loadBathymetryJson(BATHY_JSON_URL);
-    const bathyGridInfo = { xAxis: bathyData.xAxis, yAxis: bathyData.yAxis, nx: bathyData.xAxis.length, ny: bathyData.yAxis.length };
-    // The OFM foreground keeps land labels/lines above data but intentionally
-    // omits land fills. Add the bathymetry-derived opaque mask here so contour
-    // lines and rasters cannot paint over land in the combined dashboard.
-    try {
-      const combinedLandCanvas = makeMobileLandCanvas(bathyData);
-      if (combinedLandCanvas) {
-        const combinedLandSource = canvasToOlSource(combinedLandCanvas, frameExtentFromGrid({ xAxis: bathyData.xAxis, yAxis: bathyData.yAxis }));
-        const combinedLandLayer = new ol.layer.Image({ source: combinedLandSource, zIndex: 20 });
-        map.addLayer(combinedLandLayer);
-        window._combinedLandLayer = combinedLandLayer;
-      }
-    } catch (landMaskError) {
-      // A land-mask rendering failure must never prevent product layers from
-      // loading; the OFM land foreground remains available as a fallback.
-      console.warn("[combined] land mask unavailable; continuing with data layers", landMaskError);
-    }
-    const bathyLayer = buildBathyContourLayer(bathyData, bathyGridInfo, map);
-    if (bathyLayer) { map.addLayer(bathyLayer); window._combinedBathyLayer = bathyLayer; }
-  } catch (bathyError) {
-    const bathyLegend = document.getElementById("combined-bathy-legend");
-    if (bathyLegend) bathyLegend.textContent = "Bathymetry unavailable";
-    console.warn("[combined] bathymetry unavailable; continuing with other layers", BATHY_JSON_URL, bathyError);
+  // Bathymetry is opt-in in combined mode. Loading the 8 MB grid and
+  // preparing contours during startup was one of the largest main-thread
+  // stalls on mobile.
+  if (document.getElementById("chk-combined-bathy")?.checked) {
+    await ensureCombinedBathyLayer(map);
   }
 
   // ── Layer: UV arrows ─────────────────────────────────────────────────
   // v4.2: use the dedicated rebuild helper so the layer picks the
   // NEWEST UV frame (not the oldest) and refreshes on demand.
   const uvHoursSel = document.getElementById("combined-uv-hours");
-  await rebuildCombinedUvLayer(map, { hoursMode: uvHoursSel?.value || "latest" });
+  if (document.getElementById("chk-combined-uv")?.checked) {
+    await rebuildCombinedUvLayer(map, { hoursMode: uvHoursSel?.value || "latest" });
+  }
   // SLA is deliberately opt-in so the production dashboard's initial
   // appearance and network behavior remain unchanged.
   if (document.getElementById("chk-combined-sla")?.checked) {
     await rebuildCombinedSlaLayer(map);
   }
 
-  // ── Layer: Thermal fronts — fixed-pixel point symbols
-  await thermalLoadData();
-  const thermalItems = thermalFrontState.frameData.length
-    ? [thermalFrontState.frameData[thermalFrontState.frameData.length - 1]]
-    : [];
-  window._combinedFrontData = thermalItems[0]?.data || null;
-  window._combinedFrontGrid = window._combinedFrontData
-    ? await loadGridForVar("thermal_fronts", window._combinedFrontData).catch(() => null)
-    : null;
-  const thermalScanTimeDiv = document.getElementById("combined-thermal-scan-time");
-  const initialThermalHours = parseInt(document.getElementById("combined-thermal-hours")?.value || "24", 10);
-  const initialThermal = buildThermalHoursComposite(map, initialThermalHours);
-  if (initialThermal.pointLayer) { map.addLayer(initialThermal.pointLayer); window._combinedFrontLineLayer = initialThermal.pointLayer; }
-  if (initialThermal.densityLayer) { map.addLayer(initialThermal.densityLayer); window._combinedFrontDensityLayer = initialThermal.densityLayer; }
-  if (thermalScanTimeDiv) thermalScanTimeDiv.textContent = initialThermal.scanTime || "";
+  // Thermal fronts are also opt-in. Their rolling frame history can be much
+  // larger than the single frame ultimately displayed in combined mode.
+  if (document.getElementById("chk-combined-front")?.checked) {
+    await ensureCombinedFrontLayers(map);
+  }
 
   // ── Cursor circle (matches mobile/thermal-fronts behavior) ───────────
   const cursorFeature = new ol.Feature({
@@ -6547,6 +6565,65 @@ async function renderCombinedMode() {
   return true;
 }
 
+async function ensureCombinedBathyLayer(map) {
+  if (!map || window._combinedBathyLayer || window._combinedBathyLoading) return window._combinedBathyLayer;
+  window._combinedBathyLoading = true;
+  try {
+    const bathyData = await loadBathymetryJson(BATHY_JSON_URL);
+    const bathyGridInfo = { xAxis: bathyData.xAxis, yAxis: bathyData.yAxis, nx: bathyData.xAxis.length, ny: bathyData.yAxis.length };
+    try {
+      const combinedLandCanvas = makeMobileLandCanvas(bathyData);
+      if (combinedLandCanvas) {
+        const combinedLandSource = canvasToOlSource(combinedLandCanvas, frameExtentFromGrid({ xAxis: bathyData.xAxis, yAxis: bathyData.yAxis }));
+        const combinedLandLayer = new ol.layer.Image({ source: combinedLandSource, zIndex: 20 });
+        map.addLayer(combinedLandLayer);
+        window._combinedLandLayer = combinedLandLayer;
+      }
+    } catch (landMaskError) {
+      console.warn("[combined] land mask unavailable; continuing with data layers", landMaskError);
+    }
+    const bathyLayer = buildBathyContourLayer(bathyData, bathyGridInfo, map);
+    if (bathyLayer) {
+      bathyLayer.setVisible(Boolean(document.getElementById("chk-combined-bathy")?.checked));
+      map.addLayer(bathyLayer);
+      window._combinedBathyLayer = bathyLayer;
+    }
+    return bathyLayer;
+  } catch (bathyError) {
+    const bathyLegend = document.getElementById("combined-bathy-legend");
+    if (bathyLegend) bathyLegend.textContent = "Bathymetry unavailable";
+    console.warn("[combined] bathymetry unavailable; continuing with other layers", BATHY_JSON_URL, bathyError);
+    return null;
+  } finally {
+    window._combinedBathyLoading = false;
+  }
+}
+
+async function ensureCombinedFrontLayers(map) {
+  if (!map || window._combinedFrontLoading) return window._combinedFrontLineLayer;
+  if (window._combinedFrontLineLayer || window._combinedFrontDensityLayer) return window._combinedFrontLineLayer;
+  window._combinedFrontLoading = true;
+  try {
+    await thermalLoadData();
+    const thermalItems = thermalFrontState.frameData.length
+      ? [thermalFrontState.frameData[thermalFrontState.frameData.length - 1]]
+      : [];
+    window._combinedFrontData = thermalItems[0]?.data || null;
+    window._combinedFrontGrid = window._combinedFrontData
+      ? await loadGridForVar("thermal_fronts", window._combinedFrontData).catch(() => null)
+      : null;
+    const thermalScanTimeDiv = document.getElementById("combined-thermal-scan-time");
+    const initialThermalHours = parseInt(document.getElementById("combined-thermal-hours")?.value || "24", 10);
+    const initialThermal = buildThermalHoursComposite(map, initialThermalHours);
+    if (initialThermal.pointLayer) { map.addLayer(initialThermal.pointLayer); window._combinedFrontLineLayer = initialThermal.pointLayer; }
+    if (initialThermal.densityLayer) { map.addLayer(initialThermal.densityLayer); window._combinedFrontDensityLayer = initialThermal.densityLayer; }
+    if (thermalScanTimeDiv) thermalScanTimeDiv.textContent = initialThermal.scanTime || "";
+    return initialThermal.pointLayer || null;
+  } finally {
+    window._combinedFrontLoading = false;
+  }
+}
+
 // ── Helpers for combined mode ──────────────────────────────────────────────
 
 function buildBathyContourLayer(bathyData, gridInfo, map) {
@@ -6564,6 +6641,14 @@ function buildBathyContourLayer(bathyData, gridInfo, map) {
     nx: bathyData.xAxis.length, ny: bathyData.yAxis.length
   };
   window._bathyContourSource = source;
+  window.__bathyWorkerReady = false;
+  runFishedgeWorker({
+    type: "init-bathy", key: "combined-bathy",
+    xAxis: bathyData.xAxis, yAxis: bathyData.yAxis, depth: bathyData.depth
+  }).then(() => {
+    window.__bathyWorkerReady = true;
+    updateBathyContoursForMap(map);
+  }).catch(() => {});
   updateBathyContoursForMap(map);
   window._combinedMap?.on("moveend", () => scheduleCombinedBathyContourUpdate(window._combinedMap));
   return layer;
@@ -6579,6 +6664,40 @@ function scheduleCombinedBathyContourUpdate(map) {
 }
 
 function updateBathyContoursForMap(map) {
+  if (window.__bathyWorkerReady) {
+    const bd = window._bathyData;
+    const source = window._bathyContourSource;
+    if (!bd || !source || !map) return;
+    const viewExtent = map.getView().calculateExtent(map.getSize());
+    const viewProjCode = map.getView().getProjection().getCode();
+    const extent = viewProjCode === "EPSG:4326"
+      ? viewExtent
+      : ol.proj.transformExtent(viewExtent, viewProjCode, "EPSG:4326");
+    const maxW = 400, maxH = 600;
+    const sx = Math.max(1, Math.floor(bd.nx / maxW));
+    const sy = Math.max(1, Math.floor(bd.ny / maxH));
+    const maxDepth = depthMaxInExtent(bd, extent, sx, sy);
+    const levels = generateContourLevels(maxDepth);
+    const request = (window.__bathyContourRequest || 0) + 1;
+    window.__bathyContourRequest = request;
+    runFishedgeWorker({ type: "contours", key: "combined-bathy", sx, sy, extent, levels })
+      .then(segments => {
+        if (request !== window.__bathyContourRequest) return;
+        source.clear();
+        window._combinedBathyLevels = levels;
+        updateCombinedBathyLegend(levels);
+        for (const item of segments) {
+          const feat = new ol.Feature({ geometry: new ol.geom.LineString(item.segment), depth: item.level });
+          feat.getGeometry().transform("EPSG:4326", "EPSG:3857");
+          source.addFeature(feat);
+        }
+      }).catch(() => updateBathyContoursSync(map));
+    return;
+  }
+  updateBathyContoursSync(map);
+}
+
+function updateBathyContoursSync(map) {
   const bd = window._bathyData;
   const source = window._bathyContourSource;
   if (!bd || !source || !map) return;
@@ -9537,8 +9656,11 @@ async function thermalLoadData() {
     const latest = thermalFrontState.frames.at(-1)?.t;
     if (latest) thermalFrontState.frames = thermalFrontState.frames.filter(f => latest - f.t <= 21 * 864e5);
     thermalFrontState.frameData = await Promise.all(thermalFrontState.frames.map(async f => {
-      const res = await fetch(framePathOf(f) + "?t=" + Date.now());
-      return { meta: f, t: f.t, data: res.ok ? await res.json() : { features: [] } };
+      try {
+        return { meta: f, t: f.t, data: await fetchJson(framePathOf(f)) };
+      } catch (_) {
+        return { meta: f, t: f.t, data: { features: [] } };
+      }
     }));
     thermalFrontState.frameData = thermalFrontState.frameData.filter(item => Array.isArray(item.data?.features) && item.data.features.length > 0);
     thermalBuildDailyFrames();
@@ -9844,7 +9966,7 @@ function installRegionSelector(){
 async function loadIndex() {
   // 1. Fetch selected region index ONCE with a cache-buster
   const indexUrl = REGIONS[REGION_ID]?.index || `index-${REGION_ID}.json`;
-  const res = await fetch(indexUrl + "?t=" + Date.now());
+  const res = await fetch(indexUrl, { cache: "no-store" });
   if (!res.ok) throw new Error(`Failed to load ${indexUrl}`);
   const data = await res.json();
 
@@ -10053,12 +10175,9 @@ async function fetchFrameData(varKey, frameMeta, options = {}) {
     if (!p) continue;
     lastPath = p;
     try {
-      const res = await fetch(p + (p.includes('?') ? '&' : '?') + 't=' + Date.now());
-      if (res.ok) {
-        const data = await res.json();
-        data.__resolution = resolution;
-        return data;
-      }
+      const data = await fetchJson(p);
+      data.__resolution = resolution;
+      return data;
     } catch (_) {}
   }
   if (resolution === "coarse") {
@@ -10430,7 +10549,7 @@ async function loadCaptainBriefing() {
   if (!panel || !status || !plansDiv || !healthDiv || !fullDiv) return;
 
   try {
-    const res = await fetch(`https://data.fishedge.live/${REGION_ID}/briefing/latest.json?t=${Date.now()}`);
+    const res = await fetch(`https://data.fishedge.live/${REGION_ID}/briefing/latest.json`, { cache: "no-store" });
     if (!res.ok) throw new Error(`No briefing artifact for ${REGION_ID}`);
     const briefing = await res.json();
     const when = briefing.generated_at ? new Date(briefing.generated_at).toLocaleString() : "unknown";
@@ -10664,7 +10783,7 @@ async function pollForUpdates() {
   try {
     // Ping index.json with a random string to force GitHub to give us the newest version
     const regionIndexUrl = REGIONS[REGION_ID]?.index || `index-${REGION_ID}.json`;
-    const res = await fetch(regionIndexUrl + "?nocache=" + Date.now());
+    const res = await fetch(regionIndexUrl, { cache: "no-store" });
     if (!res.ok) throw new Error(`Failed to poll ${regionIndexUrl}`);
     const data = await res.json();
 
