@@ -266,7 +266,6 @@
   const status = document.getElementById('status');
   const frameTime = document.getElementById('frameTime');
   const slider = document.getElementById('frame');
-  const animate = document.getElementById('animate');
   const checks = {
     wind:   document.getElementById('wind'),
     waves:  document.getElementById('waves'),
@@ -584,7 +583,7 @@
 
   // -------- main draw loop --------
   function draw(now) {
-    if (animate.checked && now - lastFrame > 900) {
+    if (now - lastFrame > 900) {
       fi = (fi + 1) % Math.max(1, frames.length);
       slider.value = fi;
       lastFrame = now;
@@ -616,7 +615,6 @@
     });
   });
   Object.values(checks).forEach(x => x.addEventListener('change', choose));
-  animate.addEventListener('change', choose);
   slider.addEventListener('input', () => { fi = +slider.value; lastFrame = performance.now(); });
 
   // -------- load JSON, then start --------
