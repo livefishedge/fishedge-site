@@ -1,1 +1,5 @@
+# /planner/* → /dashboard/trip-planner/planner/* (proxy, keeps /planner/ working)
+/planner/* /dashboard/trip-planner/planner/:splat 200
+
+# Legacy redirect
 /subsurface-fronts/* /
