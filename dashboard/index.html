@@ -1868,16 +1868,13 @@ async function initializeData() {
 //      granted), tolerates the missing-table case by trusting the profile.
 //   4. Calls setActiveRegion() + initializeData() if the active region
 //      differs from the current REGION_ID.
-//   5. PATCHes profiles.selected_region ONLY when the user explicitly chose
-//      a region (URL or saved profile). NEVER PATCH on entitlement-gated
-//      fallback — that would silently overwrite a saved preference.
+//   5. Never writes profiles.selected_region. Dashboard URL parameters and
+//      startup resolution are read-only; saved preferences can only be
+//      changed through an explicit account/profile action.
 //   6. Stores the resolved region in window.__applyAuthRegionLastResult so
 //      the head IIFE can pass it to __profileReadyResolve.
 // =========================================================================
 window.__applyAuthRegion = function(profiles, granted, session, userId) {
-  const SUPABASE_URL = 'https://wfdpfeptmyiqifgwqpzu.supabase.co';
-  const SUPABASE_ANON_KEY = 'sb_publishable_W6wnJkT70jb69JUZgM1dow_nabPZycR';
-
   const profile = (profiles && profiles.length > 0) ? profiles[0] : null;
 
   // Normalize `granted` defensively. If the `user_regions` table is
@@ -1920,26 +1917,6 @@ window.__applyAuthRegion = function(profiles, granted, session, userId) {
         window.__dashboardRegionChangePromise = initializeData();
       }
     }
-  }
-
-  // Persist active region to profile ONLY when the user explicitly chose
-  // it (URL ?region= or the saved profile preference). Never PATCH on
-  // entitlement-gated fallback — that would silently overwrite the saved
-  // preference the moment it drifted from grants.
-  const fromExplicitUserIntent =
-    (urlRegion && activeRegion === urlRegion) ||
-    (profile && profile.selected_region && activeRegion === profile.selected_region);
-  if (fromExplicitUserIntent && activeRegion && profile && profile.selected_region !== activeRegion) {
-    fetch(`${SUPABASE_URL}/rest/v1/profiles?user_id=eq.${userId}`, {
-      method: 'PATCH',
-      headers: {
-        'apikey': SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${session.access_token}`,
-        'Content-Type': 'application/json',
-        'Prefer': 'return=minimal',
-      },
-      body: JSON.stringify({ selected_region: activeRegion }),
-    }).catch(() => {});
   }
 
   if (profile && typeof posthog !== 'undefined') {
