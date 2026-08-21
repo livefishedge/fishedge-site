@@ -451,11 +451,11 @@
     // 1) streamlines — dense seed grid on the hires grid, speed-tinted alpha
     for (let sy = 2; sy < lats.length - 2; sy += 2) {
       for (let sx = 2; sx < lons.length - 2; sx += 4) {
-        const path = traceWind(hires, f, lons[sx], lats[sy]);
+        const path = traceWind(hires, hires, lons[sx], lats[sy]);
         if (path.length < 3) continue;
         // mid-path speed → opacity (calm 0.18, strong 0.63)
         const mid = path[Math.floor(path.length / 2)];
-        const [u, v] = windAt(hires, f, mid[0], mid[1]);
+        const [u, v] = windAt(hires, hires, mid[0], mid[1]);
         const sp = Math.hypot(u, v);
         const t = Math.min(1, sp / 35);
         const alpha = 0.18 + 0.45 * t;
@@ -482,7 +482,7 @@
     for (let i = 0; i < seedCount; i++) {
       const fy = (i * 7) % Math.max(1, lats.length - 4) + 2;
       const fx = (i * 11) % Math.max(1, lons.length - 4) + 2;
-      const path = traceWind(hires, f, lons[fx], lats[fy]);
+      const path = traceWind(hires, hires, lons[fx], lats[fy]);
       if (path.length < 3) continue;
       const phase = (cycle + i * 0.041) % 1;
       let fade = 1;
@@ -491,7 +491,7 @@
       const at = Math.floor(phase * (path.length - 1));
       const p = pix(path[at][0], path[at][1]);
       if (!p) continue;
-      const [u, v] = windAt(hires, f, path[at][0], path[at][1]);
+      const [u, v] = windAt(hires, hires, path[at][0], path[at][1]);
       const sp = Math.hypot(u, v);
       const t = Math.min(1, sp / 30);
       const r = Math.round(255 - 70 * t);
