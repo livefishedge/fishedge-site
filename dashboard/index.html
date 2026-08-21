@@ -21,7 +21,6 @@
       }).catch(() => {});
     })();
   </script>
-  <script defer src="https://cdn.plot.ly/plotly-2.34.0.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/ol@10.4.0/dist/ol.js"></script>
 <script>
 /* Instrumentation shim for locate-me.js (same pattern as the dashboard).
@@ -10336,6 +10335,7 @@ async function showFrame() {
   const e = new Error();
   const callers = e.stack?.split("\n").slice(1,4).join(" | ") || "";
   console.log("[showFrame] ENTRY currentVar:", currentVar, "IS_TOUCH:", IS_TOUCH, "callers:", callers);
+  if (currentVar !== "combined") await ensurePlotly();
   console.log("[showFrame] ENTRY timestamp:", Date.now());
   updateReadoutPosition();
 
@@ -10662,6 +10662,21 @@ async function loadCaptainBriefing() {
 })();
 
 /* ========================= INIT ========================= */
+let __plotlyLoadPromise = null;
+function ensurePlotly() {
+  if (window.Plotly) return Promise.resolve(window.Plotly);
+  if (__plotlyLoadPromise) return __plotlyLoadPromise;
+  __plotlyLoadPromise = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "https://cdn.plot.ly/plotly-2.34.0.min.js";
+    script.async = true;
+    script.onload = () => resolve(window.Plotly);
+    script.onerror = () => reject(new Error("Plotly failed to load"));
+    document.head.appendChild(script);
+  });
+  return __plotlyLoadPromise;
+}
+
 async function initDashboard() {
   try {
     installRegionSelector();
@@ -10696,7 +10711,10 @@ async function initDashboard() {
     syncTimeControls();
     syncArrowLegend();
     syncControlsHeight();
-    if (currentVar === "thermal_fronts" || framesByVar[currentVar]?.length) await showFrame();
+    if (currentVar !== "combined" && (currentVar === "thermal_fronts" || framesByVar[currentVar]?.length)) {
+      await ensurePlotly();
+      await showFrame();
+    }
     else { }
     // Apply combined-mode body class at startup if already on combined
     if (currentVar === "combined") document.body.classList.add("combined-mode");
