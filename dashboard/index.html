@@ -5627,7 +5627,7 @@ function updateBathyContours(map, bd, layer) {
 
   const contourZoom = map.getView().getZoom() || 0;
   const maxW = contourZoom >= 9 ? 1920 : contourZoom >= 7 ? 800 : 800;
-  const maxH = contourZoom >= 9 ? 1200 : contourZoom >= 7 ? 1200 : 1200;
+  const maxH = contourZoom >= 9 ? 900 : contourZoom >= 7 ? 600 : 1200;
   const sx = Math.max(1, Math.floor(bd.nx / maxW));
   const sy = Math.max(1, Math.floor(bd.ny / maxH));
 
@@ -6748,7 +6748,7 @@ function updateBathyContoursForMap(map) {
       : ol.proj.transformExtent(viewExtent, viewProjCode, "EPSG:4326");
     const contourZoom = map.getView().getZoom() || 0;
     const maxW = contourZoom >= 9 ? 1920 : contourZoom >= 7 ? 800 : 400;
-    const maxH = contourZoom >= 9 ? 1200 : contourZoom >= 7 ? 1200 : 600;
+    const maxH = contourZoom >= 9 ? 900 : contourZoom >= 7 ? 600 : 600;
     const sx = Math.max(1, Math.floor(bd.nx / maxW));
     const sy = Math.max(1, Math.floor(bd.ny / maxH));
     const maxDepth = depthMaxInExtent(bd, extent, sx, sy);
@@ -6861,7 +6861,7 @@ function updateBathyContoursSync(map) {
   const [vx0, vy0, vx1, vy1] = extent;
   const contourZoom = map.getView().getZoom() || 0;
   const maxW = contourZoom >= 9 ? 1920 : contourZoom >= 7 ? 800 : 400;
-  const maxH = contourZoom >= 9 ? 1200 : contourZoom >= 7 ? 1200 : 600;
+  const maxH = contourZoom >= 9 ? 900 : contourZoom >= 7 ? 600 : 600;
   const sx = Math.max(1, Math.floor(bd.nx / maxW));
   const sy = Math.max(1, Math.floor(bd.ny / maxH));
   const maxDepth = depthMaxInExtent(bd, extent, sx, sy);
