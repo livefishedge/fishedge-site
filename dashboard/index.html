@@ -6364,26 +6364,37 @@ async function renderCombinedMode() {
   }
 
   // ── Layer: Bathymetry contours ───────────────────────────────────────
-  const bathyData = await loadBathymetryJson(BATHY_JSON_URL);
-  const bathyGridInfo = { xAxis: bathyData.xAxis, yAxis: bathyData.yAxis, nx: bathyData.xAxis.length, ny: bathyData.yAxis.length };
-  // The OFM foreground keeps land labels/lines above data but intentionally
-  // omits land fills. Add the bathymetry-derived opaque mask here so contour
-  // lines and rasters cannot paint over land in the combined dashboard.
+  // Bathymetry is an optional product. A missing/temporarily unavailable
+  // regional artifact must not abort the rest of combined-mode startup;
+  // previously this rejection stopped UV and thermal-front layers from
+  // being created as well.
+  let bathyData = null;
   try {
-    const combinedLandCanvas = makeMobileLandCanvas(bathyData);
-    if (combinedLandCanvas) {
-      const combinedLandSource = canvasToOlSource(combinedLandCanvas, frameExtentFromGrid({ xAxis: bathyData.xAxis, yAxis: bathyData.yAxis }));
-      const combinedLandLayer = new ol.layer.Image({ source: combinedLandSource, zIndex: 20 });
-      map.addLayer(combinedLandLayer);
-      window._combinedLandLayer = combinedLandLayer;
+    bathyData = await loadBathymetryJson(BATHY_JSON_URL);
+    const bathyGridInfo = { xAxis: bathyData.xAxis, yAxis: bathyData.yAxis, nx: bathyData.xAxis.length, ny: bathyData.yAxis.length };
+    // The OFM foreground keeps land labels/lines above data but intentionally
+    // omits land fills. Add the bathymetry-derived opaque mask here so contour
+    // lines and rasters cannot paint over land in the combined dashboard.
+    try {
+      const combinedLandCanvas = makeMobileLandCanvas(bathyData);
+      if (combinedLandCanvas) {
+        const combinedLandSource = canvasToOlSource(combinedLandCanvas, frameExtentFromGrid({ xAxis: bathyData.xAxis, yAxis: bathyData.yAxis }));
+        const combinedLandLayer = new ol.layer.Image({ source: combinedLandSource, zIndex: 20 });
+        map.addLayer(combinedLandLayer);
+        window._combinedLandLayer = combinedLandLayer;
+      }
+    } catch (landMaskError) {
+      // A land-mask rendering failure must never prevent product layers from
+      // loading; the OFM land foreground remains available as a fallback.
+      console.warn("[combined] land mask unavailable; continuing with data layers", landMaskError);
     }
-  } catch (landMaskError) {
-    // A land-mask rendering failure must never prevent product layers from
-    // loading; the OFM land foreground remains available as a fallback.
-    console.warn("[combined] land mask unavailable; continuing with data layers", landMaskError);
+    const bathyLayer = buildBathyContourLayer(bathyData, bathyGridInfo, map);
+    if (bathyLayer) { map.addLayer(bathyLayer); window._combinedBathyLayer = bathyLayer; }
+  } catch (bathyError) {
+    const bathyLegend = document.getElementById("combined-bathy-legend");
+    if (bathyLegend) bathyLegend.textContent = "Bathymetry unavailable";
+    console.warn("[combined] bathymetry unavailable; continuing with other layers", BATHY_JSON_URL, bathyError);
   }
-  const bathyLayer = buildBathyContourLayer(bathyData, bathyGridInfo, map);
-  if (bathyLayer) { map.addLayer(bathyLayer); window._combinedBathyLayer = bathyLayer; }
 
   // ── Layer: UV arrows ─────────────────────────────────────────────────
   // v4.2: use the dedicated rebuild helper so the layer picks the
