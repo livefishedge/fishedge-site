@@ -43,11 +43,9 @@ function contourSegments(grid, level, sx, sy, extent) {
       }
       if (crossings.length >= 2) {
         const pair = crossings.slice(0, 2);
-        const d0 = Math.hypot(pair[0][0] - vx0, pair[0][1] - vy0);
-        const d1 = Math.hypot(pair[1][0] - vx0, pair[1][1] - vy0);
-        if (d0 > 0.01 && d1 > 0.01 && Math.hypot(pair[0][0] - pair[1][0], pair[0][1] - pair[1][1]) > 0.01) {
-          segments.push(pair);
-        }
+        // Do not discard short segments. At higher zoom/detail levels a
+        // valid cell edge is naturally smaller than 0.01 degrees.
+        if (pair[0] && pair[1]) segments.push(pair);
       }
     }
   }
