@@ -291,6 +291,23 @@
   const sstLayer = map.getLayers().item(3);
   let om = null, cm = null, frames = [], fi = 0, lastFrame = performance.now();
 
+  // -------- hint.fm-style wind particles (persistent state) --------
+  // Mike (2026-08-21 16:58 ET, after sending the wind-viz research paper):
+  // replace the previous fade-along-static-pathline particles with proper
+  // hint.fm/wind advecting streamlets — each particle is moved each frame by
+  // Euler integration, leaves a short line segment between old/new positions,
+  // and respawns on age-out or bbox-exit (stochastic re-seeding). State
+  // stays across frames so each particle leaves a comet tail.
+  const particles = [];
+  for (let i = 0; i < 300; i++) {
+    particles.push({
+      lon: bbox[0] + Math.random() * (bbox[2] - bbox[0]),
+      lat: bbox[1] + Math.random() * (bbox[3] - bbox[1]),
+      age: Math.random() * 80,
+      maxAge: 80 + Math.random() * 60,
+    });
+  }
+
   function resize() {
     const r = document.getElementById('map').getBoundingClientRect();
     const d = devicePixelRatio || 1;
@@ -509,33 +526,60 @@
       }
     }
 
-    // 2) flowing particles — 180 small bright dots on the hires grid,
-    // fade in/out along path, speed-tinted (calm = white, strong = pale blue)
-    const seedCount = 180;
-    const cycle = (performance.now() / 2200) % 1; // ~2.2s per cycle
-    for (let i = 0; i < seedCount; i++) {
-      const fy = (i * 7) % Math.max(1, lats.length - 4) + 2;
-      const fx = (i * 11) % Math.max(1, lons.length - 4) + 2;
-      const path = traceWind(hires, hires, lons[fx], lats[fy], true);
-      if (path.length < 3) continue;
-      const phase = (cycle + i * 0.041) % 1;
-      let fade = 1;
-      if (phase < 0.18)      fade = phase / 0.18;
-      else if (phase > 0.82) fade = (1 - phase) / 0.18;
-      const at = Math.floor(phase * (path.length - 1));
-      const p = pix(path[at][0], path[at][1]);
-      if (!p) continue;
-      const [u, v] = windAt(hires, hires, path[at][0], path[at][1]);
+    // 2) trail decay — slightly fade canvas so old particle tails leave
+    // comet trails. Drawn BEFORE the new particles, AFTER the streamlines,
+    // so the streamlines stay sharp but particle tails accumulate and fade.
+    ctx.fillStyle = 'rgba(7, 17, 29, 0.06)';
+    ctx.globalAlpha = 1;
+    ctx.fillRect(0, 0, canvas.width / devicePixelRatio, canvas.height / devicePixelRatio);
+
+    // 3) flowing particles — 300 hint.fm-style advecting streamlets.
+    // Each particle is moved each frame by Euler integration of the local
+    // (u,v) wind vector at its position (Mercator-corrected: lon step
+    // scaled by 1/cos(lat)). A short line segment between the old and new
+    // pixel positions gives the comet-tail look. Stochastic respawn on
+    // age-out or bbox-exit keeps density uniform.
+    for (const p of particles) {
+      if (p.age >= p.maxAge ||
+          p.lon < bbox[0] || p.lon > bbox[2] ||
+          p.lat < bbox[1] || p.lat > bbox[3]) {
+        // stochastic respawn at a random bbox position
+        p.lon = bbox[0] + Math.random() * (bbox[2] - bbox[0]);
+        p.lat = bbox[1] + Math.random() * (bbox[3] - bbox[1]);
+        p.age = 0;
+        p.maxAge = 80 + Math.random() * 60;
+        continue;
+      }
+      const [u, v] = windAt(hires, hires, p.lon, p.lat);
       const sp = Math.hypot(u, v);
-      const t = Math.min(1, sp / 30);
-      const r = Math.round(255 - 70 * t);
-      const g = Math.round(255 - 30 * t);
-      const b = 255;
-      ctx.globalAlpha = fade * 0.92;
-      ctx.fillStyle = `rgb(${r},${g},${b})`;
-      ctx.beginPath();
-      ctx.arc(p[0], p[1], 1.4 + t * 1.1, 0, Math.PI * 2);
-      ctx.fill();
+      if (sp < 0.3) {
+        // no wind → mark for respawn next frame
+        p.age = p.maxAge;
+        continue;
+      }
+      // Mercator distortion: longitude step scaled by 1/cos(lat) so
+      // particles don't appear to accelerate near the pole (Mid-Atlantic
+      // bbox center ~lat 38N, cos ~0.79).
+      const cosLat = Math.cos(p.lat * Math.PI / 180);
+      const dt = sp * 0.0009; // advection scale (tuned for visual speed)
+      const oldLon = p.lon, oldLat = p.lat;
+      p.lon += (u / sp) * dt / cosLat;
+      p.lat += (v / sp) * dt;
+      p.age += 1;
+      const oldP = pix(oldLon, oldLat);
+      const newP = pix(p.lon, p.lat);
+      if (oldP && newP) {
+        const t = Math.min(1, sp / 30);
+        const fadeOut = Math.min(1, (1 - p.age / p.maxAge) * 1.5);
+        const a = (0.35 + 0.45 * t) * fadeOut;
+        ctx.strokeStyle = `rgba(${Math.round(220 + 30 * t)}, ${Math.round(230 + 20 * t)}, 255, ${a})`;
+        ctx.lineWidth = 0.8 + t * 1.0;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(oldP[0], oldP[1]);
+        ctx.lineTo(newP[0], newP[1]);
+        ctx.stroke();
+      }
     }
   }
 
