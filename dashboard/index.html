@@ -8,8 +8,21 @@
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@10.4.0/ol.css">
 
-  <script src="https://cdn.plot.ly/plotly-2.34.0.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/ol@10.4.0/dist/ol.js"></script>
+  <!-- Load only the small auth client synchronously. The dashboard's heavy
+       map/plot libraries are deferred so unauthenticated visitors can reach
+       the login form without downloading the 500 KB app first. -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-init.js?v=20260806c"></script>
+  <script>
+    (function fastAuthRedirect() {
+      if (!window.sb?.auth) return;
+      window.sb.auth.getSession().then(({ data, error }) => {
+        if (!error && !data?.session) window.location.replace('login.html');
+      }).catch(() => {});
+    })();
+  </script>
+  <script defer src="https://cdn.plot.ly/plotly-2.34.0.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/ol@10.4.0/dist/ol.js"></script>
 <script>
 /* Instrumentation shim for locate-me.js (same pattern as the dashboard).
    The viewer's map state is module-scoped, not on window. Patch the
@@ -31,15 +44,13 @@
   window.ol.Map = TrackedMap;
 })();
 </script>
-<script src="fish-locate.js?v=20260815-location-retry"></script>
-  <script src="https://cdn.jsdelivr.net/npm/ol-mapbox-style@13.4.1/dist/olms.js"></script>
-  <script src="drawMobileUvArrowsLite.js?v=20260517-arrows2"></script>
+<script defer src="fish-locate.js?v=20260815-location-retry"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/ol-mapbox-style@13.4.1/dist/olms.js"></script>
+  <script defer src="drawMobileUvArrowsLite.js?v=20260517-arrows2"></script>
   <!-- Auth + Analytics -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="supabase-init.js?v=20260806c"></script>
-  <script src="canyon-charts.js?v=20260815h-static-data"></script>
-  <script src="loran-td.js?v=20260818-3"></script>
-  <script src="https://cdn.jsdelivr.net/npm/posthog-js@1.200.0/dist/array.js"></script>
+  <script defer src="canyon-charts.js?v=20260815h-static-data"></script>
+  <script defer src="loran-td.js?v=20260818-3"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/posthog-js@1.200.0/dist/array.js"></script>
 
 
   <style>
@@ -6686,8 +6697,8 @@ function updateBathyContoursForMap(map) {
         source.clear();
         window._combinedBathyLevels = levels;
         updateCombinedBathyLegend(levels);
-        for (const item of segments) {
-          const feat = new ol.Feature({ geometry: new ol.geom.LineString(item.segment), depth: item.level });
+        for (const path of stitchContourSegments(segments)) {
+          const feat = new ol.Feature({ geometry: new ol.geom.LineString(path.segment), depth: path.level });
           feat.getGeometry().transform("EPSG:4326", "EPSG:3857");
           source.addFeature(feat);
         }
@@ -6695,6 +6706,32 @@ function updateBathyContoursForMap(map) {
     return;
   }
   updateBathyContoursSync(map);
+}
+
+function stitchContourSegments(segments) {
+  const paths = [];
+  const key = point => `${Math.round(point[0] * 1e6)},${Math.round(point[1] * 1e6)}`;
+  for (const item of segments || []) {
+    const points = item.segment;
+    if (!points || points.length < 2) continue;
+    const first = key(points[0]), last = key(points[points.length - 1]);
+    let pathIndex = -1, prepend = false;
+    for (let i = 0; i < paths.length; i++) {
+      if (paths[i].level !== item.level) continue;
+      const pathFirst = key(paths[i].segment[0]);
+      const pathLast = key(paths[i].segment[paths[i].segment.length - 1]);
+      if (pathLast === first) { pathIndex = i; break; }
+      if (pathFirst === last) { pathIndex = i; prepend = true; break; }
+    }
+    if (pathIndex < 0) {
+      paths.push({ level: item.level, segment: points.slice() });
+    } else if (prepend) {
+      paths[pathIndex].segment = points.slice(0, -1).concat(paths[pathIndex].segment);
+    } else {
+      paths[pathIndex].segment = paths[pathIndex].segment.concat(points.slice(1));
+    }
+  }
+  return paths;
 }
 
 function updateBathyContoursSync(map) {
