@@ -16,8 +16,22 @@
   <script>
     (function fastAuthRedirect() {
       if (!window.sb?.auth) return;
-      window.sb.auth.getSession().then(({ data, error }) => {
-        if (!error && !data?.session) window.location.replace('login.html');
+      // A just-completed login can need one storage/event turn before the
+      // persisted Supabase session is visible to a newly navigated document.
+      // Redirecting on the first empty read creates the intermittent black
+      // dashboard: the shell is already present, but boot is aborted.
+      window.__getSessionWithRetry = window.__getSessionWithRetry || (async function() {
+        for (let attempt = 0; attempt < 7; attempt++) {
+          try {
+            const { data, error } = await window.sb.auth.getSession();
+            if (!error && data?.session) return data.session;
+          } catch (_) {}
+          await new Promise(resolve => setTimeout(resolve, 180 + attempt * 120));
+        }
+        return null;
+      });
+      window.__getSessionWithRetry().then((session) => {
+        if (!session) window.location.replace('login.html');
       }).catch(() => {});
     })();
   </script>
@@ -295,7 +309,21 @@
       touch-action:none;
       z-index:20;
       cursor:crosshair;
+      background:#cfd2d4;
     }
+    #dashboard-boot-status{
+      position:fixed; inset:0; z-index:1990; display:flex; align-items:center;
+      justify-content:center; pointer-events:none; background:#cfd2d4;
+      color:#163047; font:700 14px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif;
+      transition:opacity .18s ease;
+    }
+    #dashboard-boot-status[hidden]{ display:none; }
+    #dashboard-boot-status .boot-card{
+      max-width:280px; padding:14px 18px; border-radius:10px; text-align:center;
+      background:rgba(255,255,255,.88); box-shadow:0 3px 18px rgba(0,0,0,.18);
+    }
+    #dashboard-boot-status button{ pointer-events:auto; margin-top:9px; padding:6px 12px;
+      border:0; border-radius:6px; background:#145b8d; color:#fff; font-weight:700; }
     #map .ol-viewport,
     #map .ol-unselectable,
     #map canvas{
@@ -1103,6 +1131,7 @@
 <!-- locate-me cache-buster: 20260806 (force CDN revalidate after 47412bc01e stuck) -->
 </head>
 <body>
+<div id="dashboard-boot-status"><div class="boot-card">Loading dashboard…</div></div>
 <!-- host for fishedge-locate-me button (rendered by /locate-me.js) -->
 <div id="fishedge-locate-host" style="position:fixed;top:8px;right:8px;z-index:1100;"></div>
   <!-- Global error overlay: catches 'The string did not match the expected
@@ -1204,7 +1233,9 @@
     (async function initAuth() {
       // Auth: check session first (handles page refresh with existing session),
       // then listen for changes (handles magic link redirect with new session).
-      const { data: { session } } = await sb.auth.getSession();
+      const session = await (window.__getSessionWithRetry
+        ? window.__getSessionWithRetry()
+        : sb.auth.getSession().then(({ data }) => data?.session || null));
       // No session -> redirect to the actual login form on first visit. This
       // replaces the legacy full-screen "Sign in / My Account" gate so the
       // first page a visitor sees is the real login/signup form, not an
@@ -1878,8 +1909,17 @@ window.__applyAuthRegion = function(profiles, granted, session, userId) {
   window.__applyAuthRegionLastResult = activeRegion;
 
   if (activeRegion && REGIONS[activeRegion] && REGION_ID !== activeRegion) {
-    setActiveRegion(activeRegion);
-    if (typeof initializeData === 'function') initializeData();
+    // Never start a second data/render pipeline while the initial dashboard
+    // boot is in progress. That race was intermittent because it depended on
+    // profile latency and was especially visible as a black mobile map.
+    if (window.__dashboardBooting || !window.__dashboardStarted) {
+      window.__pendingAuthRegion = activeRegion;
+    } else {
+      setActiveRegion(activeRegion);
+      if (typeof initializeData === 'function') {
+        window.__dashboardRegionChangePromise = initializeData();
+      }
+    }
   }
 
   // Persist active region to profile ONLY when the user explicitly chose
@@ -10680,14 +10720,30 @@ function ensurePlotly() {
 }
 
 async function initDashboard() {
+  window.__dashboardStarted = true;
+  window.__dashboardBooting = true;
+  const bootStatus = document.getElementById('dashboard-boot-status');
+  const setBootStatus = (message, failed) => {
+    if (!bootStatus) return;
+    const card = bootStatus.querySelector('.boot-card');
+    if (card) card.innerHTML = failed
+      ? `${message}<br><button type="button" onclick="location.reload()">Retry</button>`
+      : message;
+    bootStatus.hidden = false;
+  };
+  const finishBootStatus = () => { if (bootStatus) bootStatus.hidden = true; };
   try {
+    setBootStatus('Loading dashboard…', false);
     installRegionSelector();
     // Wait for the auth callback to determine the correct active region
     // before fetching the index. Without this, init() races the profile
     // fetch and may end up loading usec_south frames while the BBOX is
     // usec_md (the "stuck loading dashboard" symptom).
     if (window.__profileReady) {
-      const safeTimeout = new Promise(r => setTimeout(() => r(null), 4000));
+      // The map shell must not be held hostage by profile/entitlement APIs.
+      // A resolved profile still wins; otherwise boot with the URL/default
+      // region and apply a later region change in one serialized pass.
+      const safeTimeout = new Promise(r => setTimeout(() => r(null), 750));
       await Promise.race([window.__profileReady, safeTimeout]);
     }
     // Combined mode keeps bathymetry opt-in. The old unconditional land-mask
@@ -10723,8 +10779,18 @@ async function initDashboard() {
     // Apply combined-mode body class at startup if already on combined
     if (currentVar === "combined") document.body.classList.add("combined-mode");
     if (typeof syncDashboardChrome === "function") syncDashboardChrome();
+    window.__dashboardBooting = false;
+    if (window.__pendingAuthRegion && window.__pendingAuthRegion !== REGION_ID) {
+      const nextRegion = window.__pendingAuthRegion;
+      window.__pendingAuthRegion = null;
+      setActiveRegion(nextRegion);
+      await initializeData();
+    }
+    finishBootStatus();
   } catch (e) {
     console.error("Init failed:", e);
+    window.__dashboardBooting = false;
+    setBootStatus('Dashboard could not finish loading.', true);
   }
 }
 // Deferred OpenLayers/Plotly scripts execute after parsing but before
