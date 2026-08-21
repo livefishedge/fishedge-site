@@ -10711,7 +10711,9 @@ async function initDashboard() {
     syncTimeControls();
     syncArrowLegend();
     syncControlsHeight();
-    if (currentVar !== "combined" && (currentVar === "thermal_fronts" || framesByVar[currentVar]?.length)) {
+    if (currentVar === "combined") {
+      await showFrame();
+    } else if (currentVar === "thermal_fronts" || framesByVar[currentVar]?.length) {
       await ensurePlotly();
       await showFrame();
     }
