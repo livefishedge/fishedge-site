@@ -24,16 +24,21 @@
       // Redirecting on the first empty read creates the intermittent black
       // dashboard: the shell is already present, but boot is aborted.
       window.__getSessionWithRetry = window.__getSessionWithRetry || (async function() {
-        for (let attempt = 0; attempt < 7; attempt++) {
+        // Supabase storage is normally available on the first read. Keep only
+        // two short retries for a just-completed login; an unauthenticated
+        // visitor should reach the login form promptly, not wait several
+        // seconds for an exhaustive retry loop.
+        for (let attempt = 0; attempt < 3; attempt++) {
           try {
             const { data, error } = await window.sb.auth.getSession();
             if (!error && data?.session) return data.session;
           } catch (_) {}
-          await new Promise(resolve => setTimeout(resolve, 180 + attempt * 120));
+          await new Promise(resolve => setTimeout(resolve, 120 + attempt * 140));
         }
         return null;
       });
-      window.__getSessionWithRetry().then((session) => {
+      window.__sessionPromise = window.__sessionPromise || window.__getSessionWithRetry();
+      window.__sessionPromise.then((session) => {
         if (!session) window.location.replace('login.html');
       }).catch(() => {});
     })();
@@ -1240,8 +1245,8 @@
     (async function initAuth() {
       // Auth: check session first (handles page refresh with existing session),
       // then listen for changes (handles magic link redirect with new session).
-      const session = await (window.__getSessionWithRetry
-        ? window.__getSessionWithRetry()
+      const session = await (window.__sessionPromise || window.__getSessionWithRetry
+        ? (window.__sessionPromise || window.__getSessionWithRetry())
         : sb.auth.getSession().then(({ data }) => data?.session || null));
       // No session -> redirect to the actual login form on first visit. This
       // replaces the legacy full-screen "Sign in / My Account" gate so the
