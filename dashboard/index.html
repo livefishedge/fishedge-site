@@ -6352,10 +6352,11 @@ async function renderCombinedMode() {
   }
 
   // ── Layer: SST Temperature (unchecked by default — conflicts visually with CHL) ──
-  const sstFrames = framesByVar.sst || [];
-  console.log("[combined] SST frames count:", sstFrames.length);
-  const sstScanTimeDiv = document.getElementById("combined-sst-scan-time");
-  if (sstFrames.length) {
+  if (document.getElementById("chk-combined-sst")?.checked) {
+    const sstFrames = framesByVar.sst || [];
+    console.log("[combined] SST frames count:", sstFrames.length);
+    const sstScanTimeDiv = document.getElementById("combined-sst-scan-time");
+    if (sstFrames.length) {
     const sorted = [...sstFrames].sort((a, b) => {
       const ta = epochMsForFrame("sst", a) || 0, tb = epochMsForFrame("sst", b) || 0;
       return tb - ta;
@@ -6425,8 +6426,9 @@ async function renderCombinedMode() {
           : "";
       }
     }
-  } else {
-    if (sstScanTimeDiv) sstScanTimeDiv.textContent = "";
+    } else {
+      if (sstScanTimeDiv) sstScanTimeDiv.textContent = "";
+    }
   }
 
   // Bathymetry is opt-in in combined mode. Loading the 8 MB grid and
