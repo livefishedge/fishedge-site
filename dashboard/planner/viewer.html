@@ -39,11 +39,13 @@
     body.panel-open .panel-toggle { transform: rotate(90deg); }
 
     .panel {
+      /* 2026-08-21 (Mike 14:06 ET) — transparent so OSM base layer shows through.
+         Dropped backdrop-filter blur + box-shadow that assumed a dark
+         background. Border-left stays so the panel is still distinguishable. */
       position: fixed; z-index: 10; top: 58px; right: 0; bottom: 0;
       width: 300px;
-      background: #0a1929ed; backdrop-filter: blur(8px);
+      background: transparent;
       border-left: 1px solid #31546b;
-      box-shadow: -8px 0 30px rgba(0,0,0,.5);
       padding: 18px 16px 20px;
       overflow-y: auto;
       transition: transform .3s ease;
