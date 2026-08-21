@@ -349,17 +349,33 @@
   }
 
   // -------- wind streamlines + animated particles --------
+  // 2026-08-21 overhaul: thickened + brightened. Old alpha 0.55 / 1.4px was
+  // washing out over the OSM base. New alpha 0.95 / 2.6px with a dark
+  // outline pass makes streamlines readable on any background.
   function drawWind(grid, f) {
     if (!checks.wind.checked || !f.wind_speed_kn) return;
     const lats = grid.lats, lons = grid.lons;
-    // 1) streamlines — denser seed grid than barbs
+    // 1) streamlines — dense seed grid, dark outline first then bright fill
     for (let sy = 1; sy < lats.length - 1; sy += 1) {
       for (let sx = 1; sx < lons.length - 1; sx += 2) {
         const path = traceWind(grid, f, lons[sx], lats[sy]);
         if (path.length < 3) continue;
+        // dark outline (so the bright stroke stays readable on the OSM tiles)
+        ctx.strokeStyle = '#07111d';
+        ctx.lineWidth = 4.2;
+        ctx.globalAlpha = 0.85;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        path.forEach((p, i) => {
+          const q = pix(p[0], p[1]);
+          if (!q) return;
+          i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]);
+        });
+        ctx.stroke();
+        // bright fill on top
         ctx.strokeStyle = '#ffe14a';
-        ctx.lineWidth = 1.4;
-        ctx.globalAlpha = 0.55;
+        ctx.lineWidth = 2.6;
+        ctx.globalAlpha = 0.95;
         ctx.beginPath();
         path.forEach((p, i) => {
           const q = pix(p[0], p[1]);
@@ -369,8 +385,8 @@
         ctx.stroke();
       }
     }
-    // 2) flowing particles — sparse, animated, speed-tinted
-    const seedCount = 28;
+    // 2) flowing particles — more of them, larger glow, brighter core
+    const seedCount = 40;
     const t = (performance.now() / 1400) % 1;
     for (let i = 0; i < seedCount; i++) {
       const fy = (i * 7) % (lats.length - 4) + 2;
@@ -386,17 +402,23 @@
       const t2 = Math.min(1, sp / 25);
       // brighter at higher wind
       const r = 255, g = Math.round(225 - 30 * t2), b = Math.round(74);
-      // glow
-      ctx.globalAlpha = 0.35;
-      ctx.fillStyle = `rgba(${r},${g},${b},0.35)`;
+      // dark halo
+      ctx.globalAlpha = 0.7;
+      ctx.fillStyle = '#07111d';
       ctx.beginPath();
-      ctx.arc(p[0], p[1], 9, 0, Math.PI * 2);
+      ctx.arc(p[0], p[1], 14, 0, Math.PI * 2);
       ctx.fill();
-      // core
+      // bright glow
+      ctx.globalAlpha = 0.55;
+      ctx.fillStyle = `rgba(${r},${g},${b},0.55)`;
+      ctx.beginPath();
+      ctx.arc(p[0], p[1], 11, 0, Math.PI * 2);
+      ctx.fill();
+      // bright core
       ctx.globalAlpha = 1;
       ctx.fillStyle = `rgb(${r},${g},${b})`;
       ctx.beginPath();
-      ctx.arc(p[0], p[1], 4, 0, Math.PI * 2);
+      ctx.arc(p[0], p[1], 5, 0, Math.PI * 2);
       ctx.fill();
     }
   }
