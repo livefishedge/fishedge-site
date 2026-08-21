@@ -65,6 +65,17 @@
     .row input[type="range"] {
       width: 100%; accent-color: #5bdcff; margin-top: 4px;
     }
+    .frame-row { display: flex; align-items: center; gap: 8px; }
+    .frame-row .play-btn {
+      width: 36px; height: 36px; flex-shrink: 0;
+      background: #15324a; border: 1px solid #67d9ff; border-radius: 50%;
+      color: #67d9ff; cursor: pointer; font-size: 14px;
+      display: flex; align-items: center; justify-content: center;
+      padding: 0; line-height: 1;
+      font-family: ui-monospace, monospace;
+    }
+    .frame-row .play-btn:hover { background: #1d4666; }
+    .frame-row .play-btn:active { background: #67d9ff; color: #07111d; }
     .source { border-top: 1px solid #24465d; margin-top: 14px; padding-top: 12px; color: #7898aa; font-size: 11px; line-height: 1.5; }
     .source b { color: #b9eaff; }
 
@@ -124,7 +135,10 @@
       <input id="current" type="checkbox" checked></div>
     <div class="row" style="flex-direction:column;align-items:stretch">
       <label>Forecast frame</label>
-      <input id="frame" type="range" min="0" max="55" value="0">
+      <div class="frame-row">
+        <input id="frame" type="range" min="0" max="55" value="0">
+        <button id="playFrame" class="play-btn" aria-label="Advance to next frame">▶</button>
+      </div>
     </div>
 
     <div class="source">
@@ -333,7 +347,7 @@
     const v = -Math.cos(a);
     return [u * speed, v * speed]; // u, v in knots (visual scale)
   }
-  function traceWind(grid, f, lon0, lat0) {
+  function traceWind(grid, f, lon0, lat0, useProportionalSpeed) {
     // 2026-08-21 (Mike 13:46 ET, 'didn't work'): with the 3x hires grid,
     // 0.5 * (grid.lons[1] - grid.lons[0]) = 0.042 deg per step = ~11px/step,
     // so 28 steps covered only ~310px per streamline and the canvas went
@@ -341,15 +355,21 @@
     // Fixed stepDeg (~0.08 deg = ~20px/step) + bumped iteration cap to 50
     // so each streamline covers ~1000px of map — similar density to the
     // old 17x21 build, plus the hires smoothness from sub-cell velocities.
+    // 2026-08-21 14:38 ET (Mike): 'particle move speed should be
+    // proportional to actual wind speed'. Streamlines keep the fixed
+    // stepDeg (they show flow pattern, not particle motion). Particles
+    // get stepDeg * min(2.0, sp/10) so they move faster in strong
+    // wind and slower in calm — the local sp drives the scale per step.
     const path = [];
     let lon = lon0, lat = lat0;
-    const stepDeg = 0.08;
     for (let i = 0; i < 50; i++) {
       if (lon < bbox[0] || lon > bbox[2] || lat < bbox[1] || lat > bbox[3]) break;
       path.push([lon, lat]);
       const [u, v] = windAt(grid, f, lon, lat);
       const sp = Math.hypot(u, v);
       if (sp < 0.04) break;
+      const stepScale = useProportionalSpeed ? Math.min(2.0, sp / 10) : 1;
+      const stepDeg = 0.08 * stepScale;
       lon += (u / sp) * stepDeg * 0.8;
       lat += (v / sp) * stepDeg * 0.8;
     }
@@ -465,7 +485,7 @@
     // converging streamlines).
     for (let sy = 2; sy < lats.length - 2; sy += 1) {
       for (let sx = 2; sx < lons.length - 2; sx += 2) {
-        const path = traceWind(hires, hires, lons[sx], lats[sy]);
+        const path = traceWind(hires, hires, lons[sx], lats[sy], false);
         if (path.length < 3) continue;
         // mid-path speed → opacity (calm 0.18, strong 0.63)
         const mid = path[Math.floor(path.length / 2)];
@@ -496,7 +516,7 @@
     for (let i = 0; i < seedCount; i++) {
       const fy = (i * 7) % Math.max(1, lats.length - 4) + 2;
       const fx = (i * 11) % Math.max(1, lons.length - 4) + 2;
-      const path = traceWind(hires, hires, lons[fx], lats[fy]);
+      const path = traceWind(hires, hires, lons[fx], lats[fy], true);
       if (path.length < 3) continue;
       const phase = (cycle + i * 0.041) % 1;
       let fade = 1;
@@ -680,11 +700,8 @@
 
   // -------- main draw loop --------
   function draw(now) {
-    if (now - lastFrame > 900) {
-      fi = (fi + 1) % Math.max(1, frames.length);
-      slider.value = fi;
-      lastFrame = now;
-    }
+    // 2026-08-21 (Mike 14:38 ET): drop auto-cycling. Frame advances only
+    // when the user drags the slider OR clicks the ▶ play button.
     ctx.clearRect(0, 0, canvas.width / devicePixelRatio, canvas.height / devicePixelRatio);
     const isCm = document.querySelector('input[name=source]:checked').value === 'cmems';
     const source = isCm ? cm : om;
@@ -713,6 +730,14 @@
   });
   Object.values(checks).forEach(x => x.addEventListener('change', choose));
   slider.addEventListener('input', () => { fi = +slider.value; lastFrame = performance.now(); });
+  const playFrame = document.getElementById('playFrame');
+  playFrame.addEventListener('click', () => {
+    // Advance one frame at a time (wraps at end of day). Click repeatedly
+    // to step through frames like a stop-motion animator.
+    fi = (fi + 1) % Math.max(1, frames.length);
+    slider.value = fi;
+    lastFrame = performance.now();
+  });
 
   // -------- load JSON, then start --------
   Promise.all([
