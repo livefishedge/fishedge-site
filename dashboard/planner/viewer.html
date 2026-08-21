@@ -66,13 +66,7 @@
     .source { border-top: 1px solid #24465d; margin-top: 14px; padding-top: 12px; color: #7898aa; font-size: 11px; line-height: 1.5; }
     .source b { color: #b9eaff; }
 
-    .legend {
-      position: absolute; z-index: 5; bottom: 16px; left: 16px;
-      background: #0a1929ed; border: 1px solid #31546b; border-radius: 6px;
-      padding: 10px 12px; color: #a9dbea; font-size: 11px; line-height: 1.55;
-      backdrop-filter: blur(4px); max-width: 280px;
-    }
-    .legend b { color: #edfaff; }
+    
 
     .ol-control button { background: #0a1929 !important; color: #dcecf7 !important; }
     .ol-attribution { background: #0a1929cc !important; color: #8ba8b8 !important; }
@@ -90,7 +84,7 @@
       .top .live { display: none; }
       .panel { transform: translateX(100%); }
       body.panel-open .panel { transform: translateX(0); }
-      .legend { left: 8px; bottom: 68px; right: 8px; font-size: 10px; max-width: none; }
+      
     }
     @media (min-width: 701px) {
       .panel-toggle { display: none; }
@@ -138,17 +132,6 @@
       Region: USEC Mid-Atlantic · [-77, 36, -72, 40]
     </div>
   </aside>
-
-  <div class="legend">
-    <b>Captain units</b><br>
-    Wave / swell: feet · Wind / current: knots · SST: °F<br>
-    Streamlines show travel direction · particles animate along flow<br>
-    <span style="color:#ffe14a">━</span> wind ·
-    <span style="color:#ffb15c">━</span> swell ·
-    <span style="color:#5be6c0">━</span> current ·
-    <span style="color:#7d8aff">◆</span> canyon ·
-    <span style="color:#ffc94d">●</span> inlet
-  </div>
 
   <canvas id="vectors"></canvas>
   <script src="https://cdn.jsdelivr.net/npm/ol@10.2.1/dist/ol.js"></script>
