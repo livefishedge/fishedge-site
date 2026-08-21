@@ -16,6 +16,9 @@
   <script>
     (function fastAuthRedirect() {
       if (!window.sb?.auth) return;
+      window.__authReady = window.__authReady || new Promise(resolve => {
+        window.__authReadyResolve = resolve;
+      });
       // A just-completed login can need one storage/event turn before the
       // persisted Supabase session is visible to a newly navigated document.
       // Redirecting on the first empty read creates the intermittent black
@@ -1249,6 +1252,10 @@
         return;
       }
       if (session && await enforceEmailVerification(session)) {
+        if (window.__authReadyResolve) {
+          window.__authReadyResolve(session);
+          window.__authReadyResolve = null;
+        }
         setAccountLinkVisible(true);
         posthog.identify(session.user.email, { email: session.user.email });
         // Multi-region load: profile.selected_region (active) + user_regions (entitlement list).
@@ -10804,6 +10811,9 @@ async function initDashboard() {
   const finishBootStatus = () => { if (bootStatus) bootStatus.hidden = true; };
   try {
     setBootStatus('Loading dashboard…', false);
+    // Never allow the explicit URL-region fast path to bypass authentication.
+    // Boot only after initAuth has confirmed a valid, verified session.
+    if (window.__authReady) await window.__authReady;
     installRegionSelector();
     // Wait for the auth callback to determine the correct active region
     // before fetching the index. Without this, init() races the profile
