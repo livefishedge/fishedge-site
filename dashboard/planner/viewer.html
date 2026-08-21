@@ -347,27 +347,118 @@
     return path;
   }
 
+  // -------- hires wind grid (client-side bilinear interpolation) --------
+  // forecast.json ships 17x21 — too coarse for hint.fm/wind smoothness.
+  // buildHiresGrid() bilinearly interpolates wind_speed_kn (scalar) and
+  // wind_direction_deg (via u/v components, proper circular interp)
+  // to a denser virtual grid. factor=3 turns 17x21 into 51x63 = 3,213
+  // cells; streamlines now differ at sub-cell positions because the
+  // direction field is interpolated, not snapped.
+  function buildHiresGrid(grid, f, factor) {
+    const srcLats = grid.lats, srcLons = grid.lons;
+    const newLats = [], newLons = [];
+    for (let i = 0; i < (srcLats.length - 1) * factor; i++) {
+      const t = i / factor, idx = Math.floor(t), frac = t - idx;
+      newLats.push(srcLats[idx] * (1 - frac) + srcLats[idx + 1] * frac);
+    }
+    for (let i = 0; i < (srcLons.length - 1) * factor; i++) {
+      const t = i / factor, idx = Math.floor(t), frac = t - idx;
+      newLons.push(srcLons[idx] * (1 - frac) + srcLons[idx + 1] * frac);
+    }
+    function interpScalar(field) {
+      if (!field) return null;
+      const out = [];
+      for (let y = 0; y < newLats.length; y++) {
+        out.push([]);
+        const yi = Math.floor(y / factor);
+        const yf = (y / factor) - yi;
+        const yi2 = Math.min(yi + 1, srcLats.length - 1);
+        for (let x = 0; x < newLons.length; x++) {
+          const xi = Math.floor(x / factor);
+          const xf = (x / factor) - xi;
+          const xi2 = Math.min(xi + 1, srcLons.length - 1);
+          const v00 = field[yi]?.[xi], v01 = field[yi]?.[xi2];
+          const v10 = field[yi2]?.[xi], v11 = field[yi2]?.[xi2];
+          if (v00 == null || v01 == null || v10 == null || v11 == null) {
+            out[y].push(null);
+          } else {
+            const v0 = v00 * (1 - xf) + v01 * xf;
+            const v1 = v10 * (1 - xf) + v11 * xf;
+            out[y].push(v0 * (1 - yf) + v1 * yf);
+          }
+        }
+      }
+      return out;
+    }
+    function interpDirection() {
+      const field = f.wind_direction_deg;
+      if (!field) return null;
+      const out = [];
+      for (let y = 0; y < newLats.length; y++) {
+        out.push([]);
+        const yi = Math.floor(y / factor);
+        const yf = (y / factor) - yi;
+        const yi2 = Math.min(yi + 1, srcLats.length - 1);
+        for (let x = 0; x < newLons.length; x++) {
+          const xi = Math.floor(x / factor);
+          const xf = (x / factor) - xi;
+          const xi2 = Math.min(xi + 1, srcLons.length - 1);
+          const a00 = field[yi]?.[xi], a01 = field[yi]?.[xi2];
+          const a10 = field[yi2]?.[xi], a11 = field[yi2]?.[xi2];
+          if (a00 == null || a01 == null || a10 == null || a11 == null) {
+            out[y].push(null);
+            continue;
+          }
+          // u = sin(deg), v = cos(deg) — interp u and v (proper circular),
+          // convert back to deg
+          const u00 = Math.sin(a00 * Math.PI / 180), v00 = Math.cos(a00 * Math.PI / 180);
+          const u01 = Math.sin(a01 * Math.PI / 180), v01 = Math.cos(a01 * Math.PI / 180);
+          const u10 = Math.sin(a10 * Math.PI / 180), v10 = Math.cos(a10 * Math.PI / 180);
+          const u11 = Math.sin(a11 * Math.PI / 180), v11 = Math.cos(a11 * Math.PI / 180);
+          const u0 = u00 * (1 - xf) + u01 * xf;
+          const v0 = v00 * (1 - xf) + v01 * xf;
+          const u1 = u10 * (1 - xf) + u11 * xf;
+          const v1 = v10 * (1 - xf) + v11 * xf;
+          const u = u0 * (1 - yf) + u1 * yf;
+          const v = v0 * (1 - yf) + v1 * yf;
+          const dir = Math.atan2(u, v) * 180 / Math.PI;
+          out[y].push((dir + 360) % 360);
+        }
+      }
+      return out;
+    }
+    return {
+      lats: newLats,
+      lons: newLons,
+      wind_speed_kn: interpScalar(f.wind_speed_kn),
+      wind_direction_deg: interpDirection(),
+    };
+  }
+
   // -------- wind streamlines + animated particles (hint.fm/wind style) --------
   // 2026-08-21 redesign per Mike's "Present wind data like hint.fm/wind".
   // Style: thin white/cyan streamlines + small fading particles on a
   // near-black background. Speed encoded as opacity (calm = faint,
   // strong = bright). Particles fade in/out along their streamline path.
+  // 2026-08-21 13:41 ET (Mike: 'wind data is too sparse') — now runs on
+  // a 3x denser interpolated grid (51x63 = 3,213 cells), so streamlines
+  // actually differ at sub-cell positions instead of overlapping.
   function drawWind(grid, f) {
     if (!checks.wind.checked || !f.wind_speed_kn) return;
-    const lats = grid.lats, lons = grid.lons;
+    const hires = buildHiresGrid(grid, f, 3);
+    const lats = hires.lats, lons = hires.lons;
 
-    // 1) streamlines — thin, light-cyan, every grid cell seed, speed-tinted alpha
-    for (let sy = 0; sy < lats.length; sy += 1) {
-      for (let sx = 0; sx < lons.length; sx += 1) {
-        const path = traceWind(grid, f, lons[sx], lats[sy]);
+    // 1) streamlines — dense seed grid on the hires grid, speed-tinted alpha
+    for (let sy = 2; sy < lats.length - 2; sy += 2) {
+      for (let sx = 2; sx < lons.length - 2; sx += 4) {
+        const path = traceWind(hires, f, lons[sx], lats[sy]);
         if (path.length < 3) continue;
-        // mid-path speed → opacity (calm 0.20, strong 0.65)
+        // mid-path speed → opacity (calm 0.18, strong 0.63)
         const mid = path[Math.floor(path.length / 2)];
-        const [u, v] = windAt(grid, f, mid[0], mid[1]);
+        const [u, v] = windAt(hires, f, mid[0], mid[1]);
         const sp = Math.hypot(u, v);
         const t = Math.min(1, sp / 35);
         const alpha = 0.18 + 0.45 * t;
-        // light cyan, faintly white-tinted for low speeds
         const r = Math.round(180 + 50 * t);
         const g = Math.round(215 + 30 * t);
         const b = 230;
@@ -384,16 +475,15 @@
       }
     }
 
-    // 2) flowing particles — 80 small bright dots, fade in/out along path,
-    // speed-tinted color (calm = white, strong = pale blue)
-    const seedCount = 80;
+    // 2) flowing particles — 120 small bright dots on the hires grid,
+    // fade in/out along path, speed-tinted (calm = white, strong = pale blue)
+    const seedCount = 120;
     const cycle = (performance.now() / 2200) % 1; // ~2.2s per cycle
     for (let i = 0; i < seedCount; i++) {
       const fy = (i * 7) % Math.max(1, lats.length - 4) + 2;
       const fx = (i * 11) % Math.max(1, lons.length - 4) + 2;
-      const path = traceWind(grid, f, lons[fx], lats[fy]);
+      const path = traceWind(hires, f, lons[fx], lats[fy]);
       if (path.length < 3) continue;
-      // phase 0–1 along the path, with fade in/out at the ends
       const phase = (cycle + i * 0.041) % 1;
       let fade = 1;
       if (phase < 0.18)      fade = phase / 0.18;
@@ -401,10 +491,9 @@
       const at = Math.floor(phase * (path.length - 1));
       const p = pix(path[at][0], path[at][1]);
       if (!p) continue;
-      const [u, v] = windAt(grid, f, path[at][0], path[at][1]);
+      const [u, v] = windAt(hires, f, path[at][0], path[at][1]);
       const sp = Math.hypot(u, v);
       const t = Math.min(1, sp / 30);
-      // white at calm, pale blue at strong
       const r = Math.round(255 - 70 * t);
       const g = Math.round(255 - 30 * t);
       const b = 255;
