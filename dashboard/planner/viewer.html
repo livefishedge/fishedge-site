@@ -301,7 +301,7 @@
 
     // barbs are drawn BACK from the tip, each 10kt = full, 5kt = half, 50kt = flag
     // We'll work in pixel space along the shaft (perp = rotate a by +90°).
-    const px = ex, py = ey;
+    let px = ex, py = ey;
     const perpX = Math.cos(a), perpY = -Math.sin(a); // right-hand perp
     let s = Math.max(0, Math.round(speedKt / 5) * 5);
 
