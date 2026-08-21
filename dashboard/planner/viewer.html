@@ -456,8 +456,13 @@
     const lats = hires.lats, lons = hires.lons;
 
     // 1) streamlines — dense seed grid on the hires grid, speed-tinted alpha
-    for (let sy = 2; sy < lats.length - 2; sy += 2) {
-      for (let sx = 2; sx < lons.length - 2; sx += 4) {
+    // Mike 13:46 ET 'didn't work' — previous version had only 22*15=330
+    // seeds and streamlines exited the small 5x4 bbox after ~12 steps.
+    // Bumped to every 1st sy, every 2nd sx = ~44*29 = 1,276 seeds so the
+    // viz actually fills out (each pixel gets painted by multiple
+    // converging streamlines).
+    for (let sy = 2; sy < lats.length - 2; sy += 1) {
+      for (let sx = 2; sx < lons.length - 2; sx += 2) {
         const path = traceWind(hires, hires, lons[sx], lats[sy]);
         if (path.length < 3) continue;
         // mid-path speed → opacity (calm 0.18, strong 0.63)
@@ -482,9 +487,9 @@
       }
     }
 
-    // 2) flowing particles — 120 small bright dots on the hires grid,
+    // 2) flowing particles — 180 small bright dots on the hires grid,
     // fade in/out along path, speed-tinted (calm = white, strong = pale blue)
-    const seedCount = 120;
+    const seedCount = 180;
     const cycle = (performance.now() / 2200) % 1; // ~2.2s per cycle
     for (let i = 0; i < seedCount; i++) {
       const fy = (i * 7) % Math.max(1, lats.length - 4) + 2;
