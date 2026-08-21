@@ -10670,7 +10670,12 @@ async function loadCaptainBriefing() {
       const safeTimeout = new Promise(r => setTimeout(() => r(null), 4000));
       await Promise.race([window.__profileReady, safeTimeout]);
     }
-    await Promise.all([ loadIndex(), prepareLandMask() ]);
+    // Combined mode keeps bathymetry opt-in. The old unconditional land-mask
+    // preparation downloaded and parsed the ~13 MB bathy grid before the map
+    // could appear, even when the Bathymetry checkbox was off.
+    const initTasks = [loadIndex()];
+    if (currentVar !== "combined") initTasks.push(prepareLandMask());
+    await Promise.all(initTasks);
     // Start on the latest frame for each variable (not the oldest)
     for (const v of ["chl","sst","uv"]) {
       if (framesByVar[v]?.length) {
