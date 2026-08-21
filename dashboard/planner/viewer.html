@@ -239,7 +239,7 @@
   const map = new ol.Map({
     target: 'map',
     layers: [
-      new ol.layer.Tile({ source: new ol.source.OSM(), opacity: 0.28 }),
+      new ol.layer.Tile({ source: new ol.source.OSM(), opacity: 0.08 }),
       canyonLayer,
       inletLayer,
       new ol.layer.Image({
@@ -347,34 +347,33 @@
     return path;
   }
 
-  // -------- wind streamlines + animated particles --------
-  // 2026-08-21 overhaul: thickened + brightened. Old alpha 0.55 / 1.4px was
-  // washing out over the OSM base. New alpha 0.95 / 2.6px with a dark
-  // outline pass makes streamlines readable on any background.
+  // -------- wind streamlines + animated particles (hint.fm/wind style) --------
+  // 2026-08-21 redesign per Mike's "Present wind data like hint.fm/wind".
+  // Style: thin white/cyan streamlines + small fading particles on a
+  // near-black background. Speed encoded as opacity (calm = faint,
+  // strong = bright). Particles fade in/out along their streamline path.
   function drawWind(grid, f) {
     if (!checks.wind.checked || !f.wind_speed_kn) return;
     const lats = grid.lats, lons = grid.lons;
-    // 1) streamlines — dense seed grid, dark outline first then bright fill
-    for (let sy = 1; sy < lats.length - 1; sy += 1) {
-      for (let sx = 1; sx < lons.length - 1; sx += 2) {
+
+    // 1) streamlines — thin, light-cyan, every grid cell seed, speed-tinted alpha
+    for (let sy = 0; sy < lats.length; sy += 1) {
+      for (let sx = 0; sx < lons.length; sx += 1) {
         const path = traceWind(grid, f, lons[sx], lats[sy]);
         if (path.length < 3) continue;
-        // dark outline (so the bright stroke stays readable on the OSM tiles)
-        ctx.strokeStyle = '#07111d';
-        ctx.lineWidth = 4.2;
-        ctx.globalAlpha = 0.85;
+        // mid-path speed → opacity (calm 0.20, strong 0.65)
+        const mid = path[Math.floor(path.length / 2)];
+        const [u, v] = windAt(grid, f, mid[0], mid[1]);
+        const sp = Math.hypot(u, v);
+        const t = Math.min(1, sp / 35);
+        const alpha = 0.18 + 0.45 * t;
+        // light cyan, faintly white-tinted for low speeds
+        const r = Math.round(180 + 50 * t);
+        const g = Math.round(215 + 30 * t);
+        const b = 230;
+        ctx.strokeStyle = `rgba(${r},${g},${b},${alpha})`;
+        ctx.lineWidth = 0.9;
         ctx.lineCap = 'round';
-        ctx.beginPath();
-        path.forEach((p, i) => {
-          const q = pix(p[0], p[1]);
-          if (!q) return;
-          i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]);
-        });
-        ctx.stroke();
-        // bright fill on top
-        ctx.strokeStyle = '#ffe14a';
-        ctx.lineWidth = 2.6;
-        ctx.globalAlpha = 0.95;
         ctx.beginPath();
         path.forEach((p, i) => {
           const q = pix(p[0], p[1]);
@@ -384,40 +383,35 @@
         ctx.stroke();
       }
     }
-    // 2) flowing particles — more of them, larger glow, brighter core
-    const seedCount = 40;
-    const t = (performance.now() / 1400) % 1;
+
+    // 2) flowing particles — 80 small bright dots, fade in/out along path,
+    // speed-tinted color (calm = white, strong = pale blue)
+    const seedCount = 80;
+    const cycle = (performance.now() / 2200) % 1; // ~2.2s per cycle
     for (let i = 0; i < seedCount; i++) {
-      const fy = (i * 7) % (lats.length - 4) + 2;
-      const fx = (i * 11) % (lons.length - 4) + 2;
+      const fy = (i * 7) % Math.max(1, lats.length - 4) + 2;
+      const fx = (i * 11) % Math.max(1, lons.length - 4) + 2;
       const path = traceWind(grid, f, lons[fx], lats[fy]);
       if (path.length < 3) continue;
-      const phase = (t + i * 0.07) % 1;
+      // phase 0–1 along the path, with fade in/out at the ends
+      const phase = (cycle + i * 0.041) % 1;
+      let fade = 1;
+      if (phase < 0.18)      fade = phase / 0.18;
+      else if (phase > 0.82) fade = (1 - phase) / 0.18;
       const at = Math.floor(phase * (path.length - 1));
       const p = pix(path[at][0], path[at][1]);
       if (!p) continue;
       const [u, v] = windAt(grid, f, path[at][0], path[at][1]);
       const sp = Math.hypot(u, v);
-      const t2 = Math.min(1, sp / 25);
-      // brighter at higher wind
-      const r = 255, g = Math.round(225 - 30 * t2), b = Math.round(74);
-      // dark halo
-      ctx.globalAlpha = 0.7;
-      ctx.fillStyle = '#07111d';
-      ctx.beginPath();
-      ctx.arc(p[0], p[1], 14, 0, Math.PI * 2);
-      ctx.fill();
-      // bright glow
-      ctx.globalAlpha = 0.55;
-      ctx.fillStyle = `rgba(${r},${g},${b},0.55)`;
-      ctx.beginPath();
-      ctx.arc(p[0], p[1], 11, 0, Math.PI * 2);
-      ctx.fill();
-      // bright core
-      ctx.globalAlpha = 1;
+      const t = Math.min(1, sp / 30);
+      // white at calm, pale blue at strong
+      const r = Math.round(255 - 70 * t);
+      const g = Math.round(255 - 30 * t);
+      const b = 255;
+      ctx.globalAlpha = fade * 0.92;
       ctx.fillStyle = `rgb(${r},${g},${b})`;
       ctx.beginPath();
-      ctx.arc(p[0], p[1], 5, 0, Math.PI * 2);
+      ctx.arc(p[0], p[1], 1.4 + t * 1.1, 0, Math.PI * 2);
       ctx.fill();
     }
   }
