@@ -1384,7 +1384,7 @@
     </div>
     <div class="combined-section">
       <label class="combined-toggle">
-        <input type="checkbox" id="chk-combined-chl" checked>
+        <input type="checkbox" id="chk-combined-chl">
         <span class="box"></span>
         <span class="combined-dot dot-chl"></span>
         <span>Chlorophyll</span>
@@ -6199,6 +6199,7 @@ async function renderCombinedMode() {
   installCaptainToolHandler(map);
   if (captainAddTool.points.length) renderPtsLayer(map);
   map.on("moveend", () => syncViewStateFromOlMap(map));
+  map.on("moveend", () => combinedChlScheduleResolutionCheck(map));
   console.log("[combined] OL map created, target:", !!map.getTargetElement(), "size:", map.getSize());
   const cv0 = map.getTargetElement()?.querySelector("canvas");
   console.log("[combined]   canvas initial:", cv0 ? `${cv0.width}x${cv0.height}` : "NO CANVAS");
@@ -6255,9 +6256,9 @@ async function renderCombinedMode() {
 
   const chlFrames = framesByVar.chl || [];
   const chlScanTimeDiv = document.getElementById("combined-chl-scan-time");
-  if (chlFrames.length) {
+  if (chlFrames.length && chkChl?.checked) {
     const frame = chlFrames[chlFrames.length - 1];  // framesByVar.chl is sorted oldest-first
-    const data = await fetchFrameData("chl", frame);
+    const data = await fetchFrameData("chl", frame, { resolution: "coarse" });
     const grid = await loadGridForVar("chl", data);
     window._combinedChlData = data;
     window._combinedChlGrid = grid;
@@ -6808,7 +6809,7 @@ async function buildChlCompositeLayer(map, hoursOrOpts) {
   if (!selected.length) return {};
   const loaded = (await Promise.all(selected.map(async frame => {
     try {
-      const data = await fetchFrameData("chl", frame);
+      const data = await fetchFrameData("chl", frame, { resolution: opts.resolution || "coarse" });
       const grid = await loadGridForVar("chl", data);
       const z = mobileZForVar("chl", data);
       return is2D(z) ? { frame, data, grid, z } : null;
@@ -7006,10 +7007,32 @@ function combinedChlEnsureState() {
       gatePct: 10,
       loadingPromise: null,
       panelRevealed: false,
+      resolution: "coarse",
       opSeq: 0                      // increments on each toggle to abort stale renders
     };
   }
   return window._combinedChl;
+}
+
+// Promote to the original raster only when a coarse cell would become
+// visibly blocky, and demote again when zooming back out.
+const CHL_FULL_RESOLUTION_ZOOM = 7;
+
+function combinedChlResolutionForMap(map) {
+  return Number(map?.getView?.().getZoom?.()) >= CHL_FULL_RESOLUTION_ZOOM
+    ? "full" : "coarse";
+}
+
+function combinedChlScheduleResolutionCheck(map) {
+  const s = combinedChlEnsureState();
+  clearTimeout(s.resolutionTimer);
+  s.resolutionTimer = setTimeout(() => {
+    if (!document.getElementById("chk-combined-chl")?.checked || !s.selectedFrameIds.size) return;
+    const next = combinedChlResolutionForMap(map);
+    if (next === s.resolution) return;
+    s.resolution = next;
+    combinedChlRenderSelected({ resolution: next });
+  }, 220);
 }
 
 function combinedChlManifestKey() {
@@ -7043,7 +7066,7 @@ async function combinedChlEnsureCoverage() {
         const id = combinedChlFrameId(frame);
         if (s.cache.has(id) && s.cache.get(id).manifestKey === k) return;
         try {
-          const data = await fetchFrameData("chl", frame);
+          const data = await fetchFrameData("chl", frame, { resolution: "coarse" });
           const coverage = combinedChlComputeCoveragePct(data);
           s.cache.set(id, {
             timeMs: combinedChlFrameTimeMs(frame) || null,
@@ -7228,8 +7251,10 @@ function combinedChlApplyHoursPreset(hoursRaw) {
   combinedChlRenderSelected();
 }
 
-async function combinedChlRenderSelected() {
+async function combinedChlRenderSelected(options = {}) {
   const s = combinedChlEnsureState();
+  const resolution = options.resolution || s.resolution || "coarse";
+  s.resolution = resolution;
   const mySeq = s.opSeq || 0;   // snapshot of the toggle that started this render
   const chlScanTimeDiv = document.getElementById("combined-chl-scan-time");
   // 0 chips: clear layer, show "Pick at least one chip"
@@ -7260,7 +7285,7 @@ async function combinedChlRenderSelected() {
   if (selectedFrames.length === 1) {
     const frame = selectedFrames[0];
     try {
-      const data = await fetchFrameData("chl", frame);
+      const data = await fetchFrameData("chl", frame, { resolution });
       if (s.opSeq !== mySeq) return;   // stale — user deselected while we were fetching
       const grid = await loadGridForVar("chl", data);
       if (s.opSeq !== mySeq) return;
@@ -7298,7 +7323,7 @@ async function combinedChlRenderSelected() {
     try { window._combinedMap.removeLayer(window._combinedChlLayer); } catch (_) {}
     window._combinedChlLayer = null;
   }
-  const result = await buildChlCompositeLayer(window._combinedMap, { selectedFrames, labelMode: "auto" });
+  const result = await buildChlCompositeLayer(window._combinedMap, { selectedFrames, labelMode: "auto", resolution });
   if (s.opSeq !== mySeq) return;   // stale — user deselected while compositing
   if (result?.layer) {
     if (window._combinedMap) window._combinedMap.addLayer(result.layer);
@@ -7313,6 +7338,7 @@ async function combinedChlRenderSelected() {
 
 async function combinedChlInitPanel() {
   const s = combinedChlEnsureState();
+  s.resolution = combinedChlResolutionForMap(window._combinedMap);
   if (s.initialized && !combinedChlManifestChanged()) {
     combinedChlRebuildChips();
     return;
@@ -10002,7 +10028,15 @@ async function loadGridForVar(v, dataObj = null) {
 }
 
 
-async function fetchFrameData(varKey, frameMeta) {
+function framePathForResolution(varKey, frameMeta, resolution = "full") {
+  if (varKey === "chl" && resolution === "coarse" && frameMeta?.coarse_json_path) {
+    return String(frameMeta.coarse_json_path);
+  }
+  return framePathOf(frameMeta);
+}
+
+async function fetchFrameData(varKey, frameMeta, options = {}) {
+  const resolution = options.resolution || "full";
   const candidates = [frameMeta];
   // The rolling R2 publisher can leave a stale manifest entry after an old
   // object is purged. If the selected frame is 404, walk newest-first to the
@@ -10015,13 +10049,22 @@ async function fetchFrameData(varKey, frameMeta) {
   }
   let lastPath = "";
   for (const candidate of candidates) {
-    const p = framePathOf(candidate);
+    const p = framePathForResolution(varKey, candidate, resolution);
     if (!p) continue;
     lastPath = p;
     try {
       const res = await fetch(p + (p.includes('?') ? '&' : '?') + 't=' + Date.now());
-      if (res.ok) return await res.json();
+      if (res.ok) {
+        const data = await res.json();
+        data.__resolution = resolution;
+        return data;
+      }
     } catch (_) {}
+  }
+  if (resolution === "coarse") {
+    // Older rolling R2 windows may not have derivatives yet; preserve the
+    // existing full-resolution behavior instead of making CHL unavailable.
+    return fetchFrameData(varKey, frameMeta, { resolution: "full" });
   }
   throw new Error(`Frame load failed: ${lastPath || "no json path"}`);
 }
