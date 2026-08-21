@@ -5559,7 +5559,7 @@ async function ensureDesktopBathyContourLayer(map, bathyData, gridInfo) {
     layer = new ol.layer.Vector({
       source,
       style: new ol.style.Style({
-        stroke: new ol.style.Stroke({ color: "#8bb8d4", width: 0.8 })
+        stroke: new ol.style.Stroke({ color: "#8bb8d4", width: 1.05, lineCap: "round", lineJoin: "round" })
       }),
       zIndex: 15
     });
@@ -6697,7 +6697,12 @@ function buildBathyContourLayer(bathyData, gridInfo, map) {
   const layer = new ol.layer.Vector({
     source,
     style: feature => new ol.style.Style({
-      stroke: new ol.style.Stroke({ color: "#b25cff", width: feature.get("depth") >= 1000 ? 1.1 : 0.9 })
+      stroke: new ol.style.Stroke({
+        color: "#b25cff",
+        width: feature.get("depth") >= 1000 ? 1.25 : 1.05,
+        lineCap: "round",
+        lineJoin: "round"
+      })
     }),
     zIndex: 15
   });
@@ -6763,7 +6768,7 @@ function updateBathyContoursForMap(map) {
   updateBathyContoursSync(map);
 }
 
-function stitchContourSegments(segments, joinTolerance = 0.021) {
+function stitchContourSegments(segments, joinTolerance = 0.03) {
   const key = point => `${Math.round(point[0] * 1e6)},${Math.round(point[1] * 1e6)}`;
   const distance = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
   const remaining = (segments || []).filter(item => item?.segment?.length >= 2)
