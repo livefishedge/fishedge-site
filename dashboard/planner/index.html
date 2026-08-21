@@ -43,7 +43,6 @@
       text-transform: uppercase; margin: 28px 0 12px;
     }
 
-    /* Inlet picker */
     .inlet-picker {
       display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
       padding: 14px 16px; background: #0a1929; border: 1px solid #24465d;
@@ -55,7 +54,6 @@
       padding: 6px 10px; border-radius: 4px; font: inherit; min-width: 240px;
     }
 
-    /* Day strip — 5 cards in a row */
     .day-strip {
       display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px;
     }
@@ -72,6 +70,11 @@
     }
     .day-card .day-when { font-size: 13px; color: #edfaff; font-weight: 600; }
     .day-card .day-date { font-size: 11px; color: #6b7d92; font-family: ui-monospace, monospace; }
+    .day-card .day-time {
+      font-size: 12px; color: #edfaff; margin-top: 6px;
+      font-family: ui-monospace, monospace;
+    }
+    .day-card .frame-counter { color: #6b7d92; font-size: 10px; font-weight: normal; }
     .day-badge {
       display: inline-block; padding: 3px 10px; border-radius: 4px;
       font-size: 11px; font-weight: 700; letter-spacing: .5px;
@@ -83,8 +86,16 @@
     .day-card .day-summary {
       font-size: 11px; color: #a9dbea; line-height: 1.5;
     }
+    .day-card .frame-next {
+      display: block; width: 100%; margin-top: 10px;
+      padding: 6px 8px;
+      background: #15324a; border: 1px solid #31546b;
+      border-radius: 4px; color: #67d9ff;
+      font: 11px ui-monospace, monospace; cursor: pointer;
+      text-align: center;
+    }
+    .day-card .frame-next:hover { background: #1d4666; border-color: #67d9ff; }
 
-    /* Briefing card */
     .briefing {
       background: #0a1929; border: 1px solid #24465d; border-radius: 8px;
       padding: 18px 20px;
@@ -102,7 +113,6 @@
     }
     .briefing .map-link:hover { background: #1d4666; }
 
-    /* My trips */
     .my-trips {
       background: #0a1929; border: 1px solid #24465d; border-radius: 8px;
       padding: 16px;
@@ -113,13 +123,12 @@
       border-radius: 4px; margin-top: 8px; font-size: 12px;
     }
 
-    /* Layout grid */
     .row-2col {
       display: grid; grid-template-columns: 2fr 1fr; gap: 18px;
     }
 
     @media (max-width: 800px) {
-      .day-strip { grid-template-columns: repeat(5, minmax(110px, 1fr)); overflow-x: auto; padding-bottom: 6px; }
+      .day-strip { grid-template-columns: repeat(5, minmax(180px, 1fr)); overflow-x: auto; padding-bottom: 6px; }
       .row-2col { grid-template-columns: 1fr; }
       .top h1 { font-size: 14px; }
       .tabs a { font-size: 11px; padding: 5px 8px; }
@@ -151,7 +160,7 @@
       <span style="color:#7898aa;font-size:11px;">Target area: <strong style="color:#edfaff">Baltimore Canyon line</strong></span>
     </div>
 
-    <h2>Five-day outlook</h2>
+    <h2>Five-day outlook — click a card to drill down, ▶ Next to step frames</h2>
     <div class="day-strip" id="dayStrip">
       <div class="day-card" style="color:#7898aa">Loading forecast…</div>
     </div>
@@ -164,7 +173,7 @@
       <aside class="my-trips">
         <h2 style="margin:0 0 10px">My Trips</h2>
         <div id="tripsList" class="my-trips-empty">
-          No saved trips yet. Set a trip above and tap "Save trip" (coming soon).
+          No saved trips yet. Saved trips will show up here.
         </div>
       </aside>
     </div>
@@ -173,40 +182,24 @@
   <script>
   // ============================================================
   // FishEdge Trip Planner — /planner/ peer route
-  // Self-contained rebuild (2026-08-21, major overhaul).
   //
-  // Mike's directive: 'the planner needs a major overhaul'.
+  // Mike (2026-08-21 13:41 ET):
+  //   1) Each day card shows ONE frame at a time. Advance by button.
+  //   2) Wind viz should be higher resolution.
   //
-  //   Old version: 7-card stub linking to /planner/viewer.html —
-  //   meteorologist view, no GO/NO-GO, no inlet context, no
-  //   decision support.
-  //
-  //   New version: captain-facing trip planner:
-  //     - Day strip with computed GO/CAUTION/NO-GO per day
-  //     - Plain-English briefing card for selected day
-  //     - Inlet picker (saved in localStorage)
-  //     - My Trips sidebar (localStorage-backed)
-  //     - "View on map" link to /planner/viewer.html?date=...
-  //
-  //   Data: forecast.json (17x21 grid, 56 frames, 3-hourly).
-  //   Decision thresholds:
-  //     GO       wind < 15kt AND wave < 3ft
-  //     CAUTION  wind 15-25kt OR wave 3-6ft
-  //     NO-GO    wind > 25kt OR wave > 6ft
-  //
-  //   No dependency on dashboard-planner.js or planner-bootstrap.js —
-  //   both reference globals that aren't actually exposed, so the old
-  //   bootstrap would throw on first mount.
+  // Per-day card now tracks currentFrameIdx[dayIdx] and renders that
+  // frame's wind/wave/swell. "▶ Next" button cycles through the day's
+  // 3-hour frames. Briefing card + map link use the selected frame.
   // ============================================================
   const DATA_BASE = 'https://data.fishedge.live/usec_md/briefing/';
-  const INLET_STORAGE_KEY = 'fishedge:saved_inlet';
-  const TRIPS_STORAGE_KEY = 'fishedge:saved_trips';
+  const INLET_STORAGE_KEY = 'fished…nlet';
+  const TRIPS_STORAGE_KEY = 'fished…rips';
 
   let forecast = null;
   let selectedDayIdx = 0;
+  let currentFrameIdx = [0, 0, 0, 0, 0];
   let dayAggregates = [];
 
-  // ---- helpers ----
   function decision(maxWindKt, maxWaveFt) {
     if (maxWindKt > 25 || maxWaveFt > 6) return 'NO-GO';
     if (maxWindKt >= 15 || maxWaveFt >= 3) return 'CAUTION';
@@ -223,6 +216,16 @@
     if (diff === 0) return 'Today';
     if (diff === 1) return 'Tomorrow';
     return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  }
+  function frameLabel(isoTime) {
+    if (!isoTime) return '—';
+    const t = String(isoTime).slice(11, 16);
+    if (!t || !t.includes(':')) return isoTime;
+    const h = parseInt(t.slice(0, 2), 10);
+    const m = t.slice(3, 5);
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    const h12 = h % 12 === 0 ? 12 : h % 12;
+    return `${h12}:${m} ${ampm}`;
   }
   function windDesc(kt) {
     if (kt < 5)  return 'calm';
@@ -248,83 +251,118 @@
     return out;
   }
 
-  // ---- aggregate forecast frames into per-day stats ----
   function aggregateByDay() {
     const days = {};
     for (const f of forecast.frames || []) {
       const d = String(f.time || '').slice(0, 10);
       if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) continue;
-      if (!days[d]) days[d] = { winds: [], waves: [], swells: [], times: 0 };
-      days[d].winds.push(...gather(f.wind_speed_kn));
-      days[d].waves.push(...gather(f.wave_height_ft));
-      days[d].swells.push(...gather(f.swell_height_ft));
-      days[d].times++;
+      if (!days[d]) days[d] = { frames: [] };
+
+      const winds = gather(f.wind_speed_kn);
+      const waves = gather(f.wave_height_ft);
+      const swells = gather(f.swell_height_ft);
+      const frameWind = winds.length ? Math.max(...winds) : 0;
+      const frameWave = waves.length ? Math.max(...waves) : 0;
+      const frameSwell = swells.length ? Math.max(...swells) : 0;
+      days[d].frames.push({
+        time: f.time,
+        maxWind: Math.round(frameWind),
+        maxWave: +frameWave.toFixed(1),
+        maxSwell: +frameSwell.toFixed(1),
+      });
     }
+
     const sortedDates = Object.keys(days).sort().slice(0, 5);
     return sortedDates.map(date => {
       const d = days[date];
-      const maxWind = d.winds.length ? Math.max(...d.winds) : 0;
-      const maxWave = d.waves.length ? Math.max(...d.waves) : 0;
-      const maxSwell = d.swells.length ? Math.max(...d.swells) : 0;
+      const frames = d.frames.sort((a, b) => a.time.localeCompare(b.time));
+      const maxWind = Math.max(...frames.map(f => f.maxWind));
+      const maxWave = Math.max(...frames.map(f => f.maxWave));
+      const maxSwell = Math.max(...frames.map(f => f.maxSwell));
       return {
         date,
+        decision: decision(maxWind, maxWave),
         maxWind: Math.round(maxWind),
         maxWave: +maxWave.toFixed(1),
         maxSwell: +maxSwell.toFixed(1),
-        decision: decision(maxWind, maxWave),
+        frames,
       };
     });
   }
 
-  // ---- render day strip ----
   function renderDayStrip() {
-    const html = dayAggregates.map((d, i) => `
-      <button class="day-card ${i === selectedDayIdx ? 'selected' : ''}" data-idx="${i}">
-        <div class="day-when">${dayLabel(d.date, i)}</div>
-        <div class="day-date">${d.date}</div>
-        <div class="day-badge ${badgeClass(d.decision)}">${d.decision}</div>
-        <div class="day-summary">
-          Wind ${d.maxWind}kt · Seas ${d.maxWave}ft${d.maxSwell > 0.5 ? ` · Swell ${d.maxSwell}ft` : ''}
+    const html = dayAggregates.map((d, i) => {
+      const idx = currentFrameIdx[i] || 0;
+      const frame = d.frames[idx] || d.frames[0];
+      const frameCount = d.frames.length;
+      const isLastFrame = idx >= frameCount - 1;
+      const nextLabel = isLastFrame
+        ? 'Restart at ' + frameLabel(d.frames[0].time)
+        : '▶ Next · ' + frameLabel(d.frames[idx + 1].time);
+      return `
+        <div class="day-card ${i === selectedDayIdx ? 'selected' : ''}" data-day-idx="${i}">
+          <div class="day-when">${dayLabel(d.date, i)}</div>
+          <div class="day-date">${d.date}</div>
+          <div class="day-time">${frameLabel(frame.time)} <span class="frame-counter">frame ${idx + 1} / ${frameCount}</span></div>
+          <div class="day-badge ${badgeClass(d.decision)}">${d.decision}</div>
+          <div class="day-summary">
+            Wind ${frame.maxWind}kt · Seas ${frame.maxWave}ft${frame.maxSwell > 0.5 ? ` · Swell ${frame.maxSwell}ft` : ''}
+          </div>
+          <button class="frame-next" data-day-idx="${i}">${nextLabel}</button>
         </div>
-      </button>
-    `).join('');
+      `;
+    }).join('');
     document.getElementById('dayStrip').innerHTML = html;
-    document.querySelectorAll('.day-card').forEach(el => {
-      el.addEventListener('click', () => {
-        selectedDayIdx = +el.dataset.idx;
+
+    // Day card click → select day (but not when clicking the frame-next button)
+    document.querySelectorAll('.day-card').forEach(card => {
+      card.addEventListener('click', (e) => {
+        if (e.target.closest('.frame-next')) return;
+        selectedDayIdx = +card.dataset.dayIdx;
+        renderDayStrip();
+        renderBriefing();
+      });
+    });
+
+    // Frame-next button click → advance that day's frame
+    document.querySelectorAll('.frame-next').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const i = +btn.dataset.dayIdx;
+        currentFrameIdx[i] = (currentFrameIdx[i] + 1) % dayAggregates[i].frames.length;
         renderDayStrip();
         renderBriefing();
       });
     });
   }
 
-  // ---- render briefing card ----
   function renderBriefing() {
     const d = dayAggregates[selectedDayIdx];
     if (!d) {
       document.getElementById('briefing').innerHTML = '<h3>Briefing</h3><p style="color:#7898aa">No forecast data.</p>';
       return;
     }
-    const when = dayLabel(d.date, selectedDayIdx);
+    const idx = currentFrameIdx[selectedDayIdx] || 0;
+    const frame = d.frames[idx] || d.frames[0];
+    const when = `${dayLabel(d.date, selectedDayIdx)} · ${frameLabel(frame.time)}`;
     const advice = d.decision === 'GO' ? 'Good day to fish — go.' :
                    d.decision === 'CAUTION' ? 'Workable, but watch conditions.' :
                    'Stay in — conditions exceed safe limits.';
     document.getElementById('briefing').innerHTML = `
-      <h3>${when} briefing — ${fmtDate(new Date(d.date + 'T12:00:00Z'))}</h3>
+      <h3>${when}</h3>
       <p class="briefing-summary">
-        ${windDesc(d.maxWind)} winds to <strong>${d.maxWind}kt</strong>.
-        Seas ${waveDesc(d.maxWave)}, peaking at <strong>${d.maxWave}ft</strong>${d.maxSwell > 0.5 ? `, with swell up to <strong>${d.maxSwell}ft</strong>` : ''}.
+        ${windDesc(frame.maxWind)} winds to <strong>${frame.maxWind}kt</strong>.
+        Seas ${waveDesc(frame.maxWave)}, peaking at <strong>${frame.maxWave}ft</strong>${frame.maxSwell > 0.5 ? `, with swell up to <strong>${frame.maxSwell}ft</strong>` : ''}.
         <br><strong>${advice}</strong>
       </p>
       <p class="briefing-detail">
         <span class="day-badge ${badgeClass(d.decision)}">${d.decision}</span>
-        Wind ${d.maxWind}kt · Seas ${d.maxWave}ft${d.maxSwell > 0.5 ? ` · Swell ${d.maxSwell}ft` : ''}
+        Frame ${idx + 1}/${d.frames.length} · Wind ${frame.maxWind}kt · Seas ${frame.maxWave}ft${frame.maxSwell > 0.5 ? ` · Swell ${frame.maxSwell}ft` : ''}
       </p>
       <a class="map-link" href="/planner/viewer.html?date=${d.date}&region=usec_md">View on full map →</a>
     `;
   }
 
-  // ---- my trips (localStorage) ----
   function renderMyTrips() {
     try {
       const trips = JSON.parse(localStorage.getItem(TRIPS_STORAGE_KEY) || '[]');
@@ -344,7 +382,6 @@
     } catch (_) { /* ignore */ }
   }
 
-  // ---- load forecast + render ----
   async function loadForecast() {
     try {
       const r = await fetch(DATA_BASE + 'forecast.json');
@@ -353,6 +390,7 @@
       dayAggregates = aggregateByDay();
       if (dayAggregates.length === 0) throw new Error('No daily aggregates');
       selectedDayIdx = 0;
+      currentFrameIdx = dayAggregates.map(() => 0);
       renderDayStrip();
       renderBriefing();
     } catch (e) {
@@ -360,7 +398,6 @@
     }
   }
 
-  // ---- inlet picker (saved in localStorage) ----
   const inletSelect = document.getElementById('inlet');
   try {
     const saved = localStorage.getItem(INLET_STORAGE_KEY);
