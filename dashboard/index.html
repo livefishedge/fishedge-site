@@ -6590,6 +6590,25 @@ async function renderCombinedMode() {
     if (hoverTip) hoverTip.style.display = "none";
   });
 
+  // OL can finish constructing the map before its renderer has created the
+  // canvas, particularly on a cold mobile load while the vector-tile style
+  // is arriving. Do one explicit synchronous paint and one animation-frame
+  // repaint before declaring boot complete; otherwise the controls appear
+  // over a black target until a refresh happens to trigger a reflow.
+  map.updateSize();
+  try { map.renderSync(); } catch (e) {
+    console.warn("[combined] initial renderSync failed:", e?.message || e);
+  }
+  await new Promise(resolve => requestAnimationFrame(() => {
+    const m = window._combinedMap;
+    if (m) {
+      m.updateSize();
+      try { m.render(); } catch (_) {}
+    }
+    resolve();
+  }));
+  await new Promise(resolve => setTimeout(resolve, 0));
+
   window._combinedRenderLocked = false;
   // If CHL is already checked on first render (e.g. page refreshed in
   // combined mode), the change handler hasn't fired — init the panel now.
