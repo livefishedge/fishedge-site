@@ -6172,9 +6172,12 @@ async function applyOfmTwoLayerBasemap(map) {
           if (L.type === "fill") return false;
           // Drop 3D building fill-extrusions — we want a flat 2D look.
           if (L.type === "fill-extrusion") return false;
-          // Keep lines (roads, road casings, bridges, boundaries) and
-          // symbols (place labels, road labels, POIs) for context.
-          return L.type === "line" || L.type === "symbol";
+          // Keep only a small coastal-place label set. Roads, boundaries,
+          // POIs, and transit layers add visual noise and tile work without
+          // helping captains orient on this product.
+          if (L.type !== "symbol") return false;
+          const placeLabels = new Set(["label_town", "label_village", "label_city", "label_city_capital"]);
+          return L["source-layer"] === "place" && placeLabels.has(L.id);
         });
         return out;
       }
@@ -10659,7 +10662,7 @@ async function loadCaptainBriefing() {
 })();
 
 /* ========================= INIT ========================= */
-(async function init() {
+async function initDashboard() {
   try {
     installRegionSelector();
     // Wait for the auth callback to determine the correct active region
@@ -10701,7 +10704,15 @@ async function loadCaptainBriefing() {
   } catch (e) {
     console.error("Init failed:", e);
   }
-})();
+}
+// Deferred OpenLayers/Plotly scripts execute after parsing but before
+// DOMContentLoaded. Do not initialize the dashboard from the parser itself:
+// doing so races `ol` on a cold load and produces a black map until refresh.
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initDashboard, { once: true });
+} else {
+  initDashboard();
+}
 
 /* ================= LOGIN GATE (DISABLED - always show map) ================= */
 (function() {
