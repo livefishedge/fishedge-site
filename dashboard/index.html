@@ -69,6 +69,10 @@
   <style>
     :root{ --bg:#050b10; --fg:#e0e6ee; --panel:rgba(5,11,16,0.90); --border:#1b2836; }
     html,body{ height:100%; margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,-apple-system,"Segoe UI",sans-serif; overflow:hidden; -webkit-text-size-adjust:100%; }
+    /* Do not expose the default South map while the auth gate is resolving.
+       Unauthenticated visitors should transition from this loading card to
+       login.html, never briefly see an authenticated dashboard. */
+    body.auth-pending > :not(#dashboard-boot-status):not(#global-error-overlay){ visibility:hidden !important; }
 
     /* ======= Toolbar (fixed top bar - replaces #controls) ======= */
     #toolbar{
@@ -1130,7 +1134,7 @@
 
 <!-- locate-me cache-buster: 20260806 (force CDN revalidate after 47412bc01e stuck) -->
 </head>
-<body>
+<body class="auth-pending">
 <div id="dashboard-boot-status"><div class="boot-card">Loading dashboard…</div></div>
 <!-- host for fishedge-locate-me button (rendered by /locate-me.js) -->
 <div id="fishedge-locate-host" style="position:fixed;top:8px;right:8px;z-index:1100;"></div>
@@ -10860,10 +10864,14 @@ async function initDashboard() {
       setActiveRegion(nextRegion);
       await initializeData();
     }
+    document.body.classList.remove("auth-pending");
+    document.body.classList.add("auth-ready");
     finishBootStatus();
   } catch (e) {
     console.error("Init failed:", e);
     window.__dashboardBooting = false;
+    document.body.classList.remove("auth-pending");
+    document.body.classList.add("auth-ready");
     setBootStatus('Dashboard could not finish loading.', true);
   }
 }
