@@ -1,4 +1,2 @@
-/planner /dashboard 200
-/planner/ /dashboard/ 200
 /planner/* /dashboard/planner/:splat 200
 /subsurface-fronts/* /
