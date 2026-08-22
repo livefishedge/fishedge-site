@@ -299,7 +299,7 @@
   // and respawns on age-out or bbox-exit (stochastic re-seeding). State
   // stays across frames so each particle leaves a comet tail.
   const particles = [];
-  for (let i = 0; i < 300; i++) {
+  for (let i = 0; i < 1000; i++) {
     particles.push({
       lon: bbox[0] + Math.random() * (bbox[2] - bbox[0]),
       lat: bbox[1] + Math.random() * (bbox[3] - bbox[1]),
@@ -481,59 +481,32 @@
     };
   }
 
-  // -------- wind streamlines + animated particles (hint.fm/wind style) --------
-  // 2026-08-21 redesign per Mike's "Present wind data like hint.fm/wind".
-  // Style: thin white/cyan streamlines + small fading particles on a
-  // near-black background. Speed encoded as opacity (calm = faint,
-  // strong = bright). Particles fade in/out along their streamline path.
-  // 2026-08-21 13:41 ET (Mike: 'wind data is too sparse') — now runs on
-  // a 3x denser interpolated grid (51x63 = 3,213 cells), so streamlines
-  // actually differ at sub-cell positions instead of overlapping.
+  // -------- wind: hint.fm-style advecting particles (no static streamlines) --------
+  // 2026-08-22 (Mike): the previous static-streamlines + particles mix
+  // had two issues:
+  //   1) Streamlines from grid-aligned seeds followed near-identical paths
+  //      (after bilinear interpolation, neighboring cells have similar
+  //      wind), causing visible 'clumps' of streamlines in low-wind/sink
+  //      regions.
+  //   2) Streamlines and particles didn't always visually agree because
+  //      streamlines show the full integrated path (instantaneous snapshot)
+  //      while particles advect frame-by-frame (sampled at current position).
+  // Dropped the static streamlines entirely. Hint.fm/wind doesn't use them
+  // — it relies on dense advecting particles alone to convey the flow.
+  // 1000 particles + trail-decay buffer gives full coverage of the map.
   function drawWind(grid, f) {
     if (!checks.wind.checked || !f.wind_speed_kn) return;
     const hires = buildHiresGrid(grid, f, 3);
     const lats = hires.lats, lons = hires.lons;
 
-    // 1) streamlines — dense seed grid on the hires grid, speed-tinted alpha
-    // Mike 13:46 ET 'didn't work' — previous version had only 22*15=330
-    // seeds and streamlines exited the small 5x4 bbox after ~12 steps.
-    // Bumped to every 1st sy, every 2nd sx = ~44*29 = 1,276 seeds so the
-    // viz actually fills out (each pixel gets painted by multiple
-    // converging streamlines).
-    for (let sy = 2; sy < lats.length - 2; sy += 1) {
-      for (let sx = 2; sx < lons.length - 2; sx += 2) {
-        const path = traceWind(hires, hires, lons[sx], lats[sy], false);
-        if (path.length < 3) continue;
-        // mid-path speed → opacity (calm 0.18, strong 0.63)
-        const mid = path[Math.floor(path.length / 2)];
-        const [u, v] = windAt(hires, hires, mid[0], mid[1]);
-        const sp = Math.hypot(u, v);
-        const t = Math.min(1, sp / 35);
-        const alpha = 0.18 + 0.45 * t;
-        const r = Math.round(180 + 50 * t);
-        const g = Math.round(215 + 30 * t);
-        const b = 230;
-        ctx.strokeStyle = `rgba(${r},${g},${b},${alpha})`;
-        ctx.lineWidth = 0.9;
-        ctx.lineCap = 'round';
-        ctx.beginPath();
-        path.forEach((p, i) => {
-          const q = pix(p[0], p[1]);
-          if (!q) return;
-          i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]);
-        });
-        ctx.stroke();
-      }
-    }
-
-    // 2) trail decay — slightly fade canvas so old particle tails leave
+    // 1) trail decay — slightly fade canvas so old particle tails leave
     // comet trails. Drawn BEFORE the new particles, AFTER the streamlines,
     // so the streamlines stay sharp but particle tails accumulate and fade.
     ctx.fillStyle = 'rgba(7, 17, 29, 0.06)';
     ctx.globalAlpha = 1;
     ctx.fillRect(0, 0, canvas.width / devicePixelRatio, canvas.height / devicePixelRatio);
 
-    // 3) flowing particles — 300 hint.fm-style advecting streamlets.
+    // 2) flowing particles — 1000 hint.fm-style advecting streamlets.
     // Each particle is moved each frame by Euler integration of the local
     // (u,v) wind vector at its position (Mercator-corrected: lon step
     // scaled by 1/cos(lat)). A short line segment between the old and new
