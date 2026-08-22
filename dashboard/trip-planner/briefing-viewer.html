@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Briefing Viewer — <span id="title-date">…</span></title>
+  <title>Briefing Viewer</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@10.2.1/ol.css">
   <style>
     :root { color-scheme: dark; }
@@ -25,6 +25,10 @@
     .bv-layers .badge.om { color: #ffeb3b; }
     .bv-layers .badge.cmems { color: #ff6f00; }
     .bv-map { position: absolute; top: 52px; left: 0; right: 0; bottom: 0; }
+    .bv-flow-canvas {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      pointer-events: none; z-index: 4; mix-blend-mode: screen;
+    }
     .ol-attribution { color: #6b7d92 !important; background: rgba(10, 25, 41, 0.8) !important; }
     .ol-attribution ul { color: #6b7d92 !important; }
     .ol-control button { background-color: rgba(10, 25, 41, 0.8) !important; color: #b3e5fc !important; }
@@ -39,6 +43,15 @@
     .bv-legend b { color: #e3f2fd; }
     .bv-legend .row { display: flex; align-items: center; gap: 6px; margin: 2px 0; }
     .bv-legend .swatch { display: inline-block; width: 14px; height: 10px; border: 1px solid #1b2836; }
+    @media (max-width: 640px) {
+      .bv-header { align-items: flex-start; flex-wrap: wrap; gap: 8px; padding: 8px 10px; }
+      .bv-back { font-size: 12px; padding: 3px 8px; }
+      .bv-title { font-size: 14px; }
+      .bv-subtitle { display: none; }
+      .bv-layers { width: 100%; margin-left: 0; gap: 10px; }
+      .bv-layers label { font-size: 11px; }
+      .bv-legend { right: 0.5em; max-width: none; font-size: 10px; }
+    }
   </style>
 </head>
 <body>
@@ -55,8 +68,8 @@
   </div>
   <div id="bv-map" class="bv-map"></div>
   <div class="bv-legend" id="bv-legend">
-    <b>Raster layers</b> are pre-rendered PNGs served from <code>data.fishedge.live</code>.
-    They overlay the same geographic bbox as the captain's dashboard. Pan/zoom to inspect.
+    <b id="bv-legend-title">Wind flow</b>
+    <div id="bv-legend-meta">Loading vector field…</div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/ol@10.2.1/dist/ol.js"></script>
@@ -80,9 +93,11 @@
       const rasterUrl = (source) => `https://data.fishedge.live/${region}/briefing/${source}_${date}.png`;
       const OM_URL    = rasterUrl('raster');
       const CMEMS_URL = rasterUrl('cmems_raster');
+      const FORECAST_URL = `https://data.fishedge.live/${region}/briefing/forecast.json`;
+      const CURRENTS_URL = `https://data.fishedge.live/${region}/briefing/cmems/currents.json`;
+      const CORS_PROXY = 'https://corsproxy.io/?';
 
       // Header
-      document.getElementById('title-date').textContent = date;
       document.title = `Briefing Viewer — ${date}`;
       const dow = new Date(date + 'T12:00:00Z').toLocaleDateString('en-US', { weekday: 'short' });
       document.getElementById('bv-title').textContent = `${date} (${dow}) — 7-Day Outlook`;
@@ -95,23 +110,11 @@
         url: OM_URL,
         projection: rasterProjection,
         imageExtent: bbox,
-        crossOrigin: 'anonymous',
       });
       const cmemsSource = new ol.source.ImageStatic({
         url: CMEMS_URL,
         projection: rasterProjection,
         imageExtent: bbox,
-        crossOrigin: 'anonymous',
-      });
-
-      // Optional dark canvas base (subtle) — kept very dim so the raster is the star
-      const baseLayer = new ol.layer.Tile({
-        source: new ol.source.XYZ({
-          url: 'https://basemap.aad.gov.au/v2/epsg4326/{z}/{x}/{y}.png', // placeholder dark
-          attributions: '© Antarctic Australian Antarctic Division',
-          maxZoom: 12,
-          visible: false, // hidden by default — rasters are the primary content
-        }),
       });
 
       const omLayer    = new ol.layer.Image({ source: omSource,    visible: initialSource === 'om'    });
@@ -120,7 +123,7 @@
       // Map
       const map = new ol.Map({
         target: 'bv-map',
-        layers: [baseLayer, omLayer, cmemsLayer],
+        layers: [omLayer, cmemsLayer],
         view: new ol.View({
           projection: rasterProjection,
           center: center,
@@ -129,11 +132,248 @@
           maxZoom: 12,
           extent: [bbox[0] - 1, bbox[1] - 1, bbox[2] + 1, bbox[3] + 1],
         }),
-        controls: ol.control.defaults({ attribution: false, rotate: false }).extend([
+        controls: ol.control.defaults.defaults({ attribution: false, rotate: false }).extend([
           new ol.control.Attribution({ collapsible: false }),
           new ol.control.ScaleLine(),
         ]),
       });
+      const mapEl = document.getElementById('bv-map');
+      const flowCanvas = document.createElement('canvas');
+      flowCanvas.className = 'bv-flow-canvas';
+      flowCanvas.setAttribute('aria-hidden', 'true');
+      mapEl.appendChild(flowCanvas);
+      const flowCtx = flowCanvas.getContext('2d');
+      const legendTitle = document.getElementById('bv-legend-title');
+      const legendMeta = document.getElementById('bv-legend-meta');
+
+      function syncMapOffset() {
+        const header = document.querySelector('.bv-header');
+        const h = header ? Math.ceil(header.getBoundingClientRect().height) : 52;
+        mapEl.style.top = h + 'px';
+      }
+
+      const flowState = {
+        source: initialSource,
+        field: null,
+        particles: [],
+        lastFrame: 0,
+        raf: 0,
+        width: 0,
+        height: 0,
+        dpr: 1,
+      };
+
+      function resizeFlowCanvas() {
+        const rect = mapEl.getBoundingClientRect();
+        const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+        const width = Math.max(1, Math.round(rect.width * dpr));
+        const height = Math.max(1, Math.round(rect.height * dpr));
+        if (flowCanvas.width === width && flowCanvas.height === height) return;
+        flowCanvas.width = width;
+        flowCanvas.height = height;
+        flowCanvas.style.width = rect.width + 'px';
+        flowCanvas.style.height = rect.height + 'px';
+        flowCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        flowState.width = rect.width;
+        flowState.height = rect.height;
+        flowState.dpr = dpr;
+        seedParticles();
+      }
+
+      async function fetchJson(url) {
+        try {
+          const r = await fetch(url, { cache: 'no-store', mode: 'cors' });
+          if (r.ok) return await r.json();
+        } catch (_) {}
+        const proxied = CORS_PROXY + encodeURIComponent(url);
+        const r = await fetch(proxied, { cache: 'no-store' });
+        if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+        return r.json();
+      }
+
+      function nearestFrame(frames, wantedDate) {
+        const sameDay = (frames || []).filter(f => String(f.time || '').slice(0, 10) === wantedDate);
+        const pool = sameDay.length ? sameDay : (frames || []);
+        if (!pool.length) return null;
+        return pool.reduce((best, frame) => {
+          const hour = Number(String(frame.time || '').slice(11, 13));
+          const bestHour = Number(String(best.time || '').slice(11, 13));
+          return Math.abs(hour - 12) < Math.abs(bestHour - 12) ? frame : best;
+        }, pool[0]);
+      }
+
+      function windFieldFromForecast(data) {
+        const frame = nearestFrame(data.frames, date);
+        if (!frame) throw new Error('No Open-Meteo forecast frame');
+        const speed = frame.wind_speed_kn || [];
+        const dir = frame.wind_direction_deg || [];
+        const u = [];
+        const v = [];
+        for (let r = 0; r < speed.length; r++) {
+          const uRow = [];
+          const vRow = [];
+          for (let c = 0; c < (speed[r] || []).length; c++) {
+            const sp = Number(speed[r][c]);
+            const deg = Number((dir[r] || [])[c]);
+            if (!Number.isFinite(sp) || !Number.isFinite(deg)) {
+              uRow.push(0); vRow.push(0); continue;
+            }
+            const rad = deg * Math.PI / 180;
+            uRow.push(-sp * Math.sin(rad));
+            vRow.push(-sp * Math.cos(rad));
+          }
+          u.push(uRow); v.push(vRow);
+        }
+        return {
+          kind: 'wind',
+          label: 'Open-Meteo wind',
+          units: 'kn',
+          time: frame.time,
+          lons: data.lons || [],
+          lats: data.lats || [],
+          u, v,
+          color: 'rgba(255, 235, 59, 0.92)',
+          line: 'rgba(255, 235, 59, 0.38)',
+          speedScale: 0.0038,
+        };
+      }
+
+      function currentFieldFromCmems(data) {
+        const frame = nearestFrame(data.frames, date);
+        if (!frame) throw new Error('No CMEMS current frame');
+        return {
+          kind: 'current',
+          label: 'CMEMS current',
+          units: data.units && data.units.u || 'kn',
+          time: frame.time,
+          lons: data.lons || [],
+          lats: data.lats || [],
+          u: frame.u_kn || [],
+          v: frame.v_kn || [],
+          color: 'rgba(79, 195, 247, 0.95)',
+          line: 'rgba(79, 195, 247, 0.34)',
+          speedScale: 0.012,
+        };
+      }
+
+      function bilinear(field, lon, lat) {
+        const lons = field.lons;
+        const lats = field.lats;
+        const u = field.u;
+        const v = field.v;
+        if (lons.length < 2 || lats.length < 2 || !u.length || !v.length) return null;
+        if (lon < lons[0] || lon > lons[lons.length - 1] || lat < lats[0] || lat > lats[lats.length - 1]) return null;
+        const dlon = (lons[lons.length - 1] - lons[0]) / (lons.length - 1);
+        const dlat = (lats[lats.length - 1] - lats[0]) / (lats.length - 1);
+        const x = (lon - lons[0]) / dlon;
+        const y = (lat - lats[0]) / dlat;
+        const x0 = Math.max(0, Math.min(lons.length - 2, Math.floor(x)));
+        const y0 = Math.max(0, Math.min(lats.length - 2, Math.floor(y)));
+        const x1 = x0 + 1;
+        const y1 = y0 + 1;
+        const tx = x - x0;
+        const ty = y - y0;
+        const sample = (grid) => {
+          const a = Number((grid[y0] || [])[x0]) || 0;
+          const b = Number((grid[y0] || [])[x1]) || 0;
+          const c = Number((grid[y1] || [])[x0]) || 0;
+          const d = Number((grid[y1] || [])[x1]) || 0;
+          return a * (1 - tx) * (1 - ty) + b * tx * (1 - ty) + c * (1 - tx) * ty + d * tx * ty;
+        };
+        const uu = sample(u);
+        const vv = sample(v);
+        const speed = Math.sqrt(uu * uu + vv * vv);
+        return { u: uu, v: vv, speed };
+      }
+
+      function randomParticle() {
+        const lon = bbox[0] + Math.random() * (bbox[2] - bbox[0]);
+        const lat = bbox[1] + Math.random() * (bbox[3] - bbox[1]);
+        return { lon, lat, age: Math.random() * 90, maxAge: 70 + Math.random() * 80 };
+      }
+
+      function seedParticles() {
+        const area = Math.max(1, flowState.width * flowState.height);
+        const target = Math.max(280, Math.min(1100, Math.round(area / 1050)));
+        flowState.particles = Array.from({ length: target }, randomParticle);
+        if (flowCtx && flowState.width && flowState.height) {
+          flowCtx.clearRect(0, 0, flowState.width, flowState.height);
+        }
+      }
+
+      function clearFlow() {
+        if (flowCtx) flowCtx.clearRect(0, 0, flowState.width || flowCanvas.width, flowState.height || flowCanvas.height);
+      }
+
+      function drawFrame(ts) {
+        flowState.raf = requestAnimationFrame(drawFrame);
+        resizeFlowCanvas();
+        const field = flowState.field;
+        if (!field) return;
+        if (ts - flowState.lastFrame < 32) return;
+        flowState.lastFrame = ts;
+
+        flowCtx.globalCompositeOperation = 'destination-in';
+        flowCtx.fillStyle = 'rgba(0, 0, 0, 0.90)';
+        flowCtx.fillRect(0, 0, flowState.width, flowState.height);
+        flowCtx.globalCompositeOperation = 'source-over';
+        flowCtx.lineWidth = 1.15;
+        flowCtx.strokeStyle = field.line;
+
+        for (let i = 0; i < flowState.particles.length; i++) {
+          let p = flowState.particles[i];
+          const vec = bilinear(field, p.lon, p.lat);
+          if (!vec || vec.speed < 0.02 || p.age++ > p.maxAge || Math.random() < 0.004) {
+            flowState.particles[i] = randomParticle();
+            continue;
+          }
+          const before = ol.proj.fromLonLat([p.lon, p.lat], rasterProjection);
+          const beforePx = map.getPixelFromCoordinate(before);
+          const latScale = Math.max(0.35, Math.cos(p.lat * Math.PI / 180));
+          const step = field.speedScale * Math.max(0.25, Math.min(35, vec.speed));
+          p.lon += (vec.u * step) / latScale;
+          p.lat += vec.v * step;
+          if (p.lon < bbox[0] || p.lon > bbox[2] || p.lat < bbox[1] || p.lat > bbox[3]) {
+            flowState.particles[i] = randomParticle();
+            continue;
+          }
+          const after = ol.proj.fromLonLat([p.lon, p.lat], rasterProjection);
+          const afterPx = map.getPixelFromCoordinate(after);
+          if (!beforePx || !afterPx) continue;
+          flowCtx.globalAlpha = Math.max(0.18, Math.min(0.75, vec.speed / (field.kind === 'wind' ? 26 : 3.5)));
+          flowCtx.beginPath();
+          flowCtx.moveTo(beforePx[0], beforePx[1]);
+          flowCtx.lineTo(afterPx[0], afterPx[1]);
+          flowCtx.stroke();
+        }
+      }
+
+      async function loadFlow(source) {
+        flowState.source = source;
+        flowState.field = null;
+        clearFlow();
+        legendTitle.textContent = source === 'cmems' ? 'Current flow' : 'Wind flow';
+        legendMeta.textContent = 'Loading vector field…';
+        try {
+          const data = await fetchJson(source === 'cmems' ? CURRENTS_URL : FORECAST_URL);
+          if (flowState.source !== source) return;
+          flowState.field = source === 'cmems' ? currentFieldFromCmems(data) : windFieldFromForecast(data);
+          seedParticles();
+          const f = flowState.field;
+          legendMeta.textContent = `${f.label} · ${f.time || date} · particles advected from ${f.lons.length}×${f.lats.length} grid · ${f.units}`;
+        } catch (e) {
+          legendMeta.textContent = `Vector field unavailable: ${e && e.message ? e.message : e}`;
+        }
+      }
+
+      map.on('postrender', resizeFlowCanvas);
+      map.on('movestart', clearFlow);
+      window.addEventListener('resize', () => {
+        syncMapOffset();
+        map.updateSize();
+        resizeFlowCanvas();
+        clearFlow();
+      }, { passive: true });
 
       // Layer toggle (radio buttons)
       document.querySelectorAll('input[name="src"]').forEach(radio => {
@@ -142,6 +382,7 @@
           const v = e.target.value;
           omLayer.setVisible(v === 'om');
           cmemsLayer.setVisible(v === 'cmems');
+          loadFlow(v);
           // Reflect in URL for sharing
           const u = new URL(window.location.href);
           u.searchParams.set('source', v);
@@ -152,6 +393,11 @@
       // Click-to-zoom (double-click zooms in by default; we add a single-click
       // to fly-to the bounding extent of the raster)
       map.getView().fit(bbox, { padding: [20, 20, 20, 20] });
+      syncMapOffset();
+      map.updateSize();
+      resizeFlowCanvas();
+      loadFlow(initialSource);
+      flowState.raf = requestAnimationFrame(drawFrame);
     })();
   </script>
 </body>
