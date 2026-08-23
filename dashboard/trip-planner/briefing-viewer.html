@@ -29,6 +29,10 @@
       position: absolute; inset: 0; width: 100%; height: 100%;
       pointer-events: none; z-index: 4; mix-blend-mode: screen;
     }
+    .bv-streamlines-canvas {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      pointer-events: none; z-index: 3;
+    }
     .ol-attribution { color: #6b7d92 !important; background: rgba(10, 25, 41, 0.8) !important; }
     .ol-attribution ul { color: #6b7d92 !important; }
     .ol-control button { background-color: rgba(10, 25, 41, 0.8) !important; color: #b3e5fc !important; }
@@ -138,6 +142,14 @@
         ]),
       });
       const mapEl = document.getElementById('bv-map');
+      // Static streamline layer (z-index 3): drawn once per frame change,
+      //   never faded. This is what Mike actually wants to see.
+      // Animated particle layer (z-index 4): hint.fm-style comets on top.
+      const streamlineCanvas = document.createElement('canvas');
+      streamlineCanvas.className = 'bv-streamlines-canvas';
+      streamlineCanvas.setAttribute('aria-hidden', 'true');
+      mapEl.appendChild(streamlineCanvas);
+      const streamlineCtx = streamlineCanvas.getContext('2d');
       const flowCanvas = document.createElement('canvas');
       flowCanvas.className = 'bv-flow-canvas';
       flowCanvas.setAttribute('aria-hidden', 'true');
@@ -161,6 +173,7 @@
         width: 0,
         height: 0,
         dpr: 1,
+        streamlineFrameKey: null, // last (source,frame.time) drawn
       };
 
       function resizeFlowCanvas() {
@@ -168,15 +181,22 @@
         const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
         const width = Math.max(1, Math.round(rect.width * dpr));
         const height = Math.max(1, Math.round(rect.height * dpr));
-        if (flowCanvas.width === width && flowCanvas.height === height) return;
+        if (flowCanvas.width === width && flowCanvas.height === height
+            && streamlineCanvas.width === width && streamlineCanvas.height === height) return;
         flowCanvas.width = width;
         flowCanvas.height = height;
         flowCanvas.style.width = rect.width + 'px';
         flowCanvas.style.height = rect.height + 'px';
         flowCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        streamlineCanvas.width = width;
+        streamlineCanvas.height = height;
+        streamlineCanvas.style.width = rect.width + 'px';
+        streamlineCanvas.style.height = rect.height + 'px';
+        streamlineCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
         flowState.width = rect.width;
         flowState.height = rect.height;
         flowState.dpr = dpr;
+        flowState.streamlineFrameKey = null; // force redraw at new size
         seedParticles();
       }
 
@@ -234,7 +254,7 @@
           u, v,
           color: 'rgba(255, 235, 59, 0.92)',
           line: 'rgba(255, 235, 59, 0.38)',
-          speedScale: 0.0038,
+          speedScale: 0.012, // ~5-15 px/frame at typical 10-25 kn wind
         };
       }
 
@@ -252,7 +272,7 @@
           v: frame.v_kn || [],
           color: 'rgba(79, 195, 247, 0.95)',
           line: 'rgba(79, 195, 247, 0.34)',
-          speedScale: 0.012,
+          speedScale: 0.04, // currents are slower (kn) but need visible drift
         };
       }
 
@@ -305,20 +325,111 @@
         if (flowCtx) flowCtx.clearRect(0, 0, flowState.width || flowCanvas.width, flowState.height || flowCanvas.height);
       }
 
+      function clearStreamlines() {
+        if (streamlineCtx) {
+          streamlineCtx.clearRect(0, 0, flowState.width || streamlineCanvas.width, flowState.height || streamlineCanvas.height);
+        }
+        flowState.streamlineFrameKey = null;
+      }
+
+      // -------- static streamlines (the actual viz Mike wants) --------
+      // Trace one streamline per seed by Euler integration of the local
+      // (u,v) field. Each path is ~50 steps × 0.08° stepDeg ≈ 4° (~440km),
+      // matching hint.fm/wind's flow-density. Drawn once per frame change
+      // (not every animation tick) so the lines stay sharp and don't
+      // accumulate errors. Speed → opacity (calm=0.22, strong=0.62).
+      function traceStreamline(field, lon0, lat0) {
+        const path = [];
+        let lon = lon0, lat = lat0;
+        for (let i = 0; i < 50; i++) {
+          if (lon < bbox[0] || lon > bbox[2] || lat < bbox[1] || lat > bbox[3]) break;
+          path.push([lon, lat]);
+          const vec = bilinear(field, lon, lat);
+          if (!vec) break;
+          const sp = Math.sqrt(vec.u * vec.u + vec.v * vec.v);
+          if (sp < 0.04) break;
+          const stepDeg = 0.08;
+          // u is -sp*sin(deg), v is -sp*cos(deg) (meteorological: 0°=N blowing from).
+          // For streamline integration we follow the (u,v) direction it gives us;
+          // stepDeg scaled by lat to roughly preserve arc-length in degrees.
+          const cosLat = Math.max(0.35, Math.cos(lat * Math.PI / 180));
+          lon += (vec.u / sp) * stepDeg / cosLat;
+          lat += (vec.v / sp) * stepDeg;
+        }
+        return path;
+      }
+
+      function drawStreamlines() {
+        const field = flowState.field;
+        if (!field || !flowState.width || !flowState.height) return;
+        const key = flowState.source + '|' + (field.time || date);
+        if (key === flowState.streamlineFrameKey) return; // already drawn
+        streamlineCtx.clearRect(0, 0, flowState.width, flowState.height);
+        const lons = field.lons;
+        const lats = field.lats;
+        if (lons.length < 2 || lats.length < 2) return;
+        // Seed every (latStep, lonStep) inside the grid. ~1,200 seeds gives
+        // hint.fm-style coverage without the 8k+ seeds that tank framerate.
+        const latStep = Math.max(1, Math.floor(lats.length / 17));
+        const lonStep = Math.max(1, Math.floor(lons.length / 31));
+        const maxSpeed = field.kind === 'wind' ? 35 : 4;
+        let drawn = 0;
+        for (let yi = 1; yi < lats.length - 1; yi += latStep) {
+          for (let xi = 1; xi < lons.length - 1; xi += lonStep) {
+            const path = traceStreamline(field, lons[xi], lats[yi]);
+            if (path.length < 3) continue;
+            const mid = path[Math.floor(path.length / 2)];
+            const vec = bilinear(field, mid[0], mid[1]);
+            if (!vec) continue;
+            const sp = Math.sqrt(vec.u * vec.u + vec.v * vec.v);
+            const t = Math.min(1, sp / maxSpeed);
+            const alpha = 0.22 + 0.40 * t;
+            const r = Math.round(180 + 60 * t);
+            const g = Math.round(215 + 30 * t);
+            const b = 230;
+            streamlineCtx.strokeStyle = `rgba(${r},${g},${b},${alpha})`;
+            streamlineCtx.lineWidth = 0.9;
+            streamlineCtx.lineCap = 'round';
+            streamlineCtx.lineJoin = 'round';
+            streamlineCtx.beginPath();
+            let started = false;
+            for (const pt of path) {
+              const proj = ol.proj.fromLonLat([pt[0], pt[1]], rasterProjection);
+              const px = map.getPixelFromCoordinate(proj);
+              if (!px) continue;
+              if (!started) { streamlineCtx.moveTo(px[0], px[1]); started = true; }
+              else { streamlineCtx.lineTo(px[0], px[1]); }
+            }
+            if (started) {
+              streamlineCtx.stroke();
+              drawn++;
+            }
+          }
+        }
+        flowState.streamlineFrameKey = key;
+        if (legendMeta && legendMeta.dataset && legendMeta.dataset.base) {
+          // preserve any base label; append the streamline count
+          legendMeta.textContent = legendMeta.dataset.base + ` · ${drawn} streamlines`;
+        }
+      }
+
       function drawFrame(ts) {
         flowState.raf = requestAnimationFrame(drawFrame);
         resizeFlowCanvas();
+        drawStreamlines(); // cheap if already drawn for this frame
         const field = flowState.field;
         if (!field) return;
         if (ts - flowState.lastFrame < 32) return;
         flowState.lastFrame = ts;
 
+        // Trail decay — light fade so particle tails accumulate.
+        // destination-in with alpha 0.93 = each frame retains ~7% of trail.
         flowCtx.globalCompositeOperation = 'destination-in';
-        flowCtx.fillStyle = 'rgba(0, 0, 0, 0.90)';
+        flowCtx.fillStyle = 'rgba(0, 0, 0, 0.93)';
         flowCtx.fillRect(0, 0, flowState.width, flowState.height);
         flowCtx.globalCompositeOperation = 'source-over';
         flowCtx.lineWidth = 1.15;
-        flowCtx.strokeStyle = field.line;
+        flowCtx.strokeStyle = field.color; // particles use the stronger tint
 
         for (let i = 0; i < flowState.particles.length; i++) {
           let p = flowState.particles[i];
@@ -330,6 +441,9 @@
           const before = ol.proj.fromLonLat([p.lon, p.lat], rasterProjection);
           const beforePx = map.getPixelFromCoordinate(before);
           const latScale = Math.max(0.35, Math.cos(p.lat * Math.PI / 180));
+          // step is in degrees: speedScale (deg per (u or v) unit), so
+          // vec.u (knots) * speedScale = degrees per frame for that component.
+          // Capped so calm cells don't drift forever.
           const step = field.speedScale * Math.max(0.25, Math.min(35, vec.speed));
           p.lon += (vec.u * step) / latScale;
           p.lat += vec.v * step;
@@ -340,7 +454,7 @@
           const after = ol.proj.fromLonLat([p.lon, p.lat], rasterProjection);
           const afterPx = map.getPixelFromCoordinate(after);
           if (!beforePx || !afterPx) continue;
-          flowCtx.globalAlpha = Math.max(0.18, Math.min(0.75, vec.speed / (field.kind === 'wind' ? 26 : 3.5)));
+          flowCtx.globalAlpha = Math.max(0.18, Math.min(0.85, vec.speed / (field.kind === 'wind' ? 30 : 3.5)));
           flowCtx.beginPath();
           flowCtx.moveTo(beforePx[0], beforePx[1]);
           flowCtx.lineTo(afterPx[0], afterPx[1]);
@@ -351,7 +465,9 @@
       async function loadFlow(source) {
         flowState.source = source;
         flowState.field = null;
+        flowState.streamlineFrameKey = null;
         clearFlow();
+        clearStreamlines();
         legendTitle.textContent = source === 'cmems' ? 'Current flow' : 'Wind flow';
         legendMeta.textContent = 'Loading vector field…';
         try {
@@ -360,19 +476,23 @@
           flowState.field = source === 'cmems' ? currentFieldFromCmems(data) : windFieldFromForecast(data);
           seedParticles();
           const f = flowState.field;
-          legendMeta.textContent = `${f.label} · ${f.time || date} · particles advected from ${f.lons.length}×${f.lats.length} grid · ${f.units}`;
+          const base = `${f.label} · ${f.time || date} · grid ${f.lons.length}×${f.lats.length} · ${f.units}`;
+          legendMeta.dataset.base = base;
+          legendMeta.textContent = base;
+          drawStreamlines(); // draw immediately so user sees lines even before raf fires
         } catch (e) {
           legendMeta.textContent = `Vector field unavailable: ${e && e.message ? e.message : e}`;
         }
       }
 
-      map.on('postrender', resizeFlowCanvas);
-      map.on('movestart', clearFlow);
+      map.on('postrender', () => { resizeFlowCanvas(); drawStreamlines(); });
+      map.on('movestart', () => { clearFlow(); clearStreamlines(); });
       window.addEventListener('resize', () => {
         syncMapOffset();
         map.updateSize();
         resizeFlowCanvas();
         clearFlow();
+        clearStreamlines();
       }, { passive: true });
 
       // Layer toggle (radio buttons)
