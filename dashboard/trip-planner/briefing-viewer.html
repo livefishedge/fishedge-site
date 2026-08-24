@@ -143,12 +143,19 @@
     // Inspired by captain's dashboard scales (CHL_ALGAE, SST_SCALE, UV_SCALE,
     // SLA_SCALE, BATHY_SCALE) in dashboard/index.html. Each product uses a
     // perceptually-uniform 7-stop gradient; user_ranges set the [vmin, vmax].
+    // Per-variable viz pattern (Mike #34568: "plot each data variable based on its characteristics"):
+    //  - heat      -> bilinear raster tile as a heat map
+    //  - arrows    -> heat + vector arrows on top (uses *_direction_deg)
+    //  - streamlines -> Euler-integrated streamlines over the (u,v) field, no heat fill
+    //  - contours  -> marching-squares isobars (for pressure)
+    //  - dynamicRange=true recomputes [vmin, vmax] from the actual frame data
+    //    so the colorbar isn't clipped when the data sits outside the default range.
     const PRODUCTS = {
-      temperature_f: { name: 'Temperature', unit: '°F', scale: 'SST', vmin: 60, vmax: 90, drawWind: false },
-      wave_height_ft:{ name: 'Wave height', unit: 'ft',  scale: 'UV',  vmin: 0,  vmax: 8,  drawWind: false },
-      swell_height_ft:{name: 'Swell height',unit: 'ft',  scale: 'UV',  vmin: 0,  vmax: 6,  drawWind: false },
-      wind_speed_kn: { name: 'Wind speed', unit: 'kn',  scale: 'CHL', vmin: 0,  vmax: 30, drawWind: true  },
-      pressure_hpa:  { name: 'Pressure',    unit: 'hPa', scale: 'SLA', vmin: 990,vmax: 1030, drawWind: false },
+      temperature_f: { name: 'Temperature', unit: '°F', scale: 'SST', viz: 'heat',        dynamicRange: true  },
+      wave_height_ft:{ name: 'Wave height', unit: 'ft',  scale: 'UV',  viz: 'arrows',      dirKey: 'wave_direction_deg', dynamicRange: true },
+      swell_height_ft:{name: 'Swell height',unit: 'ft',  scale: 'UV',  viz: 'arrows',      dirKey: 'swell_direction_deg', dynamicRange: true },
+      wind_speed_kn: { name: 'Wind flow',   unit: 'kn',  scale: 'CHL', viz: 'streamlines', dynamicRange: false },
+      pressure_hpa:  { name: 'Pressure',    unit: 'hPa', scale: 'SLA', viz: 'contours',    dynamicRange: true  },
     };
 
     // viridis-like 7-stop palette (matches captain's UV_SCALE / CHL_ALGAE feel)
@@ -267,6 +274,7 @@
     // ---- state ----
     let currentProduct = 'temperature_f';
     let currentFrame = null;
+    let activeRange = null; // {vmin, vmax} computed per-frame when dynamicRange=true
     const particles = [];
 
     function nearestFrameIdxToDate(frames, wantedDate) {
@@ -369,33 +377,65 @@
     }
 
     // ---- colorbar ----
+    function computeActiveRange() {
+      const def = PRODUCTS[currentProduct];
+      const grid = currentFrame ? currentFrame[primaryDataKey()] : null;
+      if (!def.dynamicRange || !grid || !grid.length) {
+        activeRange = { vmin: 0, vmax: 30 };
+        return;
+      }
+      const flat = [];
+      for (let yi = 0; yi < grid.length; yi++) {
+        for (let xi = 0; xi < grid[yi].length; xi++) {
+          const v = grid[yi][xi];
+          if (v != null && Number.isFinite(v)) flat.push(v);
+        }
+      }
+      if (!flat.length) { activeRange = { vmin: 0, vmax: 30 }; return; }
+      let vmin = Math.min(...flat);
+      let vmax = Math.max(...flat);
+      // pad by 5% on each side so the colorbar isn't pinned to extremes
+      const pad = (vmax - vmin) * 0.05 || 1;
+      vmin -= pad; vmax += pad;
+      // round to nice numbers for the tick labels
+      const nice = (x) => {
+        const mag = Math.pow(10, Math.floor(Math.log10(Math.max(1e-9, Math.abs(x)))));
+        return Math.round(x / mag) * mag;
+      };
+      activeRange = { vmin: nice(vmin), vmax: nice(vmax) };
+    }
+
     function drawColorbar() {
       const def = PRODUCTS[currentProduct];
+      const r = activeRange || { vmin: 0, vmax: 30 };
       const canvas = document.getElementById('bv-cbar');
       const ctx = canvas.getContext('2d');
       const W = canvas.width, H = canvas.height;
       ctx.clearRect(0, 0, W, H);
-      // gradient
       for (let x = 0; x < W; x++) {
         const t = x / (W - 1);
         ctx.fillStyle = sampleScale(def.scale, t);
         ctx.fillRect(x, 0, 1, H - 8);
       }
-      // tick labels (5 evenly spaced)
       const ticks = document.getElementById('bv-cbar-ticks');
       ticks.innerHTML = '';
       const N = 5;
       for (let i = 0; i < N; i++) {
         const t = i / (N - 1);
-        const v = def.vmin + (def.vmax - def.vmin) * t;
-        const span = ticks.clientWidth || 1000;
-        const spanW = (i === 0 ? 0 : i === N-1 ? span : span * t);
+        const v = r.vmin + (r.vmax - r.vmin) * t;
         const tick = document.createElement('span');
-        tick.textContent = v.toFixed(v >= 100 ? 0 : 1);
+        const decimals = (r.vmax - r.vmin) > 50 ? 0 : (r.vmax - r.vmin) > 5 ? 1 : 2;
+        tick.textContent = v.toFixed(decimals);
         ticks.appendChild(tick);
       }
       document.getElementById('bv-cbar-name').textContent = def.name;
       document.getElementById('bv-cbar-unit').textContent = def.unit;
+    }
+
+    function primaryDataKey() {
+      const def = PRODUCTS[currentProduct];
+      // map product key -> forecast.json grid key (they're identical for the current set)
+      return currentProduct;
     }
 
     // ---- frame rendering ----
@@ -409,9 +449,23 @@
       const d = new Date(t + 'Z');
       const lbl = d.toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'America/New_York' });
       document.getElementById('bv-frame-label').textContent = lbl + ' ET';
+      computeActiveRange();
+      drawColorbar();
       map.render();
-      if (PRODUCTS[currentProduct].drawWind) drawWindOverlays();
-      else clearWindOverlays();
+      drawOverlaysForProduct();
+    }
+
+    function clearOverlays() {
+      streamlineCtx && streamlineCtx.clearRect(0, 0, streamlineCanvas.width, streamlineCanvas.height);
+      flowCtx && flowCtx.clearRect(0, 0, flowCanvas.width, flowCanvas.height);
+    }
+
+    function drawOverlaysForProduct() {
+      clearOverlays();
+      const def = PRODUCTS[currentProduct];
+      if (def.viz === 'streamlines') drawStreamlines();
+      else if (def.viz === 'arrows') drawDirectionArrows();
+      else if (def.viz === 'contours') drawIsobars();
     }
 
     function clearWindOverlays() {
@@ -456,42 +510,191 @@
       });
     }
 
-    function drawWindOverlays() {
+    // ---- streamlines (restored from d1074225 — Euler-integrated over the (u,v) field) ----
+    // Trace one streamline per seed by Euler integration of the local (u,v) field.
+    // Each path is ~50 steps × 0.08° stepDeg ≈ 4° (~440 km), matching hint.fm/wind's
+    // flow density. Drawn once per frame change (not every animation tick) so the
+    // lines stay sharp. Speed → opacity (calm=0.22, strong=0.62).
+    function traceStreamline(field, lon0, lat0) {
+      const path = [];
+      let lon = lon0, lat = lat0;
+      for (let i = 0; i < 50; i++) {
+        if (lon < field.bbox[0] || lon > field.bbox[2] || lat < field.bbox[1] || lat > field.bbox[3]) break;
+        path.push([lon, lat]);
+        const vec = bilinearVec(currentFrame, lon, lat);
+        if (!vec) break;
+        const sp = Math.sqrt(vec.u * vec.u + vec.v * vec.v);
+        if (sp < 0.04) break;
+        const stepDeg = 0.08;
+        const cosLat = Math.max(0.35, Math.cos(lat * Math.PI / 180));
+        lon += (vec.u / sp) * stepDeg / cosLat;
+        lat += (vec.v / sp) * stepDeg;
+      }
+      return path;
+    }
+
+    function drawStreamlines() {
       if (!currentFrame || !forecastData) return;
       resizeOverlayCanvases();
       const dpr = flowCanvas.width / mapEl.clientWidth;
       streamlineCtx.clearRect(0, 0, flowCanvas.width, flowCanvas.height);
       streamlineCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
       const lons = forecastData.lons, lats = forecastData.lats;
-      const maxSpeed = 25;
-      for (let yi = 0; yi < lats.length - 1; yi += 1) {
-        for (let xi = 0; xi < lons.length - 1; xi += 1) {
-          const lon = lons[xi], lat = lats[yi];
-          const vec = bilinearVec(currentFrame, lon, lat);
-          if (!vec || vec.speed < 0.3) continue;
-          const proj = ol.proj.fromLonLat([lon, lat], rasterProjection);
-          const px = map.getPixelFromCoordinate(proj);
-          if (!px) continue;
-          const t = Math.min(1, vec.speed / maxSpeed);
-          streamlineCtx.strokeStyle = `rgba(${Math.round(120+135*t)}, ${Math.round(220+30*t)}, 245, ${0.35 + 0.4*t})`;
-          streamlineCtx.lineWidth = 1.2;
+      const field = { bbox, lons, lats };
+      const latStep = Math.max(1, Math.floor(lats.length / 17));
+      const lonStep = Math.max(1, Math.floor(lons.length / 31));
+      const maxSpeed = 30;
+      for (let yi = 1; yi < lats.length - 1; yi += latStep) {
+        for (let xi = 1; xi < lons.length - 1; xi += lonStep) {
+          const path = traceStreamline(field, lons[xi], lats[yi]);
+          if (path.length < 3) continue;
+          const mid = path[Math.floor(path.length / 2)];
+          const vec = bilinearVec(currentFrame, mid[0], mid[1]);
+          if (!vec) continue;
+          const sp = Math.sqrt(vec.u * vec.u + vec.v * vec.v);
+          const t = Math.min(1, sp / maxSpeed);
+          const alpha = 0.22 + 0.40 * t;
+          const r = Math.round(180 + 60 * t);
+          const g = Math.round(215 + 30 * t);
+          const b = 230;
+          streamlineCtx.strokeStyle = `rgba(${r},${g},${b},${alpha})`;
+          streamlineCtx.lineWidth = 0.9;
           streamlineCtx.lineCap = 'round';
+          streamlineCtx.lineJoin = 'round';
           streamlineCtx.beginPath();
-          streamlineCtx.moveTo(px[0], px[1]);
-          const stepDeg = 0.18;
-          const cosLat = Math.max(0.35, Math.cos(lat * Math.PI / 180));
-          let curLon = lon, curLat = lat;
-          for (let s = 0; s < 18; s++) {
-            curLon += (vec.u / vec.speed) * stepDeg / cosLat;
-            curLat += (vec.v / vec.speed) * stepDeg;
-            const p = map.getPixelFromCoordinate(ol.proj.fromLonLat([curLon, curLat], rasterProjection));
-            if (!p) break;
-            streamlineCtx.lineTo(p[0], p[1]);
+          let started = false;
+          for (const pt of path) {
+            const proj = ol.proj.fromLonLat([pt[0], pt[1]], rasterProjection);
+            const px = map.getPixelFromCoordinate(proj);
+            if (!px) continue;
+            if (!started) { streamlineCtx.moveTo(px[0], px[1]); started = true; }
+            else { streamlineCtx.lineTo(px[0], px[1]); }
           }
-          streamlineCtx.stroke();
+          if (started) streamlineCtx.stroke();
         }
       }
     }
+
+    // ---- direction arrows for wave / swell products ----
+    function drawDirectionArrows() {
+      if (!currentFrame || !forecastData) return;
+      resizeOverlayCanvases();
+      const dpr = flowCanvas.width / mapEl.clientWidth;
+      flowCtx.clearRect(0, 0, flowCanvas.width, flowCanvas.height);
+      flowCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const def = PRODUCTS[currentProduct];
+      const dirGrid = currentFrame[def.dirKey];
+      if (!dirGrid || !dirGrid.length) return;
+      const lons = forecastData.lons, lats = forecastData.lats;
+      for (let yi = 1; yi < lats.length - 1; yi++) {
+        for (let xi = 1; xi < lons.length - 1; xi++) {
+          const lon = lons[xi], lat = lats[yi];
+          const dirDeg = dirGrid[yi]?.[xi];
+          if (dirDeg == null) continue;
+          const rad = dirDeg * Math.PI / 180;
+          // meteorological: arrow points where it's coming FROM. Arrows show "going to" = +180°.
+          // We want to show the direction the wave is moving — flip the arrow.
+          const u = -Math.sin(rad), v = -Math.cos(rad);
+          const proj = ol.proj.fromLonLat([lon, lat], rasterProjection);
+          const c = map.getPixelFromCoordinate(proj);
+          if (!c) continue;
+          const len = 14;
+          const tx = c[0] + u * len, ty = c[1] - v * len;
+          flowCtx.strokeStyle = 'rgba(20, 30, 50, 0.85)';
+          flowCtx.fillStyle   = 'rgba(20, 30, 50, 0.85)';
+          flowCtx.lineWidth = 1.2;
+          flowCtx.beginPath();
+          flowCtx.moveTo(c[0], c[1]);
+          flowCtx.lineTo(tx, ty);
+          flowCtx.stroke();
+          // arrowhead
+          const ang = Math.atan2(-v, u);
+          const ah = 4;
+          flowCtx.beginPath();
+          flowCtx.moveTo(tx, ty);
+          flowCtx.lineTo(tx - ah * Math.cos(ang - 0.4), ty - ah * Math.sin(ang - 0.4));
+          flowCtx.lineTo(tx - ah * Math.cos(ang + 0.4), ty - ah * Math.sin(ang + 0.4));
+          flowCtx.closePath();
+          flowCtx.fill();
+        }
+      }
+    }
+
+    // ---- isobars (marching squares for pressure) ----
+    function drawIsobars() {
+      if (!currentFrame || !forecastData) return;
+      resizeOverlayCanvases();
+      const dpr = flowCanvas.width / mapEl.clientWidth;
+      flowCtx.clearRect(0, 0, flowCanvas.width, flowCanvas.height);
+      flowCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const grid = currentFrame.pressure_hpa;
+      if (!grid || !grid.length) return;
+      const lons = forecastData.lons, lats = forecastData.lats;
+      const nx = lons.length, ny = lats.length;
+      const flat = grid.flat().filter(v => v != null && Number.isFinite(v));
+      if (!flat.length) return;
+      const vmin = Math.min(...flat), vmax = Math.max(...flat);
+      const step = 2; // hPa
+      const levels = [];
+      for (let v = Math.ceil(vmin / step) * step; v <= vmax; v += step) levels.push(v);
+      flowCtx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
+      flowCtx.lineWidth = 0.8;
+      flowCtx.font = '9px monospace';
+      flowCtx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+      const toPxX = lon => map.getPixelFromCoordinate(ol.proj.fromLonLat([lon, lats[0]], rasterProjection))?.[0];
+      const toPxY = lat => map.getPixelFromCoordinate(ol.proj.fromLonLat([lons[0], lat], rasterProjection))?.[1];
+      const xMin = toPxX(lons[0]), xMax = toPxX(lons[nx-1]);
+      const yMin = toPxY(lats[ny-1]), yMax = toPxY(lats[0]);
+      const w = xMax - xMin, h = yMin - yMax;
+      if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) return;
+      const lerp = (a, b, t) => a + (b - a) * t;
+      const sample = (xi, yi) => {
+        if (xi < 0 || xi >= nx || yi < 0 || yi >= ny) return null;
+        return grid[yi]?.[xi];
+      };
+      const lerpX = (xa, ya, va, xb, yb, vb, level) => {
+        if (Math.abs(va - vb) < 1e-9) return [(xa+xb)/2, (ya+yb)/2];
+        const t = (level - va) / (vb - va);
+        return [lerp(xa, xb, t), lerp(ya, yb, t)];
+      };
+      for (const level of levels) {
+        const cellPoints = [];
+        for (let yi = 0; yi < ny - 1; yi++) {
+          for (let xi = 0; xi < nx - 1; xi++) {
+            const v00 = sample(xi, yi), v10 = sample(xi+1, yi);
+            const v01 = sample(xi, yi+1), v11 = sample(xi+1, yi+1);
+            if (v00 == null || v10 == null || v01 == null || v11 == null) continue;
+            // cell corners in pixel space
+            const x0 = lerp(xMin, xMax, xi / (nx-1));
+            const x1 = lerp(xMin, xMax, (xi+1) / (nx-1));
+            const y0 = lerp(yMax, yMin, yi / (ny-1));
+            const y1 = lerp(yMax, yMin, (yi+1) / (ny-1));
+            const idx = (v00 > level ? 1 : 0) | (v10 > level ? 2 : 0) | (v11 > level ? 4 : 0) | (v01 > level ? 8 : 0);
+            if (idx === 0 || idx === 15) continue;
+            const edges = [];
+            if ((v00 > level) !== (v10 > level)) edges.push(lerpX(x0, y0, v00, x1, y0, v10, level));
+            if ((v10 > level) !== (v11 > level)) edges.push(lerpX(x1, y0, v10, x1, y1, v11, level));
+            if ((v01 > level) !== (v11 > level)) edges.push(lerpX(x0, y1, v01, x1, y1, v11, level));
+            if ((v00 > level) !== (v01 > level)) edges.push(lerpX(x0, y0, v00, x0, y1, v01, level));
+            if (edges.length >= 2) cellPoints.push(edges);
+          }
+        }
+        flowCtx.beginPath();
+        for (const seg of cellPoints) {
+          flowCtx.moveTo(seg[0][0], seg[0][1]);
+          flowCtx.lineTo(seg[1][0], seg[1][1]);
+        }
+        flowCtx.stroke();
+        // label every 4th level
+        if (cellPoints.length && level % 4 === 0 && cellPoints[0][0]) {
+          const [lx, ly] = cellPoints[0][0];
+          flowCtx.fillText(String(level), lx + 2, ly - 2);
+        }
+      }
+    }
+
+    // legacy alias (kept so the moveend/size handlers still call something safe)
+    function drawWindOverlays() { drawStreamlines(); }
 
     // ---- UI wiring ----
     function setProduct(key) {
@@ -499,10 +702,10 @@
       [...document.querySelectorAll('.bv-products button')].forEach(b => {
         b.classList.toggle('active', b.dataset.prod === key);
       });
+      computeActiveRange();
       drawColorbar();
       map.render();
-      if (PRODUCTS[key].drawWind) drawWindOverlays();
-      else clearWindOverlays();
+      drawOverlaysForProduct();
     }
 
     document.querySelectorAll('.bv-products button').forEach(btn => {
@@ -537,12 +740,8 @@
     }
     playBtn.addEventListener('click', () => { playTimer ? pause() : play(); });
 
-    map.on('moveend', () => {
-      if (PRODUCTS[currentProduct].drawWind) drawWindOverlays();
-    });
-    map.on('change:size', () => {
-      if (PRODUCTS[currentProduct].drawWind) drawWindOverlays();
-    });
+    map.on('moveend', () => { drawOverlaysForProduct(); });
+    map.on('change:size', () => { drawOverlaysForProduct(); });
 
     // ---- bootstrap ----
     (async () => {
