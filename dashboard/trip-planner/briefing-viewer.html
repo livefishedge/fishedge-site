@@ -195,6 +195,7 @@
 
     const FORECAST_URL = `https://data.fishedge.live/${region}/briefing/forecast.json`;
     const CORS_PROXY = 'https://corsproxy.io/?';
+    const MAX_FORECAST_AGE_HOURS = 12;
 
     async function fetchJson(url) {
       try {
@@ -977,6 +978,18 @@
     (async () => {
       try {
         forecastData = await fetchJson(FORECAST_URL);
+        const generatedAt = Date.parse(forecastData && forecastData.generated_at);
+        if (!Number.isFinite(generatedAt)) {
+          throw new Error('forecast missing generated_at provenance');
+        }
+        const maxAgeHours = Number(forecastData.quality && forecastData.quality.max_age_hours) || MAX_FORECAST_AGE_HOURS;
+        const ageHours = (Date.now() - generatedAt) / 3600000;
+        if (ageHours > maxAgeHours) {
+          throw new Error(`forecast is stale (${ageHours.toFixed(1)}h old; limit ${maxAgeHours}h)`);
+        }
+        if (!forecastData.quality || forecastData.quality.status !== 'pass') {
+          throw new Error('forecast failed its upstream quality gate');
+        }
         const frames = forecastData.frames || [];
         if (!frames.length) {
           document.getElementById('bv-frame-label').textContent = 'no frames';
