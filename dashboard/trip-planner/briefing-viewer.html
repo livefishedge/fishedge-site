@@ -467,9 +467,12 @@
     function drawOverlaysForProduct() {
       clearOverlays();
       const def = PRODUCTS[currentProduct];
-      if (def.viz === 'streamlines') drawStreamlines();
-      else if (def.viz === 'arrows') drawDirectionArrows();
+      if (def.viz === 'streamlines') {
+        drawStreamlines();
+        startParticleAnimation();
+      } else if (def.viz === 'arrows') drawDirectionArrows();
       else if (def.viz === 'contours') drawIsobars();
+      else stopParticleAnimation();
     }
 
     function clearWindOverlays() {
@@ -716,6 +719,102 @@
     // legacy alias (kept so the moveend/size handlers still call something safe)
     function drawWindOverlays() { drawStreamlines(); }
 
+    // ---- wind particles (hint.fm-style, animated, layered ON TOP of streamlines) ----
+    // Mike #34600: 'Wind particles are missing; add them on top of the streamlines
+    // like a previous version which you did well.' Restored from d1074225 +
+    // 5a1a9f54. Warm-yellow tints to match the streamline palette. Trail decay
+    // via near-transparent dark wash each frame so old tails fade gently. dt is
+    // speed × 0.0009 deg/frame for both wind (kn) and currents.
+    let particleRaf = 0;
+    let particleLast = 0;
+
+    function seedWindParticles() {
+      particles.length = 0;
+      if (!forecastData || !mapEl) return;
+      const rect = mapEl.getBoundingClientRect();
+      const area = Math.max(1, rect.width * rect.height);
+      const target = Math.max(280, Math.min(1100, Math.round(area / 1050)));
+      for (let i = 0; i < target; i++) {
+        const lon = bbox[0] + Math.random() * (bbox[2] - bbox[0]);
+        const lat = bbox[1] + Math.random() * (bbox[3] - bbox[1]);
+        particles.push({ lon, lat, age: Math.random() * 90, maxAge: 70 + Math.random() * 80 });
+      }
+    }
+
+    function startParticleAnimation() {
+      if (particleRaf) return;
+      if (!particles.length) seedWindParticles();
+      const loop = (ts) => {
+        particleRaf = requestAnimationFrame(loop);
+        if (!currentFrame || !forecastData) return;
+        if (ts - particleLast < 32) return; // ~30fps cap
+        particleLast = ts;
+        // resize if viewport changed
+        const rect = mapEl.getBoundingClientRect();
+        const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+        const W = Math.max(1, Math.round(rect.width * dpr));
+        const H = Math.max(1, Math.round(rect.height * dpr));
+        if (flowCanvas.width !== W || flowCanvas.height !== H) {
+          flowCanvas.width = W; flowCanvas.height = H;
+          flowCanvas.style.width = rect.width + 'px';
+          flowCanvas.style.height = rect.height + 'px';
+        }
+        const dprInv = flowCanvas.width / rect.width;
+        flowCtx.setTransform(dprInv, 0, 0, dprInv, 0, 0);
+        // trail decay (hint.fm recipe)
+        flowCtx.globalCompositeOperation = 'source-over';
+        flowCtx.globalAlpha = 1;
+        flowCtx.fillStyle = 'rgba(7, 17, 29, 0.06)';
+        flowCtx.fillRect(0, 0, rect.width, rect.height);
+        // advect particles
+        for (let i = 0; i < particles.length; i++) {
+          const p = particles[i];
+          const vec = bilinearVec(currentFrame, p.lon, p.lat);
+          if (!vec || vec.speed < 0.3 || p.age >= p.maxAge ||
+              p.lon < bbox[0] || p.lon > bbox[2] ||
+              p.lat < bbox[1] || p.lat > bbox[3]) {
+            const lon = bbox[0] + Math.random() * (bbox[2] - bbox[0]);
+            const lat = bbox[1] + Math.random() * (bbox[3] - bbox[1]);
+            particles[i] = { lon, lat, age: 0, maxAge: 70 + Math.random() * 80 };
+            continue;
+          }
+          const cosLat = Math.cos(p.lat * Math.PI / 180);
+          const dt = vec.speed * 0.0009;
+          const oldLon = p.lon, oldLat = p.lat;
+          p.lon += (vec.u / vec.speed) * dt / cosLat;
+          p.lat += (vec.v / vec.speed) * dt;
+          p.age += 1;
+          const before = ol.proj.fromLonLat([oldLon, oldLat], rasterProjection);
+          const after  = ol.proj.fromLonLat([p.lon, p.lat], rasterProjection);
+          const beforePx = map.getPixelFromCoordinate(before);
+          const afterPx  = map.getPixelFromCoordinate(after);
+          if (!beforePx || !afterPx) continue;
+          // Speed → opacity + warm-yellow tint (matches static streamlines)
+          const t = Math.min(1, vec.speed / 30);
+          const fadeOut = Math.min(1, (1 - p.age / p.maxAge) * 1.5);
+          const a = Math.max(0.18, Math.min(0.80, (0.35 + 0.45 * t) * fadeOut));
+          const r = 255;
+          const g = Math.round(220 + 20 * t);
+          const b = Math.round(60 + 30 * t);
+          flowCtx.globalAlpha = a;
+          flowCtx.strokeStyle = `rgba(${r},${g},${b},1)`;
+          flowCtx.lineWidth = 0.8 + 1.0 * t;
+          flowCtx.lineCap = 'round';
+          flowCtx.beginPath();
+          flowCtx.moveTo(beforePx[0], beforePx[1]);
+          flowCtx.lineTo(afterPx[0], afterPx[1]);
+          flowCtx.stroke();
+        }
+        flowCtx.globalAlpha = 1;
+      };
+      particleRaf = requestAnimationFrame(loop);
+    }
+
+    function stopParticleAnimation() {
+      if (particleRaf) { cancelAnimationFrame(particleRaf); particleRaf = 0; }
+      if (flowCtx && flowCanvas) flowCtx.clearRect(0, 0, flowCanvas.width, flowCanvas.height);
+    }
+
     // ---- UI wiring ----
     function setProduct(key) {
       currentProduct = key;
@@ -761,7 +860,11 @@
     playBtn.addEventListener('click', () => { playTimer ? pause() : play(); });
 
     map.on('moveend', () => { drawOverlaysForProduct(); });
-    map.on('change:size', () => { drawOverlaysForProduct(); });
+    map.on('change:size', () => {
+      // re-seed particles to new viewport area, redraw
+      seedWindParticles();
+      drawOverlaysForProduct();
+    });
 
     // ---- bootstrap ----
     (async () => {
