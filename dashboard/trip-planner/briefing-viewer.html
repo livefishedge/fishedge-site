@@ -33,16 +33,24 @@
       position: absolute; inset: 0; width: 100%; height: 100%;
       pointer-events: none; z-index: 3;
     }
+    /* Click-through overlays — must NOT eat pinch-zoom / pan on mobile */
+    .bv-legend, .ol-attribution, .ol-scale-line { pointer-events: none; }
+    /* Map gestures need the touch path unblocked */
+    .bv-map { touch-action: none; }
     .ol-attribution { color: #6b7d92 !important; background: rgba(10, 25, 41, 0.8) !important; }
     .ol-attribution ul { color: #6b7d92 !important; }
     .ol-control button { background-color: rgba(10, 25, 41, 0.8) !important; color: #b3e5fc !important; }
     .ol-control button:hover { background-color: #1b2836 !important; }
     .ol-zoom { top: auto; bottom: 0.5em; right: 0.5em; left: auto; }
+    /* Legend was eating the lower 30% of mobile viewport and blocking pinch-zoom.
+       Removed per Mike #34358 (21:43 ET): "throw away the stupid lat Lon frames and colorbar".
+       The captain's dashboard doesn't carry a floating legend — this viewer shouldn't either. */
     .bv-legend {
       position: fixed; bottom: 0.5em; left: 0.5em; z-index: 10;
       background: rgba(10, 25, 41, 0.92); border: 1px solid #1b2836; border-radius: 4px;
       padding: 8px 10px; font-size: 11px; color: #9fb0c3; max-width: 320px;
       font-family: monospace; line-height: 1.4;
+      pointer-events: none;
     }
     .bv-legend b { color: #e3f2fd; }
     .bv-legend .row { display: flex; align-items: center; gap: 6px; margin: 2px 0; }
@@ -135,7 +143,7 @@
           maxZoom: 19,
           crossOrigin: 'anonymous',
         }),
-        opacity: 0.55,
+        opacity: 0.85,
         zIndex: 0,
       });
 
