@@ -7,564 +7,571 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@10.2.1/ol.css">
   <style>
     :root { color-scheme: dark; }
-    html, body { margin: 0; height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0a1929; color: #b3e5fc; }
-    .bv-header {
+    html, body { margin: 0; height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #050b10; color: #b3e5fc; overflow: hidden; }
+
+    .bv-toolbar {
       position: fixed; top: 0; left: 0; right: 0; z-index: 20;
-      display: flex; align-items: center; gap: 16px;
-      padding: 10px 18px; background: rgba(10, 25, 41, 0.95);
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 14px; background: rgba(5, 11, 16, 0.95);
       border-bottom: 1px solid #1b2836; backdrop-filter: blur(6px);
+      flex-wrap: wrap;
     }
-    .bv-back { color: #4fc3f7; text-decoration: none; font-size: 14px; padding: 4px 10px; border: 1px solid #2a3a4d; border-radius: 4px; }
+    .bv-back { color: #4fc3f7; text-decoration: none; font-size: 13px; padding: 4px 10px; border: 1px solid #2a3a4d; border-radius: 4px; }
     .bv-back:hover { background: #1b2836; }
-    .bv-title { margin: 0; font-size: 16px; font-weight: 600; color: #e3f2fd; }
-    .bv-subtitle { font-size: 12px; color: #6b7d92; margin-left: 4px; }
-    .bv-layers { display: flex; gap: 12px; margin-left: auto; }
-    .bv-layers label { font-size: 12px; color: #b3e5fc; cursor: pointer; display: flex; align-items: center; gap: 4px; }
-    .bv-layers input { accent-color: #4fc3f7; }
-    .bv-layers .badge { font-size: 10px; padding: 1px 6px; border-radius: 3px; background: #1b2836; color: #9fb0c3; font-family: monospace; }
-    .bv-layers .badge.om { color: #ffeb3b; }
-    .bv-layers .badge.cmems { color: #ff6f00; }
-    .bv-map { position: absolute; top: 52px; left: 0; right: 0; bottom: 0; }
-    .bv-flow-canvas {
-      position: absolute; inset: 0; width: 100%; height: 100%;
-      pointer-events: none; z-index: 4; mix-blend-mode: screen;
+    .bv-title { margin: 0; font-size: 15px; font-weight: 600; color: #e3f2fd; }
+    .bv-time { font-size: 12px; color: #9fb0c3; margin-left: 4px; font-family: monospace; }
+
+    .bv-products { display: flex; gap: 6px; margin-left: auto; flex-wrap: wrap; }
+    .bv-products button {
+      background: #1b2836; color: #b3e5fc; border: 1px solid #2a3a4d;
+      padding: 4px 10px; border-radius: 4px; font-size: 12px; cursor: pointer;
+      font-family: inherit;
     }
-    .bv-streamlines-canvas {
-      position: absolute; inset: 0; width: 100%; height: 100%;
-      pointer-events: none; z-index: 3;
+    .bv-products button:hover { background: #2a3a4d; }
+    .bv-products button.active {
+      background: #4fc3f7; color: #050b10; border-color: #4fc3f7; font-weight: 600;
     }
-    /* Click-through overlays — must NOT eat pinch-zoom / pan on mobile */
-    .bv-legend, .ol-attribution, .ol-scale-line { pointer-events: none; }
-    /* Map gestures need the touch path unblocked */
-    .bv-map { touch-action: none; }
-    .ol-attribution { color: #6b7d92 !important; background: rgba(10, 25, 41, 0.8) !important; }
-    .ol-attribution ul { color: #6b7d92 !important; }
-    .ol-control button { background-color: rgba(10, 25, 41, 0.8) !important; color: #b3e5fc !important; }
-    .ol-control button:hover { background-color: #1b2836 !important; }
-    .ol-zoom { top: auto; bottom: 0.5em; right: 0.5em; left: auto; }
-    /* Legend was eating the lower 30% of mobile viewport and blocking pinch-zoom.
-       Removed per Mike #34358 (21:43 ET): "throw away the stupid lat Lon frames and colorbar".
-       The captain's dashboard doesn't carry a floating legend — this viewer shouldn't either. */
-    .bv-legend {
-      position: fixed; bottom: 0.5em; left: 0.5em; z-index: 10;
-      background: rgba(10, 25, 41, 0.92); border: 1px solid #1b2836; border-radius: 4px;
-      padding: 8px 10px; font-size: 11px; color: #9fb0c3; max-width: 320px;
-      font-family: monospace; line-height: 1.4;
+    .bv-products .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
+    .dot-temp { background: #ff8c00; }
+    .dot-wave { background: #00c8ff; }
+    .dot-swell { background: #8bd7ff; }
+    .dot-wind { background: #62e58a; }
+    .dot-press { background: #c59bff; }
+
+    .bv-framebar {
+      position: fixed; bottom: 56px; left: 0; right: 0; z-index: 15;
+      display: flex; align-items: center; gap: 10px;
+      padding: 6px 14px; background: rgba(5, 11, 16, 0.95);
+      border-top: 1px solid #1b2836;
+    }
+    .bv-framebar button {
+      background: #1b2836; color: #b3e5fc; border: 1px solid #2a3a4d;
+      width: 32px; height: 32px; border-radius: 4px; font-size: 16px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .bv-framebar button:hover { background: #2a3a4d; }
+    .bv-framebar button.playing { background: #4fc3f7; color: #050b10; border-color: #4fc3f7; }
+    #bv-slider { flex: 1; min-width: 100px; accent-color: #4fc3f7; height: 6px; }
+    .bv-frame-label { font-size: 12px; color: #e3f2fd; font-family: monospace; min-width: 140px; text-align: right; }
+
+    .bv-ranges {
+      position: fixed; bottom: 0; left: 0; right: 0; z-index: 14;
+      background: rgba(5, 11, 16, 0.95);
+      border-top: 1px solid #1b2836;
+      padding: 8px 14px 10px;
       pointer-events: none;
     }
-    .bv-legend b { color: #e3f2fd; }
-    .bv-legend .row { display: flex; align-items: center; gap: 6px; margin: 2px 0; }
-    .bv-legend .swatch { display: inline-block; width: 14px; height: 10px; border: 1px solid #1b2836; }
+    .bv-ranges-title { font-size: 11px; color: #9fb0c3; font-family: monospace; margin-bottom: 4px; display: flex; justify-content: space-between; }
+    .bv-ranges-title b { color: #e3f2fd; font-weight: 600; }
+    #bv-cbar { width: 100%; height: 32px; }
+    .bv-ranges-ticks { display: flex; justify-content: space-between; font-size: 10px; color: #9fb0c3; font-family: monospace; margin-top: 2px; }
+
+    .bv-map { position: absolute; top: 48px; left: 0; right: 0; bottom: 110px; touch-action: none; }
+    .bv-flow-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 4; mix-blend-mode: screen; }
+    .bv-streamlines-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3; }
+
+    .ol-attribution { color: #6b7d92 !important; background: rgba(5, 11, 16, 0.8) !important; font-size: 10px !important; pointer-events: none; }
+    .ol-control button { background-color: rgba(5, 11, 16, 0.8) !important; color: #b3e5fc !important; }
+    .ol-zoom { top: auto; bottom: auto; right: 0.5em; left: auto; }
+    .ol-scale-line { pointer-events: none; }
+
     @media (max-width: 640px) {
-      .bv-header { align-items: flex-start; flex-wrap: wrap; gap: 8px; padding: 8px 10px; }
-      .bv-back { font-size: 12px; padding: 3px 8px; }
-      .bv-title { font-size: 14px; }
-      .bv-subtitle { display: none; }
-      .bv-layers { width: 100%; margin-left: 0; gap: 10px; }
-      .bv-layers label { font-size: 11px; }
-      .bv-legend { right: 0.5em; max-width: none; font-size: 10px; }
+      .bv-toolbar { padding: 6px 8px; gap: 6px; }
+      .bv-back { font-size: 11px; padding: 3px 6px; }
+      .bv-title { font-size: 13px; }
+      .bv-time { display: none; }
+      .bv-products button { font-size: 11px; padding: 3px 6px; }
+      .bv-map { bottom: 96px; }
+      .bv-frame-label { min-width: auto; font-size: 10px; }
     }
   </style>
 </head>
 <body>
-  <div class="bv-header">
-    <a class="bv-back" href="javascript:history.back()">← Back to briefing</a>
+  <div class="bv-toolbar">
+    <a class="bv-back" href="javascript:history.back()">← Back</a>
     <div>
-      <h1 class="bv-title" id="bv-title">7-Day Spatial Outlook</h1>
-      <div class="bv-subtitle" id="bv-subtitle">Click + drag to pan · scroll to zoom</div>
+      <h1 class="bv-title">Briefing Viewer — <span id="bv-region">usec_md</span></h1>
+      <div class="bv-time" id="bv-time">7-Day Outlook</div>
     </div>
-    <div class="bv-layers" id="bv-layers">
-      <label><input type="radio" name="src" value="om" checked> Open-Meteo <span class="badge om">atmo</span></label>
-      <label><input type="radio" name="src" value="cmems"> CMEMS <span class="badge cmems">ocean</span></label>
+    <div class="bv-products" id="bv-products">
+      <button data-prod="temperature_f" class="active"><span class="dot dot-temp"></span>Temp</button>
+      <button data-prod="wave_height_ft"><span class="dot dot-wave"></span>Wave</button>
+      <button data-prod="swell_height_ft"><span class="dot dot-swell"></span>Swell</button>
+      <button data-prod="wind_speed_kn"><span class="dot dot-wind"></span>Wind</button>
+      <button data-prod="pressure_hpa"><span class="dot dot-press"></span>Pressure</button>
     </div>
   </div>
+
   <div id="bv-map" class="bv-map"></div>
-  <div class="bv-legend" id="bv-legend">
-    <b id="bv-legend-title">Wind flow</b>
-    <div id="bv-legend-meta">Loading vector field…</div>
+
+  <div class="bv-framebar">
+    <button id="bv-prev" aria-label="Previous frame">‹</button>
+    <button id="bv-play" aria-label="Play">▶</button>
+    <input id="bv-slider" type="range" min="0" max="0" step="1" value="0" aria-label="Frame">
+    <button id="bv-next" aria-label="Next frame">›</button>
+    <span class="bv-frame-label" id="bv-frame-label">—</span>
+  </div>
+
+  <div class="bv-ranges">
+    <div class="bv-ranges-title">
+      <b id="bv-cbar-name">Temperature</b>
+      <span id="bv-cbar-unit">°F</span>
+    </div>
+    <canvas id="bv-cbar" width="1000" height="32"></canvas>
+    <div class="bv-ranges-ticks" id="bv-cbar-ticks"></div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/ol@10.2.1/dist/ol.js"></script>
   <script>
-    (function () {
-      // Parse query params
-      const params = new URLSearchParams(window.location.search);
-      const date = params.get('date') || new Date().toISOString().slice(0, 10);
-      const region = params.get('region') || 'usec_md';
-      const initialSource = params.get('source') === 'cmems' ? 'cmems' : 'om';
+  (function () {
+    'use strict';
 
-      // usec_md bbox: [-77, 36, -72, 40] (W, S, E, N) in EPSG:4326
-      const BBOXES = {
-        usec_md:   [-77.0, 36.0, -72.0, 40.0],
-        usec_south:[-81.0, 31.0, -73.0, 36.0],
-      };
-      const bbox = BBOXES[region] || BBOXES.usec_md;
-      const center = [(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2];
+    // ---- params / region ----
+    const params = new URLSearchParams(window.location.search);
+    const targetDate = params.get('date') || new Date().toISOString().slice(0, 10);
+    const region = params.get('region') || 'usec_md';
+    document.getElementById('bv-region').textContent = region;
 
-      // Pre-rendered raster URLs (built nightly by /home/gzheng/pipelines/briefing/)
-      const rasterUrl = (source) => `https://data.fishedge.live/${region}/briefing/${source}_${date}.png`;
-      const OM_URL    = rasterUrl('raster');
-      const CMEMS_URL = rasterUrl('cmems_raster');
-      const FORECAST_URL = `https://data.fishedge.live/${region}/briefing/forecast.json`;
-      const CURRENTS_URL = `https://data.fishedge.live/${region}/briefing/cmems/currents.json`;
-      const CORS_PROXY = 'https://corsproxy.io/?';
+    const BBOXES = {
+      usec_md:    [-77.0, 36.0, -72.0, 40.0],
+      usec_south: [-81.0, 31.0, -73.0, 36.0],
+    };
+    const bbox = BBOXES[region] || BBOXES.usec_md;
+    const rasterProjection = 'EPSG:4326';
 
-      // Header
-      document.title = `Briefing Viewer — ${date}`;
-      const dow = new Date(date + 'T12:00:00Z').toLocaleDateString('en-US', { weekday: 'short' });
-      document.getElementById('bv-title').textContent = `${date} (${dow}) — 7-Day Outlook`;
-      document.getElementById('bv-subtitle').textContent =
-        `Region: ${region} · bbox: [${bbox.map(x => x.toFixed(1)).join(', ')}] · click + drag to pan · scroll to zoom`;
+    // ---- product definitions (mirrors captain's dashboard scale choices) ----
+    // Inspired by captain's dashboard scales (CHL_ALGAE, SST_SCALE, UV_SCALE,
+    // SLA_SCALE, BATHY_SCALE) in dashboard/index.html. Each product uses a
+    // perceptually-uniform 7-stop gradient; user_ranges set the [vmin, vmax].
+    const PRODUCTS = {
+      temperature_f: { name: 'Temperature', unit: '°F', scale: 'SST', vmin: 60, vmax: 90, drawWind: false },
+      wave_height_ft:{ name: 'Wave height', unit: 'ft',  scale: 'UV',  vmin: 0,  vmax: 8,  drawWind: false },
+      swell_height_ft:{name: 'Swell height',unit: 'ft',  scale: 'UV',  vmin: 0,  vmax: 6,  drawWind: false },
+      wind_speed_kn: { name: 'Wind speed', unit: 'kn',  scale: 'CHL', vmin: 0,  vmax: 30, drawWind: true  },
+      pressure_hpa:  { name: 'Pressure',    unit: 'hPa', scale: 'SLA', vmin: 990,vmax: 1030, drawWind: false },
+    };
 
-      // OpenLayers layers — ImageStatic over the rasters
-      const rasterProjection = 'EPSG:4326';
-      const omSource = new ol.source.ImageStatic({
-        url: OM_URL,
+    // viridis-like 7-stop palette (matches captain's UV_SCALE / CHL_ALGAE feel)
+    const SCALES = {
+      SST: [[0.0,'#2166ac'],[0.18,'#4393c3'],[0.36,'#92c5de'],[0.5,'#f7f7f7'],[0.64,'#fddbc7'],[0.82,'#f4a582'],[1.0,'#b2182b']],
+      UV:  [[0.0,'#440154'],[0.17,'#443983'],[0.34,'#31688e'],[0.5,'#35b779'],[0.67,'#90d743'],[0.83,'#fde725'],[1.0,'#fff7bc']],
+      CHL: [[0.0,'#001f3f'],[0.2,'#0074d9'],[0.4,'#39cccc'],[0.5,'#2ecc40'],[0.7,'#ffdc00'],[0.85,'#ff851b'],[1.0,'#ff4136']],
+      SLA: [[0.0,'#2166ac'],[0.25,'#67a9cf'],[0.5,'#f7f7f7'],[0.75,'#ef8a62'],[1.0,'#b2182b']],
+    };
+
+    function lerp(a, b, t) { return a + (b - a) * t; }
+    function hexToRgb(hex) {
+      const m = hex.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
+      return m ? [parseInt(m[1],16), parseInt(m[2],16), parseInt(m[3],16)] : [255,255,255];
+    }
+    function rgbToHex(r,g,b) {
+      const h = v => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2,'0');
+      return '#' + h(r) + h(g) + h(b);
+    }
+    function sampleScale(scale, t) {
+      const stops = SCALES[scale] || SCALES.SST;
+      for (let i = 0; i < stops.length - 1; i++) {
+        if (t <= stops[i+1][0]) {
+          const u = (t - stops[i][0]) / (stops[i+1][0] - stops[i][0]);
+          const c0 = hexToRgb(stops[i][1]);
+          const c1 = hexToRgb(stops[i+1][1]);
+          return rgbToHex(lerp(c0[0], c1[0], u), lerp(c0[1], c1[1], u), lerp(c0[2], c1[2], u));
+        }
+      }
+      return stops[stops.length-1][1];
+    }
+
+    // ---- data ----
+    let forecastData = null; // { bbox, frame_interval_hours, frames, lons, lats }
+    let frameIdx = 0;
+    let playTimer = null;
+
+    const FORECAST_URL = `https://data.fishedge.live/${region}/briefing/forecast.json`;
+    const CORS_PROXY = 'https://corsproxy.io/?';
+
+    async function fetchJson(url) {
+      try {
+        const r = await fetch(url, { cache: 'no-store', mode: 'cors' });
+        if (r.ok) return await r.json();
+      } catch (_) {}
+      const proxied = CORS_PROXY + encodeURIComponent(url);
+      const r = await fetch(proxied, { cache: 'no-store' });
+      if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+      return r.json();
+    }
+
+    // ---- ol setup ----
+    const baseLayer = new ol.layer.Tile({
+      source: new ol.source.XYZ({
+        url: 'https://{a-d}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
+        attributions: '© OpenStreetMap contributors © CARTO',
+        maxZoom: 19,
+        crossOrigin: 'anonymous',
+      }),
+      opacity: 0.7,
+      zIndex: 0,
+    });
+
+    const map = new ol.Map({
+      target: 'bv-map',
+      layers: [baseLayer],
+      view: new ol.View({
         projection: rasterProjection,
-        imageExtent: bbox,
-      });
-      const cmemsSource = new ol.source.ImageStatic({
-        url: CMEMS_URL,
+        center: [(bbox[0]+bbox[2])/2, (bbox[1]+bbox[3])/2],
+        zoom: 5.5,
+        minZoom: 4,
+        maxZoom: 12,
+        extent: [bbox[0]-1, bbox[1]-1, bbox[2]+1, bbox[3]+1],
+      }),
+      controls: ol.control.defaults.defaults({ attribution: true, rotate: false }).extend([
+        new ol.control.ScaleLine(),
+      ]),
+    });
+
+    // overlays for wind streamlines + animated particles
+    const mapEl = document.getElementById('bv-map');
+    const streamlineCanvas = document.createElement('canvas');
+    streamlineCanvas.className = 'bv-streamlines-canvas';
+    streamlineCanvas.setAttribute('aria-hidden', 'true');
+    mapEl.appendChild(streamlineCanvas);
+    const streamlineCtx = streamlineCanvas.getContext('2d');
+    const flowCanvas = document.createElement('canvas');
+    flowCanvas.className = 'bv-flow-canvas';
+    flowCanvas.setAttribute('aria-hidden', 'true');
+    mapEl.appendChild(flowCanvas);
+    const flowCtx = flowCanvas.getContext('2d');
+
+    // client-rendered raster layer (replaces old PNG ImageStatic)
+    const rasterLayer = new ol.layer.Image({
+      source: new ol.source.ImageCanvas({
         projection: rasterProjection,
-        imageExtent: bbox,
-      });
+        ratio: 1,
+        interpolate: true,
+        canvasFunction: (requestedExtent, resolution, pixelRatio, size) => {
+          const c = document.createElement('canvas');
+          c.width = Math.max(1, Math.ceil(size[0]));
+          c.height = Math.max(1, Math.ceil(size[1]));
+          const ctx = c.getContext('2d');
+          ctx.clearRect(0, 0, c.width, c.height);
+          if (!forecastData || !frameIdx || !currentFrame) return c;
+          // rasterize the current frame's grid into this tile's clip rect
+          drawFrameToTile(ctx, currentFrame, currentProduct, requestedExtent, c.width, c.height);
+          return c;
+        },
+      }),
+      opacity: 0.85,
+      zIndex: 5,
+    });
+    map.addLayer(rasterLayer);
 
-      const omLayer    = new ol.layer.Image({ source: omSource,    visible: initialSource === 'om'    });
-      const cmemsLayer = new ol.layer.Image({ source: cmemsSource, visible: initialSource === 'cmems' });
+    // ---- state ----
+    let currentProduct = 'temperature_f';
+    let currentFrame = null;
+    const particles = [];
 
-      // OpenLayers basemap (dark nautical). Mike (2026-08-23 21:16 ET):
-      // streamlines + particles must overlay geographic context, not float on
-      // void. CARTO dark matter gives coastlines + labels at low contrast so
-      // the wind/current signal stays the visual focus.
-      const baseLayer = new ol.layer.Tile({
-        source: new ol.source.XYZ({
-          url: 'https://{a-d}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
-          attributions: '© OpenStreetMap contributors © CARTO',
-          maxZoom: 19,
-          crossOrigin: 'anonymous',
-        }),
-        opacity: 0.85,
-        zIndex: 0,
-      });
-
-      // Map
-      const map = new ol.Map({
-        target: 'bv-map',
-        layers: [baseLayer, omLayer, cmemsLayer],
-        view: new ol.View({
-          projection: rasterProjection,
-          center: center,
-          zoom: 5.5,
-          minZoom: 4,
-          maxZoom: 12,
-          extent: [bbox[0] - 1, bbox[1] - 1, bbox[2] + 1, bbox[3] + 1],
-        }),
-        controls: ol.control.defaults.defaults({ attribution: false, rotate: false }).extend([
-          new ol.control.Attribution({ collapsible: false }),
-          new ol.control.ScaleLine(),
-        ]),
-      });
-      const mapEl = document.getElementById('bv-map');
-      // Static streamline layer (z-index 3): drawn once per frame change,
-      //   never faded. This is what Mike actually wants to see.
-      // Animated particle layer (z-index 4): hint.fm-style comets on top.
-      const streamlineCanvas = document.createElement('canvas');
-      streamlineCanvas.className = 'bv-streamlines-canvas';
-      streamlineCanvas.setAttribute('aria-hidden', 'true');
-      mapEl.appendChild(streamlineCanvas);
-      const streamlineCtx = streamlineCanvas.getContext('2d');
-      const flowCanvas = document.createElement('canvas');
-      flowCanvas.className = 'bv-flow-canvas';
-      flowCanvas.setAttribute('aria-hidden', 'true');
-      mapEl.appendChild(flowCanvas);
-      const flowCtx = flowCanvas.getContext('2d');
-      const legendTitle = document.getElementById('bv-legend-title');
-      const legendMeta = document.getElementById('bv-legend-meta');
-
-      function syncMapOffset() {
-        const header = document.querySelector('.bv-header');
-        const h = header ? Math.ceil(header.getBoundingClientRect().height) : 52;
-        mapEl.style.top = h + 'px';
+    function nearestFrameIdxToDate(frames, wantedDate) {
+      if (!frames || !frames.length) return 0;
+      let bestI = 0, bestDist = Infinity;
+      for (let i = 0; i < frames.length; i++) {
+        const t = frames[i].time || '';
+        const dist = Math.abs(new Date(t + 'Z').getTime() - new Date(wantedDate + 'T12:00:00Z').getTime());
+        if (dist < bestDist) { bestDist = dist; bestI = i; }
       }
+      return bestI;
+    }
 
-      const flowState = {
-        source: initialSource,
-        field: null,
-        particles: [],
-        lastFrame: 0,
-        raf: 0,
-        width: 0,
-        height: 0,
-        dpr: 1,
-        streamlineFrameKey: null, // last (source,frame.time) drawn
+    // ---- raster tile rendering (interpolates grid bilinearly into the tile extent) ----
+    function drawFrameToTile(ctx, frame, productKey, requestedExtent, w, h) {
+      const grid = frame[productKey];
+      if (!grid || !grid.length || !grid[0].length) return;
+      const lons = forecastData.lons, lats = forecastData.lats;
+      if (!lons || !lats || lons.length < 2 || lats.length < 2) return;
+      const def = PRODUCTS[productKey];
+      const vmin = def.vmin, vmax = def.vmax;
+      const scale = def.scale;
+
+      // pixel coords from lon/lat
+      const toX = lon => ((lon - requestedExtent[0]) / (requestedExtent[2] - requestedExtent[0])) * w;
+      const toY = lat => ((requestedExtent[3] - lat) / (requestedExtent[3] - requestedExtent[1])) * h;
+
+      const nx = lons.length, ny = lats.length;
+      const dlon = (lons[nx-1] - lons[0]) / (nx - 1);
+      const dlat = (lats[ny-1] - lats[0]) / (ny - 1);
+
+      // bilinear sample of grid at lon,lat
+      const sample = (lon, lat) => {
+        if (lon < lons[0] || lon > lons[nx-1] || lat < lats[0] || lat > lats[ny-1]) return null;
+        const xf = (lon - lons[0]) / dlon;
+        const yf = (lat - lats[0]) / dlat;
+        const x0 = Math.max(0, Math.min(nx-2, Math.floor(xf)));
+        const y0 = Math.max(0, Math.min(ny-2, Math.floor(yf)));
+        const x1 = x0 + 1, y1 = y0 + 1;
+        const tx = xf - x0, ty = yf - y0;
+        const g = grid;
+        const a = g[y0]?.[x0], b = g[y0]?.[x1], c = g[y1]?.[x0], d = g[y1]?.[x1];
+        if (a == null || b == null || c == null || d == null) return null;
+        return a*(1-tx)*(1-ty) + b*tx*(1-ty) + c*(1-tx)*ty + d*tx*ty;
       };
 
-      function resizeFlowCanvas() {
-        const rect = mapEl.getBoundingClientRect();
-        const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
-        const width = Math.max(1, Math.round(rect.width * dpr));
-        const height = Math.max(1, Math.round(rect.height * dpr));
-        if (flowCanvas.width === width && flowCanvas.height === height
-            && streamlineCanvas.width === width && streamlineCanvas.height === height) return;
-        flowCanvas.width = width;
-        flowCanvas.height = height;
-        flowCanvas.style.width = rect.width + 'px';
-        flowCanvas.style.height = rect.height + 'px';
-        flowCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        streamlineCanvas.width = width;
-        streamlineCanvas.height = height;
-        streamlineCanvas.style.width = rect.width + 'px';
-        streamlineCanvas.style.height = rect.height + 'px';
-        streamlineCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        flowState.width = rect.width;
-        flowState.height = rect.height;
-        flowState.dpr = dpr;
-        flowState.streamlineFrameKey = null; // force redraw at new size
-        seedParticles();
-      }
+      // Fill the tile by walking the source grid lattice (fast path):
+      // for each grid cell, draw a quad with linear color interpolation per row.
+      const cellW = Math.abs(toX(lons[1]) - toX(lons[0]));
+      const cellH = Math.abs(toY(lats[1]) - toY(lats[0]));
+      // quad per cell
+      for (let yi = 0; yi < ny - 1; yi++) {
+        for (let xi = 0; xi < nx - 1; xi++) {
+          const v00 = grid[yi][xi];
+          const v10 = grid[yi][xi+1];
+          const v01 = grid[yi+1][xi];
+          const v11 = grid[yi+1][xi+1];
+          if (v00 == null || v10 == null || v01 == null || v11 == null) continue;
+          const px = toX(lons[xi]);
+          const py = toY(lats[yi]);
+          const npx = toX(lons[xi+1]);
+          const npy = toY(lats[yi+1]);
+          const wpx = npx - px;
+          const hpx = py - npy;
 
-      async function fetchJson(url) {
-        try {
-          const r = await fetch(url, { cache: 'no-store', mode: 'cors' });
-          if (r.ok) return await r.json();
-        } catch (_) {}
-        const proxied = CORS_PROXY + encodeURIComponent(url);
-        const r = await fetch(proxied, { cache: 'no-store' });
-        if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
-        return r.json();
-      }
+          // Bilinear sample four corners and rasterize quad by scanlines
+          // (fast enough for 17×21 grid, gives smooth gradient between cells).
+          const minX = Math.max(0, Math.floor(px));
+          const maxX = Math.min(w, Math.ceil(px + wpx));
+          const minY = Math.max(0, Math.floor(npy));
+          const maxY = Math.min(h, Math.ceil(py));
+          if (maxX <= minX || maxY <= minY) continue;
 
-      function nearestFrame(frames, wantedDate) {
-        const sameDay = (frames || []).filter(f => String(f.time || '').slice(0, 10) === wantedDate);
-        const pool = sameDay.length ? sameDay : (frames || []);
-        if (!pool.length) return null;
-        return pool.reduce((best, frame) => {
-          const hour = Number(String(frame.time || '').slice(11, 13));
-          const bestHour = Number(String(best.time || '').slice(11, 13));
-          return Math.abs(hour - 12) < Math.abs(bestHour - 12) ? frame : best;
-        }, pool[0]);
-      }
-
-      function windFieldFromForecast(data) {
-        const frame = nearestFrame(data.frames, date);
-        if (!frame) throw new Error('No Open-Meteo forecast frame');
-        const speed = frame.wind_speed_kn || [];
-        const dir = frame.wind_direction_deg || [];
-        const u = [];
-        const v = [];
-        for (let r = 0; r < speed.length; r++) {
-          const uRow = [];
-          const vRow = [];
-          for (let c = 0; c < (speed[r] || []).length; c++) {
-            const sp = Number(speed[r][c]);
-            const deg = Number((dir[r] || [])[c]);
-            if (!Number.isFinite(sp) || !Number.isFinite(deg)) {
-              uRow.push(0); vRow.push(0); continue;
+          const yDir = py > npy ? 1 : -1; // pixel y goes down, lat y goes up
+          for (let yy = minY; yy < maxY; yy++) {
+            // tY: 0 at top of cell, 1 at bottom
+            const tY = yDir > 0 ? (py - yy) / hpx : (yy - npy) / hpx;
+            const ttY = Math.max(0, Math.min(1, tY));
+            const vTop = v00*(1-ttY) + v01*ttY;
+            const vBot = v10*(1-ttY) + v11*ttY;
+            const rowImg = ctx.createImageData(maxX - minX, 1);
+            const rowData = rowImg.data;
+            for (let xx = minX; xx < maxX; xx++) {
+              const tX = (xx - px) / wpx;
+              const ttX = Math.max(0, Math.min(1, tX));
+              const v = vTop*(1-ttX) + vBot*ttX;
+              const tNorm = Math.max(0, Math.min(1, (v - vmin) / (vmax - vmin)));
+              const hex = sampleScale(scale, tNorm);
+              const [r,g,b] = hexToRgb(hex);
+              const o = (xx - minX) * 4;
+              rowData[o]   = r;
+              rowData[o+1] = g;
+              rowData[o+2] = b;
+              rowData[o+3] = 255;
             }
-            const rad = deg * Math.PI / 180;
-            uRow.push(-sp * Math.sin(rad));
-            vRow.push(-sp * Math.cos(rad));
+            ctx.putImageData(rowImg, minX, yy);
           }
-          u.push(uRow); v.push(vRow);
-        }
-        return {
-          kind: 'wind',
-          label: 'Open-Meteo wind',
-          units: 'kn',
-          time: frame.time,
-          lons: data.lons || [],
-          lats: data.lats || [],
-          u, v,
-          color: 'rgba(255, 235, 59, 0.92)',
-          line: 'rgba(255, 235, 59, 0.38)',
-          speedScale: 0.012, // ~5-15 px/frame at typical 10-25 kn wind
-        };
-      }
-
-      function currentFieldFromCmems(data) {
-        const frame = nearestFrame(data.frames, date);
-        if (!frame) throw new Error('No CMEMS current frame');
-        return {
-          kind: 'current',
-          label: 'CMEMS current',
-          units: data.units && data.units.u || 'kn',
-          time: frame.time,
-          lons: data.lons || [],
-          lats: data.lats || [],
-          u: frame.u_kn || [],
-          v: frame.v_kn || [],
-          color: 'rgba(79, 195, 247, 0.95)',
-          line: 'rgba(79, 195, 247, 0.34)',
-          speedScale: 0.04, // currents are slower (kn) but need visible drift
-        };
-      }
-
-      function bilinear(field, lon, lat) {
-        const lons = field.lons;
-        const lats = field.lats;
-        const u = field.u;
-        const v = field.v;
-        if (lons.length < 2 || lats.length < 2 || !u.length || !v.length) return null;
-        if (lon < lons[0] || lon > lons[lons.length - 1] || lat < lats[0] || lat > lats[lats.length - 1]) return null;
-        const dlon = (lons[lons.length - 1] - lons[0]) / (lons.length - 1);
-        const dlat = (lats[lats.length - 1] - lats[0]) / (lats.length - 1);
-        const x = (lon - lons[0]) / dlon;
-        const y = (lat - lats[0]) / dlat;
-        const x0 = Math.max(0, Math.min(lons.length - 2, Math.floor(x)));
-        const y0 = Math.max(0, Math.min(lats.length - 2, Math.floor(y)));
-        const x1 = x0 + 1;
-        const y1 = y0 + 1;
-        const tx = x - x0;
-        const ty = y - y0;
-        const sample = (grid) => {
-          const a = Number((grid[y0] || [])[x0]) || 0;
-          const b = Number((grid[y0] || [])[x1]) || 0;
-          const c = Number((grid[y1] || [])[x0]) || 0;
-          const d = Number((grid[y1] || [])[x1]) || 0;
-          return a * (1 - tx) * (1 - ty) + b * tx * (1 - ty) + c * (1 - tx) * ty + d * tx * ty;
-        };
-        const uu = sample(u);
-        const vv = sample(v);
-        const speed = Math.sqrt(uu * uu + vv * vv);
-        return { u: uu, v: vv, speed };
-      }
-
-      function randomParticle() {
-        const lon = bbox[0] + Math.random() * (bbox[2] - bbox[0]);
-        const lat = bbox[1] + Math.random() * (bbox[3] - bbox[1]);
-        return { lon, lat, age: Math.random() * 90, maxAge: 70 + Math.random() * 80 };
-      }
-
-      function seedParticles() {
-        const area = Math.max(1, flowState.width * flowState.height);
-        const target = Math.max(280, Math.min(1100, Math.round(area / 1050)));
-        flowState.particles = Array.from({ length: target }, randomParticle);
-        if (flowCtx && flowState.width && flowState.height) {
-          flowCtx.clearRect(0, 0, flowState.width, flowState.height);
         }
       }
+    }
 
-      function clearFlow() {
-        if (flowCtx) flowCtx.clearRect(0, 0, flowState.width || flowCanvas.width, flowState.height || flowCanvas.height);
+    // ---- colorbar ----
+    function drawColorbar() {
+      const def = PRODUCTS[currentProduct];
+      const canvas = document.getElementById('bv-cbar');
+      const ctx = canvas.getContext('2d');
+      const W = canvas.width, H = canvas.height;
+      ctx.clearRect(0, 0, W, H);
+      // gradient
+      for (let x = 0; x < W; x++) {
+        const t = x / (W - 1);
+        ctx.fillStyle = sampleScale(def.scale, t);
+        ctx.fillRect(x, 0, 1, H - 8);
       }
+      // tick labels (5 evenly spaced)
+      const ticks = document.getElementById('bv-cbar-ticks');
+      ticks.innerHTML = '';
+      const N = 5;
+      for (let i = 0; i < N; i++) {
+        const t = i / (N - 1);
+        const v = def.vmin + (def.vmax - def.vmin) * t;
+        const span = ticks.clientWidth || 1000;
+        const spanW = (i === 0 ? 0 : i === N-1 ? span : span * t);
+        const tick = document.createElement('span');
+        tick.textContent = v.toFixed(v >= 100 ? 0 : 1);
+        ticks.appendChild(tick);
+      }
+      document.getElementById('bv-cbar-name').textContent = def.name;
+      document.getElementById('bv-cbar-unit').textContent = def.unit;
+    }
 
-      function clearStreamlines() {
-        if (streamlineCtx) {
-          streamlineCtx.clearRect(0, 0, flowState.width || streamlineCanvas.width, flowState.height || streamlineCanvas.height);
+    // ---- frame rendering ----
+    function setFrame(i) {
+      if (!forecastData) return;
+      const frames = forecastData.frames;
+      frameIdx = Math.max(0, Math.min(frames.length - 1, i));
+      currentFrame = frames[frameIdx];
+      document.getElementById('bv-slider').value = String(frameIdx);
+      const t = currentFrame.time || '—';
+      const d = new Date(t + 'Z');
+      const lbl = d.toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'America/New_York' });
+      document.getElementById('bv-frame-label').textContent = lbl + ' ET';
+      map.render();
+      if (PRODUCTS[currentProduct].drawWind) drawWindOverlays();
+      else clearWindOverlays();
+    }
+
+    function clearWindOverlays() {
+      streamlineCtx && streamlineCtx.clearRect(0, 0, streamlineCanvas.width, streamlineCanvas.height);
+      flowCtx && flowCtx.clearRect(0, 0, flowCanvas.width, flowCanvas.height);
+    }
+
+    function bilinearVec(frame, lon, lat) {
+      const lons = forecastData.lons, lats = forecastData.lats;
+      const u = frame.wind_speed_kn, dir = frame.wind_direction_deg;
+      if (!u || !dir || lons.length < 2 || lats.length < 2) return null;
+      if (lon < lons[0] || lon > lons[lons.length-1] || lat < lats[0] || lat > lats[lats.length-1]) return null;
+      const dlon = (lons[lons.length-1] - lons[0]) / (lons.length-1);
+      const dlat = (lats[lats.length-1] - lats[0]) / (lats.length-1);
+      const xf = (lon - lons[0]) / dlon, yf = (lat - lats[0]) / dlat;
+      const x0 = Math.max(0, Math.min(lons.length-2, Math.floor(xf)));
+      const y0 = Math.max(0, Math.min(lats.length-2, Math.floor(yf)));
+      const tx = xf - x0, ty = yf - y0;
+      const a = (y0,x0)=>u[y0]?.[x0];
+      const samp = (g) => {
+        const v00 = g[y0]?.[x0], v10 = g[y0]?.[x0+1], v01 = g[y0+1]?.[x0], v11 = g[y0+1]?.[x0+1];
+        if (v00==null||v10==null||v01==null||v11==null) return null;
+        return v00*(1-tx)*(1-ty)+v10*tx*(1-ty)+v01*(1-tx)*ty+v11*tx*ty;
+      };
+      const sp = samp(u), deg = samp(dir);
+      if (sp == null || deg == null) return null;
+      const rad = deg * Math.PI / 180;
+      return { u: -sp * Math.sin(rad), v: -sp * Math.cos(rad), speed: sp };
+    }
+
+    function resizeOverlayCanvases() {
+      const rect = mapEl.getBoundingClientRect();
+      const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+      const W = Math.max(1, Math.round(rect.width * dpr));
+      const H = Math.max(1, Math.round(rect.height * dpr));
+      [flowCanvas, streamlineCanvas].forEach(c => {
+        if (c.width !== W || c.height !== H) {
+          c.width = W; c.height = H;
+          c.style.width = rect.width + 'px';
+          c.style.height = rect.height + 'px';
         }
-        flowState.streamlineFrameKey = null;
-      }
+      });
+    }
 
-      // -------- static streamlines (the actual viz Mike wants) --------
-      // Trace one streamline per seed by Euler integration of the local
-      // (u,v) field. Each path is ~50 steps × 0.08° stepDeg ≈ 4° (~440km),
-      // matching hint.fm/wind's flow-density. Drawn once per frame change
-      // (not every animation tick) so the lines stay sharp and don't
-      // accumulate errors. Speed → opacity (calm=0.22, strong=0.62).
-      function traceStreamline(field, lon0, lat0) {
-        const path = [];
-        let lon = lon0, lat = lat0;
-        for (let i = 0; i < 50; i++) {
-          if (lon < bbox[0] || lon > bbox[2] || lat < bbox[1] || lat > bbox[3]) break;
-          path.push([lon, lat]);
-          const vec = bilinear(field, lon, lat);
-          if (!vec) break;
-          const sp = Math.sqrt(vec.u * vec.u + vec.v * vec.v);
-          if (sp < 0.04) break;
-          const stepDeg = 0.08;
-          // u is -sp*sin(deg), v is -sp*cos(deg) (meteorological: 0°=N blowing from).
-          // For streamline integration we follow the (u,v) direction it gives us;
-          // stepDeg scaled by lat to roughly preserve arc-length in degrees.
+    function drawWindOverlays() {
+      if (!currentFrame || !forecastData) return;
+      resizeOverlayCanvases();
+      const dpr = flowCanvas.width / mapEl.clientWidth;
+      streamlineCtx.clearRect(0, 0, flowCanvas.width, flowCanvas.height);
+      streamlineCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const lons = forecastData.lons, lats = forecastData.lats;
+      const maxSpeed = 25;
+      for (let yi = 0; yi < lats.length - 1; yi += 1) {
+        for (let xi = 0; xi < lons.length - 1; xi += 1) {
+          const lon = lons[xi], lat = lats[yi];
+          const vec = bilinearVec(currentFrame, lon, lat);
+          if (!vec || vec.speed < 0.3) continue;
+          const proj = ol.proj.fromLonLat([lon, lat], rasterProjection);
+          const px = map.getPixelFromCoordinate(proj);
+          if (!px) continue;
+          const t = Math.min(1, vec.speed / maxSpeed);
+          streamlineCtx.strokeStyle = `rgba(${Math.round(120+135*t)}, ${Math.round(220+30*t)}, 245, ${0.35 + 0.4*t})`;
+          streamlineCtx.lineWidth = 1.2;
+          streamlineCtx.lineCap = 'round';
+          streamlineCtx.beginPath();
+          streamlineCtx.moveTo(px[0], px[1]);
+          const stepDeg = 0.18;
           const cosLat = Math.max(0.35, Math.cos(lat * Math.PI / 180));
-          lon += (vec.u / sp) * stepDeg / cosLat;
-          lat += (vec.v / sp) * stepDeg;
-        }
-        return path;
-      }
-
-      function drawStreamlines() {
-        const field = flowState.field;
-        if (!field || !flowState.width || !flowState.height) return;
-        const key = flowState.source + '|' + (field.time || date);
-        if (key === flowState.streamlineFrameKey) return; // already drawn
-        streamlineCtx.clearRect(0, 0, flowState.width, flowState.height);
-        const lons = field.lons;
-        const lats = field.lats;
-        if (lons.length < 2 || lats.length < 2) return;
-        // Seed every (latStep, lonStep) inside the grid. ~1,200 seeds gives
-        // hint.fm-style coverage without the 8k+ seeds that tank framerate.
-        const latStep = Math.max(1, Math.floor(lats.length / 17));
-        const lonStep = Math.max(1, Math.floor(lons.length / 31));
-        const maxSpeed = field.kind === 'wind' ? 35 : 4;
-        let drawn = 0;
-        for (let yi = 1; yi < lats.length - 1; yi += latStep) {
-          for (let xi = 1; xi < lons.length - 1; xi += lonStep) {
-            const path = traceStreamline(field, lons[xi], lats[yi]);
-            if (path.length < 3) continue;
-            const mid = path[Math.floor(path.length / 2)];
-            const vec = bilinear(field, mid[0], mid[1]);
-            if (!vec) continue;
-            const sp = Math.sqrt(vec.u * vec.u + vec.v * vec.v);
-            const t = Math.min(1, sp / maxSpeed);
-            const alpha = 0.22 + 0.40 * t;
-            const r = Math.round(180 + 60 * t);
-            const g = Math.round(215 + 30 * t);
-            const b = 230;
-            streamlineCtx.strokeStyle = `rgba(${r},${g},${b},${alpha})`;
-            streamlineCtx.lineWidth = 0.9;
-            streamlineCtx.lineCap = 'round';
-            streamlineCtx.lineJoin = 'round';
-            streamlineCtx.beginPath();
-            let started = false;
-            for (const pt of path) {
-              const proj = ol.proj.fromLonLat([pt[0], pt[1]], rasterProjection);
-              const px = map.getPixelFromCoordinate(proj);
-              if (!px) continue;
-              if (!started) { streamlineCtx.moveTo(px[0], px[1]); started = true; }
-              else { streamlineCtx.lineTo(px[0], px[1]); }
-            }
-            if (started) {
-              streamlineCtx.stroke();
-              drawn++;
-            }
+          let curLon = lon, curLat = lat;
+          for (let s = 0; s < 18; s++) {
+            curLon += (vec.u / vec.speed) * stepDeg / cosLat;
+            curLat += (vec.v / vec.speed) * stepDeg;
+            const p = map.getPixelFromCoordinate(ol.proj.fromLonLat([curLon, curLat], rasterProjection));
+            if (!p) break;
+            streamlineCtx.lineTo(p[0], p[1]);
           }
-        }
-        flowState.streamlineFrameKey = key;
-        if (legendMeta && legendMeta.dataset && legendMeta.dataset.base) {
-          // preserve any base label; append the streamline count
-          legendMeta.textContent = legendMeta.dataset.base + ` · ${drawn} streamlines`;
+          streamlineCtx.stroke();
         }
       }
+    }
 
-      function drawFrame(ts) {
-        flowState.raf = requestAnimationFrame(drawFrame);
-        resizeFlowCanvas();
-        drawStreamlines(); // cheap if already drawn for this frame
-        const field = flowState.field;
-        if (!field) return;
-        if (ts - flowState.lastFrame < 32) return;
-        flowState.lastFrame = ts;
-
-        // Trail decay — paint a near-transparent dark wash over the
-        // entire particle canvas so old tails fade gently. This is the
-        // hint.fm/wind recipe; destination-in (the previous approach)
-        // was wiping nearly every pixel each frame and dropping the
-        // particle signal to ~10% intensity within 1s.
-        flowCtx.globalCompositeOperation = 'source-over';
-        flowCtx.globalAlpha = 1;
-        flowCtx.fillStyle = 'rgba(7, 17, 29, 0.06)';
-        flowCtx.fillRect(0, 0, flowState.width, flowState.height);
-
-        for (let i = 0; i < flowState.particles.length; i++) {
-          let p = flowState.particles[i];
-          const vec = bilinear(field, p.lon, p.lat);
-          if (!vec || vec.speed < 0.3 || p.age >= p.maxAge ||
-              p.lon < bbox[0] || p.lon > bbox[2] ||
-              p.lat < bbox[1] || p.lat > bbox[3]) {
-            flowState.particles[i] = randomParticle();
-            continue;
-          }
-          // Mercator-corrected drift (matches planner viewer):
-          //   dt = sp * 0.0009 deg per frame for both wind (kn) and currents.
-          // Lon step divided by cos(lat) so particles don't accelerate
-          // near the pole.
-          const cosLat = Math.cos(p.lat * Math.PI / 180);
-          const dt = vec.speed * 0.0009;
-          const oldLon = p.lon, oldLat = p.lat;
-          p.lon += (vec.u / vec.speed) * dt / cosLat;
-          p.lat += (vec.v / vec.speed) * dt;
-          p.age += 1;
-          const before = ol.proj.fromLonLat([oldLon, oldLat], rasterProjection);
-          const after = ol.proj.fromLonLat([p.lon, p.lat], rasterProjection);
-          const beforePx = map.getPixelFromCoordinate(before);
-          const afterPx = map.getPixelFromCoordinate(after);
-          if (!beforePx || !afterPx) continue;
-          // Speed → opacity (calm=0.18, strong=0.80). Life-fade so
-          // respawned particles don't pop.
-          const t = Math.min(1, vec.speed / (field.kind === 'wind' ? 30 : 3.5));
-          const fadeOut = Math.min(1, (1 - p.age / p.maxAge) * 1.5);
-          const a = Math.max(0.18, Math.min(0.80, (0.35 + 0.45 * t) * fadeOut));
-          // Tint: warm (yellow) for wind, cool (cyan) for currents —
-          // matches the static streamline tints so layers agree.
-          let r, g, b;
-          if (field.kind === 'wind') {
-            r = Math.round(255);
-            g = Math.round(220 + 20 * t);
-            b = Math.round(60 + 30 * t);
-          } else {
-            r = Math.round(120 + 60 * t);
-            g = Math.round(200 + 30 * t);
-            b = Math.round(245);
-          }
-          flowCtx.globalAlpha = a;
-          flowCtx.strokeStyle = `rgba(${r},${g},${b},1)`;
-          flowCtx.lineWidth = 0.8 + 1.0 * t;
-          flowCtx.lineCap = 'round';
-          flowCtx.beginPath();
-          flowCtx.moveTo(beforePx[0], beforePx[1]);
-          flowCtx.lineTo(afterPx[0], afterPx[1]);
-          flowCtx.stroke();
-        }
-        flowCtx.globalAlpha = 1;
-      }
-
-      async function loadFlow(source) {
-        flowState.source = source;
-        flowState.field = null;
-        flowState.streamlineFrameKey = null;
-        clearFlow();
-        clearStreamlines();
-        legendTitle.textContent = source === 'cmems' ? 'Current flow' : 'Wind flow';
-        legendMeta.textContent = 'Loading vector field…';
-        try {
-          const data = await fetchJson(source === 'cmems' ? CURRENTS_URL : FORECAST_URL);
-          if (flowState.source !== source) return;
-          flowState.field = source === 'cmems' ? currentFieldFromCmems(data) : windFieldFromForecast(data);
-          seedParticles();
-          const f = flowState.field;
-          const base = `${f.label} · ${f.time || date} · grid ${f.lons.length}×${f.lats.length} · ${f.units}`;
-          legendMeta.dataset.base = base;
-          legendMeta.textContent = base;
-          drawStreamlines(); // draw immediately so user sees lines even before raf fires
-        } catch (e) {
-          legendMeta.textContent = `Vector field unavailable: ${e && e.message ? e.message : e}`;
-        }
-      }
-
-      map.on('postrender', () => { resizeFlowCanvas(); drawStreamlines(); });
-      map.on('movestart', () => { clearFlow(); clearStreamlines(); });
-      window.addEventListener('resize', () => {
-        syncMapOffset();
-        map.updateSize();
-        resizeFlowCanvas();
-        clearFlow();
-        clearStreamlines();
-      }, { passive: true });
-
-      // Layer toggle (radio buttons)
-      document.querySelectorAll('input[name="src"]').forEach(radio => {
-        radio.checked = (radio.value === initialSource);
-        radio.addEventListener('change', e => {
-          const v = e.target.value;
-          omLayer.setVisible(v === 'om');
-          cmemsLayer.setVisible(v === 'cmems');
-          loadFlow(v);
-          // Reflect in URL for sharing
-          const u = new URL(window.location.href);
-          u.searchParams.set('source', v);
-          history.replaceState(null, '', u.toString());
-        });
+    // ---- UI wiring ----
+    function setProduct(key) {
+      currentProduct = key;
+      [...document.querySelectorAll('.bv-products button')].forEach(b => {
+        b.classList.toggle('active', b.dataset.prod === key);
       });
+      drawColorbar();
+      map.render();
+      if (PRODUCTS[key].drawWind) drawWindOverlays();
+      else clearWindOverlays();
+    }
 
-      // Click-to-zoom (double-click zooms in by default; we add a single-click
-      // to fly-to the bounding extent of the raster)
-      map.getView().fit(bbox, { padding: [20, 20, 20, 20] });
-      syncMapOffset();
-      map.updateSize();
-      resizeFlowCanvas();
-      loadFlow(initialSource);
-      flowState.raf = requestAnimationFrame(drawFrame);
+    document.querySelectorAll('.bv-products button').forEach(btn => {
+      btn.addEventListener('click', () => setProduct(btn.dataset.prod));
+    });
+
+    document.getElementById('bv-prev').addEventListener('click', () => {
+      setFrame(frameIdx - 1);
+      pause();
+    });
+    document.getElementById('bv-next').addEventListener('click', () => {
+      setFrame(frameIdx + 1);
+      pause();
+    });
+    document.getElementById('bv-slider').addEventListener('input', e => {
+      setFrame(parseInt(e.target.value, 10));
+      pause();
+    });
+    const playBtn = document.getElementById('bv-play');
+    function pause() {
+      if (playTimer) { clearInterval(playTimer); playTimer = null; }
+      playBtn.textContent = '▶'; playBtn.classList.remove('playing');
+    }
+    function play() {
+      pause();
+      playBtn.textContent = '⏸'; playBtn.classList.add('playing');
+      playTimer = setInterval(() => {
+        if (!forecastData) return;
+        const next = (frameIdx + 1) % forecastData.frames.length;
+        setFrame(next);
+      }, 800);
+    }
+    playBtn.addEventListener('click', () => { playTimer ? pause() : play(); });
+
+    map.on('moveend', () => {
+      if (PRODUCTS[currentProduct].drawWind) drawWindOverlays();
+    });
+    map.on('change:size', () => {
+      if (PRODUCTS[currentProduct].drawWind) drawWindOverlays();
+    });
+
+    // ---- bootstrap ----
+    (async () => {
+      try {
+        forecastData = await fetchJson(FORECAST_URL);
+        const frames = forecastData.frames || [];
+        if (!frames.length) {
+          document.getElementById('bv-frame-label').textContent = 'no frames';
+          return;
+        }
+        const startIdx = nearestFrameIdxToDate(frames, targetDate);
+        const slider = document.getElementById('bv-slider');
+        slider.min = '0';
+        slider.max = String(frames.length - 1);
+        slider.value = String(startIdx);
+        frameIdx = startIdx;
+        currentFrame = frames[startIdx];
+        drawColorbar();
+        setFrame(startIdx);
+        map.getView().fit(bbox, { padding: [10, 10, 60, 10] });
+        // soft auto-play so the planner viewer visibly lives
+        // (Mike's directive: looks like captain's dashboard, not a static PNG)
+        play();
+      } catch (e) {
+        document.getElementById('bv-frame-label').textContent = 'load failed: ' + e.message;
+        console.error(e);
+      }
     })();
+  })();
   </script>
 </body>
 </html>
