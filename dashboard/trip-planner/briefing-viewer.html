@@ -261,7 +261,13 @@
           const ctx = c.getContext('2d');
           ctx.clearRect(0, 0, c.width, c.height);
           if (!forecastData || !frameIdx || !currentFrame) return c;
-          // rasterize the current frame's grid into this tile's clip rect
+          // Mike #34665: 'when I zoom in there is a color layer, which is
+          // unknown.' For viz='streamlines' and viz='contours' we DO NOT want
+          // a heat-map fill under the vector overlay — the streamlines/isobars
+          // carry the visual signal. Skip drawFrameToTile so the raster layer
+          // is transparent for those products.
+          const viz = (PRODUCTS[currentProduct] || {}).viz;
+          if (viz === 'streamlines' || viz === 'contours') return c;
           drawFrameToTile(ctx, currentFrame, currentProduct, requestedExtent, c.width, c.height);
           return c;
         },
