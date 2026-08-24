@@ -124,10 +124,25 @@
       const omLayer    = new ol.layer.Image({ source: omSource,    visible: initialSource === 'om'    });
       const cmemsLayer = new ol.layer.Image({ source: cmemsSource, visible: initialSource === 'cmems' });
 
+      // OpenLayers basemap (dark nautical). Mike (2026-08-23 21:16 ET):
+      // streamlines + particles must overlay geographic context, not float on
+      // void. CARTO dark matter gives coastlines + labels at low contrast so
+      // the wind/current signal stays the visual focus.
+      const baseLayer = new ol.layer.Tile({
+        source: new ol.source.XYZ({
+          url: 'https://{a-d}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
+          attributions: '© OpenStreetMap contributors © CARTO',
+          maxZoom: 19,
+          crossOrigin: 'anonymous',
+        }),
+        opacity: 0.55,
+        zIndex: 0,
+      });
+
       // Map
       const map = new ol.Map({
         target: 'bv-map',
-        layers: [omLayer, cmemsLayer],
+        layers: [baseLayer, omLayer, cmemsLayer],
         view: new ol.View({
           projection: rasterProjection,
           center: center,
