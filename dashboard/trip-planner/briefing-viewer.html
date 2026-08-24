@@ -401,30 +401,14 @@
       // pad by 5% on each side so the colorbar isn't pinned to extremes
       const pad = (vmax - vmin) * 0.05 || Math.max(1, Math.abs(vmax) * 0.05);
       vmin -= pad; vmax += pad;
-      // round to nice numbers for the tick labels — stable across tight AND wide ranges.
-      // For ranges < 10, snap to nearest integer; for 10..1000, snap to nearest
-      // 1/2/5/10 × 10^k; for wider, snap to nearest 10^k. This avoids the
-      // collapse-to-1000 bug when vmin≈vmax≈1000 (Math.log10 of 1000 gives
-      // mag=1000 and Math.round(x/1000)*1000 collapses everything).
-      const span = vmax - vmin;
-      const nice = (x) => {
-        if (!Number.isFinite(x)) return 0;
-        const sign = x < 0 ? -1 : 1;
-        const ax = Math.abs(x);
-        if (ax === 0) return 0;
-        const exp = Math.floor(Math.log10(ax));
-        const frac = ax / Math.pow(10, exp);  // 1..10
-        let step;
-        if (span < 5)       step = Math.pow(10, exp - 1); // fine resolution
-        else if (span < 50) step = frac > 5 ? Math.pow(10, exp) : (frac > 2 ? 0.5 * Math.pow(10, exp) : 0.2 * Math.pow(10, exp));
-        else                step = frac > 5 ? Math.pow(10, exp) : Math.pow(10, exp);
-        return sign * Math.round(ax / step) * step;
-      };
-      activeRange = { vmin: nice(vmin), vmax: nice(vmax) };
-      // Guard: if nice() collapsed the range, fall back to padded raw range.
-      if (!(activeRange.vmax > activeRange.vmin)) {
-        activeRange = { vmin: vmin, vmax: vmax };
-      }
+      // Use the padded raw range directly. drawColorbar already produces 5
+      // evenly-spaced ticks across [vmin, vmax] with decimals based on span
+      // size (decimals=0 for span>=50, 1 for >=5, 2 for tighter). Previously
+      // I tried rounding to nice numbers but nice() collapsed pressure data
+      // (~981..1017) to vmin=vmax=1000 because Math.log10 of values near a
+      // 10^k boundary gives the wrong step. Raw range with linear ticks
+      // is correct.
+      activeRange = { vmin, vmax };
     }
 
     function drawColorbar() {
