@@ -559,6 +559,13 @@
       const latStep = Math.max(1, Math.floor(lats.length / 17));
       const lonStep = Math.max(1, Math.floor(lons.length / 31));
       const maxSpeed = 30;
+      // Mike #34665: 'some streamlines clase into one very thick line'.
+      // Render-density artifact: with latStep=1, lonStep=1 every grid cell
+      // is a seed, neighbors trace nearly identical paths through the
+      // smooth field, alpha stacks where they coincide. Fix: dedupe by
+      // midpoint pixel position so we don't stroke the same path twice.
+      const used = new Set();
+      const keyFor = (px, py) => `${Math.round(px/3)},${Math.round(py/3)}`;
       for (let yi = 1; yi < lats.length - 1; yi += latStep) {
         for (let xi = 1; xi < lons.length - 1; xi += lonStep) {
           const path = traceStreamline(field, lons[xi], lats[yi]);
@@ -578,14 +585,18 @@
           streamlineCtx.lineJoin = 'round';
           streamlineCtx.beginPath();
           let started = false;
+          let dup = false;
           for (const pt of path) {
             const proj = ol.proj.fromLonLat([pt[0], pt[1]], rasterProjection);
             const px = map.getPixelFromCoordinate(proj);
             if (!px) continue;
+            const k = keyFor(px[0], px[1]);
+            if (used.has(k)) { dup = true; break; }
+            used.add(k);
             if (!started) { streamlineCtx.moveTo(px[0], px[1]); started = true; }
             else { streamlineCtx.lineTo(px[0], px[1]); }
           }
-          if (started) streamlineCtx.stroke();
+          if (started && !dup) streamlineCtx.stroke();
         }
       }
     }
