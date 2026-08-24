@@ -295,7 +295,11 @@
       const lons = forecastData.lons, lats = forecastData.lats;
       if (!lons || !lats || lons.length < 2 || lats.length < 2) return;
       const def = PRODUCTS[productKey];
-      const vmin = def.vmin, vmax = def.vmax;
+      // dynamic per-frame range — fall back to (0, 30) if activeRange not yet computed.
+      // (Bug fix #0f6434f4: PRODUCTS no longer carries vmin/vmax on each entry;
+      // drawFrameToTile was reading undefined and rasterizing NaN pixels.)
+      const r = activeRange || { vmin: 0, vmax: 30 };
+      const vmin = r.vmin, vmax = r.vmax;
       const scale = def.scale;
 
       // pixel coords from lon/lat
@@ -584,36 +588,52 @@
       flowCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
       const def = PRODUCTS[currentProduct];
       const dirGrid = currentFrame[def.dirKey];
-      if (!dirGrid || !dirGrid.length) return;
+      const magGrid = currentFrame[currentProduct]; // wave/swell height drives arrow length
+      if (!dirGrid || !dirGrid.length || !magGrid || !magGrid.length) return;
       const lons = forecastData.lons, lats = forecastData.lats;
-      for (let yi = 1; yi < lats.length - 1; yi++) {
-        for (let xi = 1; xi < lons.length - 1; xi++) {
+
+      // Quiver-style arrows: stem length scales with wave height (small swell -> tiny arrow,
+      // big swell -> long arrow). Arrowhead size scales with magnitude too, so the visual
+      // signature carries the height information, not just direction.
+      const r = activeRange || { vmin: 0, vmax: 6 };
+      const magRange = r.vmax - r.vmin || 6;
+      const minLen = 6, maxLen = 30;
+      const minHead = 3, maxHead = 6;
+      flowCtx.strokeStyle = 'rgba(15, 25, 45, 0.95)';
+      flowCtx.fillStyle   = 'rgba(15, 25, 45, 0.95)';
+
+      // Subsample: only draw arrows on alternating cells so the map isn't overcrowded.
+      // 17x21 grid -> 9 arrows per axis at most.
+      const stride = 2;
+      for (let yi = 1; yi < lats.length - 1; yi += stride) {
+        for (let xi = 1; xi < lons.length - 1; xi += stride) {
           const lon = lons[xi], lat = lats[yi];
           const dirDeg = dirGrid[yi]?.[xi];
-          if (dirDeg == null) continue;
+          const mag = magGrid[yi]?.[xi];
+          if (dirDeg == null || mag == null) continue;
           const rad = dirDeg * Math.PI / 180;
-          // meteorological: arrow points where it's coming FROM. Arrows show "going to" = +180°.
-          // We want to show the direction the wave is moving — flip the arrow.
+          // meteorological: arrow points where it's coming FROM. Flip 180° so the arrow
+          // shows where the wave is GOING TO.
           const u = -Math.sin(rad), v = -Math.cos(rad);
           const proj = ol.proj.fromLonLat([lon, lat], rasterProjection);
           const c = map.getPixelFromCoordinate(proj);
           if (!c) continue;
-          const len = 14;
-          const tx = c[0] + u * len, ty = c[1] - v * len;
-          flowCtx.strokeStyle = 'rgba(20, 30, 50, 0.85)';
-          flowCtx.fillStyle   = 'rgba(20, 30, 50, 0.85)';
-          flowCtx.lineWidth = 1.2;
+          const t = Math.max(0, Math.min(1, (mag - r.vmin) / magRange));
+          const len = minLen + t * (maxLen - minLen);
+          const head = minHead + t * (maxHead - minHead);
+          const tx = c[0] + u * len, ty = c[1] - v * len; // OL pixel y grows downward, math y grows up
+          // Stem (thicker for bigger waves)
+          flowCtx.lineWidth = 0.9 + t * 0.9;
           flowCtx.beginPath();
           flowCtx.moveTo(c[0], c[1]);
           flowCtx.lineTo(tx, ty);
           flowCtx.stroke();
-          // arrowhead
+          // Arrowhead
           const ang = Math.atan2(-v, u);
-          const ah = 4;
           flowCtx.beginPath();
           flowCtx.moveTo(tx, ty);
-          flowCtx.lineTo(tx - ah * Math.cos(ang - 0.4), ty - ah * Math.sin(ang - 0.4));
-          flowCtx.lineTo(tx - ah * Math.cos(ang + 0.4), ty - ah * Math.sin(ang + 0.4));
+          flowCtx.lineTo(tx - head * Math.cos(ang - 0.45), ty - head * Math.sin(ang - 0.45));
+          flowCtx.lineTo(tx - head * Math.cos(ang + 0.45), ty - head * Math.sin(ang + 0.45));
           flowCtx.closePath();
           flowCtx.fill();
         }
