@@ -1801,6 +1801,10 @@ var BBOX = [...(REGION_FALLBACKS[REGION_ID]?.bbox ?? REGION_FALLBACKS.usec_south
 // Declared before setActiveRegion() so the initial call can assign to it
 // without hitting a Temporal Dead Zone ReferenceError.
 var BATHY_JSON_URL = `https://data.fishedge.live/${REGION_ID}/gebco_bath_latest/gebco_bathy.json`;
+var SURVEY_BATHY_TILE_TEMPLATE = REGION_ID === "usec_md"
+  ? "data/survey_bathy/offshore_composite/color/{z}/{x}/{y}.png"
+  : "";
+var SURVEY_BATHY_TILE_VERSION = "20260823_h13474_h13480_v1";
 
 /**
  * Centralised region-state setter. Call whenever the active region changes
@@ -1816,12 +1820,15 @@ function setActiveRegion(regionId, regionMeta) {
     : [...(REGION_FALLBACKS[regionId]?.bbox ?? REGION_FALLBACKS.usec_south.bbox)];
   const bathyPath = regionMeta?.bathy_path || "gebco_bath_latest/gebco_bathy.json";
   BATHY_JSON_URL = `https://data.fishedge.live/${regionId}/${bathyPath}`;
+  SURVEY_BATHY_TILE_TEMPLATE = regionMeta?.survey_bathy_tile_template
+    || (regionId === "usec_md" ? "data/survey_bathy/offshore_composite/color/{z}/{x}/{y}.png" : "");
   // Invalidate layer caches on region switch so old data doesn't bleed through
   if (prevRegion !== regionId) {
     window._bathyData = null;
     window._bathyLayer = null;
     window._bathyContourSource = null;
     window._combinedBathyLayer = null;
+    window._combinedSurveyBathyLayer = null;
     window._combinedUvLayer = null;
     window._combinedHeightLayer = null;
     gridCache.__bathy_json = null; // invalidate stale bathy cache for new region
@@ -2532,6 +2539,8 @@ let desktopMapState = {
   slaContourLayer: null,
   slaContourLabelOverlays: [],
   bathyContourLayer: null,
+  surveyBathyLayer: null,
+  surveyBathyLayerTemplate: null,
   currentGridInfo: null,
   currentDataObj: null,
   ready: false
@@ -2989,9 +2998,11 @@ async function renderDesktopFrame(frameMeta) {
 
   // Bathymetry contours rendered as OL vector layer
   if (currentVar === "bathy") {
+    ensureDesktopSurveyBathyLayer(map);
     await ensureDesktopBathyContourLayer(map, dataObj, gridInfo);
-  } else if (desktopMapState.bathyContourLayer) {
-    desktopMapState.bathyContourLayer.setVisible(false);
+  } else {
+    if (desktopMapState.bathyContourLayer) desktopMapState.bathyContourLayer.setVisible(false);
+    if (desktopMapState.surveyBathyLayer) desktopMapState.surveyBathyLayer.setVisible(false);
   }
 
   // Preserve an existing viewport when switching pages/products; otherwise fit to data.
@@ -3521,6 +3532,7 @@ if (chkUv) chkUv.addEventListener("change", async e => {
 
 if (chkBathy) chkBathy.addEventListener("change", e => {
   if (window._combinedBathyLayer) window._combinedBathyLayer.setVisible(e.target.checked);
+  if (window._combinedSurveyBathyLayer) window._combinedSurveyBathyLayer.setVisible(e.target.checked);
   const legend = document.getElementById("combined-bathy-legend");
   if (legend) legend.style.display = e.target.checked ? "" : "none";
 });
@@ -5552,6 +5564,60 @@ async function ensureDesktopPlaceLayer(map) {
   map.addLayer(layer);
 }
 
+function surveyBathyTileUrl() {
+  if (!SURVEY_BATHY_TILE_TEMPLATE) return "";
+  const sep = SURVEY_BATHY_TILE_TEMPLATE.includes("?") ? "&" : "?";
+  return `${SURVEY_BATHY_TILE_TEMPLATE}${sep}v=${encodeURIComponent(SURVEY_BATHY_TILE_VERSION)}`;
+}
+
+function buildSurveyBathyTileLayer(options = {}) {
+  const url = surveyBathyTileUrl();
+  if (!url || !window.ol?.layer?.Tile || !window.ol?.source?.XYZ) return null;
+  const source = new ol.source.XYZ({
+    url,
+    minZoom: 8,
+    maxZoom: 14,
+    crossOrigin: "anonymous",
+    wrapX: false,
+    transition: 0
+  });
+  const layer = new ol.layer.Tile({
+    source,
+    opacity: options.opacity ?? 0.84,
+    zIndex: options.zIndex ?? 14,
+    minZoom: options.minZoom ?? 8,
+    maxZoom: options.maxZoom ?? 15
+  });
+  layer.set("name", "survey-bathy-composite");
+  layer.set("title", "Survey-first high-resolution bathymetry");
+  layer.set("tileTemplate", SURVEY_BATHY_TILE_TEMPLATE);
+  return layer;
+}
+
+function ensureDesktopSurveyBathyLayer(map) {
+  if (!map) return;
+  const template = SURVEY_BATHY_TILE_TEMPLATE || "";
+  if (!template) {
+    if (desktopMapState.surveyBathyLayer) {
+      map.removeLayer(desktopMapState.surveyBathyLayer);
+      desktopMapState.surveyBathyLayer = null;
+      desktopMapState.surveyBathyLayerTemplate = null;
+    }
+    return;
+  }
+  if (desktopMapState.surveyBathyLayer && desktopMapState.surveyBathyLayerTemplate !== template) {
+    map.removeLayer(desktopMapState.surveyBathyLayer);
+    desktopMapState.surveyBathyLayer = null;
+    desktopMapState.surveyBathyLayerTemplate = null;
+  }
+  if (!desktopMapState.surveyBathyLayer) {
+    desktopMapState.surveyBathyLayer = buildSurveyBathyTileLayer({ zIndex: 14, opacity: 0.86 });
+    desktopMapState.surveyBathyLayerTemplate = template;
+    if (desktopMapState.surveyBathyLayer) map.addLayer(desktopMapState.surveyBathyLayer);
+  }
+  desktopMapState.surveyBathyLayer?.setVisible(currentVar === "bathy");
+}
+
 async function ensureDesktopBathyContourLayer(map, bathyData, gridInfo) {
   if (!map) return;
   // Re-use existing layer or create new one
@@ -6260,6 +6326,7 @@ async function renderCombinedMode() {
     window._combinedChlLayer = null;
     window._combinedSstLayer = null;
     window._combinedBathyLayer = null;
+    window._combinedSurveyBathyLayer = null;
     window._combinedUvLayer = null;
     window._combinedHeightLayer = null;
     window._combinedFrontDensityLayer = null;
@@ -6483,6 +6550,12 @@ async function renderCombinedMode() {
     // loading; the OFM land foreground remains available as a fallback.
     console.warn("[combined] land mask unavailable; continuing with data layers", landMaskError);
   }
+  const surveyBathyLayer = buildSurveyBathyTileLayer({ zIndex: 14, opacity: 0.82 });
+  if (surveyBathyLayer) {
+    surveyBathyLayer.setVisible(document.getElementById("chk-combined-bathy")?.checked ?? true);
+    map.addLayer(surveyBathyLayer);
+    window._combinedSurveyBathyLayer = surveyBathyLayer;
+  }
   const bathyLayer = buildBathyContourLayer(bathyData, bathyGridInfo, map);
   if (bathyLayer) { map.addLayer(bathyLayer); window._combinedBathyLayer = bathyLayer; }
 
@@ -6625,6 +6698,7 @@ async function renderCombinedMode() {
   // Log all window._combined* layer refs
   console.log("[combined] window._combinedChlLayer:", !!window._combinedChlLayer);
   console.log("[combined] window._combinedBathyLayer:", !!window._combinedBathyLayer);
+  console.log("[combined] window._combinedSurveyBathyLayer:", !!window._combinedSurveyBathyLayer);
   console.log("[combined] window._combinedUvLayer:", !!window._combinedUvLayer);
   console.log("[combined] window._combinedFrontDensityLayer:", !!window._combinedFrontDensityLayer);
   console.log("[combined] window._combinedFrontLineLayer:", !!window._combinedFrontLineLayer);
