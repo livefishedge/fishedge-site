@@ -399,14 +399,32 @@
       let vmin = Math.min(...flat);
       let vmax = Math.max(...flat);
       // pad by 5% on each side so the colorbar isn't pinned to extremes
-      const pad = (vmax - vmin) * 0.05 || 1;
+      const pad = (vmax - vmin) * 0.05 || Math.max(1, Math.abs(vmax) * 0.05);
       vmin -= pad; vmax += pad;
-      // round to nice numbers for the tick labels
+      // round to nice numbers for the tick labels — stable across tight AND wide ranges.
+      // For ranges < 10, snap to nearest integer; for 10..1000, snap to nearest
+      // 1/2/5/10 × 10^k; for wider, snap to nearest 10^k. This avoids the
+      // collapse-to-1000 bug when vmin≈vmax≈1000 (Math.log10 of 1000 gives
+      // mag=1000 and Math.round(x/1000)*1000 collapses everything).
+      const span = vmax - vmin;
       const nice = (x) => {
-        const mag = Math.pow(10, Math.floor(Math.log10(Math.max(1e-9, Math.abs(x)))));
-        return Math.round(x / mag) * mag;
+        if (!Number.isFinite(x)) return 0;
+        const sign = x < 0 ? -1 : 1;
+        const ax = Math.abs(x);
+        if (ax === 0) return 0;
+        const exp = Math.floor(Math.log10(ax));
+        const frac = ax / Math.pow(10, exp);  // 1..10
+        let step;
+        if (span < 5)       step = Math.pow(10, exp - 1); // fine resolution
+        else if (span < 50) step = frac > 5 ? Math.pow(10, exp) : (frac > 2 ? 0.5 * Math.pow(10, exp) : 0.2 * Math.pow(10, exp));
+        else                step = frac > 5 ? Math.pow(10, exp) : Math.pow(10, exp);
+        return sign * Math.round(ax / step) * step;
       };
       activeRange = { vmin: nice(vmin), vmax: nice(vmax) };
+      // Guard: if nice() collapsed the range, fall back to padded raw range.
+      if (!(activeRange.vmax > activeRange.vmin)) {
+        activeRange = { vmin: vmin, vmax: vmax };
+      }
     }
 
     function drawColorbar() {
@@ -739,6 +757,11 @@
         const lat = bbox[1] + Math.random() * (bbox[3] - bbox[1]);
         particles.push({ lon, lat, age: Math.random() * 90, maxAge: 70 + Math.random() * 80 });
       }
+      // Diagnostic — logs the first time particles are seeded after a frame change.
+      if (!seedWindParticles._logged) {
+        seedWindParticles._logged = true;
+        console.log('[particles] seeded', target, 'across', bbox[2]-bbox[0], 'x', bbox[3]-bbox[1], 'deg');
+      }
     }
 
     function startParticleAnimation() {
@@ -746,7 +769,13 @@
       if (!particles.length) seedWindParticles();
       const loop = (ts) => {
         particleRaf = requestAnimationFrame(loop);
-        if (!currentFrame || !forecastData) return;
+        if (!currentFrame || !forecastData) {
+          if (!startParticleAnimation._loggedNoFrame) {
+            startParticleAnimation._loggedNoFrame = true;
+            console.warn('[particles] skipped frame: currentFrame=', !!currentFrame, 'forecastData=', !!forecastData);
+          }
+          return;
+        }
         if (ts - particleLast < 32) return; // ~30fps cap
         particleLast = ts;
         // resize if viewport changed
@@ -767,6 +796,8 @@
         flowCtx.fillStyle = 'rgba(7, 17, 29, 0.06)';
         flowCtx.fillRect(0, 0, rect.width, rect.height);
         // advect particles
+        let drawn = 0;
+        let respawned = 0;
         for (let i = 0; i < particles.length; i++) {
           const p = particles[i];
           const vec = bilinearVec(currentFrame, p.lon, p.lat);
@@ -776,6 +807,7 @@
             const lon = bbox[0] + Math.random() * (bbox[2] - bbox[0]);
             const lat = bbox[1] + Math.random() * (bbox[3] - bbox[1]);
             particles[i] = { lon, lat, age: 0, maxAge: 70 + Math.random() * 80 };
+            respawned++;
             continue;
           }
           const cosLat = Math.cos(p.lat * Math.PI / 180);
@@ -804,8 +836,13 @@
           flowCtx.moveTo(beforePx[0], beforePx[1]);
           flowCtx.lineTo(afterPx[0], afterPx[1]);
           flowCtx.stroke();
+          drawn++;
         }
         flowCtx.globalAlpha = 1;
+        if (!startParticleAnimation._loggedOnce) {
+          startParticleAnimation._loggedOnce = true;
+          console.log('[particles] first frame drawn=', drawn, 'respawned=', respawned, 'total=', particles.length);
+        }
       };
       particleRaf = requestAnimationFrame(loop);
     }
