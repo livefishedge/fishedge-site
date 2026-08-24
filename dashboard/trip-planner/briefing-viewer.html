@@ -210,7 +210,13 @@
     // ---- ol setup ----
     const baseLayer = new ol.layer.Tile({
       source: new ol.source.XYZ({
-        url: 'https://{a-d}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
+        // Mike #34713: 'still artifacts in wind map' — the @2x retina
+        // suffix doesn't exist at the low zoom levels (5.5) we use, so
+        // OL falls back to standard tiles and the coastline becomes
+        // pixelated (the staircase artifact the user keeps seeing on the
+        // basemap). Drop @2x — the standard dark_all tiles are already
+        // 256×256 and look correct at this zoom.
+        url: 'https://{a-d}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
         attributions: '© OpenStreetMap contributors © CARTO',
         maxZoom: 19,
         crossOrigin: 'anonymous',
@@ -475,6 +481,14 @@
     function drawOverlaysForProduct() {
       clearOverlays();
       const def = PRODUCTS[currentProduct];
+      // Mike #34713: 'doubling' effect on coastlines was caused by the
+      // rasterLayer still being in the layer stack at opacity 0.85 even
+      // when drawFrameToTile returned early. Hide the layer entirely
+      // when streamlines or contours are showing — they carry the viz,
+      // and the raster can produce subtle doubling with the basemap.
+      if (rasterLayer) {
+        rasterLayer.setVisible(def.viz === 'heat' || def.viz === 'arrows');
+      }
       if (def.viz === 'streamlines') {
         drawStreamlines();
         startParticleAnimation();
@@ -548,6 +562,23 @@
       return path;
     }
 
+    // Mike #34713: streamlines abruptly terminate at bbox and low-speed
+    // edges, producing visible "walls" of streamline endings along
+    // meteorological fronts. Fade alpha in the last 25% of the path so
+    // the wall dissolves into the basemap instead of forming a sharp edge.
+    function fadeTailAlpha(rawPath, w, h) {
+      const n = rawPath.length;
+      if (n < 4) return rawPath;
+      const tailFrac = 0.25;
+      const tailStart = Math.floor(n * (1 - tailFrac));
+      return rawPath.map((pt, i) => {
+        if (i < tailStart) return { pt, alpha: 1 };
+        const t = (i - tailStart) / (n - tailStart); // 0..1 over the tail
+        const a = 1 - t; // fade 1 → 0
+        return { pt, alpha: a };
+      });
+    }
+
     function drawStreamlines() {
       if (!currentFrame || !forecastData) return;
       resizeOverlayCanvases();
@@ -556,19 +587,24 @@
       streamlineCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
       const lons = forecastData.lons, lats = forecastData.lats;
       const field = { bbox, lons, lats };
-      const latStep = Math.max(1, Math.floor(lats.length / 17));
-      const lonStep = Math.max(1, Math.floor(lons.length / 31));
+      // Mike #34713: 'still artifacts in wind map'. The previous version
+      // (latStep=1, lonStep=1, 8-px dedupe bucket) created a visible density
+      // boundary along meteorological fronts: smooth regions of the field
+      // threw away most seeds (neighbors bucket into the same 8-px cluster)
+      // while fronts kept seeds (more variety passes the bucket). That
+      // boundary IS the staircase the user sees, sitting on top of a real
+      // meteorological front in the data.
+      //
+      // Fix: coarser stride (~85 seeds total) + much tighter bucket (4 px,
+      // smaller than the seed spacing) so density is uniform across smooth
+      // regions AND fronts. Streamlines then trace the actual (u,v) field
+      // without per-region density boundaries.
+      const latStep = 2;
+      const lonStep = 2;
+      const bucketPx = 4;
+      const keyFor = (px, py) => `${Math.round(px/bucketPx)},${Math.round(py/bucketPx)}`;
       const maxSpeed = 30;
-      // Mike #34665 + #34691: 'streamlines clase into one very thick line'
-      // AND a step-like diagonal artifact. Both come from the dedupe: the
-      // previous code marked EVERY path point as used (not just the seed),
-      // so rejected seeds still extended the rejection zone, and the
-      // acceptance/rejection boundary followed 3-pixel-square edges. Fix:
-      // check only the seed point against `used`, and mark only the seed
-      // point when accepted. The dedupe bucket is coarser too (8 px) so
-      // neighbors with similar but not identical paths can coexist.
       const used = new Set();
-      const keyFor = (px, py) => `${Math.round(px/8)},${Math.round(py/8)}`;
       let accepted = 0;
       for (let yi = 1; yi < lats.length - 1; yi += latStep) {
         for (let xi = 1; xi < lons.length - 1; xi += lonStep) {
@@ -604,6 +640,31 @@
             if (!started) { streamlineCtx.moveTo(px[0], px[1]); started = true; }
             else { streamlineCtx.lineTo(px[0], px[1]); }
           }
+          // Mike #34713: fade alpha along the last 25% of the path so the
+          // streamline doesn't terminate with a sharp wall at the bbox or
+          // low-speed edges. The full path still renders, just with a soft
+          // fade so it dissolves into the basemap instead of producing a
+          // visible "staircase" along the meteorological front.
+          const faded = fadeTailAlpha(path, flowCanvas.width, flowCanvas.height);
+          const baseAlpha = alpha;
+          let prevPx = null;
+          for (const seg of faded) {
+            const proj = ol.proj.fromLonLat([seg.pt[0], seg.pt[1]], rasterProjection);
+            const px = map.getPixelFromCoordinate(proj);
+            if (!px) { prevPx = null; continue; }
+            if (!prevPx) {
+              streamlineCtx.moveTo(px[0], px[1]);
+              prevPx = px;
+              continue;
+            }
+            streamlineCtx.globalAlpha = baseAlpha * seg.alpha;
+            streamlineCtx.beginPath();
+            streamlineCtx.moveTo(prevPx[0], prevPx[1]);
+            streamlineCtx.lineTo(px[0], px[1]);
+            streamlineCtx.stroke();
+            prevPx = px;
+          }
+          streamlineCtx.globalAlpha = 1;
           if (started) streamlineCtx.stroke();
         }
       }
