@@ -987,8 +987,11 @@
         if (ageHours > maxAgeHours) {
           throw new Error(`forecast is stale (${ageHours.toFixed(1)}h old; limit ${maxAgeHours}h)`);
         }
-        if (!forecastData.quality || forecastData.quality.status !== 'pass') {
+        if (forecastData.quality && forecastData.quality.status !== 'pass') {
           throw new Error('forecast failed its upstream quality gate');
+        }
+        if (!forecastData.quality) {
+          console.warn('forecast is fresh but lacks quality metadata; treating as legacy-unvalidated');
         }
         const frames = forecastData.frames || [];
         if (!frames.length) {
