@@ -244,6 +244,30 @@
       ]),
     });
 
+    // Dev-only domain diagnostics: show the target box and the larger field
+    // used by streamline integration once the forecast metadata is loaded.
+    const domainSource = new ol.source.Vector();
+    const domainLayer = new ol.layer.Vector({
+      source: domainSource,
+      zIndex: 8,
+      style: feature => feature.get('kind') === 'field'
+        ? new ol.style.Style({ stroke: new ol.style.Stroke({ color: 'rgba(255,193,7,0.9)', width: 2, lineDash: [8, 6] }) })
+        : new ol.style.Style({ stroke: new ol.style.Stroke({ color: 'rgba(79,195,247,0.95)', width: 2 }) }),
+    });
+    map.addLayer(domainLayer);
+    const devDiagnostics = window.location.hostname.startsWith('feat-');
+    function drawDomainDiagnostics() {
+      if (!devDiagnostics || !Array.isArray(fieldBbox)) return;
+      domainSource.clear();
+      const ring = extent => ol.geom.Polygon.fromExtent(extent);
+      const fieldFeature = new ol.Feature(ring(fieldBbox));
+      fieldFeature.set('kind', 'field');
+      const targetFeature = new ol.Feature(ring(bbox));
+      targetFeature.set('kind', 'target');
+      domainSource.addFeatures([fieldFeature, targetFeature]);
+      map.getView().setExtent(fieldBbox);
+    }
+
     // overlays for wind streamlines + animated particles
     const mapEl = document.getElementById('bv-map');
     const streamlineCanvas = document.createElement('canvas');
@@ -615,6 +639,7 @@
       const maxSpeed = 30;
       const used = new Set();
       let accepted = 0;
+      let boundaryExits = 0;
       for (let yi = 1; yi < lats.length - 1; yi += latStep) {
         for (let xi = 1; xi < lons.length - 1; xi += lonStep) {
           if (lons[xi] < bbox[0] || lons[xi] > bbox[2] ||
@@ -627,6 +652,10 @@
           if (used.has(seedKey)) continue;
           const path = traceStreamline(field, lons[xi], lats[yi]);
           if (path.length < 3) continue;
+          const last = path[path.length - 1];
+          const edge = 0.09;
+          if (last[0] <= fieldBbox[0] + edge || last[0] >= fieldBbox[2] - edge ||
+              last[1] <= fieldBbox[1] + edge || last[1] >= fieldBbox[3] - edge) boundaryExits++;
           used.add(seedKey);
           accepted++;
           const mid = path[Math.floor(path.length / 2)];
@@ -668,6 +697,7 @@
           streamlineCtx.globalAlpha = 1;
         }
       }
+      if (devDiagnostics) console.log(`[streamlines] accepted=${accepted} field-boundary exits=${boundaryExits}`);
     }
 
     // ---- direction arrows for wave / swell products ----
@@ -989,6 +1019,7 @@
         fieldBbox = Array.isArray(forecastData.field_bbox || forecastData.bbox)
           ? (forecastData.field_bbox || forecastData.bbox)
           : bbox;
+        drawDomainDiagnostics();
         const generatedAt = Date.parse(forecastData && forecastData.generated_at);
         if (!Number.isFinite(generatedAt)) {
           throw new Error('forecast missing generated_at provenance');
@@ -1022,7 +1053,7 @@
         currentFrame = frames[startIdx];
         drawColorbar();
         setFrame(startIdx);
-        map.getView().fit(bbox, { padding: [10, 10, 60, 10] });
+        map.getView().fit(devDiagnostics ? fieldBbox : bbox, { padding: [10, 10, 60, 10] });
         // soft auto-play so the planner viewer visibly lives
         // (Mike's directive: looks like captain's dashboard, not a static PNG)
         play();
