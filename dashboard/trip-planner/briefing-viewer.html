@@ -584,19 +584,39 @@
     function traceStreamline(field, lon0, lat0) {
       const path = [];
       let lon = lon0, lat = lat0;
+      let prevU = null, prevV = null;
+      const calmThresholdKn = 2.5;
+      const baseStepDeg = 0.08;
       for (let i = 0; i < 30; i++) {
         if (lon < field.bbox[0] || lon > field.bbox[2] || lat < field.bbox[1] || lat > field.bbox[3]) break;
         path.push([lon, lat]);
         const vec = bilinearVec(currentFrame, lon, lat);
         if (!vec) break;
         const sp = Math.sqrt(vec.u * vec.u + vec.v * vec.v);
-        // A near-calm vector has unstable direction. Normalizing it into a
-        // full step turns tiny GFS noise into diamond/loop artifacts.
-        if (sp < 0.8) break;
-        const stepDeg = 0.08;
+        // Weak GFS winds have an unstable direction. A fixed step after
+        // normalizing the vector turns that noise into visible diamonds.
+        // Below 2.5 kn, stop rather than drawing a pseudo-streamline.
+        if (sp < calmThresholdKn) break;
+        if (prevU !== null) {
+          const prevSp = Math.sqrt(prevU * prevU + prevV * prevV);
+          const cosine = (vec.u * prevU + vec.v * prevV) / (sp * prevSp);
+          // A sharp reversal is numerical/model noise at this display scale,
+          // not a useful continuation of the local flow line.
+          if (cosine < -0.15) break;
+        }
+        // Preserve the long visual reach of strong winds, but make weak-wind
+        // segments proportionally shorter instead of normalizing them to the
+        // same 0.08° displacement.
+        const stepDeg = baseStepDeg * Math.min(1, sp / 10);
         const cosLat = Math.max(0.35, Math.cos(lat * Math.PI / 180));
         lon += (vec.u / sp) * stepDeg / cosLat;
         lat += (vec.v / sp) * stepDeg;
+        for (let j = Math.max(0, path.length - 8); j < path.length - 2; j++) {
+          const prior = path[j];
+          if (Math.hypot(lon - prior[0], lat - prior[1]) < 0.035) return path;
+        }
+        prevU = vec.u;
+        prevV = vec.v;
       }
       return path;
     }
