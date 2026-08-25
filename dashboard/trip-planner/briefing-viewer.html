@@ -638,20 +638,10 @@
           streamlineCtx.lineWidth = 0.9;
           streamlineCtx.lineCap = 'round';
           streamlineCtx.lineJoin = 'round';
-          streamlineCtx.beginPath();
-          let started = false;
-          for (const pt of path) {
-            const proj = ol.proj.fromLonLat([pt[0], pt[1]], rasterProjection);
-            const px = map.getPixelFromCoordinate(proj);
-            if (!px) continue;
-            if (!started) { streamlineCtx.moveTo(px[0], px[1]); started = true; }
-            else { streamlineCtx.lineTo(px[0], px[1]); }
-          }
-          // Mike #34713: fade alpha along the last 25% of the path so the
-          // streamline doesn't terminate with a sharp wall at the bbox or
-          // low-speed edges. The full path still renders, just with a soft
-          // fade so it dissolves into the basemap instead of producing a
-          // visible "staircase" along the meteorological front.
+          // Fade alpha along the last 25% of the path so streamlines ending
+          // at the bbox or a low-speed cell dissolve instead of forming a
+          // bright wall. Draw each segment once: a prior full-path stroke
+          // silently defeated this fade and exaggerated convergence points.
           const faded = fadeTailAlpha(path, flowCanvas.width, flowCanvas.height);
           const baseAlpha = alpha;
           let prevPx = null;
@@ -672,7 +662,6 @@
             prevPx = px;
           }
           streamlineCtx.globalAlpha = 1;
-          if (started) streamlineCtx.stroke();
         }
       }
     }
