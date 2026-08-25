@@ -91,7 +91,7 @@
     <a class="bv-back" href="javascript:history.back()">← Back</a>
     <div>
       <h1 class="bv-title">Briefing Viewer — <span id="bv-region">usec_md</span></h1>
-      <div class="bv-time" id="bv-time">7-Day Outlook</div>
+      <div class="bv-time" id="bv-time">7-Day Outlook · loading forecast…</div>
     </div>
     <div class="bv-products" id="bv-products">
       <button data-prod="temperature_f" class="active"><span class="dot dot-temp"></span>Temp</button>
@@ -979,8 +979,12 @@
         }
         const maxAgeHours = Number(forecastData.quality && forecastData.quality.max_age_hours) || MAX_FORECAST_AGE_HOURS;
         const ageHours = (Date.now() - generatedAt) / 3600000;
+        const ageLabel = ageHours > maxAgeHours
+          ? `STALE · ${ageHours.toFixed(1)}h old · limit ${maxAgeHours}h`
+          : `fresh · ${ageHours.toFixed(1)}h old`;
+        document.getElementById('bv-time').textContent = `7-Day Outlook · ${ageLabel}`;
         if (ageHours > maxAgeHours) {
-          throw new Error(`forecast is stale (${ageHours.toFixed(1)}h old; limit ${maxAgeHours}h)`);
+          console.warn(`[forecast] rendering stale data: ${ageLabel}`);
         }
         if (forecastData.quality && forecastData.quality.status !== 'pass') {
           throw new Error('forecast failed its upstream quality gate');
