@@ -518,7 +518,11 @@
       }
       if (def.viz === 'streamlines') {
         drawStreamlines();
-        startParticleAnimation();
+        // Particles are intentionally disabled in the dev diagnostic view
+        // until a coastline/land mask is available. Uniform seeding over
+        // land creates the yellow coastal clusters that can be mistaken for
+        // wind convergence. Static streamlines remain the validated field.
+        if (!devDiagnostics) startParticleAnimation();
       } else if (def.viz === 'arrows') drawDirectionArrows();
       else if (def.viz === 'contours') drawIsobars();
       else stopParticleAnimation();
