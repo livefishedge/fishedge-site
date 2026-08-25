@@ -547,14 +547,14 @@
     }
 
     // ---- streamlines (restored from d1074225 — Euler-integrated over the (u,v) field) ----
-    // Trace one streamline per seed by Euler integration of the local (u,v) field.
-    // Each path is ~50 steps × 0.08° stepDeg ≈ 4° (~440 km), matching hint.fm/wind's
-    // flow density. Drawn once per frame change (not every animation tick) so the
-    // lines stay sharp. Speed → opacity (calm=0.22, strong=0.62).
+    // Trace one local streamline per seed by Euler integration of the local
+    // (u,v) field. A long one-way trace makes most paths terminate on the
+    // downstream bbox edge and creates a false convergence wall, so keep the
+    // visible segment local and let particles communicate longer-range flow.
     function traceStreamline(field, lon0, lat0) {
       const path = [];
       let lon = lon0, lat = lat0;
-      for (let i = 0; i < 50; i++) {
+      for (let i = 0; i < 30; i++) {
         if (lon < field.bbox[0] || lon > field.bbox[2] || lat < field.bbox[1] || lat > field.bbox[3]) break;
         path.push([lon, lat]);
         const vec = bilinearVec(currentFrame, lon, lat);
@@ -576,7 +576,7 @@
     function fadeTailAlpha(rawPath, w, h) {
       const n = rawPath.length;
       if (n < 4) return rawPath;
-      const tailFrac = 0.25;
+      const tailFrac = 0.35;
       const tailStart = Math.floor(n * (1 - tailFrac));
       return rawPath.map((pt, i) => {
         if (i < tailStart) return { pt, alpha: 1 };
