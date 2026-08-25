@@ -518,11 +518,10 @@
       }
       if (def.viz === 'streamlines') {
         drawStreamlines();
-        // Particles are intentionally disabled in the dev diagnostic view
-        // until a coastline/land mask is available. Uniform seeding over
-        // land creates the yellow coastal clusters that can be mistaken for
-        // wind convergence. Static streamlines remain the validated field.
-        if (!devDiagnostics) startParticleAnimation();
+        // Particles use the same weak-wind guard as streamlines. A coastline
+        // mask is still a future refinement, but disabling the layer leaves
+        // the diagnostic map visibly empty in broad low-wind areas.
+        startParticleAnimation();
       } else if (def.viz === 'arrows') drawDirectionArrows();
       else if (def.viz === 'contours') drawIsobars();
       else stopParticleAnimation();
@@ -658,9 +657,9 @@
       // smaller than the seed spacing) so density is uniform across smooth
       // regions AND fronts. Streamlines then trace the actual (u,v) field
       // without per-region density boundaries.
-      const latStep = 2;
-      const lonStep = 2;
-      const bucketPx = 4;
+      const latStep = 1;
+      const lonStep = 1;
+      const bucketPx = 3;
       const keyFor = (px, py) => `${Math.round(px/bucketPx)},${Math.round(py/bucketPx)}`;
       const maxSpeed = 30;
       const used = new Set();
@@ -677,7 +676,7 @@
           const seedKey = keyFor(seedPx[0], seedPx[1]);
           if (used.has(seedKey)) continue;
           const path = traceStreamline(field, lons[xi], lats[yi]);
-          if (path.length < 3) continue;
+          if (path.length < 2) continue;
           const last = path[path.length - 1];
           const edge = 0.09;
           if (last[0] <= fieldBbox[0] + edge || last[0] >= fieldBbox[2] - edge ||
@@ -873,7 +872,6 @@
     let particleLast = 0;
 
     function seedWindParticles() {
-      if (devDiagnostics) return;
       particles.length = 0;
       if (!forecastData || !mapEl) return;
       const rect = mapEl.getBoundingClientRect();
@@ -892,7 +890,6 @@
     }
 
     function startParticleAnimation() {
-      if (devDiagnostics) return;
       if (particleRaf) return;
       if (!particles.length) seedWindParticles();
       const loop = (ts) => {
@@ -929,7 +926,7 @@
         for (let i = 0; i < particles.length; i++) {
           const p = particles[i];
           const vec = bilinearVec(currentFrame, p.lon, p.lat);
-          if (!vec || vec.speed < 0.3 || p.age >= p.maxAge ||
+          if (!vec || vec.speed < 2.5 || p.age >= p.maxAge ||
               p.lon < bbox[0] || p.lon > bbox[2] ||
               p.lat < bbox[1] || p.lat > bbox[3]) {
             const lon = bbox[0] + Math.random() * (bbox[2] - bbox[0]);
