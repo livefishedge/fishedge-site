@@ -590,7 +590,9 @@
         const vec = bilinearVec(currentFrame, lon, lat);
         if (!vec) break;
         const sp = Math.sqrt(vec.u * vec.u + vec.v * vec.v);
-        if (sp < 0.04) break;
+        // A near-calm vector has unstable direction. Normalizing it into a
+        // full step turns tiny GFS noise into diamond/loop artifacts.
+        if (sp < 0.8) break;
         const stepDeg = 0.08;
         const cosLat = Math.max(0.35, Math.cos(lat * Math.PI / 180));
         lon += (vec.u / sp) * stepDeg / cosLat;
