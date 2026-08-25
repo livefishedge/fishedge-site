@@ -851,6 +851,7 @@
     let particleLast = 0;
 
     function seedWindParticles() {
+      if (devDiagnostics) return;
       particles.length = 0;
       if (!forecastData || !mapEl) return;
       const rect = mapEl.getBoundingClientRect();
@@ -869,6 +870,7 @@
     }
 
     function startParticleAnimation() {
+      if (devDiagnostics) return;
       if (particleRaf) return;
       if (!particles.length) seedWindParticles();
       const loop = (ts) => {
