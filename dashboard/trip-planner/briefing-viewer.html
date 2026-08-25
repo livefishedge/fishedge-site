@@ -195,6 +195,7 @@
     let playTimer = null;
 
     const FORECAST_URL = `https://data.fishedge.live/${region}/briefing/forecast.json`;
+    const DEV_FORECAST_URL = `/data/${region}/briefing/forecast.json`;
     const CORS_PROXY = 'https://corsproxy.io/?';
     const MAX_FORECAST_AGE_HOURS = 12;
 
@@ -976,6 +977,15 @@
     (async () => {
       try {
         forecastData = await fetchJson(FORECAST_URL);
+        // Dev carries a NOAA GFS diagnostic payload while the shared feed is
+        // migrated off Open-Meteo. Use it only when the shared payload lacks
+        // the expanded integration field; production stays on the canonical
+        // data host.
+        if (window.location.hostname.startsWith('feat-') &&
+            (!Array.isArray(forecastData.bbox) || forecastData.bbox[0] > -79)) {
+          try { forecastData = await fetchJson(DEV_FORECAST_URL); }
+          catch (fallbackError) { console.warn('[forecast] dev fallback unavailable', fallbackError); }
+        }
         fieldBbox = Array.isArray(forecastData.field_bbox || forecastData.bbox)
           ? (forecastData.field_bbox || forecastData.bbox)
           : bbox;
