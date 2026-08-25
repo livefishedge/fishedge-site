@@ -265,7 +265,7 @@
       const targetFeature = new ol.Feature(ring(bbox));
       targetFeature.set('kind', 'target');
       domainSource.addFeatures([fieldFeature, targetFeature]);
-      map.getView().setExtent(fieldBbox);
+      map.getView().set('extent', fieldBbox);
     }
 
     // overlays for wind streamlines + animated particles
