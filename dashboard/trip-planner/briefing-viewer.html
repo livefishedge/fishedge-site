@@ -35,6 +35,7 @@
     .dot-temp { background: #ff8c00; }
     .dot-wave { background: #00c8ff; }
     .dot-swell { background: #8bd7ff; }
+    .dot-composite { background: #ffb3d1; box-shadow: 0 0 0 1px #000 inset; }
     .dot-wind { background: #62e58a; }
     .dot-press { background: #c59bff; }
 
@@ -97,6 +98,7 @@
       <button data-prod="temperature_f" class="active"><span class="dot dot-temp"></span>Temp</button>
       <button data-prod="wave_height_ft"><span class="dot dot-wave"></span>Wave</button>
       <button data-prod="swell_height_ft"><span class="dot dot-swell"></span>Swell</button>
+      <button data-prod="wave_composite" class="bv-composite-btn"><span class="dot dot-composite"></span>Wave + Swell</button>
       <button data-prod="wind_speed_kn"><span class="dot dot-wind"></span>Wind</button>
       <button data-prod="pressure_hpa"><span class="dot dot-press"></span>Pressure</button>
     </div>
@@ -155,6 +157,7 @@
       temperature_f: { name: 'Temperature', unit: '°F', scale: 'SST', viz: 'heat',        dynamicRange: true  },
       wave_height_ft:{ name: 'Wave height', unit: 'ft',  scale: 'UV',  viz: 'arrows',      dirKey: 'wave_direction_deg', dynamicRange: true },
       swell_height_ft:{name: 'Swell height',unit: 'ft',  scale: 'UV',  viz: 'arrows',      dirKey: 'swell_direction_deg', dynamicRange: true },
+      wave_composite:{name: 'Wave + Swell', unit: 'ft',  scale: 'UV',  viz: 'composite',   dynamicRange: true },
       wind_speed_kn: { name: 'Wind flow',   unit: 'kn',  scale: 'CHL', viz: 'streamlines', dynamicRange: false },
       pressure_hpa:  { name: 'Pressure',    unit: 'hPa', scale: 'SLA', viz: 'contours',    dynamicRange: true  },
     };
@@ -524,7 +527,221 @@
         startParticleAnimation();
       } else if (def.viz === 'arrows') drawDirectionArrows();
       else if (def.viz === 'contours') drawIsobars();
+      else if (def.viz === 'composite') drawWaveComposite();
       else stopParticleAnimation();
+    }
+
+    // ---- wave composite: heat fill + swell streamlines + wind-wave streamlines + wind arrows ----
+    // Reference image: significant-wave-height heat fill (UV ramp, dynamicRange),
+    // black streamlines traced over the swell field, pink streamlines over the
+    // wind-wave field, white arrows for atmospheric 10-m wind.
+    function drawWaveComposite() {
+      if (!currentFrame || !forecastData) return;
+      resizeOverlayCanvases();
+      const dpr = flowCanvas.width / mapEl.clientWidth;
+      // Both canvases share the same transform; clear them in case prior product
+      // left residue on the overlay canvas.
+      streamlineCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      flowCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      streamlineCtx.clearRect(0, 0, flowCanvas.width, flowCanvas.height);
+      flowCtx.clearRect(0, 0, flowCanvas.width, flowCanvas.height);
+      // Heat fill uses the rasterLayer (drawn by drawFrameToTile via map.render()).
+      // Streamlines + arrows draw on top of the heat.
+      drawPartitionStreamlines('swell',   'rgba(0, 0, 0, 0.95)',         1.4);
+      drawPartitionStreamlines('wind_wave','rgba(255, 105, 180, 0.92)',   1.2);
+      drawAtmosphericWindArrows();
+    }
+
+    // Generic streamline tracer for any (height, direction) field in the frame.
+    // Reuses the same Euler-integration approach as drawStreamlines but with
+    // arbitrary field keys and stroke style.
+    function tracePartitionStreamline(fieldName, lon0, lat0) {
+      const path = [];
+      let lon = lon0, lat = lat0;
+      let prevU = null, prevV = null;
+      // Lower calm threshold than wind: swell can be < 0.5 ft in places but
+      // still carry useful direction. Wind-wave is much weaker; we want it
+      // visible even at 0.2 ft.
+      const calmThreshold = fieldName === 'swell' ? 0.4 : 0.15;
+      const baseStepDeg = fieldName === 'swell' ? 0.10 : 0.07;
+      const maxSpeed = fieldName === 'swell' ? 4.0 : 2.0; // normalize partition magnitudes
+      for (let i = 0; i < 30; i++) {
+        if (lon < field.bbox[0] || lon > field.bbox[2] || lat < field.bbox[1] || lat > field.bbox[3]) break;
+        path.push([lon, lat]);
+        const vec = bilinearPartitionVec(currentFrame, fieldName, lon, lat);
+        if (!vec) break;
+        const sp = Math.sqrt(vec.u * vec.u + vec.v * vec.v);
+        if (sp < calmThreshold) break;
+        if (prevU !== null) {
+          const prevSp = Math.sqrt(prevU * prevU + prevV * prevV);
+          const cosine = (vec.u * prevU + vec.v * prevV) / (sp * prevSp);
+          if (cosine < -0.15) break;
+        }
+        const stepDeg = baseStepDeg * Math.min(1, sp / maxSpeed);
+        const cosLat = Math.max(0.35, Math.cos(lat * Math.PI / 180));
+        lon += (vec.u / sp) * stepDeg / cosLat;
+        lat += (vec.v / sp) * stepDeg;
+        for (let j = Math.max(0, path.length - 8); j < path.length - 2; j++) {
+          const prior = path[j];
+          if (Math.hypot(lon - prior[0], lat - prior[1]) < 0.035) return path;
+        }
+        prevU = vec.u;
+        prevV = vec.v;
+      }
+      return path;
+    }
+
+    // Bilinear vector sample for any partition: swell / wind_wave / atmospheric wind.
+    function bilinearPartitionVec(frame, kind, lon, lat) {
+      const lons = forecastData.lons, lats = forecastData.lats;
+      let spGrid, dgGrid;
+      if (kind === 'swell') {
+        spGrid = frame.swell_wave_height;
+        dgGrid = frame.swell_wave_direction;
+      } else if (kind === 'wind_wave') {
+        spGrid = frame.wind_wave_height;
+        dgGrid = frame.wind_wave_direction;
+      } else if (kind === 'wind') {
+        spGrid = frame.wind_speed_kn;
+        dgGrid = frame.wind_direction_deg;
+      } else return null;
+      if (!spGrid || !dgGrid || lons.length < 2 || lats.length < 2) return null;
+      if (lon < lons[0] || lon > lons[lons.length-1] || lat < lats[0] || lat > lats[lats.length-1]) return null;
+      const dlon = (lons[lons.length-1] - lons[0]) / (lons.length-1);
+      const dlat = (lats[lats.length-1] - lats[0]) / (lats.length-1);
+      const xf = (lon - lons[0]) / dlon, yf = (lat - lats[0]) / dlat;
+      const x0 = Math.max(0, Math.min(lons.length-2, Math.floor(xf)));
+      const y0 = Math.max(0, Math.min(lats.length-2, Math.floor(yf)));
+      const tx = xf - x0, ty = yf - y0;
+      const corner = (yy, xx) => {
+        const sp = spGrid[yy]?.[xx], deg = dgGrid[yy]?.[xx];
+        if (sp == null || deg == null || !Number.isFinite(sp) || !Number.isFinite(deg)) return null;
+        const rad = Number(deg) * Math.PI / 180;
+        // Meteorological convention: arrow points FROM. Flip so streamlines
+        // show direction-of-travel (where the wave is going).
+        return { u: -Number(sp) * Math.sin(rad), v: -Number(sp) * Math.cos(rad) };
+      };
+      const c00 = corner(y0, x0), c10 = corner(y0, x0 + 1);
+      const c01 = corner(y0 + 1, x0), c11 = corner(y0 + 1, x0 + 1);
+      if (!c00 || !c10 || !c01 || !c11) return null;
+      const blend = key => c00[key] * (1-tx)*(1-ty) + c10[key] * tx*(1-ty) + c01[key] * (1-tx)*ty + c11[key] * tx*ty;
+      const uu = blend('u'), vv = blend('v');
+      return { u: uu, v: vv, speed: Math.sqrt(uu * uu + vv * vv) };
+    }
+
+    function drawPartitionStreamlines(kind, strokeStyle, lineWidth) {
+      const lons = forecastData.lons, lats = forecastData.lats;
+      const field = { bbox: fieldBbox, lons, lats };
+      const latStep = 1, lonStep = 1;
+      const bucketPx = 3;
+      const keyFor = (px, py) => `${Math.round(px/bucketPx)},${Math.round(py/bucketPx)}`;
+      const used = new Set();
+      // Partition magnitude for alpha scaling
+      const maxSpeed = kind === 'swell' ? 4.0 : 2.0;
+      for (let yi = 1; yi < lats.length - 1; yi += latStep) {
+        for (let xi = 1; xi < lons.length - 1; xi += lonStep) {
+          if (lons[xi] < bbox[0] || lons[xi] > bbox[2] ||
+              lats[yi] < bbox[1] || lats[yi] > bbox[3]) continue;
+          const seedProj = ol.proj.fromLonLat([lons[xi], lats[yi]], rasterProjection);
+          const seedPx = map.getPixelFromCoordinate(seedProj);
+          if (!seedPx) continue;
+          const seedKey = keyFor(seedPx[0], seedPx[1]);
+          if (used.has(seedKey)) continue;
+          const path = tracePartitionStreamline(kind, lons[xi], lats[yi]);
+          if (path.length < 2) continue;
+          used.add(seedKey);
+          const mid = path[Math.floor(path.length / 2)];
+          const vec = bilinearPartitionVec(currentFrame, kind, mid[0], mid[1]);
+          if (!vec) continue;
+          const sp = vec.speed;
+          const t = Math.min(1, sp / maxSpeed);
+          const alpha = 0.55 + 0.35 * t;
+          streamlineCtx.globalAlpha = alpha;
+          streamlineCtx.strokeStyle = strokeStyle;
+          streamlineCtx.lineWidth = lineWidth;
+          streamlineCtx.lineCap = 'round';
+          streamlineCtx.lineJoin = 'round';
+          // Tail fade (last 35%) so streamlines don't form a wall at bbox edge.
+          const faded = fadeTailAlpha(path, flowCanvas.width, flowCanvas.height);
+          let prevPx = null;
+          for (const seg of faded) {
+            const proj = ol.proj.fromLonLat([seg.pt[0], seg.pt[1]], rasterProjection);
+            const px = map.getPixelFromCoordinate(proj);
+            if (!px) { prevPx = null; continue; }
+            if (!prevPx) { prevPx = px; continue; }
+            streamlineCtx.globalAlpha = alpha * seg.alpha;
+            streamlineCtx.beginPath();
+            streamlineCtx.moveTo(prevPx[0], prevPx[1]);
+            streamlineCtx.lineTo(px[0], px[1]);
+            streamlineCtx.stroke();
+            prevPx = px;
+          }
+        }
+      }
+      streamlineCtx.globalAlpha = 1;
+    }
+
+    // White arrows for atmospheric 10-m wind. Subsample the grid for legibility.
+    function drawAtmosphericWindArrows() {
+      const lons = forecastData.lons, lats = forecastData.lats;
+      const stride = 2; // 17x21 -> ~9 arrows per axis
+      const r = activeRange || { vmin: 0, vmax: 25 };
+      const magRange = r.vmax - r.vmin || 25;
+      const minLen = 8, maxLen = 26;
+      const minHead = 3, maxHead = 6;
+      flowCtx.strokeStyle = 'rgba(255, 255, 255, 0.92)';
+      flowCtx.fillStyle   = 'rgba(255, 255, 255, 0.92)';
+      // Subtle dark halo so white arrows pop on the dark basemap and over
+      // bright heat cells alike. Two strokes per arrow: one wide dark, one
+      // narrow white.
+      const halo = 'rgba(7, 17, 29, 0.55)';
+      for (let yi = 1; yi < lats.length - 1; yi += stride) {
+        for (let xi = 1; xi < lons.length - 1; xi += stride) {
+          const lon = lons[xi], lat = lats[yi];
+          const sp = currentFrame.wind_speed_kn?.[yi]?.[xi];
+          const dg = currentFrame.wind_direction_deg?.[yi]?.[xi];
+          if (sp == null || dg == null) continue;
+          const rad = dg * Math.PI / 180;
+          const u = -Math.sin(rad), v = -Math.cos(rad);
+          const proj = ol.proj.fromLonLat([lon, lat], rasterProjection);
+          const c = map.getPixelFromCoordinate(proj);
+          if (!c) continue;
+          const t = Math.max(0, Math.min(1, (sp - r.vmin) / magRange));
+          const len = minLen + t * (maxLen - minLen);
+          const head = minHead + t * (maxHead - minHead);
+          const tx = c[0] + u * len, ty = c[1] - v * len;
+          // Halo stem
+          flowCtx.lineWidth = 2.4 + t * 1.0;
+          flowCtx.strokeStyle = halo;
+          flowCtx.beginPath();
+          flowCtx.moveTo(c[0], c[1]);
+          flowCtx.lineTo(tx, ty);
+          flowCtx.stroke();
+          // White stem
+          flowCtx.lineWidth = 1.0 + t * 0.8;
+          flowCtx.strokeStyle = 'rgba(255, 255, 255, 0.92)';
+          flowCtx.beginPath();
+          flowCtx.moveTo(c[0], c[1]);
+          flowCtx.lineTo(tx, ty);
+          flowCtx.stroke();
+          // Arrowhead with halo
+          const ang = Math.atan2(-v, u);
+          flowCtx.fillStyle = halo;
+          flowCtx.beginPath();
+          flowCtx.moveTo(tx, ty);
+          flowCtx.lineTo(tx - (head + 1.2) * Math.cos(ang - 0.45), ty - (head + 1.2) * Math.sin(ang - 0.45));
+          flowCtx.lineTo(tx - (head + 1.2) * Math.cos(ang + 0.45), ty - (head + 1.2) * Math.sin(ang + 0.45));
+          flowCtx.closePath();
+          flowCtx.fill();
+          flowCtx.fillStyle = 'rgba(255, 255, 255, 0.92)';
+          flowCtx.beginPath();
+          flowCtx.moveTo(tx, ty);
+          flowCtx.lineTo(tx - head * Math.cos(ang - 0.45), ty - head * Math.sin(ang - 0.45));
+          flowCtx.lineTo(tx - head * Math.cos(ang + 0.45), ty - head * Math.sin(ang + 0.45));
+          flowCtx.closePath();
+          flowCtx.fill();
+        }
+      }
     }
 
     function clearWindOverlays() {
