@@ -555,7 +555,8 @@
     // Generic streamline tracer for any (height, direction) field in the frame.
     // Reuses the same Euler-integration approach as drawStreamlines but with
     // arbitrary field keys and stroke style.
-    function tracePartitionStreamline(fieldName, lon0, lat0) {
+    function tracePartitionStreamline(field, lon0, lat0) {
+      const fieldName = field.kind;
       const path = [];
       let lon = lon0, lat = lat0;
       let prevU = null, prevV = null;
@@ -631,7 +632,7 @@
 
     function drawPartitionStreamlines(kind, strokeStyle, lineWidth) {
       const lons = forecastData.lons, lats = forecastData.lats;
-      const field = { bbox: fieldBbox, lons, lats };
+      const field = { kind, bbox: fieldBbox, lons, lats };
       const latStep = 1, lonStep = 1;
       const bucketPx = 3;
       const keyFor = (px, py) => `${Math.round(px/bucketPx)},${Math.round(py/bucketPx)}`;
@@ -647,11 +648,11 @@
           if (!seedPx) continue;
           const seedKey = keyFor(seedPx[0], seedPx[1]);
           if (used.has(seedKey)) continue;
-          const path = tracePartitionStreamline(kind, lons[xi], lats[yi]);
+          const path = tracePartitionStreamline(field, lons[xi], lats[yi]);
           if (path.length < 2) continue;
           used.add(seedKey);
           const mid = path[Math.floor(path.length / 2)];
-          const vec = bilinearPartitionVec(currentFrame, kind, mid[0], mid[1]);
+          const vec = bilinearPartitionVec(currentFrame, field.kind, mid[0], mid[1]);
           if (!vec) continue;
           const sp = vec.speed;
           const t = Math.min(1, sp / maxSpeed);
