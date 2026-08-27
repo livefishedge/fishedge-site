@@ -306,7 +306,7 @@
           // is transparent for those products.
           const viz = (PRODUCTS[currentProduct] || {}).viz;
           if (viz === 'streamlines' || viz === 'contours') return c;
-          drawFrameToTile(ctx, currentFrame, primaryDataKey(), requestedExtent, c.width, c.height);
+          drawFrameToTile(ctx, currentFrame, currentProduct, requestedExtent, c.width, c.height);
           return c;
         },
       }),
@@ -334,11 +334,11 @@
 
     // ---- raster tile rendering (interpolates grid bilinearly into the tile extent) ----
     function drawFrameToTile(ctx, frame, productKey, requestedExtent, w, h) {
-      const grid = frame[productKey];
+      const def = PRODUCTS[productKey];
+      const grid = frame[def.dataKey || productKey];
       if (!grid || !grid.length || !grid[0].length) return;
       const lons = forecastData.lons, lats = forecastData.lats;
       if (!lons || !lats || lons.length < 2 || lats.length < 2) return;
-      const def = PRODUCTS[productKey];
       // dynamic per-frame range — fall back to (0, 30) if activeRange not yet computed.
       // (Bug fix #0f6434f4: PRODUCTS no longer carries vmin/vmax on each entry;
       // drawFrameToTile was reading undefined and rasterizing NaN pixels.)
@@ -527,6 +527,9 @@
       // and the raster can produce subtle doubling with the basemap.
       if (rasterLayer) {
         rasterLayer.setVisible(def.viz === 'heat' || def.viz === 'arrows' || def.viz === 'composite');
+        // setProduct calls map.render() before this visibility switch; render
+        // again so the newly enabled composite heat layer is painted now.
+        map.render();
       }
       if (def.viz === 'streamlines') {
         drawStreamlines();
