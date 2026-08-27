@@ -117,6 +117,7 @@ def reshape_grid(resp_list, nrows, ncols):
 
 def interp_to_display(frames, src_lats, src_lons, dst_lats, dst_lons):
     """Bilinear interp each field from src NxN grid to dst MxK grid. NaN-safe."""
+    direction_fields = {"wave_direction", "wind_wave_direction", "swell_wave_direction"}
     src_lat_arr = np.array(src_lats)
     src_lon_arr = np.array(src_lons)
     out = []
@@ -145,6 +146,20 @@ def interp_to_display(frames, src_lats, src_lons, dst_lats, dst_lons):
                         mi = int(np.searchsorted(src_lon_arr, dn) - 1)
                         mf = (dn - src_lon_arr[mi]) / (src_lon_arr[mi + 1] - src_lon_arr[mi])
                     v00, v01, v10, v11 = arr[li, mi], arr[li, mi + 1], arr[li + 1, mi], arr[li + 1, mi + 1]
+                    if fld in direction_fields:
+                        # Compass angles are circular: interpolate unit-vector
+                        # components, never degrees (359° and 1° are adjacent,
+                        # not opposite directions).
+                        weights = ((1 - lf) * (1 - mf), (1 - lf) * mf, lf * (1 - mf), lf * mf)
+                        corners = (v00, v01, v10, v11)
+                        valid = [(v, wt) for v, wt in zip(corners, weights) if not np.isnan(v)]
+                        if not valid:
+                            row.append(None)
+                        else:
+                            sx = sum(wt * np.sin(np.deg2rad(v)) for v, wt in valid)
+                            sy = sum(wt * np.cos(np.deg2rad(v)) for v, wt in valid)
+                            row.append(float(np.rad2deg(np.arctan2(sx, sy)) % 360.0))
+                        continue
                     if any(np.isnan([v00, v01, v10, v11])):
                         vals = [v for v in (v00, v01, v10, v11) if not np.isnan(v)]
                         row.append(float(np.mean(vals)) if vals else None)
