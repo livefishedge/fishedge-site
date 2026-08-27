@@ -675,19 +675,31 @@
 
     function respawnWavePacket(packet) {
       const spanLon = bbox[2] - bbox[0], spanLat = bbox[3] - bbox[1];
-      const candidates = [
+      const edgeCandidates = [
         [bbox[0], bbox[1] + Math.random() * spanLat],
         [bbox[2], bbox[1] + Math.random() * spanLat],
         [bbox[0] + Math.random() * spanLon, bbox[1]],
         [bbox[0] + Math.random() * spanLon, bbox[3]],
       ];
+      // Swell is remotely generated and enters from a boundary. Wind waves
+      // are locally forced, so most new wind-wave packets originate in the
+      // interior where the wind-wave field has energy, with a small boundary
+      // component retained for continuity.
+      const interiorCandidates = Array.from({ length: 3 }, () => [
+        bbox[0] + (0.1 + 0.8 * Math.random()) * spanLon,
+        bbox[1] + (0.1 + 0.8 * Math.random()) * spanLat,
+      ]);
+      const candidates = packet.kind === 'swell'
+        ? edgeCandidates
+        : interiorCandidates;
       let best = candidates[0], bestScore = -Infinity;
       for (const candidate of candidates) {
         const v = bilinearPartitionVec(currentFrame, packet.kind, candidate[0], candidate[1]);
         if (!v || !v.speed) continue;
         const inward = (candidate[0] === bbox[0] ? v.u : candidate[0] === bbox[2] ? -v.u : 0) +
           (candidate[1] === bbox[1] ? v.v : candidate[1] === bbox[3] ? -v.v : 0);
-        if (inward > bestScore) { bestScore = inward; best = candidate; }
+        const score = packet.kind === 'wind_wave' ? v.speed : inward;
+        if (score > bestScore) { bestScore = score; best = candidate; }
       }
       packet.lon = best[0]; packet.lat = best[1]; packet.age = 0;
     }
