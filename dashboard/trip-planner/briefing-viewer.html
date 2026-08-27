@@ -557,9 +557,9 @@
       // switch. This keeps the visual contract deterministic: fill first,
       // then partition streamlines and atmospheric arrows above it.
       drawWaveHeatOverlay();
-      drawPartitionStreamlines('swell',   'rgba(0, 0, 0, 0.95)',         1.4);
-      drawPartitionStreamlines('wind_wave','rgba(255, 105, 180, 0.92)',   1.2);
+      drawWavePackets();
       drawAtmosphericWindArrows();
+      startWavePacketAnimation();
     }
 
     function drawWaveHeatOverlay() {
@@ -585,6 +585,91 @@
           streamlineCtx.closePath(); streamlineCtx.fill();
         }
       }
+    }
+
+    let wavePackets = null;
+    let wavePacketRaf = 0;
+    let wavePacketLastTs = 0;
+
+    function ensureWavePackets() {
+      if (wavePackets) return;
+      wavePackets = [];
+      const lons = forecastData.lons, lats = forecastData.lats;
+      for (const kind of ['swell', 'wind_wave']) {
+        for (let yi = 1; yi < lats.length - 1; yi += 2) {
+          for (let xi = 1; xi < lons.length - 1; xi += 2) {
+            wavePackets.push({ kind, lon: lons[xi], lat: lats[yi] });
+          }
+        }
+      }
+    }
+
+    function drawWavePackets() {
+      ensureWavePackets();
+      const styles = {
+        swell: { stroke: 'rgba(0, 0, 0, 0.95)', width: 1.5, half: 0.14, max: 4.0 },
+        wind_wave: { stroke: 'rgba(255, 105, 180, 0.92)', width: 1.25, half: 0.105, max: 2.0 },
+      };
+      for (const packet of wavePackets) {
+        const s = styles[packet.kind];
+        const vec = bilinearPartitionVec(currentFrame, packet.kind, packet.lon, packet.lat);
+        if (!vec || vec.speed < (packet.kind === 'swell' ? 0.4 : 0.15)) continue;
+        const c = map.getPixelFromCoordinate(ol.proj.fromLonLat([packet.lon, packet.lat], rasterProjection));
+        const inv = 1 / vec.speed;
+        const tx = -vec.v * inv, ty = vec.u * inv;
+        const cosLat = Math.max(0.35, Math.cos(packet.lat * Math.PI / 180));
+        const p0 = map.getPixelFromCoordinate(ol.proj.fromLonLat([
+          packet.lon - tx * s.half / cosLat, packet.lat - ty * s.half
+        ], rasterProjection));
+        const p1 = map.getPixelFromCoordinate(ol.proj.fromLonLat([
+          packet.lon + tx * s.half / cosLat, packet.lat + ty * s.half
+        ], rasterProjection));
+        if (!c || !p0 || !p1) continue;
+        streamlineCtx.globalAlpha = 0.48 + 0.42 * Math.min(1, vec.speed / s.max);
+        streamlineCtx.strokeStyle = s.stroke;
+        streamlineCtx.lineWidth = s.width;
+        streamlineCtx.lineCap = 'round';
+        streamlineCtx.beginPath();
+        streamlineCtx.moveTo(p0[0], p0[1]);
+        streamlineCtx.lineTo(p1[0], p1[1]);
+        streamlineCtx.stroke();
+      }
+      streamlineCtx.globalAlpha = 1;
+    }
+
+    function startWavePacketAnimation() {
+      if (wavePacketRaf) return;
+      wavePacketLastTs = 0;
+      const tick = ts => {
+        wavePacketRaf = 0;
+        if (currentProduct !== 'wave_composite' || !currentFrame || !forecastData) return;
+        const dt = wavePacketLastTs ? Math.min(50, ts - wavePacketLastTs) : 16;
+        wavePacketLastTs = ts;
+        ensureWavePackets();
+        for (const packet of wavePackets) {
+          const vec = bilinearPartitionVec(currentFrame, packet.kind, packet.lon, packet.lat);
+          if (!vec || vec.speed < (packet.kind === 'swell' ? 0.4 : 0.15)) continue;
+          const step = (packet.kind === 'swell' ? 0.0045 : 0.0055) * (dt / 16);
+          const cosLat = Math.max(0.35, Math.cos(packet.lat * Math.PI / 180));
+          packet.lon += (vec.u / vec.speed) * step / cosLat;
+          packet.lat += (vec.v / vec.speed) * step;
+          if (packet.lon < fieldBbox[0] || packet.lon > fieldBbox[2] ||
+              packet.lat < fieldBbox[1] || packet.lat > fieldBbox[3]) {
+            packet.lon = bbox[0] + Math.random() * (bbox[2] - bbox[0]);
+            packet.lat = bbox[1] + Math.random() * (bbox[3] - bbox[1]);
+          }
+        }
+        clearOverlays();
+        resizeOverlayCanvases();
+        const dpr = flowCanvas.width / mapEl.clientWidth;
+        streamlineCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        flowCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        drawWaveHeatOverlay();
+        drawWavePackets();
+        drawAtmosphericWindArrows();
+        wavePacketRaf = requestAnimationFrame(tick);
+      };
+      wavePacketRaf = requestAnimationFrame(tick);
     }
 
     // Generic streamline tracer for any (height, direction) field in the frame.
