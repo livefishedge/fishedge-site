@@ -598,7 +598,7 @@
       for (const kind of ['swell', 'wind_wave']) {
         for (let yi = 1; yi < lats.length - 1; yi += 2) {
           for (let xi = 1; xi < lons.length - 1; xi += 2) {
-            wavePackets.push({ kind, lon: lons[xi], lat: lats[yi] });
+            wavePackets.push({ kind, lon: lons[xi], lat: lats[yi], age: Math.random() * 12000 });
           }
         }
       }
@@ -647,20 +647,18 @@
         wavePacketLastTs = ts;
         ensureWavePackets();
         for (const packet of wavePackets) {
+          packet.age += dt;
           const vec = bilinearPartitionVec(currentFrame, packet.kind, packet.lon, packet.lat);
           if (!vec || vec.speed < (packet.kind === 'swell' ? 0.4 : 0.15)) continue;
           const step = (packet.kind === 'swell' ? 0.0045 : 0.0055) * (dt / 16);
           const cosLat = Math.max(0.35, Math.cos(packet.lat * Math.PI / 180));
           packet.lon += (vec.u / vec.speed) * step / cosLat;
           packet.lat += (vec.v / vec.speed) * step;
-          // Recycle at the displayed domain edge, not fieldBbox. The latter
-          // is intentionally larger for integration diagnostics; waiting for
-          // it left the visible map empty after the initial packet cohort.
-          // Wrapping preserves a continuous stream and avoids random jumps.
-          if (packet.lon < bbox[0]) packet.lon = bbox[2];
-          if (packet.lon > bbox[2]) packet.lon = bbox[0];
-          if (packet.lat < bbox[1]) packet.lat = bbox[3];
-          if (packet.lat > bbox[3]) packet.lat = bbox[1];
+          // Continuously inject a new packet at the upstream boundary. The
+          // age limit staggers births even when a weak/turning field keeps a
+          // packet inside the display for a long time.
+          if (packet.age > 12000 || packet.lon < bbox[0] || packet.lon > bbox[2] ||
+              packet.lat < bbox[1] || packet.lat > bbox[3]) respawnWavePacket(packet);
         }
         clearOverlays();
         resizeOverlayCanvases();
@@ -673,6 +671,25 @@
         wavePacketRaf = requestAnimationFrame(tick);
       };
       wavePacketRaf = requestAnimationFrame(tick);
+    }
+
+    function respawnWavePacket(packet) {
+      const spanLon = bbox[2] - bbox[0], spanLat = bbox[3] - bbox[1];
+      const candidates = [
+        [bbox[0], bbox[1] + Math.random() * spanLat],
+        [bbox[2], bbox[1] + Math.random() * spanLat],
+        [bbox[0] + Math.random() * spanLon, bbox[1]],
+        [bbox[0] + Math.random() * spanLon, bbox[3]],
+      ];
+      let best = candidates[0], bestScore = -Infinity;
+      for (const candidate of candidates) {
+        const v = bilinearPartitionVec(currentFrame, packet.kind, candidate[0], candidate[1]);
+        if (!v || !v.speed) continue;
+        const inward = (candidate[0] === bbox[0] ? v.u : candidate[0] === bbox[2] ? -v.u : 0) +
+          (candidate[1] === bbox[1] ? v.v : candidate[1] === bbox[3] ? -v.v : 0);
+        if (inward > bestScore) { bestScore = inward; best = candidate; }
+      }
+      packet.lon = best[0]; packet.lat = best[1]; packet.age = 0;
     }
 
     // Generic streamline tracer for any (height, direction) field in the frame.
