@@ -21,7 +21,7 @@
     .bv-title { margin: 0; font-size: 15px; font-weight: 600; color: #e3f2fd; }
     .bv-time { font-size: 12px; color: #9fb0c3; margin-left: 4px; font-family: monospace; }
 
-    .bv-products { display: flex; gap: 6px; margin-left: auto; flex-wrap: wrap; }
+    .bv-products { display: none; }
     .bv-products button {
       background: #1b2836; color: #b3e5fc; border: 1px solid #2a3a4d;
       padding: 4px 10px; border-radius: 4px; font-size: 12px; cursor: pointer;
@@ -32,9 +32,10 @@
       background: #4fc3f7; color: #050b10; border-color: #4fc3f7; font-weight: 600;
     }
     .bv-products .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
-    .bv-layers { display: none; align-items: center; gap: 8px; padding: 4px 8px; margin-left: 4px; border: 1px solid #2a3a4d; border-radius: 4px; background: rgba(27,40,54,.9); font-size: 11px; white-space: nowrap; }
+    .bv-layers { display: flex; align-items: center; gap: 8px; margin-left: auto; padding: 4px 8px; border: 1px solid #2a3a4d; border-radius: 4px; background: rgba(27,40,54,.9); font-size: 11px; white-space: nowrap; }
     .bv-layers.visible { display: flex; }
     .bv-layers label { display: inline-flex; align-items: center; gap: 3px; color: #d6e5f2; cursor: pointer; }
+    .bv-layers label.unavailable { color: #718096; cursor: not-allowed; }
     .bv-layers input { margin: 0; accent-color: #4fc3f7; }
     .bv-layer-swell { color: #111 !important; text-shadow: 0 0 2px #fff; }
     .bv-layer-windwave { color: #ff69b4 !important; }
@@ -101,19 +102,12 @@
       <h1 class="bv-title">Briefing Viewer — <span id="bv-region">usec_md</span></h1>
       <div class="bv-time" id="bv-time">7-Day Outlook · loading forecast…</div>
     </div>
-    <div class="bv-products" id="bv-products">
-      <button data-prod="temperature_f" class="active"><span class="dot dot-temp"></span>Temp</button>
-      <button data-prod="wave_height_ft"><span class="dot dot-wave"></span>Wave</button>
-      <button data-prod="swell_height_ft"><span class="dot dot-swell"></span>Swell</button>
-      <button data-prod="wave_composite" class="bv-composite-btn"><span class="dot dot-composite"></span>Wave + Swell</button>
-      <button data-prod="wind_speed_kn"><span class="dot dot-wind"></span>Wind</button>
-      <button data-prod="pressure_hpa"><span class="dot dot-press"></span>Pressure</button>
-    </div>
     <div class="bv-layers" id="bv-layers" aria-label="Composite layers">
-      <label><input type="checkbox" data-layer="height" checked> Wave height</label>
-      <label class="bv-layer-swell"><input type="checkbox" data-layer="swell" checked> Swell</label>
-      <label class="bv-layer-windwave"><input type="checkbox" data-layer="wind_wave" checked> Wind wave</label>
+      <label><input type="checkbox" data-layer="temperature"> Temp</label>
+      <label><input type="checkbox" data-layer="pressure"> Pressure</label>
       <label class="bv-layer-wind"><input type="checkbox" data-layer="wind" checked> Wind</label>
+      <label class="bv-layer-windwave"><input type="checkbox" data-layer="wind_wave" checked> Wind-Wave</label>
+      <label class="bv-layer-swell"><input type="checkbox" data-layer="swell" checked> Swell</label>
     </div>
   </div>
 
@@ -330,10 +324,13 @@
     map.addLayer(rasterLayer);
 
     // ---- state ----
-    let currentProduct = 'temperature_f';
+    // The viewer is intentionally a single composite map.  The checkboxes
+    // control overlays; significant wave height remains the persistent base
+    // field so turning off every vector layer still leaves useful context.
+    let currentProduct = 'wave_composite';
     let currentFrame = null;
     let activeRange = null; // {vmin, vmax} computed per-frame when dynamicRange=true
-    const layerVisibility = { height: true, swell: true, wind_wave: true, wind: true };
+    const layerVisibility = { temperature: false, pressure: false, swell: true, wind_wave: true, wind: true };
     const particles = [];
 
     function nearestFrameIdxToDate(frames, wantedDate) {
@@ -510,6 +507,7 @@
       const frames = forecastData.frames;
       frameIdx = Math.max(0, Math.min(frames.length - 1, i));
       currentFrame = frames[frameIdx];
+      updateLayerAvailability();
       document.getElementById('bv-slider').value = String(frameIdx);
       const t = currentFrame.time || '—';
       const d = new Date(/[zZ]|[+-]\d\d:\d\d$/.test(t) ? t : t + 'Z');
@@ -519,6 +517,25 @@
       drawColorbar();
       map.render();
       drawOverlaysForProduct();
+    }
+
+    // Keep controls honest: the current WW3 payload contains wave partitions
+    // and atmospheric wind, but not air temperature or sea-level pressure.
+    // Leave those requested controls visible, while disabling them until the
+    // upstream payload actually supplies the corresponding grids.
+    function updateLayerAvailability() {
+      const available = {
+        temperature: !!(currentFrame && (currentFrame.temperature_f || currentFrame.temperature)),
+        pressure: !!(currentFrame && (currentFrame.pressure_hpa || currentFrame.pressure)),
+      };
+      for (const key of ['temperature', 'pressure']) {
+        const input = document.querySelector(`#bv-layers input[data-layer="${key}"]`);
+        const label = input?.closest('label');
+        if (!input || !label) continue;
+        input.disabled = !available[key];
+        label.classList.toggle('unavailable', !available[key]);
+        label.title = available[key] ? '' : 'Not included in the current forecast payload';
+      }
     }
 
     function clearOverlays() {
@@ -570,9 +587,14 @@
       // ImageCanvas implementations that do not invalidate after a product
       // switch. This keeps the visual contract deterministic: fill first,
       // then partition streamlines and atmospheric arrows above it.
-      if (layerVisibility.height) drawWaveHeatOverlay();
+      drawWaveHeatOverlay();
       if (layerVisibility.swell || layerVisibility.wind_wave) drawWavePackets();
-      if (layerVisibility.wind) drawAtmosphericWindArrows();
+      if (layerVisibility.wind) {
+        drawStreamlines(true);
+        startParticleAnimation();
+      } else {
+        stopParticleAnimation();
+      }
       startWavePacketAnimation();
     }
 
@@ -682,14 +704,17 @@
           if (packet.age > 12000 || packet.lon < bbox[0] || packet.lon > bbox[2] ||
               packet.lat < bbox[1] || packet.lat > bbox[3]) respawnWavePacket(packet);
         }
-        clearOverlays();
+        // The wind particle animator owns flowCtx and its trail decay.  The
+        // wave animator must clear only the streamline canvas, otherwise it
+        // erases every wind particle immediately after it is drawn.
+        streamlineCtx.clearRect(0, 0, streamlineCanvas.width, streamlineCanvas.height);
         resizeOverlayCanvases();
         const dpr = flowCanvas.width / mapEl.clientWidth;
         streamlineCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
         flowCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        if (layerVisibility.height) drawWaveHeatOverlay();
+        drawWaveHeatOverlay();
         if (layerVisibility.swell || layerVisibility.wind_wave) drawWavePackets();
-        if (layerVisibility.wind) drawAtmosphericWindArrows();
+        if (layerVisibility.wind) drawStreamlines(true);
         wavePacketRaf = requestAnimationFrame(tick);
       };
       wavePacketRaf = requestAnimationFrame(tick);
@@ -1115,11 +1140,11 @@
       });
     }
 
-    function drawStreamlines() {
+    function drawStreamlines(preserveCanvas = false) {
       if (!currentFrame || !forecastData) return;
       resizeOverlayCanvases();
       const dpr = flowCanvas.width / mapEl.clientWidth;
-      streamlineCtx.clearRect(0, 0, flowCanvas.width, flowCanvas.height);
+      if (!preserveCanvas) streamlineCtx.clearRect(0, 0, flowCanvas.width, flowCanvas.height);
       streamlineCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
       const lons = forecastData.lons, lats = forecastData.lats;
       const field = { bbox: fieldBbox, lons, lats };
@@ -1458,7 +1483,7 @@
     // ---- UI wiring ----
     function setProduct(key) {
       currentProduct = key;
-      document.getElementById('bv-layers').classList.toggle('visible', key === 'wave_composite');
+      document.getElementById('bv-layers').classList.toggle('visible', true);
       [...document.querySelectorAll('.bv-products button')].forEach(b => {
         b.classList.toggle('active', b.dataset.prod === key);
       });
@@ -1565,6 +1590,7 @@
         slider.value = String(startIdx);
         frameIdx = startIdx;
         currentFrame = frames[startIdx];
+        updateLayerAvailability();
         drawColorbar();
         setFrame(startIdx);
         map.getView().fit(devDiagnostics ? fieldBbox : bbox, { padding: [10, 10, 60, 10] });
