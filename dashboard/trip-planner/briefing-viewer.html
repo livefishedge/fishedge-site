@@ -1248,16 +1248,20 @@
     // ---- bootstrap ----
     (async () => {
       try {
-        forecastData = await fetchJson(FORECAST_URL);
+        // On staging / feat-* hostnames the local deploy's forecast.json is
+        // the source of truth — prod CDN still carries the pre-WW3 payload.
+        // Skip the CDN hop entirely so the composite has the swell/partition
+        // fields it needs.
+        const isStaging = window.location.hostname.startsWith('feat-') ||
+                           window.location.hostname.includes('pages.dev') ||
+                           window.location.hostname === 'localhost' ||
+                           window.location.hostname === '127.0.0.1';
+        forecastData = isStaging
+          ? await fetchJson(DEV_FORECAST_URL)
+          : await fetchJson(FORECAST_URL);
         // Dev carries a NOAA GFS diagnostic payload while the shared feed is
-        // migrated off Open-Meteo. Use it only when the shared payload lacks
-        // the expanded integration field; production stays on the canonical
-        // data host.
-        if (window.location.hostname.startsWith('feat-') &&
-            (!Array.isArray(forecastData.bbox) || forecastData.bbox[0] > -79)) {
-          try { forecastData = await fetchJson(DEV_FORECAST_URL); }
-          catch (fallbackError) { console.warn('[forecast] dev fallback unavailable', fallbackError); }
-        }
+        // migrated off Open-Meteo. Fall back to local if the prod CDN still
+        // serves the legacy schema.
         fieldBbox = Array.isArray(forecastData.field_bbox || forecastData.bbox)
           ? (forecastData.field_bbox || forecastData.bbox)
           : bbox;
