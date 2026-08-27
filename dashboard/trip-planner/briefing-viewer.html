@@ -32,6 +32,13 @@
       background: #4fc3f7; color: #050b10; border-color: #4fc3f7; font-weight: 600;
     }
     .bv-products .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
+    .bv-layers { display: none; align-items: center; gap: 8px; padding: 4px 8px; margin-left: 4px; border: 1px solid #2a3a4d; border-radius: 4px; background: rgba(27,40,54,.9); font-size: 11px; white-space: nowrap; }
+    .bv-layers.visible { display: flex; }
+    .bv-layers label { display: inline-flex; align-items: center; gap: 3px; color: #d6e5f2; cursor: pointer; }
+    .bv-layers input { margin: 0; accent-color: #4fc3f7; }
+    .bv-layer-swell { color: #111 !important; text-shadow: 0 0 2px #fff; }
+    .bv-layer-windwave { color: #ff69b4 !important; }
+    .bv-layer-wind { color: #fff !important; }
     .dot-temp { background: #ff8c00; }
     .dot-wave { background: #00c8ff; }
     .dot-swell { background: #8bd7ff; }
@@ -101,6 +108,12 @@
       <button data-prod="wave_composite" class="bv-composite-btn"><span class="dot dot-composite"></span>Wave + Swell</button>
       <button data-prod="wind_speed_kn"><span class="dot dot-wind"></span>Wind</button>
       <button data-prod="pressure_hpa"><span class="dot dot-press"></span>Pressure</button>
+    </div>
+    <div class="bv-layers" id="bv-layers" aria-label="Composite layers">
+      <label><input type="checkbox" data-layer="height" checked> Wave height</label>
+      <label class="bv-layer-swell"><input type="checkbox" data-layer="swell" checked> Swell</label>
+      <label class="bv-layer-windwave"><input type="checkbox" data-layer="wind_wave" checked> Wind wave</label>
+      <label class="bv-layer-wind"><input type="checkbox" data-layer="wind" checked> Wind</label>
     </div>
   </div>
 
@@ -320,6 +333,7 @@
     let currentProduct = 'temperature_f';
     let currentFrame = null;
     let activeRange = null; // {vmin, vmax} computed per-frame when dynamicRange=true
+    const layerVisibility = { height: true, swell: true, wind_wave: true, wind: true };
     const particles = [];
 
     function nearestFrameIdxToDate(frames, wantedDate) {
@@ -556,9 +570,9 @@
       // ImageCanvas implementations that do not invalidate after a product
       // switch. This keeps the visual contract deterministic: fill first,
       // then partition streamlines and atmospheric arrows above it.
-      drawWaveHeatOverlay();
-      drawWavePackets();
-      drawAtmosphericWindArrows();
+      if (layerVisibility.height) drawWaveHeatOverlay();
+      if (layerVisibility.swell || layerVisibility.wind_wave) drawWavePackets();
+      if (layerVisibility.wind) drawAtmosphericWindArrows();
       startWavePacketAnimation();
     }
 
@@ -612,6 +626,7 @@
         wind_wave: { stroke: 'rgba(255, 105, 180, 0.92)', width: 1.25, half: 0.105, max: 2.0 },
       };
       for (const packet of wavePackets) {
+        if (!layerVisibility[packet.kind]) continue;
         const s = styles[packet.kind];
         const vec = bilinearPartitionVec(currentFrame, packet.kind, packet.lon, packet.lat);
         if (!vec || vec.speed < (packet.kind === 'swell' ? 0.4 : 0.15)) continue;
@@ -672,9 +687,9 @@
         const dpr = flowCanvas.width / mapEl.clientWidth;
         streamlineCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
         flowCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        drawWaveHeatOverlay();
-        drawWavePackets();
-        drawAtmosphericWindArrows();
+        if (layerVisibility.height) drawWaveHeatOverlay();
+        if (layerVisibility.swell || layerVisibility.wind_wave) drawWavePackets();
+        if (layerVisibility.wind) drawAtmosphericWindArrows();
         wavePacketRaf = requestAnimationFrame(tick);
       };
       wavePacketRaf = requestAnimationFrame(tick);
@@ -1443,6 +1458,7 @@
     // ---- UI wiring ----
     function setProduct(key) {
       currentProduct = key;
+      document.getElementById('bv-layers').classList.toggle('visible', key === 'wave_composite');
       [...document.querySelectorAll('.bv-products button')].forEach(b => {
         b.classList.toggle('active', b.dataset.prod === key);
       });
@@ -1454,6 +1470,12 @@
 
     document.querySelectorAll('.bv-products button').forEach(btn => {
       btn.addEventListener('click', () => setProduct(btn.dataset.prod));
+    });
+    document.querySelectorAll('#bv-layers input[data-layer]').forEach(input => {
+      input.addEventListener('change', () => {
+        layerVisibility[input.dataset.layer] = input.checked;
+        if (currentProduct === 'wave_composite') drawOverlaysForProduct();
+      });
     });
 
     document.getElementById('bv-prev').addEventListener('click', () => {
