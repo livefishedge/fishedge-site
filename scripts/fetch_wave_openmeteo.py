@@ -19,7 +19,8 @@ Returns per hour, per grid point:
   - wind_wave_height, wind_wave_direction, wind_wave_period  (partition)
   - swell_wave_height, swell_wave_direction, swell_wave_period (partition)
 
-Output written to data/usec_md/briefing/forecast.json (existing contract path).
+Output written to data/usec_md/briefing/forecast.json and the dashboard fixture
+copy, using the versioned briefing-forecast-v2 contract.
 """
 
 import json
@@ -34,6 +35,7 @@ FULL_BBOX = [-80.0, 33.0, -69.0, 43.0]
 STEP_DEG = 0.25
 N = 17  # square NxN fetch -> 4° span, covers the 5°/4° display bbox
 OUT_PATH = Path(__file__).resolve().parents[1] / "data" / "usec_md" / "briefing" / "forecast.json"
+DASHBOARD_OUT_PATH = Path(__file__).resolve().parents[1] / "dashboard" / "trip-planner" / "data" / "usec_md" / "briefing" / "forecast.json"
 
 
 def build_square_grid(bbox, step, n):
@@ -185,7 +187,7 @@ def fetch_atmospheric_wind(lats_grid, lons_grid, forecast_days=3):
     merge them by `time` ISO string.
     """
     url = "https://api.open-meteo.com/v1/forecast"
-    fields = ["wind_speed_10m", "wind_direction_10m"]
+    fields = ["wind_speed_10m", "wind_gusts_10m", "wind_direction_10m", "temperature_2m", "pressure_msl"]
     flat_lats, flat_lons = [], []
     for lat in lats_grid:
         for lon in lons_grid:
@@ -197,6 +199,7 @@ def fetch_atmospheric_wind(lats_grid, lons_grid, forecast_days=3):
         "longitude": ",".join(f"{x:.4f}" for x in flat_lons),
         "hourly": ",".join(fields),
         "wind_speed_unit": "kn",
+        "temperature_unit": "fahrenheit",
         "forecast_days": forecast_days,
         "timezone": "UTC",
     }
@@ -228,8 +231,6 @@ def merge_wind_into_frames(frames, wind_resp, nrows, ncols):
     if not wind_resp:
         return frames
     times = wind_resp[0]["hourly"]["time"]
-    sp0 = wind_resp[0]["hourly"]["wind_speed_10m"]
-    dg0 = wind_resp[0]["hourly"]["wind_direction_10m"]
     time_idx = {t: i for i, t in enumerate(times)}
     out = []
     for fr in frames:
@@ -237,23 +238,37 @@ def merge_wind_into_frames(frames, wind_resp, nrows, ncols):
         h_idx = time_idx.get(fr["time"])
         sp_grid = []
         dg_grid = []
+        gust_grid, temp_grid, pressure_grid = [], [], []
         for row in range(nrows):
-            sp_row, dg_row = [], []
+            sp_row, gust_row, dg_row, temp_row, pressure_row = [], [], [], [], []
             for col in range(ncols):
                 pt = row * ncols + col
                 if h_idx is None:
                     sp_row.append(None)
+                    gust_row.append(None)
                     dg_row.append(None)
+                    temp_row.append(None); pressure_row.append(None)
                     continue
                 sp = wind_resp[pt]["hourly"]["wind_speed_10m"][h_idx]
+                gust = wind_resp[pt]["hourly"]["wind_gusts_10m"][h_idx]
                 dg = wind_resp[pt]["hourly"]["wind_direction_10m"][h_idx]
+                temp = wind_resp[pt]["hourly"]["temperature_2m"][h_idx]
+                pressure = wind_resp[pt]["hourly"]["pressure_msl"][h_idx]
                 # rename to forecast.json contract keys (kn + deg)
                 sp_row.append(sp)
+                gust_row.append(gust)
                 dg_row.append(dg)
+                temp_row.append(temp); pressure_row.append(pressure)
             sp_grid.append(sp_row)
+            gust_grid.append(gust_row)
             dg_grid.append(dg_row)
+            temp_grid.append(temp_row)
+            pressure_grid.append(pressure_row)
         new_fr["wind_speed_kn"] = sp_grid
+        new_fr["wind_gust_kn"] = gust_grid
         new_fr["wind_direction_deg"] = dg_grid
+        new_fr["temperature_f"] = temp_grid
+        new_fr["pressure_hpa"] = pressure_grid
         out.append(new_fr)
     return out
 
@@ -268,13 +283,10 @@ def main():
     nhours = len(resp[0]["hourly"]["time"])
     print(f"fetched {nhours} hours from open-meteo marine ({len(resp)} points)")
 
-    # Atmospheric wind (separate endpoint, same grid).
-    try:
-        wind_resp = fetch_atmospheric_wind(fetch_lats, fetch_lons)
-        print(f"fetched {nhours} hours from open-meteo forecast ({len(wind_resp)} points)")
-    except Exception as e:
-        print(f"warn: atmospheric wind fetch failed ({e}); renderer will fall back to wind_wave vectors")
-        wind_resp = None
+    # Atmospheric fields are required by briefing-forecast-v2. Never publish
+    # a marine-only artifact after the weather request fails.
+    wind_resp = fetch_atmospheric_wind(fetch_lats, fetch_lons)
+    print(f"fetched atmospheric fields from open-meteo forecast ({len(wind_resp)} points)")
 
     frames = reshape_grid(resp, nrows, ncols)
     if wind_resp:
@@ -294,7 +306,18 @@ def main():
 
     frames = interp_to_display(frames, fetch_lats, fetch_lons, dst_lats, dst_lons)
 
+    # Normalize the mixed upstream names into one stable viewer contract.
+    rename = {
+        "wave_height": "wave_height_ft", "wave_direction": "wave_direction_deg", "wave_period": "wave_period_s",
+        "swell_wave_height": "swell_height_ft", "swell_wave_direction": "swell_direction_deg", "swell_wave_period": "swell_period_s",
+        "wind_wave_height": "wind_wave_height_ft", "wind_wave_direction": "wind_wave_direction_deg", "wind_wave_period": "wind_wave_period_s",
+    }
+    for fr in frames:
+        for old, new in rename.items():
+            fr[new] = fr.pop(old)
+
     payload = {
+        "schema_version": "briefing-forecast-v2",
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "source": "NOAA WaveWatch III via Open-Meteo Marine API",
         "source_url": "https://marine-api.open-meteo.com/v1/marine",
@@ -305,17 +328,18 @@ def main():
         "lons": dst_lons,
         "frame_interval_hours": 1,
         "units": {
-            "wave_height": "ft",
-            "swell_wave_height": "ft",
-            "wind_wave_height": "ft",
-            "direction": "deg",
-            "period": "s",
-            "wind_speed": "kn",
+            "wave_height_ft": "ft", "swell_height_ft": "ft", "wind_wave_height_ft": "ft",
+            "wave_direction_deg": "deg", "swell_direction_deg": "deg", "wind_wave_direction_deg": "deg",
+            "wave_period_s": "s", "swell_period_s": "s", "wind_wave_period_s": "s",
+            "wind_speed_kn": "kn", "wind_gust_kn": "kn", "wind_direction_deg": "deg",
+            "temperature_f": "°F", "pressure_hpa": "hPa (mean sea level)",
         },
         "frames": frames,
         "quality": {
             "status": "pass",
             "source_model": "WW3",
+            "atmospheric_source": "Open-Meteo Forecast API (temperature_2m, pressure_msl, 10 m wind)",
+            "max_age_hours": 12,
             "via": "open-meteo.com/v1/marine (JSON)",
             "grid_order": "latitude-major, longitude-minor",
             "notes": (
@@ -328,10 +352,13 @@ def main():
             ),
         },
     }
-    OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    OUT_PATH.write_text(json.dumps(payload))
-    size = OUT_PATH.stat().st_size
-    print(f"wrote {OUT_PATH} ({size} bytes, {len(frames)} frames)")
+    encoded = json.dumps(payload, allow_nan=False, separators=(",", ":"))
+    for output_path in (OUT_PATH, DASHBOARD_OUT_PATH):
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = output_path.with_suffix(output_path.suffix + ".tmp")
+        tmp.write_text(encoded)
+        tmp.replace(output_path)
+        print(f"wrote {output_path} ({output_path.stat().st_size} bytes, {len(frames)} frames)")
 
 
 if __name__ == "__main__":

@@ -103,6 +103,7 @@
       <div class="bv-time" id="bv-time">7-Day Outlook · loading forecast…</div>
     </div>
     <div class="bv-layers" id="bv-layers" aria-label="Composite layers">
+      <label><input type="checkbox" data-layer="wave_height" checked> Significant Wave Height</label>
       <label><input type="checkbox" data-layer="temperature"> Temp</label>
       <label><input type="checkbox" data-layer="pressure"> Pressure</label>
       <label class="bv-layer-wind"><input type="checkbox" data-layer="wind" checked> Wind</label>
@@ -161,12 +162,12 @@
     //  - dynamicRange=true recomputes [vmin, vmax] from the actual frame data
     //    so the colorbar isn't clipped when the data sits outside the default range.
     const PRODUCTS = {
-      temperature_f: { name: 'Temperature', unit: '°F', scale: 'SST', viz: 'heat',        dynamicRange: true  },
-      wave_height_ft:{ name: 'Wave height', unit: 'ft',  scale: 'UV',  viz: 'arrows',      dataKey: 'wave_height',       dirKey: 'wave_direction',       dynamicRange: true },
-      swell_height_ft:{name: 'Swell height',unit: 'ft',  scale: 'UV',  viz: 'arrows',      dataKey: 'swell_wave_height', dirKey: 'swell_wave_direction', dynamicRange: true },
+      temperature_f: { name: 'Air temperature', unit: '°F', scale: 'SST', viz: 'heat', dataKey: 'temperature_f', dynamicRange: true },
+      wave_height_ft:{ name: 'Significant wave height', unit: 'ft', scale: 'UV', viz: 'arrows', dataKey: 'wave_height_ft', dirKey: 'wave_direction_deg', dynamicRange: true },
+      swell_height_ft:{name: 'Swell height',unit: 'ft', scale: 'UV', viz: 'arrows', dataKey: 'swell_height_ft', dirKey: 'swell_direction_deg', dynamicRange: true },
       // Composite heat uses significant wave height; partition directions are
       // rendered as the swell and wind-wave overlays below.
-      wave_composite:{name: 'Wave + Swell', unit: 'ft',  scale: 'UV',  viz: 'composite',   dataKey: 'wave_height', dynamicRange: true },
+      wave_composite:{name: 'Significant wave height', unit: 'ft', scale: 'UV', viz: 'composite', dataKey: 'wave_height_ft', dynamicRange: true },
       wind_speed_kn: { name: 'Wind flow',   unit: 'kn',  scale: 'CHL', viz: 'streamlines', dynamicRange: false },
       pressure_hpa:  { name: 'Pressure',    unit: 'hPa', scale: 'SLA', viz: 'contours',    dynamicRange: true  },
     };
@@ -220,6 +221,27 @@
       const r = await fetch(proxied, { cache: 'no-store' });
       if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
       return r.json();
+    }
+
+    // Keep old cached artifacts readable, but make every renderer consume the
+    // explicit-unit v2 names. Legacy aliases are accepted only at this edge.
+    function normalizeForecastPayload(payload) {
+      if (!payload || !Array.isArray(payload.frames)) throw new Error('forecast missing frames');
+      const aliases = {
+        wave_height: 'wave_height_ft', wave_direction: 'wave_direction_deg', wave_period: 'wave_period_s',
+        swell_wave_height: 'swell_height_ft', swell_wave_direction: 'swell_direction_deg', swell_wave_period: 'swell_period_s',
+        wind_wave_height: 'wind_wave_height_ft', wind_wave_direction: 'wind_wave_direction_deg', wind_wave_period: 'wind_wave_period_s',
+      };
+      let legacy = false;
+      const frames = payload.frames.map(frame => {
+        const out = { ...frame };
+        for (const [oldKey, newKey] of Object.entries(aliases)) {
+          if (out[newKey] == null && out[oldKey] != null) { out[newKey] = out[oldKey]; legacy = true; }
+        }
+        return out;
+      });
+      if (legacy) console.warn('[forecast] normalized legacy marine keys', { generated_at: payload.generated_at, source: payload.source });
+      return { ...payload, schema_version: payload.schema_version || 'briefing-forecast-v1-legacy', frames };
     }
 
     // ---- ol setup ----
@@ -325,12 +347,11 @@
 
     // ---- state ----
     // The viewer is intentionally a single composite map.  The checkboxes
-    // control overlays; significant wave height remains the persistent base
-    // field so turning off every vector layer still leaves useful context.
+    // control overlays and the selected scalar background.
     let currentProduct = 'wave_composite';
     let currentFrame = null;
     let activeRange = null; // {vmin, vmax} computed per-frame when dynamicRange=true
-    const layerVisibility = { temperature: false, pressure: false, swell: true, wind_wave: true, wind: true };
+    const layerVisibility = { wave_height: true, temperature: false, pressure: false, swell: true, wind_wave: true, wind: true };
     const particles = [];
 
     function nearestFrameIdxToDate(frames, wantedDate) {
@@ -439,8 +460,9 @@
 
     // ---- colorbar ----
     function computeActiveRange() {
-      const def = PRODUCTS[currentProduct];
-      const grid = currentFrame ? currentFrame[primaryDataKey()] : null;
+      const scalarKey = layerVisibility.temperature ? 'temperature_f' : layerVisibility.wave_height ? 'wave_height_ft' : layerVisibility.pressure ? 'pressure_hpa' : null;
+      const def = PRODUCTS[scalarKey || currentProduct];
+      const grid = currentFrame && scalarKey ? currentFrame[scalarKey] : null;
       if (!def.dynamicRange || !grid || !grid.length) {
         activeRange = { vmin: 0, vmax: 30 };
         return;
@@ -469,7 +491,8 @@
     }
 
     function drawColorbar() {
-      const def = PRODUCTS[currentProduct];
+      const scalarKey = layerVisibility.temperature ? 'temperature_f' : layerVisibility.wave_height ? 'wave_height_ft' : layerVisibility.pressure ? 'pressure_hpa' : null;
+      const def = PRODUCTS[scalarKey || currentProduct];
       const r = activeRange || { vmin: 0, vmax: 30 };
       const canvas = document.getElementById('bv-cbar');
       const ctx = canvas.getContext('2d');
@@ -496,7 +519,8 @@
     }
 
     function primaryDataKey() {
-      const def = PRODUCTS[currentProduct];
+      const scalarKey = layerVisibility.temperature ? 'temperature_f' : layerVisibility.wave_height ? 'wave_height_ft' : null;
+      const def = PRODUCTS[scalarKey || currentProduct];
       // map product key -> forecast.json grid key
       return def.dataKey || currentProduct;
     }
@@ -519,22 +543,26 @@
       drawOverlaysForProduct();
     }
 
-    // Keep controls honest: the current WW3 payload contains wave partitions
-    // and atmospheric wind, but not air temperature or sea-level pressure.
-    // Leave those requested controls visible, while disabling them until the
-    // upstream payload actually supplies the corresponding grids.
     function updateLayerAvailability() {
       const available = {
-        temperature: !!(currentFrame && (currentFrame.temperature_f || currentFrame.temperature)),
-        pressure: !!(currentFrame && (currentFrame.pressure_hpa || currentFrame.pressure)),
+        wave_height: !!(currentFrame && currentFrame.wave_height_ft),
+        temperature: !!(currentFrame && currentFrame.temperature_f),
+        pressure: !!(currentFrame && currentFrame.pressure_hpa),
+        wind: !!(currentFrame && currentFrame.wind_speed_kn && currentFrame.wind_direction_deg),
+        wind_wave: !!(currentFrame && currentFrame.wind_wave_height_ft && currentFrame.wind_wave_direction_deg),
+        swell: !!(currentFrame && currentFrame.swell_height_ft && currentFrame.swell_direction_deg),
       };
-      for (const key of ['temperature', 'pressure']) {
+      for (const key of Object.keys(available)) {
         const input = document.querySelector(`#bv-layers input[data-layer="${key}"]`);
         const label = input?.closest('label');
         if (!input || !label) continue;
         input.disabled = !available[key];
+        if (!available[key]) { input.checked = false; layerVisibility[key] = false; }
         label.classList.toggle('unavailable', !available[key]);
-        label.title = available[key] ? '' : 'Not included in the current forecast payload';
+        label.title = available[key] ? '' : `Missing ${key} grid in current forecast frame`;
+      }
+      if (available.wave_height && !layerVisibility.temperature && !layerVisibility.wave_height && !layerVisibility.pressure) {
+        // no forced fallback: the user may intentionally turn all scalar layers off
       }
     }
 
@@ -589,6 +617,7 @@
       // then partition streamlines and atmospheric arrows above it.
       drawWaveHeatOverlay();
       if (layerVisibility.swell || layerVisibility.wind_wave) drawWavePackets();
+      if (layerVisibility.pressure) drawIsobars(true);
       if (layerVisibility.wind) {
         drawStreamlines(true);
         startParticleAnimation();
@@ -599,16 +628,18 @@
     }
 
     function drawWaveHeatOverlay() {
-      const grid = currentFrame.wave_height;
+      const scalarKey = layerVisibility.temperature ? 'temperature_f' : layerVisibility.wave_height ? 'wave_height_ft' : null;
+      const grid = scalarKey && currentFrame[scalarKey];
       const lons = forecastData.lons, lats = forecastData.lats;
       if (!grid || !lons || !lats) return;
-      const r = activeRange || { vmin: 0, vmax: 6 };
+      const scale = scalarKey === 'temperature_f' ? 'SST' : 'UV';
+      const r = activeRange || { vmin: 0, vmax: scalarKey === 'temperature_f' ? 90 : 6 };
       for (let yi = 0; yi < lats.length - 1; yi++) {
         for (let xi = 0; xi < lons.length - 1; xi++) {
           const vals = [grid[yi]?.[xi], grid[yi]?.[xi + 1], grid[yi + 1]?.[xi], grid[yi + 1]?.[xi + 1]];
           if (vals.some(v => v == null || !Number.isFinite(v))) continue;
           const v = vals.reduce((a, b) => a + b, 0) / vals.length;
-          const c = hexToRgb(sampleScale('UV', Math.max(0, Math.min(1, (v - r.vmin) / (r.vmax - r.vmin || 1)))));
+          const c = hexToRgb(sampleScale(scale, Math.max(0, Math.min(1, (v - r.vmin) / (r.vmax - r.vmin || 1)))));
           const p00 = map.getPixelFromCoordinate(ol.proj.fromLonLat([lons[xi], lats[yi]], rasterProjection));
           const p10 = map.getPixelFromCoordinate(ol.proj.fromLonLat([lons[xi + 1], lats[yi]], rasterProjection));
           const p11 = map.getPixelFromCoordinate(ol.proj.fromLonLat([lons[xi + 1], lats[yi + 1]], rasterProjection));
@@ -714,6 +745,7 @@
         flowCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
         drawWaveHeatOverlay();
         if (layerVisibility.swell || layerVisibility.wind_wave) drawWavePackets();
+        if (layerVisibility.pressure) drawIsobars(true);
         if (layerVisibility.wind) drawStreamlines(true);
         wavePacketRaf = requestAnimationFrame(tick);
       };
@@ -819,11 +851,11 @@
       const lons = forecastData.lons, lats = forecastData.lats;
       let spGrid, dgGrid;
       if (kind === 'swell') {
-        spGrid = frame.swell_wave_height;
-        dgGrid = frame.swell_wave_direction;
+        spGrid = frame.swell_height_ft;
+        dgGrid = frame.swell_direction_deg;
       } else if (kind === 'wind_wave') {
-        spGrid = frame.wind_wave_height;
-        dgGrid = frame.wind_wave_direction;
+        spGrid = frame.wind_wave_height_ft;
+        dgGrid = frame.wind_wave_direction_deg;
       } else if (kind === 'wind') {
         spGrid = frame.wind_speed_kn;
         dgGrid = frame.wind_direction_deg;
@@ -1290,11 +1322,11 @@
     }
 
     // ---- isobars (marching squares for pressure) ----
-    function drawIsobars() {
+    function drawIsobars(preserveCanvas = false) {
       if (!currentFrame || !forecastData) return;
       resizeOverlayCanvases();
       const dpr = flowCanvas.width / mapEl.clientWidth;
-      flowCtx.clearRect(0, 0, flowCanvas.width, flowCanvas.height);
+      if (!preserveCanvas) flowCtx.clearRect(0, 0, flowCanvas.width, flowCanvas.height);
       flowCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
       const grid = currentFrame.pressure_hpa;
       if (!grid || !grid.length) return;
@@ -1499,6 +1531,15 @@
     document.querySelectorAll('#bv-layers input[data-layer]').forEach(input => {
       input.addEventListener('change', () => {
         layerVisibility[input.dataset.layer] = input.checked;
+        if (input.dataset.layer === 'temperature' && input.checked) {
+          layerVisibility.wave_height = false;
+          document.querySelector('#bv-layers input[data-layer="wave_height"]').checked = false;
+        } else if (input.dataset.layer === 'wave_height' && input.checked) {
+          layerVisibility.temperature = false;
+          document.querySelector('#bv-layers input[data-layer="temperature"]').checked = false;
+        }
+        computeActiveRange();
+        drawColorbar();
         if (currentProduct === 'wave_composite') drawOverlaysForProduct();
       });
     });
@@ -1552,6 +1593,7 @@
         forecastData = isStaging
           ? await fetchJson(DEV_FORECAST_URL)
           : await fetchJson(FORECAST_URL);
+        forecastData = normalizeForecastPayload(forecastData);
         // Dev carries a NOAA GFS diagnostic payload while the shared feed is
         // migrated off Open-Meteo. Fall back to local if the prod CDN still
         // serves the legacy schema.
