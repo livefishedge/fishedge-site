@@ -729,6 +729,54 @@
       streamlineCtx.globalAlpha = 1;
     }
 
+    // Wave phase crests are not streamlines. A crest's long axis is
+    // perpendicular to propagation, so render short moving phase segments
+    // whose normal follows the partition vector. This is the geometry used
+    // by the CCOM/JHC wave display: black swell crests and pink wind-wave
+    // crests advance in the direction encoded by their respective fields.
+    function drawPartitionStreamlines(kind, strokeStyle, lineWidth) {
+      const lons = forecastData.lons, lats = forecastData.lats;
+      const stride = 1;
+      const phasePeriod = 8;
+      const phase = frameIdx % phasePeriod;
+      const crestHalfLength = kind === 'swell' ? 0.13 : 0.10;
+      const maxSpeed = kind === 'swell' ? 4.0 : 2.0;
+      for (let yi = 1; yi < lats.length - 1; yi += stride) {
+        for (let xi = 1; xi < lons.length - 1; xi += stride) {
+          // Animate packets through the lattice instead of drawing every
+          // crest continuously. Offset the two partitions so they remain
+          // visually separable while sharing the same physical field.
+          if ((xi + yi + phase + (kind === 'wind_wave' ? 3 : 0)) % phasePeriod >= 4) continue;
+          const lon = lons[xi], lat = lats[yi];
+          if (lon < bbox[0] || lon > bbox[2] || lat < bbox[1] || lat > bbox[3]) continue;
+          const vec = bilinearPartitionVec(currentFrame, kind, lon, lat);
+          if (!vec || vec.speed < (kind === 'swell' ? 0.4 : 0.15)) continue;
+          const c = map.getPixelFromCoordinate(ol.proj.fromLonLat([lon, lat], rasterProjection));
+          if (!c) continue;
+          // Rotate the propagation vector by 90° to obtain the crest tangent.
+          const inv = 1 / vec.speed;
+          const tx = -vec.v * inv, ty = vec.u * inv;
+          const p0 = map.getPixelFromCoordinate(ol.proj.fromLonLat([
+            lon - tx * crestHalfLength / Math.max(0.35, Math.cos(lat * Math.PI / 180)), lat - ty * crestHalfLength
+          ], rasterProjection));
+          const p1 = map.getPixelFromCoordinate(ol.proj.fromLonLat([
+            lon + tx * crestHalfLength / Math.max(0.35, Math.cos(lat * Math.PI / 180)), lat + ty * crestHalfLength
+          ], rasterProjection));
+          if (!p0 || !p1) continue;
+          const alpha = 0.48 + 0.42 * Math.min(1, vec.speed / maxSpeed);
+          streamlineCtx.globalAlpha = alpha;
+          streamlineCtx.strokeStyle = strokeStyle;
+          streamlineCtx.lineWidth = lineWidth;
+          streamlineCtx.lineCap = 'round';
+          streamlineCtx.beginPath();
+          streamlineCtx.moveTo(p0[0], p0[1]);
+          streamlineCtx.lineTo(p1[0], p1[1]);
+          streamlineCtx.stroke();
+        }
+      }
+      streamlineCtx.globalAlpha = 1;
+    }
+
     // White arrows for atmospheric 10-m wind. Subsample the grid for legibility.
     function drawAtmosphericWindArrows() {
       const lons = forecastData.lons, lats = forecastData.lats;
