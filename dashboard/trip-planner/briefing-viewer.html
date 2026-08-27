@@ -155,9 +155,11 @@
     //    so the colorbar isn't clipped when the data sits outside the default range.
     const PRODUCTS = {
       temperature_f: { name: 'Temperature', unit: '°F', scale: 'SST', viz: 'heat',        dynamicRange: true  },
-      wave_height_ft:{ name: 'Wave height', unit: 'ft',  scale: 'UV',  viz: 'arrows',      dirKey: 'wave_direction_deg', dynamicRange: true },
-      swell_height_ft:{name: 'Swell height',unit: 'ft',  scale: 'UV',  viz: 'arrows',      dirKey: 'swell_direction_deg', dynamicRange: true },
-      wave_composite:{name: 'Wave + Swell', unit: 'ft',  scale: 'UV',  viz: 'composite',   dynamicRange: true },
+      wave_height_ft:{ name: 'Wave height', unit: 'ft',  scale: 'UV',  viz: 'arrows',      dataKey: 'wave_height',       dirKey: 'wave_direction',       dynamicRange: true },
+      swell_height_ft:{name: 'Swell height',unit: 'ft',  scale: 'UV',  viz: 'arrows',      dataKey: 'swell_wave_height', dirKey: 'swell_wave_direction', dynamicRange: true },
+      // Composite heat uses significant wave height; partition directions are
+      // rendered as the swell and wind-wave overlays below.
+      wave_composite:{name: 'Wave + Swell', unit: 'ft',  scale: 'UV',  viz: 'composite',   dataKey: 'wave_height', dynamicRange: true },
       wind_speed_kn: { name: 'Wind flow',   unit: 'kn',  scale: 'CHL', viz: 'streamlines', dynamicRange: false },
       pressure_hpa:  { name: 'Pressure',    unit: 'hPa', scale: 'SLA', viz: 'contours',    dynamicRange: true  },
     };
@@ -482,8 +484,8 @@
 
     function primaryDataKey() {
       const def = PRODUCTS[currentProduct];
-      // map product key -> forecast.json grid key (they're identical for the current set)
-      return currentProduct;
+      // map product key -> forecast.json grid key
+      return def.dataKey || currentProduct;
     }
 
     // ---- frame rendering ----
@@ -517,7 +519,7 @@
       // when streamlines or contours are showing — they carry the viz,
       // and the raster can produce subtle doubling with the basemap.
       if (rasterLayer) {
-        rasterLayer.setVisible(def.viz === 'heat' || def.viz === 'arrows');
+        rasterLayer.setVisible(def.viz === 'heat' || def.viz === 'arrows' || def.viz === 'composite');
       }
       if (def.viz === 'streamlines') {
         drawStreamlines();
@@ -955,7 +957,7 @@
       flowCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
       const def = PRODUCTS[currentProduct];
       const dirGrid = currentFrame[def.dirKey];
-      const magGrid = currentFrame[currentProduct]; // wave/swell height drives arrow length
+      const magGrid = currentFrame[primaryDataKey()]; // wave/swell height drives arrow length
       if (!dirGrid || !dirGrid.length || !magGrid || !magGrid.length) return;
       const lons = forecastData.lons, lats = forecastData.lats;
 
