@@ -594,12 +594,13 @@
     function ensureWavePackets() {
       if (wavePackets) return;
       wavePackets = [];
-      const lons = forecastData.lons, lats = forecastData.lats;
       for (const kind of ['swell', 'wind_wave']) {
-        for (let yi = 1; yi < lats.length - 1; yi += 2) {
-          for (let xi = 1; xi < lons.length - 1; xi += 2) {
-            wavePackets.push({ kind, lon: lons[xi], lat: lats[yi], age: Math.random() * 12000 });
-          }
+        // Seed the initial visible population through the same source model
+        // used for later births; do not paint an unweighted uniform cloud.
+        for (let i = 0; i < 90; i++) {
+          const packet = { kind, lon: bbox[0], lat: bbox[1], age: Math.random() * 12000 };
+          respawnWavePacket(packet);
+          wavePackets.push(packet);
         }
       }
     }
@@ -681,31 +682,54 @@
 
     function respawnWavePacket(packet) {
       const spanLon = bbox[2] - bbox[0], spanLat = bbox[3] - bbox[1];
-      const edgeCandidates = [
-        [bbox[0], bbox[1] + Math.random() * spanLat],
-        [bbox[2], bbox[1] + Math.random() * spanLat],
-        [bbox[0] + Math.random() * spanLon, bbox[1]],
-        [bbox[0] + Math.random() * spanLon, bbox[3]],
-      ];
+      const edgeCandidates = Array.from({ length: 32 }, (_, i) => {
+        const t = (i + Math.random()) / 32;
+        const side = i % 4;
+        return side === 0 ? [bbox[0], bbox[1] + t * spanLat]
+          : side === 1 ? [bbox[2], bbox[1] + t * spanLat]
+          : side === 2 ? [bbox[0] + t * spanLon, bbox[1]]
+          : [bbox[0] + t * spanLon, bbox[3]];
+      });
       // Swell is remotely generated and enters from a boundary. Wind waves
       // are locally forced, so most new wind-wave packets originate in the
       // interior where the wind-wave field has energy, with a small boundary
       // component retained for continuity.
-      const interiorCandidates = Array.from({ length: 3 }, () => [
-        bbox[0] + (0.1 + 0.8 * Math.random()) * spanLon,
-        bbox[1] + (0.1 + 0.8 * Math.random()) * spanLat,
+      const interiorCandidates = Array.from({ length: 24 }, () => [
+        bbox[0] + (0.05 + 0.9 * Math.random()) * spanLon,
+        bbox[1] + (0.05 + 0.9 * Math.random()) * spanLat,
       ]);
       const candidates = packet.kind === 'swell'
         ? edgeCandidates
         : interiorCandidates;
-      let best = candidates[0], bestScore = -Infinity;
+      const scored = [];
       for (const candidate of candidates) {
         const v = bilinearPartitionVec(currentFrame, packet.kind, candidate[0], candidate[1]);
         if (!v || !v.speed) continue;
         const inward = (candidate[0] === bbox[0] ? v.u : candidate[0] === bbox[2] ? -v.u : 0) +
           (candidate[1] === bbox[1] ? v.v : candidate[1] === bbox[3] ? -v.v : 0);
-        const score = packet.kind === 'wind_wave' ? v.speed : inward;
-        if (score > bestScore) { bestScore = score; best = candidate; }
+        let score;
+        if (packet.kind === 'swell') {
+          // Swell source strength is proportional to wave energy (H²), and
+          // only boundaries facing into the propagation vector are favored.
+          score = v.speed * v.speed * Math.max(0, inward);
+        } else {
+          const wind = bilinearPartitionVec(currentFrame, 'wind', candidate[0], candidate[1]);
+          const alignment = wind && wind.speed
+            ? Math.max(0, (v.u * wind.u + v.v * wind.v) / (v.speed * wind.speed))
+            : 0;
+          // Wind-wave generation is strongest where local wind and wave
+          // propagation agree; H² keeps births concentrated in energetic cells.
+          score = v.speed * v.speed * (0.15 + 0.85 * alignment);
+        }
+        if (score > 0) scored.push({ candidate, score });
+      }
+      if (!scored.length) return;
+      const total = scored.reduce((sum, item) => sum + item.score, 0);
+      let pick = Math.random() * total;
+      let best = scored[scored.length - 1].candidate;
+      for (const item of scored) {
+        pick -= item.score;
+        if (pick <= 0) { best = item.candidate; break; }
       }
       packet.lon = best[0]; packet.lat = best[1]; packet.age = 0;
     }
