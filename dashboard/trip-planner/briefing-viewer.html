@@ -653,11 +653,14 @@
           const cosLat = Math.max(0.35, Math.cos(packet.lat * Math.PI / 180));
           packet.lon += (vec.u / vec.speed) * step / cosLat;
           packet.lat += (vec.v / vec.speed) * step;
-          if (packet.lon < fieldBbox[0] || packet.lon > fieldBbox[2] ||
-              packet.lat < fieldBbox[1] || packet.lat > fieldBbox[3]) {
-            packet.lon = bbox[0] + Math.random() * (bbox[2] - bbox[0]);
-            packet.lat = bbox[1] + Math.random() * (bbox[3] - bbox[1]);
-          }
+          // Recycle at the displayed domain edge, not fieldBbox. The latter
+          // is intentionally larger for integration diagnostics; waiting for
+          // it left the visible map empty after the initial packet cohort.
+          // Wrapping preserves a continuous stream and avoids random jumps.
+          if (packet.lon < bbox[0]) packet.lon = bbox[2];
+          if (packet.lon > bbox[2]) packet.lon = bbox[0];
+          if (packet.lat < bbox[1]) packet.lat = bbox[3];
+          if (packet.lat > bbox[3]) packet.lat = bbox[1];
         }
         clearOverlays();
         resizeOverlayCanvases();
