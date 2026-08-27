@@ -306,7 +306,7 @@
           // is transparent for those products.
           const viz = (PRODUCTS[currentProduct] || {}).viz;
           if (viz === 'streamlines' || viz === 'contours') return c;
-          drawFrameToTile(ctx, currentFrame, currentProduct, requestedExtent, c.width, c.height);
+          drawFrameToTile(ctx, currentFrame, primaryDataKey(), requestedExtent, c.width, c.height);
           return c;
         },
       }),
