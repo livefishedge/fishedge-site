@@ -844,11 +844,14 @@
     // the wall dissolves into the basemap instead of forming a sharp edge.
     function fadeTailAlpha(rawPath, w, h) {
       const n = rawPath.length;
-      if (n < 4) return rawPath;
       const tailFrac = 0.35;
+      // Always return a uniform shape — callers iterate `for (const seg of faded)`
+      // and access seg.pt[0] / seg.alpha. Returning the raw path for short inputs
+      // (n < 4) used to throw "Cannot read properties of undefined (reading '0')"
+      // when the caller hit seg.pt on a raw [lon, lat] array. Wrap unconditionally.
       const tailStart = Math.floor(n * (1 - tailFrac));
       return rawPath.map((pt, i) => {
-        if (i < tailStart) return { pt, alpha: 1 };
+        if (i < tailStart || n < 4) return { pt, alpha: 1 };
         const t = (i - tailStart) / (n - tailStart); // 0..1 over the tail
         const a = 1 - t; // fade 1 → 0
         return { pt, alpha: a };
