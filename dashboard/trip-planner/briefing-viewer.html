@@ -699,12 +699,24 @@
           streamlineCtx.lineJoin = 'round';
           // Tail fade (last 35%) so streamlines don't form a wall at bbox edge.
           const faded = fadeTailAlpha(path, flowCanvas.width, flowCanvas.height);
+          // CCOM's wave display uses packets, not uninterrupted streamlines:
+          // short dashes advance along the integrated path as time plays.
+          // The frame clock supplies a stable phase, so packets travel between
+          // forecast frames without adding a second animation loop.
+          const packetPeriod = 9;
+          const packetLength = 4;
+          const packetPhase = (frameIdx + (kind === 'wind_wave' ? 3 : 0)) % packetPeriod;
           let prevPx = null;
-          for (const seg of faded) {
+          for (let pointIdx = 1; pointIdx < faded.length; pointIdx++) {
+            const seg = faded[pointIdx];
             const proj = ol.proj.fromLonLat([seg.pt[0], seg.pt[1]], rasterProjection);
             const px = map.getPixelFromCoordinate(proj);
             if (!px) { prevPx = null; continue; }
             if (!prevPx) { prevPx = px; continue; }
+            if (((pointIdx + packetPhase) % packetPeriod) >= packetLength) {
+              prevPx = px;
+              continue;
+            }
             streamlineCtx.globalAlpha = alpha * seg.alpha;
             streamlineCtx.beginPath();
             streamlineCtx.moveTo(prevPx[0], prevPx[1]);
