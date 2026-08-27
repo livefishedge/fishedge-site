@@ -346,16 +346,10 @@
       const vmin = r.vmin, vmax = r.vmax;
       const scale = def.scale;
 
-      // ImageCanvas supplies the requested extent in the map projection
-      // (Web Mercator), while forecast grids are lon/lat degrees. Convert the
-      // extent before indexing the grid; mixing these units silently placed
-      // every colored quad outside the canvas.
-      const sw = ol.proj.toLonLat([requestedExtent[0], requestedExtent[1]], rasterProjection);
-      const ne = ol.proj.toLonLat([requestedExtent[2], requestedExtent[3]], rasterProjection);
-      const extentLon0 = sw[0], extentLon1 = ne[0];
-      const extentLat0 = sw[1], extentLat1 = ne[1];
-      const toX = lon => ((lon - extentLon0) / (extentLon1 - extentLon0)) * w;
-      const toY = lat => ((extentLat1 - lat) / (extentLat1 - extentLat0)) * h;
+      // The map uses EPSG:4326, so ImageCanvas' requested extent is already
+      // in the same lon/lat units as the forecast grid.
+      const toX = lon => ((lon - requestedExtent[0]) / (requestedExtent[2] - requestedExtent[0])) * w;
+      const toY = lat => ((requestedExtent[3] - lat) / (requestedExtent[3] - requestedExtent[1])) * h;
 
       const nx = lons.length, ny = lats.length;
       const dlon = (lons[nx-1] - lons[0]) / (nx - 1);
