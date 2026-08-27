@@ -290,6 +290,7 @@
     const rasterLayer = new ol.layer.Image({
       source: new ol.source.ImageCanvas({
         projection: rasterProjection,
+        extent: bbox,
         ratio: 1,
         interpolate: true,
         canvasFunction: (requestedExtent, resolution, pixelRatio, size) => {
