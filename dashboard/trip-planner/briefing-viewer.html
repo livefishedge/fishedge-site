@@ -649,7 +649,13 @@
         for (const packet of wavePackets) {
           packet.age += dt;
           const vec = bilinearPartitionVec(currentFrame, packet.kind, packet.lon, packet.lat);
-          if (!vec || vec.speed < (packet.kind === 'swell' ? 0.4 : 0.15)) continue;
+          if (!vec || vec.speed < (packet.kind === 'swell' ? 0.4 : 0.15)) {
+            // Do not leave a packet stranded in a calm/null cell: drawWavePackets
+            // intentionally suppresses those marks, so recover it immediately
+            // through the appropriate physical source model.
+            respawnWavePacket(packet);
+            continue;
+          }
           const step = (packet.kind === 'swell' ? 0.0045 : 0.0055) * (dt / 16);
           const cosLat = Math.max(0.35, Math.cos(packet.lat * Math.PI / 180));
           packet.lon += (vec.u / vec.speed) * step / cosLat;
