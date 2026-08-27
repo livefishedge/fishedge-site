@@ -552,11 +552,39 @@
       flowCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
       streamlineCtx.clearRect(0, 0, flowCanvas.width, flowCanvas.height);
       flowCtx.clearRect(0, 0, flowCanvas.width, flowCanvas.height);
-      // Heat fill uses the rasterLayer (drawn by drawFrameToTile via map.render()).
-      // Streamlines + arrows draw on top of the heat.
+      // Paint the composite heat directly on the overlay as a fallback for
+      // ImageCanvas implementations that do not invalidate after a product
+      // switch. This keeps the visual contract deterministic: fill first,
+      // then partition streamlines and atmospheric arrows above it.
+      drawWaveHeatOverlay();
       drawPartitionStreamlines('swell',   'rgba(0, 0, 0, 0.95)',         1.4);
       drawPartitionStreamlines('wind_wave','rgba(255, 105, 180, 0.92)',   1.2);
       drawAtmosphericWindArrows();
+    }
+
+    function drawWaveHeatOverlay() {
+      const grid = currentFrame.wave_height;
+      const lons = forecastData.lons, lats = forecastData.lats;
+      if (!grid || !lons || !lats) return;
+      const r = activeRange || { vmin: 0, vmax: 6 };
+      for (let yi = 0; yi < lats.length - 1; yi++) {
+        for (let xi = 0; xi < lons.length - 1; xi++) {
+          const vals = [grid[yi]?.[xi], grid[yi]?.[xi + 1], grid[yi + 1]?.[xi], grid[yi + 1]?.[xi + 1]];
+          if (vals.some(v => v == null || !Number.isFinite(v))) continue;
+          const v = vals.reduce((a, b) => a + b, 0) / vals.length;
+          const c = hexToRgb(sampleScale('UV', Math.max(0, Math.min(1, (v - r.vmin) / (r.vmax - r.vmin || 1)))));
+          const p00 = map.getPixelFromCoordinate(ol.proj.fromLonLat([lons[xi], lats[yi]], rasterProjection));
+          const p10 = map.getPixelFromCoordinate(ol.proj.fromLonLat([lons[xi + 1], lats[yi]], rasterProjection));
+          const p11 = map.getPixelFromCoordinate(ol.proj.fromLonLat([lons[xi + 1], lats[yi + 1]], rasterProjection));
+          const p01 = map.getPixelFromCoordinate(ol.proj.fromLonLat([lons[xi], lats[yi + 1]], rasterProjection));
+          if (!p00 || !p10 || !p11 || !p01) continue;
+          streamlineCtx.fillStyle = `rgba(${c[0]},${c[1]},${c[2]},0.62)`;
+          streamlineCtx.beginPath();
+          streamlineCtx.moveTo(p00[0], p00[1]); streamlineCtx.lineTo(p10[0], p10[1]);
+          streamlineCtx.lineTo(p11[0], p11[1]); streamlineCtx.lineTo(p01[0], p01[1]);
+          streamlineCtx.closePath(); streamlineCtx.fill();
+        }
+      }
     }
 
     // Generic streamline tracer for any (height, direction) field in the frame.
