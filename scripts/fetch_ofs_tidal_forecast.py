@@ -102,8 +102,20 @@ def download_to_temp(key):
     return path
 
 
+def _map_curvilinear(values, lon, lat, mask, target_lats, target_lons):
+    """Map a ROMS rho/u/v field to the FishEdge grid without land extrapolation."""
+    lon2, lat2 = np.meshgrid(target_lons, target_lats)
+    valid = np.isfinite(lon) & np.isfinite(lat) & (mask > 0.5)
+    tree = cKDTree(np.column_stack((lon[valid], lat[valid])))
+    distance, index = tree.query(np.column_stack((lon2.ravel(), lat2.ravel())))
+    flat_values = values[valid]
+    out = flat_values[index].astype(float)
+    out[distance > 0.45] = np.nan
+    return out.reshape(lon2.shape)
+
+
 def model_grid(path, target_lats, target_lons):
-    """Read one ROMS file and build nearest valid model-cell lookup."""
+    """Read zeta plus depth-averaged ROMS currents and map them to the display grid."""
     with xr.open_dataset(path, decode_times=True) as ds:
         required = {"zeta", "lon_rho", "lat_rho", "mask_rho", "ocean_time"}
         missing = required.difference(ds.variables)
@@ -113,21 +125,27 @@ def model_grid(path, target_lats, target_lons):
         lat = np.asarray(ds["lat_rho"].values, dtype=float)
         mask = np.asarray(ds["mask_rho"].values, dtype=float)
         zeta = np.asarray(ds["zeta"].isel(ocean_time=0).values, dtype=float)
+        # OFS ROMS files expose 3-D u/v on staggered grids. Depth averaging
+        # gives the operational surface/depth-mean flow used by the viewer.
+        u = v = None
+        if {"u", "v", "lon_u", "lat_u", "lon_v", "lat_v", "mask_u", "mask_v"}.issubset(ds.variables):
+            u = np.asarray(ds["u"].isel(ocean_time=0).mean(dim="s_rho", skipna=True).values, dtype=float)
+            v = np.asarray(ds["v"].isel(ocean_time=0).mean(dim="s_rho", skipna=True).values, dtype=float)
+            lon_u = np.asarray(ds["lon_u"].values, dtype=float)
+            lat_u = np.asarray(ds["lat_u"].values, dtype=float)
+            mask_u = np.asarray(ds["mask_u"].values, dtype=float)
+            lon_v = np.asarray(ds["lon_v"].values, dtype=float)
+            lat_v = np.asarray(ds["lat_v"].values, dtype=float)
+            mask_v = np.asarray(ds["mask_v"].values, dtype=float)
         model_time = np.datetime64(ds["ocean_time"].values[0], "ms").astype("int64")
 
     # Model grids are curvilinear.  Nearest wet-cell lookup is stable and
     # avoids smoothing across coastline cells; the 0.25-degree output grid is
     # deliberately coarser than both regional OFS grids.
-    lon2, lat2 = np.meshgrid(target_lons, target_lats)
-    valid = np.isfinite(lon) & np.isfinite(lat) & (mask > 0.5)
-    tree = cKDTree(np.column_stack((lon[valid], lat[valid])))
-    distance, index = tree.query(np.column_stack((lon2.ravel(), lat2.ravel())))
-    flat_zeta = zeta[valid]
-    values = flat_zeta[index]
-    # Do not project a model into a distant target cell.  0.45 degrees is
-    # generous for the model grids but prevents false offshore coverage.
-    values[distance > 0.45] = np.nan
-    return model_time, values.reshape(lon2.shape)
+    zeta_grid = _map_curvilinear(zeta, lon, lat, mask, target_lats, target_lons)
+    u_grid = _map_curvilinear(u, lon_u, lat_u, mask_u, target_lats, target_lons) if u is not None else None
+    v_grid = _map_curvilinear(v, lon_v, lat_v, mask_v, target_lats, target_lons) if v is not None else None
+    return model_time, zeta_grid, u_grid, v_grid
 
 
 def iso_hour(epoch_ms):
@@ -154,20 +172,26 @@ def build_payload(date, hours):
                 continue
             path = download_to_temp(key)
             try:
-                model_time, grid_m = model_grid(path, target_lats, target_lons)
+                model_time, grid_m, u_grid, v_grid = model_grid(path, target_lats, target_lons)
             finally:
                 os.unlink(path)
-            per_model.append((model, model_time, grid_m))
+            per_model.append((model, model_time, grid_m, u_grid, v_grid))
         if not per_model:
             continue
         # MODELS is ordered by priority. Fill remaining cells from the next
         # model without blending two models across their common boundary.
         merged = np.full((len(target_lats), len(target_lons)), np.nan)
         sources = np.full(merged.shape, "", dtype=object)
-        for model, model_time, grid_m in per_model:
+        merged_u = np.full(merged.shape, np.nan)
+        merged_v = np.full(merged.shape, np.nan)
+        for model, model_time, grid_m, u_grid, v_grid in per_model:
             take = np.isnan(merged) & np.isfinite(grid_m)
             merged[take] = grid_m[take]
             sources[take] = model
+            if u_grid is not None and v_grid is not None:
+                current_take = np.isnan(merged_u) & np.isfinite(u_grid) & np.isfinite(v_grid)
+                merged_u[current_take] = u_grid[current_take]
+                merged_v[current_take] = v_grid[current_take]
         # model_grid returns epoch milliseconds already.
         time_ms = per_model[0][1]
         frames_by_time[time_ms] = {
@@ -175,6 +199,9 @@ def build_payload(date, hours):
             "water_level_m": np.where(np.isfinite(merged), merged, None).tolist(),
             "water_level_ft": np.where(np.isfinite(merged), merged * 3.280839895, None).tolist(),
             "tide_height_ft": np.where(np.isfinite(merged), merged * 3.280839895, None).tolist(),
+            "current_u_ms": np.where(np.isfinite(merged_u), merged_u, None).tolist(),
+            "current_v_ms": np.where(np.isfinite(merged_v), merged_v, None).tolist(),
+            "current_speed_kn": np.where(np.isfinite(merged_u) & np.isfinite(merged_v), np.hypot(merged_u, merged_v) * 1.943844492, None).tolist(),
             "model_source": sorted(set(sources.ravel()) - {""}),
             "coverage_cells": int(np.isfinite(merged).sum()),
         }
@@ -188,7 +215,7 @@ def build_payload(date, hours):
         "lats": target_lats,
         "lons": target_lons,
         "frame_interval_hours": 1,
-        "units": {"water_level_m": "m", "water_level_ft": "ft", "tide_height_ft": "ft"},
+        "units": {"water_level_m": "m", "water_level_ft": "ft", "tide_height_ft": "ft", "current_u_ms": "m/s", "current_v_ms": "m/s", "current_speed_kn": "kn"},
         "datum": "model free-surface datum; do not label as MLLW without a datum transform",
         "variable": "zeta",
         "source": "NOAA NOS Operational Forecast Systems via noaa-ofs-pds",
@@ -198,7 +225,7 @@ def build_payload(date, hours):
         "quality": {
             "status": "pass" if frames else "fail",
             "grid_method": "nearest wet ROMS rho cell; no extrapolation beyond 0.45 degrees",
-            "notes": "CBOFS/DBOFS zeta is total free-surface elevation and may include surge and river effects; it is not a pure astronomical tide field.",
+            "notes": "CBOFS/DBOFS zeta is total free-surface elevation and may include surge and river effects; depth-averaged ROMS u/v are included where available.",
         },
     }
 
@@ -219,6 +246,8 @@ def merge_forecast(path, tidal):
             frame["water_level_ft"] = ofs["water_level_ft"]
             frame["tide_model_source"] = ofs["model_source"]
             frame["tide_model_coverage_cells"] = ofs["coverage_cells"]
+            for key in ("current_u_ms", "current_v_ms", "current_speed_kn"):
+                frame[key] = ofs[key]
             merged += 1
     payload.setdefault("quality", {})["ofs_tidal_source"] = tidal["source"]
     payload["ofs_tidal_forecast"] = {k: tidal[k] for k in ("schema_version", "generated_at", "models", "quality")}

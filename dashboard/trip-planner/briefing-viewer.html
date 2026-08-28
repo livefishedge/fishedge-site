@@ -159,6 +159,7 @@
         <label><input type="checkbox" data-layer="temperature"><span class="bv-dot dot-temp"></span>Temp</label>
         <label><input type="checkbox" data-layer="pressure"><span class="bv-dot dot-press"></span>Pressure</label>
         <label><input type="checkbox" data-layer="tide" checked><span class="bv-dot dot-tide"></span>OFS water level</label>
+        <label><input type="checkbox" data-layer="tide_current" checked><span class="bv-dot dot-tide"></span>Tidal currents</label>
         <label><input type="checkbox" data-layer="wind" checked><span class="bv-dot dot-wind"></span>Wind</label>
         <label><input type="checkbox" data-layer="wind_wave" checked><span class="bv-dot dot-composite"></span>Wind-Wave</label>
         <label><input type="checkbox" data-layer="swell" checked><span class="bv-dot dot-swell"></span>Swell</label>
@@ -588,14 +589,10 @@
     // ---- ol setup ----
     const baseLayer = new ol.layer.Tile({
       source: new ol.source.XYZ({
-        // Mike #34713: 'still artifacts in wind map' — the @2x retina
-        // suffix doesn't exist at the low zoom levels (5.5) we use, so
-        // OL falls back to standard tiles and the coastline becomes
-        // pixelated (the staircase artifact the user keeps seeing on the
-        // basemap). Drop @2x — the standard dark_all tiles are already
-        // 256×256 and look correct at this zoom.
-        url: 'https://{a-d}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
-        attributions: '© OpenStreetMap contributors © CARTO',
+        // Use the public OSM raster directly. CARTO's hosted style can emit
+        // an API-key/watermark response; this path has no Carto dependency.
+        url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+        attributions: '© OpenStreetMap contributors',
         maxZoom: 19,
         crossOrigin: 'anonymous',
       }),
@@ -692,7 +689,7 @@
     let currentProduct = 'wave_composite';
     let currentFrame = null;
     let activeRange = null; // {vmin, vmax} computed per-frame when dynamicRange=true
-    const layerVisibility = { wave_height: true, temperature: false, pressure: false, tide: true, swell: true, wind_wave: true, wind: true };
+    const layerVisibility = { wave_height: true, temperature: false, pressure: false, tide: true, tide_current: true, swell: true, wind_wave: true, wind: true };
     const particles = [];
 
     function hasVisibleRasterVariable() {
@@ -919,6 +916,7 @@
         temperature: !!(currentFrame && currentFrame.temperature_f),
         pressure: !!(currentFrame && currentFrame.pressure_hpa),
         tide: !!(currentFrame && currentFrame.tide_height_ft),
+        tide_current: !!(currentFrame && currentFrame.current_u_ms && currentFrame.current_v_ms),
         wind: !!(currentFrame && currentFrame.wind_speed_kn && currentFrame.wind_direction_deg),
         wind_wave: !!(currentFrame && currentFrame.wind_wave_height_ft && currentFrame.wind_wave_direction_deg),
         swell: !!(currentFrame && currentFrame.swell_height_ft && currentFrame.swell_direction_deg),
@@ -927,15 +925,17 @@
         const input = document.querySelector(`#bv-layers input[data-layer="${key}"]`);
         const label = input?.closest('label');
         if (!input || !label) continue;
-        const anyFrameAvailable = key === 'tide' && forecastData && forecastData.frames
-          ? forecastData.frames.some(frame => !!(frame && frame.tide_height_ft))
+        const anyFrameAvailable = (key === 'tide' || key === 'tide_current') && forecastData && forecastData.frames
+          ? forecastData.frames.some(frame => key === 'tide_current'
+            ? !!(frame && frame.current_u_ms && frame.current_v_ms)
+            : !!(frame && frame.tide_height_ft))
           : available[key];
         input.disabled = !anyFrameAvailable;
         // Preserve an enabled layer's checked state while the time slider
         // crosses a frame without a regional OFS surface. Only disable and
         // clear it when the entire payload has no tide grids at all.
         if (!anyFrameAvailable) { input.checked = false; layerVisibility[key] = false; }
-        else if (key === 'tide') input.checked = layerVisibility.tide;
+        else if (key === 'tide' || key === 'tide_current') input.checked = layerVisibility[key];
         label.classList.toggle('unavailable', !available[key]);
         label.title = available[key] ? '' : `No ${key} grid in current forecast frame`;
       }
@@ -1003,7 +1003,7 @@
       drawWaveHeatOverlay();
       if (layerVisibility.swell || layerVisibility.wind_wave) drawWavePackets();
       if (layerVisibility.pressure) drawIsobars(true);
-      if (layerVisibility.wind) {
+      if (layerVisibility.wind || layerVisibility.tide_current) {
         drawStreamlines(true);
         startParticleAnimation();
       } else {
@@ -1451,8 +1451,12 @@
 
     function bilinearVec(frame, lon, lat) {
       const lons = forecastData.lons, lats = forecastData.lats;
-      const speedGrid = frame.wind_speed_kn, dirGrid = frame.wind_direction_deg;
-      if (!speedGrid || !dirGrid || lons.length < 2 || lats.length < 2) return null;
+      const useTideCurrent = layerVisibility.tide_current && frame.current_u_ms && frame.current_v_ms;
+      const speedGrid = useTideCurrent ? frame.current_speed_kn : frame.wind_speed_kn;
+      const uGrid = useTideCurrent ? frame.current_u_ms : null;
+      const vGrid = useTideCurrent ? frame.current_v_ms : null;
+      const dirGrid = useTideCurrent ? null : frame.wind_direction_deg;
+      if (!speedGrid || (!useTideCurrent && !dirGrid) || lons.length < 2 || lats.length < 2) return null;
       if (lon < lons[0] || lon > lons[lons.length-1] || lat < lats[0] || lat > lats[lats.length-1]) return null;
       const dlon = (lons[lons.length-1] - lons[0]) / (lons.length-1);
       const dlat = (lats[lats.length-1] - lats[0]) / (lats.length-1);
@@ -1465,8 +1469,14 @@
       // reversed wind axis—the exact kind of false convergence this viewer
       // previously displayed.
       const corner = (yy, xx) => {
-        const sp = speedGrid[yy]?.[xx], deg = dirGrid[yy]?.[xx];
-        if (sp == null || deg == null || !Number.isFinite(sp) || !Number.isFinite(deg)) return null;
+        const sp = speedGrid[yy]?.[xx], deg = dirGrid?.[yy]?.[xx];
+        if (sp == null || !Number.isFinite(sp)) return null;
+        if (useTideCurrent) {
+          const u = uGrid[yy]?.[xx], v = vGrid[yy]?.[xx];
+          if (!Number.isFinite(u) || !Number.isFinite(v)) return null;
+          return { u: Number(u) * 1.943844492, v: -Number(v) * 1.943844492 };
+        }
+        if (deg == null || !Number.isFinite(deg)) return null;
         const rad = Number(deg) * Math.PI / 180;
         return { u: -Number(sp) * Math.sin(rad), v: -Number(sp) * Math.cos(rad) };
       };
@@ -1846,7 +1856,8 @@
         for (let i = 0; i < particles.length; i++) {
           const p = particles[i];
           const vec = bilinearVec(currentFrame, p.lon, p.lat);
-          if (!vec || vec.speed < 2.5 || p.age >= p.maxAge ||
+          const minParticleSpeed = layerVisibility.tide_current ? 0.05 : 2.5;
+          if (!vec || vec.speed < minParticleSpeed || p.age >= p.maxAge ||
               p.lon < bbox[0] || p.lon > bbox[2] ||
               p.lat < bbox[1] || p.lat > bbox[3]) {
             const lon = bbox[0] + Math.random() * (bbox[2] - bbox[0]);
@@ -1867,7 +1878,7 @@
           const afterPx  = map.getPixelFromCoordinate(after);
           if (!beforePx || !afterPx) continue;
           // Speed → opacity + warm-yellow tint (matches static streamlines)
-          const t = Math.min(1, vec.speed / 30);
+          const t = Math.min(1, vec.speed / (layerVisibility.tide_current ? 2.5 : 30));
           const fadeOut = Math.min(1, (1 - p.age / p.maxAge) * 1.5);
           const a = Math.max(0.18, Math.min(0.80, (0.35 + 0.45 * t) * fadeOut));
           const r = 255;
