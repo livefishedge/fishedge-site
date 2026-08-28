@@ -171,7 +171,7 @@ def fetch_all_tides(hours=COOPS_HOURS, begin=None):
     return out
 
 
-def add_tide_grids(frames, tides, lats, lons, preserve_ofs=True):
+def add_tide_grids(frames, tides, lats, lons, preserve_ofs=True, land_mask=None):
     """Add an IDW-interpolated tide-height surface to each forecast frame.
 
     CO-OPS predictions are point forecasts. This produces a regional
@@ -185,7 +185,11 @@ def add_tide_grids(frames, tides, lats, lons, preserve_ofs=True):
     if not points:
         return frames
     for frame in frames:
-        if preserve_ofs and frame.get("tide_model_source"):
+        # Preserve only official OFS model surfaces. A prior CO-OPS fallback
+        # is deliberately replaceable so shoreline masking can be corrected
+        # on subsequent refreshes.
+        source = set(frame.get("tide_model_source") or [])
+        if preserve_ofs and source.intersection({"dbofs", "cbofs"}):
             continue
         frame_ms = int(datetime.strptime(frame["time"], "%Y-%m-%dT%H:%M").replace(tzinfo=timezone.utc).timestamp() * 1000)
         values = []
@@ -198,7 +202,10 @@ def add_tide_grids(frames, tides, lats, lons, preserve_ofs=True):
         grid = []
         for lat in lats:
             row = []
-            for lon in lons:
+            for xi, lon in enumerate(lons):
+                if land_mask and land_mask[lats.index(lat)][xi]:
+                    row.append(None)
+                    continue
                 weighted = []
                 for slat, slon, value in values:
                     dlat = lat - slat

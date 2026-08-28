@@ -13,6 +13,8 @@ import datetime as dt
 import json
 from pathlib import Path
 import numpy as np
+from cartopy.io import shapereader
+from shapely.geometry import Point
 
 from fetch_wave_openmeteo import (
     DISPLAY_BBOX,
@@ -39,7 +41,8 @@ def grid():
 def refresh(path, tides):
     payload = json.loads(Path(path).read_text())
     lats, lons = grid()
-    add_tide_grids(payload["frames"], tides, lats, lons, preserve_ofs=True)
+    land = land_mask(lats, lons)
+    add_tide_grids(payload["frames"], tides, lats, lons, preserve_ofs=True, land_mask=land)
     for frame in payload["frames"]:
         if "tide_height_ft" in frame and not frame.get("tide_model_source"):
             frame["tide_model_source"] = ["coops_station_blend"]
@@ -53,6 +56,13 @@ def refresh(path, tides):
     tmp.write_text(json.dumps(payload, allow_nan=False, separators=(",", ":")))
     tmp.replace(path)
     print(f"refreshed {path}")
+
+
+def land_mask(lats, lons):
+    """Return a display-grid land mask from Natural Earth 10m polygons."""
+    reader = shapereader.natural_earth(resolution="10m", category="physical", name="land")
+    geometries = list(shapereader.Reader(reader).geometries())
+    return [[any(geometry.contains(Point(lon, lat)) for geometry in geometries) for lon in lons] for lat in lats]
 
 
 def add_harmonic_phase_amplitude(frames):
