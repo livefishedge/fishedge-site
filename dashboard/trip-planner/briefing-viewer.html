@@ -998,6 +998,7 @@
     function drawTidalContours() {
       if (!currentFrame || !forecastData) return;
       const ctx = tideCtx;
+      const waterCells = forecastData.tide_water_cells;
       ctx.globalCompositeOperation = 'source-over';
       ctx.globalAlpha = 0.95;
       ctx.lineCap = 'round';
@@ -1012,6 +1013,7 @@
         ctx.setLineDash(dashed ? [5, 4] : []);
         for (let yi = 0; yi < lats.length - 1; yi++) {
           for (let xi = 0; xi < lons.length - 1; xi++) {
+            if (waterCells && waterCells[yi] && waterCells[yi][xi] === false) continue;
             let v00 = grid[yi]?.[xi], v10 = grid[yi]?.[xi + 1];
             let v01 = grid[yi + 1]?.[xi], v11 = grid[yi + 1]?.[xi + 1];
             if (![v00, v10, v01, v11].every(v => Number.isFinite(v))) continue;
@@ -1045,10 +1047,10 @@
         ctx.setLineDash([]);
       };
       if (layerVisibility.tide_phase && currentFrame.tide_phase_deg) {
-        // Use 5° spacing so the modest but real offshore phase gradient is
+        // Use 2° spacing so the modest but real offshore phase gradient is
         // visible. Phase is cyclic; segment() tests the +/-360 seam.
         const phaseColors = ['#fff7bc', '#e7f6c5', '#a8ddb5', '#7fcdbb', '#41b6c4', '#2c7fb8', '#225ea8', '#253494', '#2c1e78', '#4a1486', '#6a51a3', '#9e9ac8'];
-        for (let level = 0; level < 360; level += 5) {
+        for (let level = 0; level < 360; level += 2) {
           segment(currentFrame.tide_phase_deg, level, phaseColors[Math.floor(level / 15) % phaseColors.length], 1.7, false, true);
         }
       }
@@ -1056,7 +1058,7 @@
         const values = currentFrame.tide_amplitude_ft.flat().filter(Number.isFinite);
         if (values.length) {
           const lo = Math.min(...values), hi = Math.max(...values);
-          for (let i = 1; i <= 16; i++) segment(currentFrame.tide_amplitude_ft, lo + (hi - lo) * i / 17, 'rgba(230,245,255,0.9)', 1.5, true, false);
+          for (let i = 1; i <= 24; i++) segment(currentFrame.tide_amplitude_ft, lo + (hi - lo) * i / 25, 'rgba(230,245,255,0.9)', 1.5, true, false);
         }
       }
       ctx.globalAlpha = 1;

@@ -14,7 +14,7 @@ import json
 from pathlib import Path
 import numpy as np
 from cartopy.io import shapereader
-from shapely.geometry import Point
+from shapely.geometry import Point, box
 
 from fetch_wave_openmeteo import (
     DISPLAY_BBOX,
@@ -42,6 +42,7 @@ def refresh(path, tides):
     payload = json.loads(Path(path).read_text())
     lats, lons = grid()
     land = land_mask(lats, lons)
+    payload["tide_water_cells"] = water_cell_mask(lats, lons)
     add_tide_grids(payload["frames"], tides, lats, lons, preserve_ofs=True, land_mask=land)
     for frame in payload["frames"]:
         if "tide_height_ft" in frame and not frame.get("tide_model_source"):
@@ -67,6 +68,25 @@ def land_mask(lats, lons):
     reader = shapereader.natural_earth(resolution="10m", category="physical", name="land")
     geometries = list(shapereader.Reader(reader).geometries())
     return [[any(geometry.contains(Point(lon, lat)) for geometry in geometries) for lon in lons] for lat in lats]
+
+
+def water_cell_mask(lats, lons):
+    """Return cells that do not intersect Natural Earth land.
+
+    A point mask leaves narrow peninsulas/islands between four water corner
+    points looking like ocean.  The contour renderer works cell-by-cell, so it
+    needs a conservative polygon-intersection mask as well.
+    """
+    reader = shapereader.natural_earth(resolution="10m", category="physical", name="land")
+    geometries = list(shapereader.Reader(reader).geometries())
+    cells = []
+    for yi in range(len(lats) - 1):
+        row = []
+        for xi in range(len(lons) - 1):
+            cell = box(lons[xi], lats[yi], lons[xi + 1], lats[yi + 1])
+            row.append(not any(geometry.intersects(cell) for geometry in geometries))
+        cells.append(row)
+    return cells
 
 
 def add_harmonic_phase_amplitude(frames, tides=None, lats=None, lons=None, land_mask=None):
