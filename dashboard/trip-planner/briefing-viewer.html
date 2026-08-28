@@ -528,7 +528,11 @@
     // TIDE_STATIONS initializer reads forecastData on script load)
 
     const FORECAST_URL = `https://data.fishedge.live/${region}/briefing/forecast.json`;
-    const DEV_FORECAST_URL = `/dashboard/trip-planner/data/${region}/briefing/forecast.json`;
+    // Keep the data artifact tied to the deployment that contains it. This
+    // also forces the Pages edge to fetch the refreshed 72-frame tide grid
+    // instead of reusing an older cached JSON response.
+    const FORECAST_DATA_BUILD = 'c58cf058';
+    const DEV_FORECAST_URL = `/dashboard/trip-planner/data/${region}/briefing/forecast.json?v=${FORECAST_DATA_BUILD}`;
     const CORS_PROXY = 'https://corsproxy.io/?';
     const MAX_FORECAST_AGE_HOURS = 12;
 
