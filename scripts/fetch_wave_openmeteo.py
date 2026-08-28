@@ -26,6 +26,7 @@ copy, using the versioned briefing-forecast-v2 contract.
 import json
 import time
 from pathlib import Path
+from datetime import datetime, timedelta, timezone
 import requests
 import numpy as np
 
@@ -36,6 +37,138 @@ STEP_DEG = 0.25
 N = 17  # square NxN fetch -> 4° span, covers the 5°/4° display bbox
 OUT_PATH = Path(__file__).resolve().parents[1] / "data" / "usec_md" / "briefing" / "forecast.json"
 DASHBOARD_OUT_PATH = Path(__file__).resolve().parents[1] / "dashboard" / "trip-planner" / "data" / "usec_md" / "briefing" / "forecast.json"
+
+
+# ---- CO-OPS tide stations (curators: NJ/DE/MD/VA inshore + outer banks) ----
+# NOAA Center for Operational Oceanographic Products and Services publishes
+# free harmonic tide predictions in plain text via api/data/. We precompute the
+# request URL per station here so the viewer never needs a live API hop. Five
+# stations cover the usec_md bbox (36-40N, 77-72W) with adequate redundancy:
+#   - Cape May + Atlantic City = NJ inshore reference
+#   - Ocean City Inlet = MD eastern shore (inside the display bbox)
+#   - CBBT = lower Chesapeake Bay mouth
+#   - Duck, NC = outer banks (Hatteras corridor edge)
+# Units: feet (CO-OPS MLLW datum, the same as the USEC captain convention).
+TIDE_STATIONS = [
+    {"id": "8635750", "name": "Cape May, NJ",       "lat": 38.968, "lon": -74.960},
+    {"id": "8534720", "name": "Atlantic City, NJ",  "lat": 39.355, "lon": -74.418},
+    {"id": "8570283", "name": "Ocean City Inlet",   "lat": 38.328, "lon": -75.092},
+    {"id": "8638863", "name": "CBBT, Chesapeake",   "lat": 36.967, "lon": -76.117},
+    {"id": "8651370", "name": "Duck, NC",           "lat": 36.183, "lon": -75.747},
+]
+COOPS_API = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter"
+COOPS_HOURS = 24  # viewer renders a 24h window starting at run time
+
+
+def fetch_coops_curve(station_id, hours=COOPS_HOURS):
+    """Fetch a single CO-OPS station's hourly tide prediction for the next
+    `hours` hours, starting at the top of the next hour (UTC).
+
+    Returns a dict with `curve` (list of {t, v} epoch-ms + ft), `range`
+    ({vmin, vmax} in ft), and `next_event` ({t, label} for the first high or
+    low after `now`). Raises RuntimeError on fetch failure so the caller can
+    decide whether to abort or fall back to a synthetic curve.
+    """
+    begin = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
+    end = begin + timedelta(hours=hours)
+    params = {
+        "product": "predictions",
+        "application": "FishEdge.Briefing",
+        "begin_date": begin.strftime("%Y%m%d %H:%M"),
+        "end_date": end.strftime("%Y%m%d %H:%M"),
+        "datum": "MLLW",
+        "station": station_id,
+        "time_zone": "gmt",
+        "units": "english",
+        "interval": "h",
+        "format": "json",
+    }
+    last_err = None
+    for attempt in range(3):
+        try:
+            r = requests.get(COOPS_API, params=params, timeout=30)
+            if r.status_code == 200:
+                payload = r.json()
+                preds = payload.get("predictions") or []
+                if not preds:
+                    raise RuntimeError(f"empty predictions for station {station_id}")
+                curve = []
+                for p in preds:
+                    # CO-OPS time is "YYYY-MM-DD HH:MM" in the requested zone.
+                    dt = datetime.strptime(p["t"], "%Y-%m-%d %H:%M")
+                    epoch_ms = int(dt.replace(tzinfo=timezone.utc).timestamp() * 1000)
+                    curve.append({"t": epoch_ms, "v": float(p["v"])})
+                vs = [c["v"] for c in curve]
+                rng = {"vmin": min(vs), "vmax": max(vs)}
+                next_event = _find_next_tide_event(curve)
+                return {"curve": curve, "range": rng, "next_event": next_event}
+            last_err = f"http {r.status_code}: {r.text[:200]}"
+        except Exception as e:
+            last_err = f"exception: {e}"
+        time.sleep(2 ** attempt)
+    raise RuntimeError(f"CO-OPS fetch failed for {station_id} after 3 tries: {last_err}")
+
+
+def _find_next_tide_event(curve):
+    """Find the first high or low tide after the first point in the curve.
+
+    A tide event is a local extremum where the sign of (v[i+1] - v[i]) flips.
+    Returns {"t": epoch_ms, "label": "high 3.2 ft @ 14:00 UTC"} or None.
+    """
+    if len(curve) < 3:
+        return None
+    now_ms = curve[0]["t"]
+    for i in range(1, len(curve) - 1):
+        dv_prev = curve[i]["v"] - curve[i - 1]["v"]
+        dv_next = curve[i + 1]["v"] - curve[i]["v"]
+        if dv_prev == 0 or dv_next == 0:
+            continue
+        if (dv_prev > 0) != (dv_next > 0):
+            t_iso = curve[i]["t"]
+            if t_iso < now_ms:
+                continue
+            kind = "high" if dv_prev > 0 else "low"
+            dt = datetime.fromtimestamp(t_iso / 1000, tz=timezone.utc)
+            label = f"{kind} {curve[i]['v']:.1f} ft @ {dt.strftime('%H:%M UTC')}"
+            return {"t": t_iso, "label": label}
+    return None
+
+
+def fetch_all_tides():
+    """Fetch CO-OPS curves for every station. Failures are downgraded to
+    per-station errors so a single dead station does not kill the artifact.
+
+    Returns a dict shaped for the viewer's `forecast.tides` slot:
+      {
+        "stations": [ {id, name, lat, lon}, ... ],
+        "curves":   { station_id: [{t, v}, ...] },
+        "range":    { station_id: {vmin, vmax} },
+        "next_event": { station_id: {t, label} | null },
+        "generated_at": epoch_ms,
+        "source": "NOAA CO-OPS api/data/ (predictions, MLLW, hourly)",
+      }
+    """
+    out = {
+        "stations": TIDE_STATIONS,
+        "curves": {},
+        "range": {},
+        "next_event": {},
+        "generated_at": int(time.time() * 1000),
+        "source": "NOAA CO-OPS api/data/ (predictions, MLLW, hourly)",
+    }
+    failures = []
+    for st in TIDE_STATIONS:
+        try:
+            res = fetch_coops_curve(st["id"])
+            out["curves"][st["id"]] = res["curve"]
+            out["range"][st["id"]] = res["range"]
+            out["next_event"][st["id"]] = res["next_event"]
+            print(f"  tides {st['id']} {st['name']}: {len(res['curve'])} pts, range {res['range']['vmin']:.1f}-{res['range']['vmax']:.1f} ft")
+        except Exception as e:
+            failures.append(f"{st['id']} ({st['name']}): {e}")
+            print(f"  tides {st['id']} {st['name']}: FAILED {e}")
+    out["fetch_failures"] = failures
+    return out
 
 
 def build_square_grid(bbox, step, n):
@@ -292,6 +425,15 @@ def main():
     if wind_resp:
         frames = merge_wind_into_frames(frames, wind_resp, nrows, ncols)
 
+    # CO-OPS tide curves — independent of the wave grid, fetched per-station.
+    # Failures are downgraded per-station so a single dead station does not
+    # poison the artifact; the viewer falls back to "tide unavailable" when
+    # the active station's curve is absent.
+    tides = fetch_all_tides()
+    n_tides_ok = len(tides["curves"])
+    n_tides_fail = len(tides.get("fetch_failures") or [])
+    print(f"tides: {n_tides_ok}/{len(TIDE_STATIONS)} stations ok ({n_tides_fail} failed)")
+
     # Build display lat/lon arrays (existing contract: 0.25° step).
     dst_lats, dst_lons = [], []
     lat = DISPLAY_BBOX[1]
@@ -335,6 +477,7 @@ def main():
             "temperature_f": "°F", "pressure_hpa": "hPa (mean sea level)",
         },
         "frames": frames,
+        "tides": tides,
         "quality": {
             "status": "pass",
             "source_model": "WW3",
