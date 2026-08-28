@@ -9,6 +9,7 @@ legacy layer. It never overwrites an OFS frame, and marks fallback frames as
 """
 
 import argparse
+import datetime as dt
 import json
 from pathlib import Path
 
@@ -57,7 +58,9 @@ def main():
     parser.add_argument("--hours", type=int, default=72)
     parser.add_argument("paths", nargs="+", type=Path)
     args = parser.parse_args()
-    tides = fetch_all_tides(hours=args.hours)
+    first_time = json.loads(args.paths[0].read_text())["frames"][0]["time"]
+    begin = dt.datetime.strptime(first_time, "%Y-%m-%dT%H:%M").replace(tzinfo=None)
+    tides = fetch_all_tides(hours=args.hours, begin=begin)
     print(f"CO-OPS stations: {len(tides['curves'])}/{len(tides['stations'])}")
     for path in args.paths:
         refresh(path, tides)

@@ -60,7 +60,7 @@ COOPS_API = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter"
 COOPS_HOURS = 24  # viewer renders a 24h window starting at run time
 
 
-def fetch_coops_curve(station_id, hours=COOPS_HOURS):
+def fetch_coops_curve(station_id, hours=COOPS_HOURS, begin=None):
     """Fetch a single CO-OPS station's hourly tide prediction for the next
     `hours` hours, starting at the top of the next hour (UTC).
 
@@ -69,7 +69,7 @@ def fetch_coops_curve(station_id, hours=COOPS_HOURS):
     low after `now`). Raises RuntimeError on fetch failure so the caller can
     decide whether to abort or fall back to a synthetic curve.
     """
-    begin = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
+    begin = begin or datetime.utcnow().replace(minute=0, second=0, microsecond=0)
     end = begin + timedelta(hours=hours)
     params = {
         "product": "predictions",
@@ -134,7 +134,7 @@ def _find_next_tide_event(curve):
     return None
 
 
-def fetch_all_tides(hours=COOPS_HOURS):
+def fetch_all_tides(hours=COOPS_HOURS, begin=None):
     """Fetch CO-OPS curves for every station. Failures are downgraded to
     per-station errors so a single dead station does not kill the artifact.
 
@@ -159,7 +159,7 @@ def fetch_all_tides(hours=COOPS_HOURS):
     failures = []
     for st in TIDE_STATIONS:
         try:
-            res = fetch_coops_curve(st["id"], hours=hours)
+            res = fetch_coops_curve(st["id"], hours=hours, begin=begin)
             out["curves"][st["id"]] = res["curve"]
             out["range"][st["id"]] = res["range"]
             out["next_event"][st["id"]] = res["next_event"]

@@ -39,8 +39,9 @@ curvilinear grids to the existing 17 x 21 display grid, writes
 `data/usec_md/briefing/tidal_forecast.json`, and merges matching UTC hours
 into both viewer artifacts.
 
-The third command extends the map layer with a 72-hour CO-OPS station-blend
-estimate for forecast hours that have no OFS frame. It never overwrites an
+The third command requests predictions starting at the first forecast frame
+and extends the map layer with a 72-hour CO-OPS station-blend estimate for
+forecast hours that have no OFS frame. It never overwrites an
 OFS frame, and marks fallback frames with `coops_station_blend` and MLLW
 metadata. This keeps the slider continuous while making the lower-confidence
 fallback explicit.
