@@ -67,6 +67,7 @@
     #bv-menu-panel .dot-wind{ background:#62e58a; }
     #bv-menu-panel .dot-press{ background:#c59bff; }
     #bv-menu-panel .bv-status{ font-size:11px; color:#9fb0c3; padding:6px 8px; border-top:1px solid rgba(255,255,255,0.1); }
+    #bv-menu-panel .bv-briefing-source{ font-size:10px; color:#7a8fa8; margin-top:-3px; }
 
     /* Briefing details live inside the hamburger menu so the map remains
        unobstructed. */
@@ -172,6 +173,7 @@
     </div>
     <div class="bv-section">
       <h3>Tide <select id="bv-tide-station" style="font-size:10px;background:#0c1723;color:#b3e5fc;border:1px solid #273649;border-radius:4px;padding:1px 4px;margin-left:4px;"></select></h3>
+      <div class="bv-briefing-source" id="bv-tide-source">CO-OPS harmonic prediction · MLLW datum</div>
       <svg id="bv-tide-svg" viewBox="0 0 280 80" role="img" aria-label="24-hour tide curve"></svg>
       <div class="bv-row"><span>Next event</span><b id="bv-tide-next">—</b></div>
       <div class="bv-row"><span>Range</span><b id="bv-tide-range">—</b></div>
@@ -640,7 +642,7 @@
           c.height = Math.max(1, Math.ceil(size[1]));
           const ctx = c.getContext('2d');
           ctx.clearRect(0, 0, c.width, c.height);
-          if (!forecastData || !frameIdx || !currentFrame) return c;
+          if (!forecastData || !currentFrame || !hasVisibleRasterVariable()) return c;
           // Mike #34665: 'when I zoom in there is a color layer, which is
           // unknown.' For viz='streamlines' and viz='contours' we DO NOT want
           // a heat-map fill under the vector overlay — the streamlines/isobars
@@ -665,6 +667,13 @@
     let activeRange = null; // {vmin, vmax} computed per-frame when dynamicRange=true
     const layerVisibility = { wave_height: true, temperature: false, pressure: false, swell: true, wind_wave: true, wind: true };
     const particles = [];
+
+    function hasVisibleRasterVariable() {
+      // The composite raster is the scalar heat field. Directional variables
+      // are drawn on transparent canvases, so they must never keep the raster
+      // alive after the scalar checkboxes are cleared.
+      return !!(layerVisibility.wave_height || layerVisibility.temperature);
+    }
 
     function nearestFrameIdxToDate(frames, wantedDate) {
       if (!frames || !frames.length) return 0;
@@ -893,7 +902,10 @@
       // when streamlines or contours are showing — they carry the viz,
       // and the raster can produce subtle doubling with the basemap.
       if (rasterLayer) {
-        rasterLayer.setVisible(def.viz === 'heat' || def.viz === 'arrows' || def.viz === 'composite');
+        rasterLayer.setVisible(
+          (def.viz === 'heat' || def.viz === 'arrows' || def.viz === 'composite') &&
+          hasVisibleRasterVariable()
+        );
         // setProduct calls map.render() before this visibility switch; render
         // again so the newly enabled composite heat layer is painted now.
         map.render();
