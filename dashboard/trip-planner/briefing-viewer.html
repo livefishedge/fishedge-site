@@ -66,6 +66,7 @@
     #bv-menu-panel .dot-composite{ background:#ffb3d1; box-shadow:0 0 0 1px #000 inset; }
     #bv-menu-panel .dot-wind{ background:#62e58a; }
     #bv-menu-panel .dot-press{ background:#c59bff; }
+    #bv-menu-panel .dot-tide{ background:#4fc3f7; }
     #bv-menu-panel .bv-status{ font-size:11px; color:#9fb0c3; padding:6px 8px; border-top:1px solid rgba(255,255,255,0.1); }
     #bv-menu-panel .bv-briefing-source{ font-size:10px; color:#7a8fa8; margin-top:-3px; }
 
@@ -157,6 +158,7 @@
         <label><input type="checkbox" data-layer="wave_height" checked><span class="bv-dot dot-wave"></span>Significant Wave Height</label>
         <label><input type="checkbox" data-layer="temperature"><span class="bv-dot dot-temp"></span>Temp</label>
         <label><input type="checkbox" data-layer="pressure"><span class="bv-dot dot-press"></span>Pressure</label>
+        <label><input type="checkbox" data-layer="tide"><span class="bv-dot dot-tide"></span>Tide forecast</label>
         <label><input type="checkbox" data-layer="wind" checked><span class="bv-dot dot-wind"></span>Wind</label>
         <label><input type="checkbox" data-layer="wind_wave" checked><span class="bv-dot dot-composite"></span>Wind-Wave</label>
         <label><input type="checkbox" data-layer="swell" checked><span class="bv-dot dot-swell"></span>Swell</label>
@@ -250,6 +252,7 @@
       wave_composite:{name: 'Significant wave height', unit: 'ft', scale: 'UV', viz: 'composite', dataKey: 'wave_height_ft', dynamicRange: true },
       wind_speed_kn: { name: 'Wind flow',   unit: 'kn',  scale: 'CHL', viz: 'streamlines', dynamicRange: false },
       pressure_hpa:  { name: 'Pressure',    unit: 'hPa', scale: 'SLA', viz: 'contours',    dynamicRange: true  },
+      tide_height_ft:{ name: 'Tide height',  unit: 'ft MLLW', scale: 'TIDE', viz: 'heat', dataKey: 'tide_height_ft', dynamicRange: true },
     };
 
     // viridis-like 7-stop palette (matches captain's UV_SCALE / CHL_ALGAE feel)
@@ -258,6 +261,7 @@
       UV:  [[0.0,'#440154'],[0.17,'#443983'],[0.34,'#31688e'],[0.5,'#35b779'],[0.67,'#90d743'],[0.83,'#fde725'],[1.0,'#fff7bc']],
       CHL: [[0.0,'#001f3f'],[0.2,'#0074d9'],[0.4,'#39cccc'],[0.5,'#2ecc40'],[0.7,'#ffdc00'],[0.85,'#ff851b'],[1.0,'#ff4136']],
       SLA: [[0.0,'#2166ac'],[0.25,'#67a9cf'],[0.5,'#f7f7f7'],[0.75,'#ef8a62'],[1.0,'#b2182b']],
+      TIDE:[[0.0,'#081d58'],[0.2,'#225ea8'],[0.4,'#41b6c4'],[0.6,'#a1dab4'],[0.8,'#ffffcc'],[1.0,'#f03b20']],
     };
 
     function lerp(a, b, t) { return a + (b - a) * t; }
@@ -665,14 +669,21 @@
     let currentProduct = 'wave_composite';
     let currentFrame = null;
     let activeRange = null; // {vmin, vmax} computed per-frame when dynamicRange=true
-    const layerVisibility = { wave_height: true, temperature: false, pressure: false, swell: true, wind_wave: true, wind: true };
+    const layerVisibility = { wave_height: true, temperature: false, pressure: false, tide: false, swell: true, wind_wave: true, wind: true };
     const particles = [];
 
     function hasVisibleRasterVariable() {
       // The composite raster is the scalar heat field. Directional variables
       // are drawn on transparent canvases, so they must never keep the raster
       // alive after the scalar checkboxes are cleared.
-      return !!(layerVisibility.wave_height || layerVisibility.temperature);
+      return !!(layerVisibility.tide || layerVisibility.wave_height || layerVisibility.temperature);
+    }
+
+    function activeHeatKey() {
+      if (layerVisibility.tide) return 'tide_height_ft';
+      if (layerVisibility.temperature) return 'temperature_f';
+      if (layerVisibility.wave_height) return 'wave_height_ft';
+      return null;
     }
 
     function nearestFrameIdxToDate(frames, wantedDate) {
@@ -689,7 +700,9 @@
     // ---- raster tile rendering (interpolates grid bilinearly into the tile extent) ----
     function drawFrameToTile(ctx, frame, productKey, requestedExtent, w, h) {
       const def = PRODUCTS[productKey];
-      const grid = frame[def.dataKey || productKey];
+      const dataKey = productKey === 'wave_composite' ? (activeHeatKey() || def.dataKey) : (def.dataKey || productKey);
+      const rasterDef = PRODUCTS[dataKey] || def;
+      const grid = frame[dataKey];
       if (!grid || !grid.length || !grid[0].length) return;
       const lons = forecastData.lons, lats = forecastData.lats;
       if (!lons || !lats || lons.length < 2 || lats.length < 2) return;
@@ -698,7 +711,7 @@
       // drawFrameToTile was reading undefined and rasterizing NaN pixels.)
       const r = activeRange || { vmin: 0, vmax: 30 };
       const vmin = r.vmin, vmax = r.vmax;
-      const scale = def.scale;
+      const scale = rasterDef.scale;
 
       // The map uses EPSG:4326, so ImageCanvas' requested extent is already
       // in the same lon/lat units as the forecast grid.
@@ -781,7 +794,7 @@
 
     // ---- colorbar ----
     function computeActiveRange() {
-      const scalarKey = layerVisibility.temperature ? 'temperature_f' : layerVisibility.wave_height ? 'wave_height_ft' : layerVisibility.pressure ? 'pressure_hpa' : null;
+      const scalarKey = activeHeatKey() || (layerVisibility.pressure ? 'pressure_hpa' : null);
       const def = PRODUCTS[scalarKey || currentProduct];
       const grid = currentFrame && scalarKey ? currentFrame[scalarKey] : null;
       if (!def.dynamicRange || !grid || !grid.length) {
@@ -812,7 +825,7 @@
     }
 
     function drawColorbar() {
-      const scalarKey = layerVisibility.temperature ? 'temperature_f' : layerVisibility.wave_height ? 'wave_height_ft' : layerVisibility.pressure ? 'pressure_hpa' : null;
+      const scalarKey = activeHeatKey() || (layerVisibility.pressure ? 'pressure_hpa' : null);
       const def = PRODUCTS[scalarKey || currentProduct];
       const r = activeRange || { vmin: 0, vmax: 30 };
       const canvas = document.getElementById('bv-cbar');
@@ -870,6 +883,7 @@
         wave_height: !!(currentFrame && currentFrame.wave_height_ft),
         temperature: !!(currentFrame && currentFrame.temperature_f),
         pressure: !!(currentFrame && currentFrame.pressure_hpa),
+        tide: !!(currentFrame && currentFrame.tide_height_ft),
         wind: !!(currentFrame && currentFrame.wind_speed_kn && currentFrame.wind_direction_deg),
         wind_wave: !!(currentFrame && currentFrame.wind_wave_height_ft && currentFrame.wind_wave_direction_deg),
         swell: !!(currentFrame && currentFrame.swell_height_ft && currentFrame.swell_direction_deg),
@@ -953,7 +967,7 @@
     }
 
     function drawWaveHeatOverlay() {
-      const scalarKey = layerVisibility.temperature ? 'temperature_f' : layerVisibility.wave_height ? 'wave_height_ft' : null;
+      const scalarKey = activeHeatKey();
       const grid = scalarKey && currentFrame[scalarKey];
       const lons = forecastData.lons, lats = forecastData.lats;
       if (!grid || !lons || !lats) return;

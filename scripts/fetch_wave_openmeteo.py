@@ -171,6 +171,48 @@ def fetch_all_tides():
     return out
 
 
+def add_tide_grids(frames, tides, lats, lons):
+    """Add an IDW-interpolated tide-height surface to each forecast frame.
+
+    CO-OPS predictions are point forecasts. This produces a regional
+    visualization between those points; station curves remain authoritative.
+    Frames outside the fetched prediction window are left without a grid.
+    """
+    stations = tides.get("stations") or []
+    curves = tides.get("curves") or {}
+    points = [(st, curves.get(st["id"]) or []) for st in stations]
+    points = [(st, curve) for st, curve in points if curve]
+    if not points:
+        return frames
+    for frame in frames:
+        frame_ms = int(datetime.strptime(frame["time"], "%Y-%m-%dT%H:%M").replace(tzinfo=timezone.utc).timestamp() * 1000)
+        values = []
+        for st, curve in points:
+            nearest = min(curve, key=lambda p: abs(p["t"] - frame_ms))
+            if abs(nearest["t"] - frame_ms) <= 2 * 3600000:
+                values.append((st["lat"], st["lon"], nearest["v"]))
+        if not values:
+            continue
+        grid = []
+        for lat in lats:
+            row = []
+            for lon in lons:
+                weighted = []
+                for slat, slon, value in values:
+                    dlat = lat - slat
+                    dlon = (lon - slon) * np.cos(np.deg2rad(lat))
+                    d2 = dlat * dlat + dlon * dlon
+                    if d2 < 1e-10:
+                        weighted = [(1.0, value)]
+                        break
+                    weighted.append((1.0 / d2, value))
+                total = sum(weight for weight, _ in weighted)
+                row.append(float(sum(weight * value for weight, value in weighted) / total) if total else None)
+            grid.append(row)
+        frame["tide_height_ft"] = grid
+    return frames
+
+
 def build_square_grid(bbox, step, n):
     """Build NxN lat/lon grid covering bbox (centered)."""
     lon_span = (n - 1) * step
@@ -447,6 +489,7 @@ def main():
     print(f"display grid: {len(dst_lats)}x{len(dst_lons)}")
 
     frames = interp_to_display(frames, fetch_lats, fetch_lons, dst_lats, dst_lons)
+    frames = add_tide_grids(frames, tides, dst_lats, dst_lons)
 
     # Normalize the mixed upstream names into one stable viewer contract.
     rename = {
@@ -475,6 +518,7 @@ def main():
             "wave_period_s": "s", "swell_period_s": "s", "wind_wave_period_s": "s",
             "wind_speed_kn": "kn", "wind_gust_kn": "kn", "wind_direction_deg": "deg",
             "temperature_f": "°F", "pressure_hpa": "hPa (mean sea level)",
+            "tide_height_ft": "ft (MLLW)",
         },
         "frames": frames,
         "tides": tides,
