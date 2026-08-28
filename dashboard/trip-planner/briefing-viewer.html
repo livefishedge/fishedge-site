@@ -263,7 +263,11 @@
       UV:  [[0.0,'#440154'],[0.17,'#443983'],[0.34,'#31688e'],[0.5,'#35b779'],[0.67,'#90d743'],[0.83,'#fde725'],[1.0,'#fff7bc']],
       CHL: [[0.0,'#001f3f'],[0.2,'#0074d9'],[0.4,'#39cccc'],[0.5,'#2ecc40'],[0.7,'#ffdc00'],[0.85,'#ff851b'],[1.0,'#ff4136']],
       SLA: [[0.0,'#2166ac'],[0.25,'#67a9cf'],[0.5,'#f7f7f7'],[0.75,'#ef8a62'],[1.0,'#b2182b']],
-      TIDE:[[0.0,'#081d58'],[0.2,'#225ea8'],[0.4,'#41b6c4'],[0.6,'#a1dab4'],[0.8,'#ffffcc'],[1.0,'#f03b20']],
+      // Offshore water-level contrast: low/negative values stay pale blue;
+      // higher positive values move through royal blue into purple. Tide
+      // values use a signed-log transform below so small offshore changes
+      // remain visible without saturating the shelf signal.
+      TIDE:[[0.0,'#d9f3ff'],[0.18,'#8ed8f8'],[0.38,'#2f8fce'],[0.58,'#1554b7'],[0.78,'#32258f'],[1.0,'#7b2cbf']],
     };
 
     function lerp(a, b, t) { return a + (b - a) * t; }
@@ -286,6 +290,19 @@
         }
       }
       return stops[stops.length-1][1];
+    }
+
+    function tideLogValue(v) {
+      // Signed logarithm preserves the zero crossing required for water level
+      // while expanding the low-amplitude offshore signal.
+      const scale = 0.25;
+      return Math.sign(v) * Math.log1p(Math.abs(v) / scale);
+    }
+
+    function scalarNorm(v, vmin, vmax, scale) {
+      if (scale !== 'TIDE') return (v - vmin) / (vmax - vmin || 1);
+      const lo = tideLogValue(vmin), hi = tideLogValue(vmax);
+      return (tideLogValue(v) - lo) / (hi - lo || 1);
     }
 
     // ---- hamburger + side-panel briefing (tide / moon / sun) ----
@@ -795,7 +812,7 @@
               const tX = (xx - px) / wpx;
               const ttX = Math.max(0, Math.min(1, tX));
               const v = vTop*(1-ttX) + vBot*ttX;
-              const tNorm = Math.max(0, Math.min(1, (v - vmin) / (vmax - vmin)));
+              const tNorm = Math.max(0, Math.min(1, scalarNorm(v, vmin, vmax, scale)));
               const hex = sampleScale(scale, tNorm);
               const [r,g,b] = hexToRgb(hex);
               const o = (xx - minX) * 4;
@@ -1007,7 +1024,7 @@
           const vals = [grid[yi]?.[xi], grid[yi]?.[xi + 1], grid[yi + 1]?.[xi], grid[yi + 1]?.[xi + 1]];
           if (vals.some(v => v == null || !Number.isFinite(v))) continue;
           const v = vals.reduce((a, b) => a + b, 0) / vals.length;
-          const c = hexToRgb(sampleScale(scale, Math.max(0, Math.min(1, (v - r.vmin) / (r.vmax - r.vmin || 1)))));
+          const c = hexToRgb(sampleScale(scale, Math.max(0, Math.min(1, scalarNorm(v, r.vmin, r.vmax, scale)))));
           const p00 = map.getPixelFromCoordinate(ol.proj.fromLonLat([lons[xi], lats[yi]], rasterProjection));
           const p10 = map.getPixelFromCoordinate(ol.proj.fromLonLat([lons[xi + 1], lats[yi]], rasterProjection));
           const p11 = map.getPixelFromCoordinate(ol.proj.fromLonLat([lons[xi + 1], lats[yi + 1]], rasterProjection));
