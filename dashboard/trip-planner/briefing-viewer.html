@@ -654,6 +654,12 @@
     flowCanvas.setAttribute('aria-hidden', 'true');
     mapEl.appendChild(flowCanvas);
     const flowCtx = flowCanvas.getContext('2d');
+    // Keep static tidal contours separate from the animated flow canvas.
+    const tideCanvas = document.createElement('canvas');
+    tideCanvas.className = 'bv-tide-overlay-canvas';
+    tideCanvas.setAttribute('aria-hidden', 'true');
+    mapEl.appendChild(tideCanvas);
+    const tideCtx = tideCanvas.getContext('2d');
 
     // client-rendered raster layer (replaces old PNG ImageStatic)
     const rasterLayer = new ol.layer.Image({
@@ -959,6 +965,7 @@
     function clearOverlays() {
       streamlineCtx && streamlineCtx.clearRect(0, 0, streamlineCanvas.width, streamlineCanvas.height);
       flowCtx && flowCtx.clearRect(0, 0, flowCanvas.width, flowCanvas.height);
+      tideCtx && tideCtx.clearRect(0, 0, tideCanvas.width, tideCanvas.height);
     }
 
     function drawOverlaysForProduct() {
@@ -992,14 +999,15 @@
 
     function drawTidalContours() {
       if (!currentFrame || !forecastData) return;
+      const ctx = tideCtx;
       const lons = forecastData.lons, lats = forecastData.lats;
       const project = (xi, yi) => map.getPixelFromCoordinate(
         ol.proj.fromLonLat([lons[xi], lats[yi]], rasterProjection)
       );
       const segment = (grid, level, style, width, dashed, circular) => {
-        flowCtx.strokeStyle = style;
-        flowCtx.lineWidth = width;
-        flowCtx.setLineDash(dashed ? [5, 4] : []);
+        ctx.strokeStyle = style;
+        ctx.lineWidth = width;
+        ctx.setLineDash(dashed ? [5, 4] : []);
         for (let yi = 0; yi < lats.length - 1; yi++) {
           for (let xi = 0; xi < lons.length - 1; xi++) {
             let v00 = grid[yi]?.[xi], v10 = grid[yi]?.[xi + 1];
@@ -1022,12 +1030,12 @@
             edge(v00, v10, p00, p10); edge(v10, v11, p10, p11);
             edge(v01, v11, p01, p11); edge(v00, v01, p00, p01);
             if (points.length >= 2) {
-              flowCtx.beginPath(); flowCtx.moveTo(points[0][0], points[0][1]);
-              flowCtx.lineTo(points[1][0], points[1][1]); flowCtx.stroke();
+              ctx.beginPath(); ctx.moveTo(points[0][0], points[0][1]);
+              ctx.lineTo(points[1][0], points[1][1]); ctx.stroke();
             }
           }
         }
-        flowCtx.setLineDash([]);
+        ctx.setLineDash([]);
       };
       if (layerVisibility.tide_phase && currentFrame.tide_phase_deg) {
         // Four co-tidal phase lines: high, falling, low, rising.
@@ -1555,7 +1563,7 @@
       const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
       const W = Math.max(1, Math.round(rect.width * dpr));
       const H = Math.max(1, Math.round(rect.height * dpr));
-      [flowCanvas, streamlineCanvas].forEach(c => {
+      [flowCanvas, streamlineCanvas, tideCanvas].forEach(c => {
         if (c.width !== W || c.height !== H) {
           c.width = W; c.height = H;
           c.style.width = rect.width + 'px';
