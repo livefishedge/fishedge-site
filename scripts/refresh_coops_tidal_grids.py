@@ -12,6 +12,7 @@ import argparse
 import datetime as dt
 import json
 from pathlib import Path
+import numpy as np
 
 from fetch_wave_openmeteo import (
     DISPLAY_BBOX,
@@ -43,6 +44,7 @@ def refresh(path, tides):
         if "tide_height_ft" in frame and not frame.get("tide_model_source"):
             frame["tide_model_source"] = ["coops_station_blend"]
             frame["tide_model_datum"] = "MLLW"
+    add_harmonic_phase_amplitude(payload["frames"])
     payload.setdefault("quality", {})["coops_tidal_fallback"] = (
         "CO-OPS harmonic station blend; estimated between stations; "
         "OFS frames take precedence"
@@ -51,6 +53,49 @@ def refresh(path, tides):
     tmp.write_text(json.dumps(payload, allow_nan=False, separators=(",", ":")))
     tmp.replace(path)
     print(f"refreshed {path}")
+
+
+def add_harmonic_phase_amplitude(frames):
+    """Fit the dominant M2 constituent for co-tidal/co-range map overlays.
+
+    This is intentionally labeled an estimate: the 72-hour window is not a
+    substitute for a full NOAA harmonic atlas, and OFS zeta can include surge.
+    Phase convention is 0° at fitted high water, 90° falling, 180° low water,
+    and 270° rising.
+    """
+    if not frames:
+        return
+    times = []
+    for frame in frames:
+        raw = str(frame.get("time", "")).replace("Z", "")
+        times.append(dt.datetime.strptime(raw, "%Y-%m-%dT%H:%M"))
+    t = np.array([(value - times[0]).total_seconds() / 3600.0 for value in times])
+    omega = 2.0 * np.pi / 12.4206  # lunar M2 period, hours
+    design = np.column_stack((np.ones(len(t)), np.cos(omega * t), np.sin(omega * t)))
+    ny = len(frames[0].get("tide_height_ft") or [])
+    nx = len((frames[0].get("tide_height_ft") or [[]])[0]) if ny else 0
+    amp = np.full((ny, nx), np.nan)
+    phase = np.full((len(frames), ny, nx), np.nan)
+    for yi in range(ny):
+        for xi in range(nx):
+            values = np.array([
+                frame.get("tide_height_ft", [[None] * nx for _ in range(ny)])[yi][xi]
+                for frame in frames
+            ], dtype=float)
+            valid = np.isfinite(values)
+            if valid.sum() < 12:
+                continue
+            coeff, *_ = np.linalg.lstsq(design[valid], values[valid], rcond=None)
+            amplitude = float(np.hypot(coeff[1], coeff[2]))
+            if not np.isfinite(amplitude):
+                continue
+            amp[yi, xi] = amplitude
+            high_phase = np.arctan2(coeff[2], coeff[1])
+            phase[:, yi, xi] = (np.rad2deg(omega * t - high_phase) % 360.0)
+    amp_json = np.where(np.isfinite(amp), amp, None).tolist()
+    for index, frame in enumerate(frames):
+        frame["tide_amplitude_ft"] = amp_json
+        frame["tide_phase_deg"] = np.where(np.isfinite(phase[index]), phase[index], None).tolist()
 
 
 def main():

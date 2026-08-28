@@ -160,6 +160,8 @@
         <label><input type="checkbox" data-layer="pressure"><span class="bv-dot dot-press"></span>Pressure</label>
         <label><input type="checkbox" data-layer="tide" checked><span class="bv-dot dot-tide"></span>OFS water level</label>
         <label><input type="checkbox" data-layer="tide_current" checked><span class="bv-dot dot-tide"></span>Tidal currents</label>
+        <label><input type="checkbox" data-layer="tide_phase" checked><span class="bv-dot dot-tide"></span>Co-tidal phase</label>
+        <label><input type="checkbox" data-layer="tide_range" checked><span class="bv-dot dot-tide"></span>Co-range amplitude</label>
         <label><input type="checkbox" data-layer="wind" checked><span class="bv-dot dot-wind"></span>Wind</label>
         <label><input type="checkbox" data-layer="wind_wave" checked><span class="bv-dot dot-composite"></span>Wind-Wave</label>
         <label><input type="checkbox" data-layer="swell" checked><span class="bv-dot dot-swell"></span>Swell</label>
@@ -689,7 +691,7 @@
     let currentProduct = 'wave_composite';
     let currentFrame = null;
     let activeRange = null; // {vmin, vmax} computed per-frame when dynamicRange=true
-    const layerVisibility = { wave_height: true, temperature: false, pressure: false, tide: true, tide_current: true, swell: true, wind_wave: true, wind: true };
+    const layerVisibility = { wave_height: true, temperature: false, pressure: false, tide: true, tide_current: true, tide_phase: true, tide_range: true, swell: true, wind_wave: true, wind: true };
     const particles = [];
 
     function hasVisibleRasterVariable() {
@@ -917,6 +919,8 @@
         pressure: !!(currentFrame && currentFrame.pressure_hpa),
         tide: !!(currentFrame && currentFrame.tide_height_ft),
         tide_current: !!(currentFrame && currentFrame.current_u_ms && currentFrame.current_v_ms),
+        tide_phase: !!(currentFrame && currentFrame.tide_phase_deg),
+        tide_range: !!(currentFrame && currentFrame.tide_amplitude_ft),
         wind: !!(currentFrame && currentFrame.wind_speed_kn && currentFrame.wind_direction_deg),
         wind_wave: !!(currentFrame && currentFrame.wind_wave_height_ft && currentFrame.wind_wave_direction_deg),
         swell: !!(currentFrame && currentFrame.swell_height_ft && currentFrame.swell_direction_deg),
@@ -925,17 +929,21 @@
         const input = document.querySelector(`#bv-layers input[data-layer="${key}"]`);
         const label = input?.closest('label');
         if (!input || !label) continue;
-        const anyFrameAvailable = (key === 'tide' || key === 'tide_current') && forecastData && forecastData.frames
+        const anyFrameAvailable = ['tide', 'tide_current', 'tide_phase', 'tide_range'].includes(key) && forecastData && forecastData.frames
           ? forecastData.frames.some(frame => key === 'tide_current'
             ? !!(frame && frame.current_u_ms && frame.current_v_ms)
-            : !!(frame && frame.tide_height_ft))
+            : key === 'tide_phase'
+              ? !!(frame && frame.tide_phase_deg)
+              : key === 'tide_range'
+                ? !!(frame && frame.tide_amplitude_ft)
+                : !!(frame && frame.tide_height_ft))
           : available[key];
         input.disabled = !anyFrameAvailable;
         // Preserve an enabled layer's checked state while the time slider
         // crosses a frame without a regional OFS surface. Only disable and
         // clear it when the entire payload has no tide grids at all.
         if (!anyFrameAvailable) { input.checked = false; layerVisibility[key] = false; }
-        else if (key === 'tide' || key === 'tide_current') input.checked = layerVisibility[key];
+        else if (['tide', 'tide_current', 'tide_phase', 'tide_range'].includes(key)) input.checked = layerVisibility[key];
         label.classList.toggle('unavailable', !available[key]);
         label.title = available[key] ? '' : `No ${key} grid in current forecast frame`;
       }
@@ -982,6 +990,59 @@
       else stopParticleAnimation();
     }
 
+    function drawTidalContours() {
+      if (!currentFrame || !forecastData) return;
+      const lons = forecastData.lons, lats = forecastData.lats;
+      const project = (xi, yi) => map.getPixelFromCoordinate(
+        ol.proj.fromLonLat([lons[xi], lats[yi]], rasterProjection)
+      );
+      const segment = (grid, level, style, width, dashed, circular) => {
+        flowCtx.strokeStyle = style;
+        flowCtx.lineWidth = width;
+        flowCtx.setLineDash(dashed ? [5, 4] : []);
+        for (let yi = 0; yi < lats.length - 1; yi++) {
+          for (let xi = 0; xi < lons.length - 1; xi++) {
+            let v00 = grid[yi]?.[xi], v10 = grid[yi]?.[xi + 1];
+            let v01 = grid[yi + 1]?.[xi], v11 = grid[yi + 1]?.[xi + 1];
+            if (![v00, v10, v01, v11].every(v => Number.isFinite(v))) continue;
+            if (circular) {
+              const base = v00;
+              const unwrap = v => base + ((((v - base) + 540) % 360) - 180);
+              v10 = unwrap(v10); v01 = unwrap(v01); v11 = unwrap(v11);
+            }
+            const points = [];
+            const edge = (a, b, pa, pb) => {
+              if ((a < level) === (b < level) || a === b) return;
+              const t = (level - a) / (b - a);
+              points.push([pa[0] + t * (pb[0] - pa[0]), pa[1] + t * (pb[1] - pa[1])]);
+            };
+            const p00 = project(xi, yi), p10 = project(xi + 1, yi);
+            const p01 = project(xi, yi + 1), p11 = project(xi + 1, yi + 1);
+            if (!p00 || !p10 || !p01 || !p11) continue;
+            edge(v00, v10, p00, p10); edge(v10, v11, p10, p11);
+            edge(v01, v11, p01, p11); edge(v00, v01, p00, p01);
+            if (points.length >= 2) {
+              flowCtx.beginPath(); flowCtx.moveTo(points[0][0], points[0][1]);
+              flowCtx.lineTo(points[1][0], points[1][1]); flowCtx.stroke();
+            }
+          }
+        }
+        flowCtx.setLineDash([]);
+      };
+      if (layerVisibility.tide_phase && currentFrame.tide_phase_deg) {
+        // Four co-tidal phase lines: high, falling, low, rising.
+        [[0, '#fff7bc'], [90, '#7fcdbb'], [180, '#41b6c4'], [270, '#225ea8']]
+          .forEach(([level, color]) => segment(currentFrame.tide_phase_deg, level, color, 1.4, false, true));
+      }
+      if (layerVisibility.tide_range && currentFrame.tide_amplitude_ft) {
+        const values = currentFrame.tide_amplitude_ft.flat().filter(Number.isFinite);
+        if (values.length) {
+          const lo = Math.min(...values), hi = Math.max(...values);
+          for (let i = 1; i <= 3; i++) segment(currentFrame.tide_amplitude_ft, lo + (hi - lo) * i / 4, 'rgba(230,245,255,0.72)', 1, true, false);
+        }
+      }
+    }
+
     // ---- wave composite: heat fill + swell streamlines + wind-wave streamlines + wind arrows ----
     // Reference image: significant-wave-height heat fill (UV ramp, dynamicRange),
     // black streamlines traced over the swell field, pink streamlines over the
@@ -1001,6 +1062,7 @@
       // switch. This keeps the visual contract deterministic: fill first,
       // then partition streamlines and atmospheric arrows above it.
       drawWaveHeatOverlay();
+      drawTidalContours();
       if (layerVisibility.swell || layerVisibility.wind_wave) drawWavePackets();
       if (layerVisibility.pressure) drawIsobars(true);
       if (layerVisibility.wind || layerVisibility.tide_current) {
