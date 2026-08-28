@@ -671,7 +671,7 @@
     let currentProduct = 'wave_composite';
     let currentFrame = null;
     let activeRange = null; // {vmin, vmax} computed per-frame when dynamicRange=true
-    const layerVisibility = { wave_height: true, temperature: false, pressure: false, tide: false, swell: true, wind_wave: true, wind: true };
+    const layerVisibility = { wave_height: true, temperature: false, pressure: false, tide: true, swell: true, wind_wave: true, wind: true };
     const particles = [];
 
     function hasVisibleRasterVariable() {
@@ -682,7 +682,10 @@
     }
 
     function activeHeatKey() {
-      if (layerVisibility.tide) return 'tide_height_ft';
+      // Keep the tide toggle latched while scrubbing. If the selected frame
+      // is outside the currently published OFS window, fall back to the
+      // selected wave scalar instead of silently turning the layer off.
+      if (layerVisibility.tide && currentFrame && currentFrame.tide_height_ft) return 'tide_height_ft';
       if (layerVisibility.temperature) return 'temperature_f';
       if (layerVisibility.wave_height) return 'wave_height_ft';
       if (layerVisibility.pressure) return 'pressure_hpa';
@@ -903,10 +906,21 @@
         const input = document.querySelector(`#bv-layers input[data-layer="${key}"]`);
         const label = input?.closest('label');
         if (!input || !label) continue;
-        input.disabled = !available[key];
-        if (!available[key]) { input.checked = false; layerVisibility[key] = false; }
+        const anyFrameAvailable = key === 'tide' && forecastData && forecastData.frames
+          ? forecastData.frames.some(frame => !!(frame && frame.tide_height_ft))
+          : available[key];
+        input.disabled = !anyFrameAvailable;
+        // Preserve an enabled layer's checked state while the time slider
+        // crosses a frame without a regional OFS surface. Only disable and
+        // clear it when the entire payload has no tide grids at all.
+        if (!anyFrameAvailable) { input.checked = false; layerVisibility[key] = false; }
+        else if (key === 'tide') input.checked = layerVisibility.tide;
         label.classList.toggle('unavailable', !available[key]);
-        label.title = available[key] ? '' : `Missing ${key} grid in current forecast frame`;
+        label.title = available[key] ? '' : `No ${key} grid in current forecast frame`;
+      }
+      const tideStatus = document.getElementById('bv-menu-status');
+      if (tideStatus && layerVisibility.tide && !available.tide) {
+        tideStatus.textContent = 'OFS water level unavailable at this forecast hour';
       }
       if (available.wave_height && !layerVisibility.temperature && !layerVisibility.wave_height && !layerVisibility.pressure) {
         // no forced fallback: the user may intentionally turn all scalar layers off
