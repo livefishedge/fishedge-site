@@ -28,6 +28,9 @@ python3 scripts/fetch_ofs_tidal_forecast.py \
   --date "$(date -u +%Y%m%d)" --hours 24 \
   --merge-forecast data/usec_md/briefing/forecast.json \
   --merge-forecast dashboard/trip-planner/data/usec_md/briefing/forecast.json
+python3 scripts/refresh_coops_tidal_grids.py --hours 72 \
+  data/usec_md/briefing/forecast.json \
+  dashboard/trip-planner/data/usec_md/briefing/forecast.json
 ```
 
 The first command creates the base wave/weather/CO-OPS artifact. The second
@@ -35,6 +38,12 @@ command downloads only the requested hourly OFS field files, maps the
 curvilinear grids to the existing 17 x 21 display grid, writes
 `data/usec_md/briefing/tidal_forecast.json`, and merges matching UTC hours
 into both viewer artifacts.
+
+The third command extends the map layer with a 72-hour CO-OPS station-blend
+estimate for forecast hours that have no OFS frame. It never overwrites an
+OFS frame, and marks fallback frames with `coops_station_blend` and MLLW
+metadata. This keeps the slider continuous while making the lower-confidence
+fallback explicit.
 
 Use `--hours 1` for a smoke test. A production job should use 24 hours and
 refresh at least hourly. The S3 run resolver probes the requested date and

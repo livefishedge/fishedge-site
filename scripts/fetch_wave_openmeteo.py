@@ -134,7 +134,7 @@ def _find_next_tide_event(curve):
     return None
 
 
-def fetch_all_tides():
+def fetch_all_tides(hours=COOPS_HOURS):
     """Fetch CO-OPS curves for every station. Failures are downgraded to
     per-station errors so a single dead station does not kill the artifact.
 
@@ -159,7 +159,7 @@ def fetch_all_tides():
     failures = []
     for st in TIDE_STATIONS:
         try:
-            res = fetch_coops_curve(st["id"])
+            res = fetch_coops_curve(st["id"], hours=hours)
             out["curves"][st["id"]] = res["curve"]
             out["range"][st["id"]] = res["range"]
             out["next_event"][st["id"]] = res["next_event"]
@@ -171,7 +171,7 @@ def fetch_all_tides():
     return out
 
 
-def add_tide_grids(frames, tides, lats, lons):
+def add_tide_grids(frames, tides, lats, lons, preserve_ofs=True):
     """Add an IDW-interpolated tide-height surface to each forecast frame.
 
     CO-OPS predictions are point forecasts. This produces a regional
@@ -185,6 +185,8 @@ def add_tide_grids(frames, tides, lats, lons):
     if not points:
         return frames
     for frame in frames:
+        if preserve_ofs and frame.get("tide_model_source"):
+            continue
         frame_ms = int(datetime.strptime(frame["time"], "%Y-%m-%dT%H:%M").replace(tzinfo=timezone.utc).timestamp() * 1000)
         values = []
         for st, curve in points:
