@@ -73,8 +73,9 @@ def find_run(model, requested_date):
     raise RuntimeError(f"no {model} OFS run found near {requested_date}")
 
 
-def forecast_keys(keys, model, run_date, hours):
-    pattern = re.compile(rf"/{re.escape(model)}\.t\d{{2}}z\.{run_date}\.fields\.f(\d{{3}})\.nc$")
+def forecast_keys(keys, model, run_date, hours, cycle=None):
+    cycle_pattern = f"{int(cycle):02d}" if cycle is not None else r"\d{2}"
+    pattern = re.compile(rf"/{re.escape(model)}\.t{cycle_pattern}z\.{run_date}\.fields\.f(\d{{3}})\.nc$")
     found = {}
     for key in keys:
         match = pattern.search("/" + key)
@@ -152,14 +153,14 @@ def iso_hour(epoch_ms):
     return dt.datetime.fromtimestamp(epoch_ms / 1000, tz=dt.timezone.utc).strftime("%Y-%m-%dT%H:%MZ")
 
 
-def build_payload(date, hours):
+def build_payload(date, hours, cycle=None):
     target_lats, target_lons = display_grid()
     runs = {}
     keysets = {}
     for model in MODELS:
         run_date, prefix, keys = find_run(model, date)
         runs[model] = {"date": run_date, "prefix": prefix}
-        keysets[model] = forecast_keys(keys, model, run_date, hours)
+        keysets[model] = forecast_keys(keys, model, run_date, hours, cycle=cycle)
         if not keysets[model]:
             raise RuntimeError(f"{model} run {run_date} has no forecast field files")
 
@@ -262,6 +263,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--date", default=dt.datetime.now(dt.timezone.utc).strftime("%Y%m%d"), help="UTC OFS run date")
     parser.add_argument("--hours", type=int, default=24, help="forecast hours to ingest (default: 24)")
+    parser.add_argument("--cycle", type=int, help="UTC model cycle to use, e.g. 12; default selects matching keys")
     parser.add_argument("--output", type=Path, default=OUTPUT)
     parser.add_argument(
         "--merge-forecast", type=Path, action="append", default=[],
@@ -270,7 +272,9 @@ def main():
     args = parser.parse_args()
     if not 1 <= args.hours <= 72:
         parser.error("--hours must be between 1 and 72")
-    payload = build_payload(args.date, args.hours)
+    if args.cycle is not None and not 0 <= args.cycle <= 23:
+        parser.error("--cycle must be between 0 and 23")
+    payload = build_payload(args.date, args.hours, cycle=args.cycle)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     import json
     args.output.write_text(json.dumps(payload, allow_nan=False, separators=(",", ":")))
