@@ -158,7 +158,7 @@
         <label><input type="checkbox" data-layer="wave_height" checked><span class="bv-dot dot-wave"></span>Significant Wave Height</label>
         <label><input type="checkbox" data-layer="temperature"><span class="bv-dot dot-temp"></span>Temp</label>
         <label><input type="checkbox" data-layer="pressure"><span class="bv-dot dot-press"></span>Pressure</label>
-        <label><input type="checkbox" data-layer="tide"><span class="bv-dot dot-tide"></span>Tide forecast</label>
+        <label><input type="checkbox" data-layer="tide" checked><span class="bv-dot dot-tide"></span>OFS water level</label>
         <label><input type="checkbox" data-layer="wind" checked><span class="bv-dot dot-wind"></span>Wind</label>
         <label><input type="checkbox" data-layer="wind_wave" checked><span class="bv-dot dot-composite"></span>Wind-Wave</label>
         <label><input type="checkbox" data-layer="swell" checked><span class="bv-dot dot-swell"></span>Swell</label>
@@ -214,7 +214,9 @@
 
     // ---- params / region ----
     const params = new URLSearchParams(window.location.search);
-    const targetDate = params.get('date') || new Date().toISOString().slice(0, 10);
+    // Default to the current UTC hour so newly published near-term OFS frames
+    // are visible immediately; a ?date=YYYY-MM-DD query still selects a day.
+    const targetDate = params.get('date') || new Date().toISOString().slice(0, 13);
     const region = params.get('region') || 'usec_md';
     document.getElementById('bv-region').textContent = region;
 
@@ -252,7 +254,7 @@
       wave_composite:{name: 'Significant wave height', unit: 'ft', scale: 'UV', viz: 'composite', dataKey: 'wave_height_ft', dynamicRange: true },
       wind_speed_kn: { name: 'Wind flow',   unit: 'kn',  scale: 'CHL', viz: 'streamlines', dynamicRange: false },
       pressure_hpa:  { name: 'Pressure',    unit: 'hPa', scale: 'SLA', viz: 'contours',    dynamicRange: true  },
-      tide_height_ft:{ name: 'Tide height',  unit: 'ft MLLW', scale: 'TIDE', viz: 'heat', dataKey: 'tide_height_ft', dynamicRange: true },
+      tide_height_ft:{ name: 'OFS total water level', unit: 'ft model datum', scale: 'TIDE', viz: 'heat', dataKey: 'tide_height_ft', dynamicRange: true },
     };
 
     // viridis-like 7-stop palette (matches captain's UV_SCALE / CHL_ALGAE feel)
@@ -687,12 +689,20 @@
       return null;
     }
 
+    function parseForecastTime(value) {
+      const raw = String(value || '').trim();
+      if (!raw) return NaN;
+      if (/^\d{4}-\d\d-\d\d$/.test(raw)) return Date.parse(raw + 'T12:00:00Z');
+      if (/^\d{4}-\d\d-\d\dT\d\d$/.test(raw)) return Date.parse(raw + ':00:00Z');
+      return Date.parse(/[zZ]|[+-]\d\d:\d\d$/.test(raw) ? raw : raw + 'Z');
+    }
+
     function nearestFrameIdxToDate(frames, wantedDate) {
       if (!frames || !frames.length) return 0;
+      const wantedMs = parseForecastTime(wantedDate);
       let bestI = 0, bestDist = Infinity;
       for (let i = 0; i < frames.length; i++) {
-        const t = frames[i].time || '';
-        const dist = Math.abs(new Date(t + 'Z').getTime() - new Date(wantedDate + 'T12:00:00Z').getTime());
+        const dist = Math.abs(parseForecastTime(frames[i].time) - wantedMs);
         if (dist < bestDist) { bestDist = dist; bestI = i; }
       }
       return bestI;
