@@ -125,7 +125,7 @@
     .bv-map { position: absolute; top: 48px; left: 0; right: 0; bottom: 110px; touch-action: none; }
     .bv-flow-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 4; mix-blend-mode: screen; }
     .bv-streamlines-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3; }
-    .bv-tide-overlay-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 6; mix-blend-mode: screen; }
+    .bv-tide-overlay-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 6; mix-blend-mode: normal; }
     #bv-map > canvas.bv-tide-overlay-canvas { position: absolute !important; inset: 0 !important; z-index: 6 !important; pointer-events: none !important; }
 
     .ol-attribution { color: #6b7d92 !important; background: rgba(5, 11, 16, 0.8) !important; font-size: 10px !important; pointer-events: none; }
@@ -998,6 +998,10 @@
     function drawTidalContours() {
       if (!currentFrame || !forecastData) return;
       const ctx = tideCtx;
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = 0.95;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
       const lons = forecastData.lons, lats = forecastData.lats;
       const project = (xi, yi) => map.getPixelFromCoordinate(
         ol.proj.fromLonLat([lons[xi], lats[yi]], rasterProjection)
@@ -1041,18 +1045,22 @@
         ctx.setLineDash([]);
       };
       if (layerVisibility.tide_phase && currentFrame.tide_phase_deg) {
-        // Dense co-tidal phase lines; phase is cyclic, so each cell tests
-        // level-360/level/level+360 to preserve the 0° seam.
-        [[0, '#fff7bc'], [30, '#e7f6c5'], [60, '#a8ddb5'], [90, '#7fcdbb'], [120, '#41b6c4'], [150, '#2c7fb8'], [180, '#225ea8'], [210, '#253494'], [240, '#2c1e78'], [270, '#4a1486'], [300, '#6a51a3'], [330, '#9e9ac8']]
-          .forEach(([level, color]) => segment(currentFrame.tide_phase_deg, level, color, 1.4, false, true));
+        // Use 5° spacing so the modest but real offshore phase gradient is
+        // visible. Phase is cyclic; segment() tests the +/-360 seam.
+        const phaseColors = ['#fff7bc', '#e7f6c5', '#a8ddb5', '#7fcdbb', '#41b6c4', '#2c7fb8', '#225ea8', '#253494', '#2c1e78', '#4a1486', '#6a51a3', '#9e9ac8'];
+        for (let level = 0; level < 360; level += 5) {
+          segment(currentFrame.tide_phase_deg, level, phaseColors[Math.floor(level / 15) % phaseColors.length], 1.7, false, true);
+        }
       }
       if (layerVisibility.tide_range && currentFrame.tide_amplitude_ft) {
         const values = currentFrame.tide_amplitude_ft.flat().filter(Number.isFinite);
         if (values.length) {
           const lo = Math.min(...values), hi = Math.max(...values);
-          for (let i = 1; i <= 8; i++) segment(currentFrame.tide_amplitude_ft, lo + (hi - lo) * i / 9, 'rgba(230,245,255,0.72)', 1, true, false);
+          for (let i = 1; i <= 16; i++) segment(currentFrame.tide_amplitude_ft, lo + (hi - lo) * i / 17, 'rgba(230,245,255,0.9)', 1.5, true, false);
         }
       }
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
     }
 
     // ---- wave composite: heat fill + swell streamlines + wind-wave streamlines + wind arrows ----

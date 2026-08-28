@@ -47,7 +47,11 @@ def refresh(path, tides):
         if "tide_height_ft" in frame and not frame.get("tide_model_source"):
             frame["tide_model_source"] = ["coops_station_blend"]
             frame["tide_model_datum"] = "MLLW"
-    add_harmonic_phase_amplitude(payload["frames"])
+    # Derive the co-tidal field from the station harmonic coefficients before
+    # spatially blending heights.  Fitting the already-blended scalar field
+    # collapses offshore phase toward one value, which makes co-tidal lines
+    # disappear over the ocean.
+    add_harmonic_phase_amplitude(payload["frames"], tides=tides, lats=lats, lons=lons, land_mask=land)
     payload.setdefault("quality", {})["coops_tidal_fallback"] = (
         "CO-OPS harmonic station blend; estimated between stations; "
         "OFS frames take precedence"
@@ -65,7 +69,7 @@ def land_mask(lats, lons):
     return [[any(geometry.contains(Point(lon, lat)) for geometry in geometries) for lon in lons] for lat in lats]
 
 
-def add_harmonic_phase_amplitude(frames):
+def add_harmonic_phase_amplitude(frames, tides=None, lats=None, lons=None, land_mask=None):
     """Fit the dominant M2 constituent for co-tidal/co-range map overlays.
 
     This is intentionally labeled an estimate: the 72-hour window is not a
@@ -86,22 +90,55 @@ def add_harmonic_phase_amplitude(frames):
     nx = len((frames[0].get("tide_height_ft") or [[]])[0]) if ny else 0
     amp = np.full((ny, nx), np.nan)
     phase = np.full((len(frames), ny, nx), np.nan)
-    for yi in range(ny):
-        for xi in range(nx):
-            values = np.array([
-                frame.get("tide_height_ft", [[None] * nx for _ in range(ny)])[yi][xi]
-                for frame in frames
-            ], dtype=float)
-            valid = np.isfinite(values)
+
+    # Interpolate the complex M2 coefficients (cosine/sine terms), rather
+    # than interpolating heights and fitting afterward.  Complex interpolation
+    # preserves phase propagation between stations into the offshore cells.
+    station_coeffs = []
+    if tides:
+        frame0 = times[0].replace(tzinfo=dt.timezone.utc)
+        for station in tides.get("stations") or []:
+            curve = tides.get("curves", {}).get(station["id"]) or []
+            if len(curve) < 12:
+                continue
+            ct = np.array([(float(point["t"]) / 1000.0 - frame0.timestamp()) / 3600.0 for point in curve])
+            values = np.array([point["v"] for point in curve], dtype=float)
+            valid = np.isfinite(ct) & np.isfinite(values)
             if valid.sum() < 12:
                 continue
-            coeff, *_ = np.linalg.lstsq(design[valid], values[valid], rcond=None)
-            amplitude = float(np.hypot(coeff[1], coeff[2]))
-            if not np.isfinite(amplitude):
-                continue
-            amp[yi, xi] = amplitude
-            high_phase = np.arctan2(coeff[2], coeff[1])
-            phase[:, yi, xi] = (np.rad2deg(omega * t - high_phase) % 360.0)
+            cdesign = np.column_stack((np.ones(valid.sum()), np.cos(omega * ct[valid]), np.sin(omega * ct[valid])))
+            coeff, *_ = np.linalg.lstsq(cdesign, values[valid], rcond=None)
+            station_coeffs.append((station, coeff))
+    if station_coeffs and lats is not None and lons is not None:
+        for yi, lat in enumerate(lats):
+            for xi, lon in enumerate(lons):
+                if land_mask and land_mask[yi][xi]:
+                    continue
+                weighted = []
+                for station, coeff in station_coeffs:
+                    dlat = lat - station["lat"]
+                    dlon = (lon - station["lon"]) * np.cos(np.deg2rad(lat))
+                    d2 = dlat * dlat + dlon * dlon
+                    weighted.append((1e12 if d2 < 1e-10 else 1.0 / d2, coeff))
+                total = sum(weight for weight, _ in weighted)
+                coeff = sum((weight / total) * value for weight, value in weighted)
+                amplitude = float(np.hypot(coeff[1], coeff[2]))
+                if np.isfinite(amplitude):
+                    amp[yi, xi] = amplitude
+                    high_phase = np.arctan2(coeff[2], coeff[1])
+                    phase[:, yi, xi] = (np.rad2deg(omega * t - high_phase) % 360.0)
+    else:
+        # Backward-compatible fallback for callers that only provide frames.
+        for yi in range(ny):
+            for xi in range(nx):
+                values = np.array([frame.get("tide_height_ft", [])[yi][xi] for frame in frames], dtype=float)
+                valid = np.isfinite(values)
+                if valid.sum() < 12:
+                    continue
+                coeff, *_ = np.linalg.lstsq(design[valid], values[valid], rcond=None)
+                amp[yi, xi] = float(np.hypot(coeff[1], coeff[2]))
+                high_phase = np.arctan2(coeff[2], coeff[1])
+                phase[:, yi, xi] = (np.rad2deg(omega * t - high_phase) % 360.0)
     amp_json = np.where(np.isfinite(amp), amp, None).tolist()
     for index, frame in enumerate(frames):
         frame["tide_amplitude_ft"] = amp_json
