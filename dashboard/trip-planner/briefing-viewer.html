@@ -147,6 +147,7 @@
       <div class="bv-time" id="bv-time">7-Day Outlook · loading forecast…</div>
     </div>
     <button id="bv-hamburger-btn" aria-label="Open layer menu">☰</button>
+  </div>
   <div id="bv-menu-panel" aria-label="Layer menu">
     <div class="bv-section">
       <div class="bv-section-title">Map Layers</div>
@@ -218,6 +219,12 @@
       usec_south: [-81.0, 31.0, -73.0, 36.0],
     };
     const bbox = BBOXES[region] || BBOXES.usec_md;
+
+    // ---- data (declared before any function references it; fixes TDZ in
+    // TIDE_STATIONS initializer and renderActiveTide). ----
+    let forecastData = null; // { bbox, frame_interval_hours, frames, lons, lats, tides }
+    let frameIdx = 0;
+    let playTimer = null;
     let fieldBbox = bbox;
     const rasterProjection = 'EPSG:4326';
 
@@ -405,8 +412,20 @@
       `;
     }
 
+    function parseForecastDate(value) {
+      if (!value) return new Date();
+      const raw = String(value);
+      // Forecast frames use either YYYY-MM-DD or an ISO timestamp without a
+      // timezone. Treat both as UTC and never append a second time component.
+      const iso = /^\d{4}-\d{2}-\d{2}$/.test(raw)
+        ? `${raw}T12:00:00Z`
+        : (/Z$|[+-]\d\d:\d\d$/.test(raw) ? raw : `${raw}Z`);
+      const parsed = new Date(iso);
+      return Number.isFinite(parsed.getTime()) ? parsed : new Date();
+    }
+
     function renderSunMoon(targetDate) {
-      const refDate = targetDate ? new Date(targetDate + 'T12:00:00Z') : new Date();
+      const refDate = parseForecastDate(targetDate);
       const m = moonPhase(refDate);
       // Roughly central to the bbox
       const lat = (bbox[1] + bbox[3]) / 2, lon = (bbox[0] + bbox[2]) / 2;
@@ -507,9 +526,8 @@
     }
 
     // ---- data ----
-    let forecastData = null; // { bbox, frame_interval_hours, frames, lons, lats }
-    let frameIdx = 0;
-    let playTimer = null;
+    // (forecastData / frameIdx / playTimer declared up top to avoid TDZ when
+    // TIDE_STATIONS initializer reads forecastData on script load)
 
     const FORECAST_URL = `https://data.fishedge.live/${region}/briefing/forecast.json`;
     const DEV_FORECAST_URL = `/dashboard/trip-planner/data/${region}/briefing/forecast.json`;
@@ -835,6 +853,7 @@
       const frames = forecastData.frames;
       frameIdx = Math.max(0, Math.min(frames.length - 1, i));
       currentFrame = frames[frameIdx];
+      renderSunMoon(currentFrame && (currentFrame.valid_time || currentFrame.time));
       updateLayerAvailability();
       document.getElementById('bv-slider').value = String(frameIdx);
       const t = currentFrame.time || '—';
@@ -1950,19 +1969,11 @@
 
         // Sun + moon: pure-math, anchored to the bbox centroid and the
         // currently selected frame date. Cheap enough to render every tick.
-        renderSunMoon(currentFrame && currentFrame.valid_time);
+        renderSunMoon(currentFrame && (currentFrame.valid_time || currentFrame.time));
 
         // Active tide chart: reads from forecast.tides.curves if the pipeline
         // shipped them; otherwise the SVG renders "tide unavailable" cleanly.
         renderActiveTide();
-
-        // Re-render moon when the frame changes (the planner viewer advances
-        // via the slider / play loop). Tides are stationary 24h curves so we
-        // do NOT re-render them per-frame.
-        const reRenderSunMoon = () => {
-          if (!currentFrame) return;
-          renderSunMoon(currentFrame.valid_time);
-        };
 
         // soft auto-play so the planner viewer visibly lives
         // (Mike's directive: looks like captain's dashboard, not a static PNG)
