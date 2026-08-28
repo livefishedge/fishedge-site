@@ -676,13 +676,14 @@
       // The composite raster is the scalar heat field. Directional variables
       // are drawn on transparent canvases, so they must never keep the raster
       // alive after the scalar checkboxes are cleared.
-      return !!(layerVisibility.tide || layerVisibility.wave_height || layerVisibility.temperature);
+      return !!(layerVisibility.tide || layerVisibility.wave_height || layerVisibility.temperature || layerVisibility.pressure);
     }
 
     function activeHeatKey() {
       if (layerVisibility.tide) return 'tide_height_ft';
       if (layerVisibility.temperature) return 'temperature_f';
       if (layerVisibility.wave_height) return 'wave_height_ft';
+      if (layerVisibility.pressure) return 'pressure_hpa';
       return null;
     }
 
@@ -971,7 +972,7 @@
       const grid = scalarKey && currentFrame[scalarKey];
       const lons = forecastData.lons, lats = forecastData.lats;
       if (!grid || !lons || !lats) return;
-      const scale = scalarKey === 'temperature_f' ? 'SST' : 'UV';
+      const scale = PRODUCTS[scalarKey]?.scale || 'UV';
       const r = activeRange || { vmin: 0, vmax: scalarKey === 'temperature_f' ? 90 : 6 };
       for (let yi = 0; yi < lats.length - 1; yi++) {
         for (let xi = 0; xi < lons.length - 1; xi++) {
@@ -1674,7 +1675,7 @@
       const flat = grid.flat().filter(v => v != null && Number.isFinite(v));
       if (!flat.length) return;
       const vmin = Math.min(...flat), vmax = Math.max(...flat);
-      const step = 2; // hPa
+      const step = (vmax - vmin) < 10 ? 1 : 2; // hPa
       const levels = [];
       for (let v = Math.ceil(vmin / step) * step; v <= vmax; v += step) levels.push(v);
       flowCtx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
