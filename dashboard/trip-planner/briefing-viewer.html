@@ -161,7 +161,6 @@
         <label><input type="checkbox" data-layer="temperature"><span class="bv-dot dot-temp"></span>Temp</label>
         <label><input type="checkbox" data-layer="pressure"><span class="bv-dot dot-press"></span>Pressure</label>
         <label><input type="checkbox" data-layer="tide" checked><span class="bv-dot dot-tide"></span>OFS water level</label>
-        <label><input type="checkbox" data-layer="tide_current" checked><span class="bv-dot dot-tide"></span>Tidal currents</label>
         <label><input type="checkbox" data-layer="tide_phase" checked><span class="bv-dot dot-tide"></span>Co-tidal phase</label>
         <label><input type="checkbox" data-layer="tide_range" checked><span class="bv-dot dot-tide"></span>Co-range amplitude (static)</label>
         <label><input type="checkbox" data-layer="wind" checked><span class="bv-dot dot-wind"></span>Wind</label>
@@ -699,7 +698,7 @@
     let currentProduct = 'wave_composite';
     let currentFrame = null;
     let activeRange = null; // {vmin, vmax} computed per-frame when dynamicRange=true
-    const layerVisibility = { wave_height: true, temperature: false, pressure: false, tide: true, tide_current: true, tide_phase: true, tide_range: true, swell: true, wind_wave: true, wind: true };
+    const layerVisibility = { wave_height: true, temperature: false, pressure: false, tide: true, tide_phase: true, tide_range: true, swell: true, wind_wave: true, wind: true };
     const particles = [];
 
     function hasVisibleRasterVariable() {
@@ -926,7 +925,6 @@
         temperature: !!(currentFrame && currentFrame.temperature_f),
         pressure: !!(currentFrame && currentFrame.pressure_hpa),
         tide: !!(currentFrame && currentFrame.tide_height_ft),
-        tide_current: !!(currentFrame && currentFrame.current_u_ms && currentFrame.current_v_ms),
         tide_phase: !!(currentFrame && currentFrame.tide_phase_deg),
         tide_range: !!(currentFrame && currentFrame.tide_amplitude_ft),
         wind: !!(currentFrame && currentFrame.wind_speed_kn && currentFrame.wind_direction_deg),
@@ -937,10 +935,8 @@
         const input = document.querySelector(`#bv-layers input[data-layer="${key}"]`);
         const label = input?.closest('label');
         if (!input || !label) continue;
-        const anyFrameAvailable = ['tide', 'tide_current', 'tide_phase', 'tide_range'].includes(key) && forecastData && forecastData.frames
-          ? forecastData.frames.some(frame => key === 'tide_current'
-            ? !!(frame && frame.current_u_ms && frame.current_v_ms)
-            : key === 'tide_phase'
+        const anyFrameAvailable = ['tide', 'tide_phase', 'tide_range'].includes(key) && forecastData && forecastData.frames
+          ? forecastData.frames.some(frame => key === 'tide_phase'
               ? !!(frame && frame.tide_phase_deg)
               : key === 'tide_range'
                 ? !!(frame && frame.tide_amplitude_ft)
@@ -951,7 +947,7 @@
         // crosses a frame without a regional OFS surface. Only disable and
         // clear it when the entire payload has no tide grids at all.
         if (!anyFrameAvailable) { input.checked = false; layerVisibility[key] = false; }
-        else if (['tide', 'tide_current', 'tide_phase', 'tide_range'].includes(key)) input.checked = layerVisibility[key];
+        else if (['tide', 'tide_phase', 'tide_range'].includes(key)) input.checked = layerVisibility[key];
         label.classList.toggle('unavailable', !available[key]);
         label.title = available[key] ? '' : `No ${key} grid in current forecast frame`;
       }
@@ -1020,17 +1016,22 @@
               const unwrap = v => base + ((((v - base) + 540) % 360) - 180);
               v10 = unwrap(v10); v01 = unwrap(v01); v11 = unwrap(v11);
             }
-            const points = [];
+            let points = [];
+            const levels = circular ? [level - 360, level, level + 360] : [level];
+            for (const contourLevel of levels) {
+              const candidate = [];
             const edge = (a, b, pa, pb) => {
-              if ((a < level) === (b < level) || a === b) return;
-              const t = (level - a) / (b - a);
-              points.push([pa[0] + t * (pb[0] - pa[0]), pa[1] + t * (pb[1] - pa[1])]);
+              if ((a < contourLevel) === (b < contourLevel) || a === b) return;
+              const t = (contourLevel - a) / (b - a);
+              candidate.push([pa[0] + t * (pb[0] - pa[0]), pa[1] + t * (pb[1] - pa[1])]);
             };
             const p00 = project(xi, yi), p10 = project(xi + 1, yi);
             const p01 = project(xi, yi + 1), p11 = project(xi + 1, yi + 1);
             if (!p00 || !p10 || !p01 || !p11) continue;
             edge(v00, v10, p00, p10); edge(v10, v11, p10, p11);
             edge(v01, v11, p01, p11); edge(v00, v01, p00, p01);
+              if (candidate.length >= 2) { points = candidate; break; }
+            }
             if (points.length >= 2) {
               ctx.beginPath(); ctx.moveTo(points[0][0], points[0][1]);
               ctx.lineTo(points[1][0], points[1][1]); ctx.stroke();
@@ -1040,15 +1041,16 @@
         ctx.setLineDash([]);
       };
       if (layerVisibility.tide_phase && currentFrame.tide_phase_deg) {
-        // Four co-tidal phase lines: high, falling, low, rising.
-        [[0, '#fff7bc'], [90, '#7fcdbb'], [180, '#41b6c4'], [270, '#225ea8']]
+        // Dense co-tidal phase lines; phase is cyclic, so each cell tests
+        // level-360/level/level+360 to preserve the 0° seam.
+        [[0, '#fff7bc'], [30, '#e7f6c5'], [60, '#a8ddb5'], [90, '#7fcdbb'], [120, '#41b6c4'], [150, '#2c7fb8'], [180, '#225ea8'], [210, '#253494'], [240, '#2c1e78'], [270, '#4a1486'], [300, '#6a51a3'], [330, '#9e9ac8']]
           .forEach(([level, color]) => segment(currentFrame.tide_phase_deg, level, color, 1.4, false, true));
       }
       if (layerVisibility.tide_range && currentFrame.tide_amplitude_ft) {
         const values = currentFrame.tide_amplitude_ft.flat().filter(Number.isFinite);
         if (values.length) {
           const lo = Math.min(...values), hi = Math.max(...values);
-          for (let i = 1; i <= 3; i++) segment(currentFrame.tide_amplitude_ft, lo + (hi - lo) * i / 4, 'rgba(230,245,255,0.72)', 1, true, false);
+          for (let i = 1; i <= 8; i++) segment(currentFrame.tide_amplitude_ft, lo + (hi - lo) * i / 9, 'rgba(230,245,255,0.72)', 1, true, false);
         }
       }
     }
@@ -1075,7 +1077,7 @@
       drawTidalContours();
       if (layerVisibility.swell || layerVisibility.wind_wave) drawWavePackets();
       if (layerVisibility.pressure) drawIsobars(true);
-      if (layerVisibility.wind || layerVisibility.tide_current) {
+      if (layerVisibility.wind) {
         drawStreamlines(true);
         startParticleAnimation();
       } else {
@@ -1523,12 +1525,8 @@
 
     function bilinearVec(frame, lon, lat) {
       const lons = forecastData.lons, lats = forecastData.lats;
-      const useTideCurrent = layerVisibility.tide_current && frame.current_u_ms && frame.current_v_ms;
-      const speedGrid = useTideCurrent ? frame.current_speed_kn : frame.wind_speed_kn;
-      const uGrid = useTideCurrent ? frame.current_u_ms : null;
-      const vGrid = useTideCurrent ? frame.current_v_ms : null;
-      const dirGrid = useTideCurrent ? null : frame.wind_direction_deg;
-      if (!speedGrid || (!useTideCurrent && !dirGrid) || lons.length < 2 || lats.length < 2) return null;
+      const speedGrid = frame.wind_speed_kn, dirGrid = frame.wind_direction_deg;
+      if (!speedGrid || !dirGrid || lons.length < 2 || lats.length < 2) return null;
       if (lon < lons[0] || lon > lons[lons.length-1] || lat < lats[0] || lat > lats[lats.length-1]) return null;
       const dlon = (lons[lons.length-1] - lons[0]) / (lons.length-1);
       const dlat = (lats[lats.length-1] - lats[0]) / (lats.length-1);
@@ -1541,13 +1539,8 @@
       // reversed wind axis—the exact kind of false convergence this viewer
       // previously displayed.
       const corner = (yy, xx) => {
-        const sp = speedGrid[yy]?.[xx], deg = dirGrid?.[yy]?.[xx];
+        const sp = speedGrid[yy]?.[xx], deg = dirGrid[yy]?.[xx];
         if (sp == null || !Number.isFinite(sp)) return null;
-        if (useTideCurrent) {
-          const u = uGrid[yy]?.[xx], v = vGrid[yy]?.[xx];
-          if (!Number.isFinite(u) || !Number.isFinite(v)) return null;
-          return { u: Number(u) * 1.943844492, v: -Number(v) * 1.943844492 };
-        }
         if (deg == null || !Number.isFinite(deg)) return null;
         const rad = Number(deg) * Math.PI / 180;
         return { u: -Number(sp) * Math.sin(rad), v: -Number(sp) * Math.cos(rad) };
@@ -1928,7 +1921,7 @@
         for (let i = 0; i < particles.length; i++) {
           const p = particles[i];
           const vec = bilinearVec(currentFrame, p.lon, p.lat);
-          const minParticleSpeed = layerVisibility.tide_current ? 0.05 : 2.5;
+          const minParticleSpeed = 2.5;
           if (!vec || vec.speed < minParticleSpeed || p.age >= p.maxAge ||
               p.lon < bbox[0] || p.lon > bbox[2] ||
               p.lat < bbox[1] || p.lat > bbox[3]) {
@@ -1950,7 +1943,7 @@
           const afterPx  = map.getPixelFromCoordinate(after);
           if (!beforePx || !afterPx) continue;
           // Speed → opacity + warm-yellow tint (matches static streamlines)
-          const t = Math.min(1, vec.speed / (layerVisibility.tide_current ? 2.5 : 30));
+          const t = Math.min(1, vec.speed / 30);
           const fadeOut = Math.min(1, (1 - p.age / p.maxAge) * 1.5);
           const a = Math.max(0.18, Math.min(0.80, (0.35 + 0.45 * t) * fadeOut));
           const r = 255;
