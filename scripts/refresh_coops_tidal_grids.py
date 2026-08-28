@@ -48,11 +48,11 @@ def refresh(path, tides):
         if "tide_height_ft" in frame and not frame.get("tide_model_source"):
             frame["tide_model_source"] = ["coops_station_blend"]
             frame["tide_model_datum"] = "MLLW"
-    # Derive the co-tidal field from the station harmonic coefficients before
-    # spatially blending heights.  Fitting the already-blended scalar field
-    # collapses offshore phase toward one value, which makes co-tidal lines
-    # disappear over the ocean.
-    add_harmonic_phase_amplitude(payload["frames"], tides=tides, lats=lats, lons=lons, land_mask=land)
+    # Co-tidal/co-range fields are populated only by the gridded STOFS HTP
+    # pipeline. Never manufacture offshore lines from station interpolation.
+    for frame in payload["frames"]:
+        frame.pop("tide_phase_deg", None)
+        frame.pop("tide_amplitude_ft", None)
     payload.setdefault("quality", {})["coops_tidal_fallback"] = (
         "CO-OPS harmonic station blend; estimated between stations; "
         "OFS frames take precedence"
