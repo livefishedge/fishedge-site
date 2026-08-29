@@ -743,7 +743,7 @@
       const def = PRODUCTS[productKey];
       const dataKey = productKey === 'wave_composite' ? (activeHeatKey() || def.dataKey) : (def.dataKey || productKey);
       const rasterDef = PRODUCTS[dataKey] || def;
-      const oceanOnly = ['wave_height_ft', 'swell_height_ft', 'wind_wave_height_ft'].includes(dataKey);
+      const oceanOnly = ['wave_height_ft', 'swell_height_ft', 'wind_wave_height_ft', 'astronomical_tide_ft'].includes(dataKey);
       const grid = frame[dataKey];
       if (!grid || !grid.length || !grid[0].length) return;
       const lons = forecastData.lons, lats = forecastData.lats;
