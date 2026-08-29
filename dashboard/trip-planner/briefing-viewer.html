@@ -956,6 +956,7 @@
     }
 
     function clearOverlays() {
+      [streamlineCtx, flowCtx, tideCtx].forEach(ctx => ctx && ctx.setTransform(1, 0, 0, 1, 0, 0));
       streamlineCtx && streamlineCtx.clearRect(0, 0, streamlineCanvas.width, streamlineCanvas.height);
       flowCtx && flowCtx.clearRect(0, 0, flowCanvas.width, flowCanvas.height);
       tideCtx && tideCtx.clearRect(0, 0, tideCanvas.width, tideCanvas.height);
@@ -997,6 +998,8 @@
       if (!currentFrame || !forecastData) return;
       resizeOverlayCanvases();
       const ctx = tideCtx;
+      const dpr = tideCanvas.width / Math.max(1, mapEl.clientWidth);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       const waterCells = forecastData.tide_water_cells;
       ctx.globalCompositeOperation = 'source-over';
       // Keep the harmonic overlay visually dominant over the animated wave
