@@ -51,12 +51,26 @@ def ocean_grid_mask(lats, lons):
                       for lon in lons] for lat in lats], dtype=bool)
 
 
+def ocean_cell_mask(lats, lons):
+    """Keep a cell only when its 3x3 shoreline samples are all ocean."""
+    land_path = shapereader.natural_earth(resolution="10m", category="physical", name="land")
+    land = [prep(record.geometry) for record in shapereader.Reader(land_path).records()]
+    def ocean(lon, lat):
+        return not any(shape.contains(Point(lon, lat)) for shape in land)
+    return np.array([[
+        all(ocean(lons[xi] + dx * (lons[xi + 1] - lons[xi]),
+                  lats[yi] + dy * (lats[yi + 1] - lats[yi]))
+            for dx in (0.0, 0.5, 1.0) for dy in (0.0, 0.5, 1.0))
+        for xi in range(len(lons) - 1)] for yi in range(len(lats) - 1)], dtype=bool)
+
+
 def make_fields(model_dir):
     result = {}
     common = None
     lons = np.arange(BBOX[0], BBOX[2] + STEP / 2, STEP)
     lats = np.arange(BBOX[1], BBOX[3] + STEP / 2, STEP)
     ocean = ocean_grid_mask(lats, lons)
+    ocean_cells = ocean_cell_mask(lats, lons)
     for name in CONSTITUENTS:
         amp, phase, valid = atlas_field(model_dir, name)
         valid &= ocean
@@ -71,7 +85,7 @@ def make_fields(model_dir):
     # atlas land/no-data boundaries while preserving the open ocean.
     m2 = np.asarray(result["M2"]["amplitude_ft"], dtype=float)
     points = np.isfinite(m2)
-    result["wet_mask"] = (points[:-1, :-1] & points[1:, :-1] & points[:-1, 1:] & points[1:, 1:]).tolist()
+    result["wet_mask"] = ((points[:-1, :-1] & points[1:, :-1] & points[:-1, 1:] & points[1:, 1:]) & ocean_cells).tolist()
     return result
 
 
@@ -92,6 +106,25 @@ def merge_forecast(path, fields):
         hours = (current - first).total_seconds() / 3600.0
         frame["tide_amplitude_ft"] = amp
         frame["tide_phase_deg"] = [[None if value is None else float((value + 360.0 * hours / CONSTITUENTS["M2"]) % 360.0) for value in row] for row in phase]
+        # Astronomical tide prediction: sum the four atlas constituents at
+        # the selected hour. This is a predictable tide height relative to
+        # the atlas mean, not an OFS total-water-level/surge product.
+        tide = []
+        for yi in range(len(amp)):
+            row = []
+            for xi in range(len(amp[yi])):
+                value = 0.0
+                usable = False
+                for name, period in CONSTITUENTS.items():
+                    a = fields[name]["amplitude_ft"][yi][xi]
+                    p = fields[name]["phase_deg"][yi][xi]
+                    if a is None or p is None:
+                        continue
+                    value += float(a) * np.cos(np.deg2rad(float(p) + 360.0 * hours / period))
+                    usable = True
+                row.append(float(value) if usable else None)
+            tide.append(row)
+        frame["astronomical_tide_ft"] = tide
     payload["tide_water_cells"] = fields["wet_mask"]
     payload.pop("ofs_tidal_forecast", None)
     payload.get("units", {}).pop("tide_height_ft", None)

@@ -160,6 +160,7 @@
         <label><input type="checkbox" data-layer="wave_height" checked><span class="bv-dot dot-wave"></span>Significant Wave Height</label>
         <label><input type="checkbox" data-layer="temperature"><span class="bv-dot dot-temp"></span>Temp</label>
         <label><input type="checkbox" data-layer="pressure"><span class="bv-dot dot-press"></span>Pressure</label>
+        <label><input type="checkbox" data-layer="tide_level"><span class="bv-dot dot-tide"></span>Predicted tide level (low/high)</label>
         <label><input type="checkbox" data-layer="tide_phase" checked><span class="bv-dot dot-tide"></span>Co-tidal phase</label>
         <label><input type="checkbox" data-layer="tide_range" checked><span class="bv-dot dot-tide"></span>Co-range amplitude (static)</label>
         <label><input type="checkbox" data-layer="wind" checked><span class="bv-dot dot-wind"></span>Wind</label>
@@ -258,6 +259,7 @@
       wave_composite:{name: 'Significant wave height', unit: 'ft', scale: 'UV', viz: 'composite', dataKey: 'wave_height_ft', dynamicRange: true },
       wind_speed_kn: { name: 'Wind flow',   unit: 'kn',  scale: 'CHL', viz: 'streamlines', dynamicRange: false },
       pressure_hpa:  { name: 'Pressure',    unit: 'hPa', scale: 'SLA', viz: 'contours',    dynamicRange: true  },
+      astronomical_tide_ft: { name: 'Predicted astronomical tide', unit: 'ft relative to mean', scale: 'TIDE', viz: 'heat', dataKey: 'astronomical_tide_ft', dynamicRange: true },
     };
 
     // viridis-like 7-stop palette (matches captain's UV_SCALE / CHL_ALGAE feel)
@@ -699,18 +701,19 @@
     let currentProduct = 'wave_composite';
     let currentFrame = null;
     let activeRange = null; // {vmin, vmax} computed per-frame when dynamicRange=true
-    const layerVisibility = { wave_height: true, temperature: false, pressure: false, tide_phase: true, tide_range: true, swell: true, wind_wave: true, wind: true };
+    const layerVisibility = { wave_height: true, temperature: false, pressure: false, tide_level: false, tide_phase: true, tide_range: true, swell: true, wind_wave: true, wind: true };
     const particles = [];
 
     function hasVisibleRasterVariable() {
       // The composite raster is the scalar heat field. Directional variables
       // are drawn on transparent canvases, so they must never keep the raster
       // alive after the scalar checkboxes are cleared.
-      return !!(layerVisibility.wave_height || layerVisibility.temperature || layerVisibility.pressure);
+      return !!(layerVisibility.wave_height || layerVisibility.temperature || layerVisibility.pressure || layerVisibility.tide_level);
     }
 
     function activeHeatKey() {
       if (layerVisibility.temperature) return 'temperature_f';
+      if (layerVisibility.tide_level) return 'astronomical_tide_ft';
       if (layerVisibility.wave_height) return 'wave_height_ft';
       if (layerVisibility.pressure) return 'pressure_hpa';
       return null;
@@ -922,6 +925,7 @@
         wave_height: !!(currentFrame && currentFrame.wave_height_ft),
         temperature: !!(currentFrame && currentFrame.temperature_f),
         pressure: !!(currentFrame && currentFrame.pressure_hpa),
+        tide_level: !!(currentFrame && currentFrame.astronomical_tide_ft),
         tide_phase: !!(currentFrame && currentFrame.tide_phase_deg),
         tide_range: !!(currentFrame && currentFrame.tide_amplitude_ft),
         wind: !!(currentFrame && currentFrame.wind_speed_kn && currentFrame.wind_direction_deg),
@@ -1136,7 +1140,7 @@
       const r = activeRange || { vmin: 0, vmax: scalarKey === 'temperature_f' ? 90 : 6 };
       for (let yi = 0; yi < lats.length - 1; yi++) {
         for (let xi = 0; xi < lons.length - 1; xi++) {
-          if (['wave_height_ft', 'swell_height_ft', 'wind_wave_height_ft'].includes(scalarKey) &&
+          if (['wave_height_ft', 'swell_height_ft', 'wind_wave_height_ft', 'astronomical_tide_ft'].includes(scalarKey) &&
               !forecastData.tide_water_cells?.[yi]?.[xi]) continue;
           const vals = [grid[yi]?.[xi], grid[yi]?.[xi + 1], grid[yi + 1]?.[xi], grid[yi + 1]?.[xi + 1]];
           if (vals.some(v => v == null || !Number.isFinite(v))) continue;
