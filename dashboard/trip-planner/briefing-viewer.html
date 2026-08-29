@@ -740,6 +740,7 @@
       const def = PRODUCTS[productKey];
       const dataKey = productKey === 'wave_composite' ? (activeHeatKey() || def.dataKey) : (def.dataKey || productKey);
       const rasterDef = PRODUCTS[dataKey] || def;
+      const oceanOnly = ['wave_height_ft', 'swell_height_ft', 'wind_wave_height_ft'].includes(dataKey);
       const grid = frame[dataKey];
       if (!grid || !grid.length || !grid[0].length) return;
       const lons = forecastData.lons, lats = forecastData.lats;
@@ -781,7 +782,7 @@
       // quad per cell
       for (let yi = 0; yi < ny - 1; yi++) {
         for (let xi = 0; xi < nx - 1; xi++) {
-          if (!forecastData.tide_water_cells?.[yi]?.[xi]) continue;
+          if (oceanOnly && !forecastData.tide_water_cells?.[yi]?.[xi]) continue;
           const v00 = grid[yi][xi];
           const v10 = grid[yi][xi+1];
           const v01 = grid[yi+1][xi];
@@ -1135,7 +1136,8 @@
       const r = activeRange || { vmin: 0, vmax: scalarKey === 'temperature_f' ? 90 : 6 };
       for (let yi = 0; yi < lats.length - 1; yi++) {
         for (let xi = 0; xi < lons.length - 1; xi++) {
-          if (!forecastData.tide_water_cells?.[yi]?.[xi]) continue;
+          if (['wave_height_ft', 'swell_height_ft', 'wind_wave_height_ft'].includes(scalarKey) &&
+              !forecastData.tide_water_cells?.[yi]?.[xi]) continue;
           const vals = [grid[yi]?.[xi], grid[yi]?.[xi + 1], grid[yi + 1]?.[xi], grid[yi + 1]?.[xi + 1]];
           if (vals.some(v => v == null || !Number.isFinite(v))) continue;
           const v = vals.reduce((a, b) => a + b, 0) / vals.length;
@@ -1918,7 +1920,7 @@
       for (let i = 0; i < target; i++) {
         const lon = bbox[0] + Math.random() * (bbox[2] - bbox[0]);
         const lat = bbox[1] + Math.random() * (bbox[3] - bbox[1]);
-        if (isOceanPoint(lon, lat)) particles.push({ lon, lat, age: Math.random() * 90, maxAge: 70 + Math.random() * 80 });
+        particles.push({ lon, lat, age: Math.random() * 90, maxAge: 70 + Math.random() * 80 });
       }
       // Diagnostic — logs the first time particles are seeded after a frame change.
       if (!seedWindParticles._logged) {
@@ -1968,9 +1970,8 @@
           if (!vec || vec.speed < minParticleSpeed || p.age >= p.maxAge ||
               p.lon < bbox[0] || p.lon > bbox[2] ||
               p.lat < bbox[1] || p.lat > bbox[3]) {
-            let lon, lat;
-            do { lon = bbox[0] + Math.random() * (bbox[2] - bbox[0]); lat = bbox[1] + Math.random() * (bbox[3] - bbox[1]); }
-            while (!isOceanPoint(lon, lat));
+            const lon = bbox[0] + Math.random() * (bbox[2] - bbox[0]);
+            const lat = bbox[1] + Math.random() * (bbox[3] - bbox[1]);
             particles[i] = { lon, lat, age: 0, maxAge: 70 + Math.random() * 80 };
             respawned++;
             continue;
