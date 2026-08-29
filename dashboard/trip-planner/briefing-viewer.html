@@ -1006,6 +1006,7 @@
 
     function drawTidalContours() {
       if (!currentFrame || !forecastData) return;
+      resizeOverlayCanvases();
       const ctx = tideCtx;
       const waterCells = forecastData.tide_water_cells;
       ctx.globalCompositeOperation = 'source-over';
@@ -2019,7 +2020,9 @@
         }
         computeActiveRange();
         drawColorbar();
-        if (currentProduct === 'wave_composite') drawOverlaysForProduct();
+        // Every layer toggle can affect the independent tide overlay, even
+        // when the selected base product is not the wave composite.
+        drawOverlaysForProduct();
       });
     });
 
