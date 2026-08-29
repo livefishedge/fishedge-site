@@ -1014,7 +1014,11 @@
         ctx.setLineDash(dashed ? [5, 4] : []);
         for (let yi = 0; yi < lats.length - 1; yi++) {
           for (let xi = 0; xi < lons.length - 1; xi++) {
-            if (waterCells && waterCells[yi] && waterCells[yi][xi] === false) continue;
+            // The atlas mask is a cell mask, not a point mask. Fail closed:
+            // only an explicit wet cell may emit a contour. This prevents a
+            // missing/misaligned mask row from ever drawing tide lines over
+            // the basemap's land.
+            if (!waterCells?.[yi]?.[xi]) continue;
             let v00 = grid[yi]?.[xi], v10 = grid[yi]?.[xi + 1];
             let v01 = grid[yi + 1]?.[xi], v11 = grid[yi + 1]?.[xi + 1];
             if (![v00, v10, v01, v11].every(v => Number.isFinite(v))) continue;
