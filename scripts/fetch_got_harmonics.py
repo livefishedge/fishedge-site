@@ -52,16 +52,27 @@ def ocean_grid_mask(lats, lons):
 
 
 def ocean_cell_mask(lats, lons):
-    """Keep a cell only when its 3x3 shoreline samples are all ocean."""
+    """Keep cells whose centers are ocean; retain coastal coverage."""
     land_path = shapereader.natural_earth(resolution="10m", category="physical", name="land")
     land = [prep(record.geometry) for record in shapereader.Reader(land_path).records()]
     def ocean(lon, lat):
         return not any(shape.contains(Point(lon, lat)) for shape in land)
-    return np.array([[
-        all(ocean(lons[xi] + dx * (lons[xi + 1] - lons[xi]),
-                  lats[yi] + dy * (lats[yi + 1] - lats[yi]))
-            for dx in (0.0, 0.5, 1.0) for dy in (0.0, 0.5, 1.0))
-        for xi in range(len(lons) - 1)] for yi in range(len(lats) - 1)], dtype=bool)
+    return np.array([[ocean((lons[xi] + lons[xi + 1]) / 2,
+                            (lats[yi] + lats[yi + 1]) / 2)
+                      for xi in range(len(lons) - 1)]
+                     for yi in range(len(lats) - 1)], dtype=bool)
+
+
+def fill_ocean_gaps(values, valid, ocean):
+    """Nearest-neighbor fill only for ocean points missing in the atlas grid."""
+    out = values.copy()
+    source = np.argwhere(valid)
+    for yi, xi in np.argwhere(ocean & ~valid):
+        if not len(source):
+            continue
+        nearest = source[np.argmin((source[:, 0] - yi) ** 2 + (source[:, 1] - xi) ** 2)]
+        out[yi, xi] = values[nearest[0], nearest[1]]
+    return out
 
 
 def make_fields(model_dir):
@@ -76,6 +87,9 @@ def make_fields(model_dir):
         valid &= ocean
         amp = np.where(valid, amp, np.nan)
         phase = np.where(valid, phase, np.nan)
+        amp = fill_ocean_gaps(amp, valid, ocean)
+        phase = fill_ocean_gaps(phase, valid, ocean)
+        valid = ocean.copy()
         common = valid if common is None else (common | valid)
         result[name] = {
             "amplitude_ft": [[None if not np.isfinite(v) else float(v) for v in row] for row in amp],
