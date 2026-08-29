@@ -1010,7 +1010,10 @@
       const ctx = tideCtx;
       const waterCells = forecastData.tide_water_cells;
       ctx.globalCompositeOperation = 'source-over';
-      ctx.globalAlpha = 0.95;
+      // Keep the harmonic overlay visually dominant over the animated wave
+      // strokes.  The field is only 0.25 degrees, so faint 1px contours get
+      // lost against the basemap before they can be read offshore.
+      ctx.globalAlpha = 1;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
       const lons = forecastData.lons, lats = forecastData.lats;
@@ -1057,18 +1060,27 @@
         ctx.setLineDash([]);
       };
       if (layerVisibility.tide_phase && currentFrame.tide_phase_deg) {
-        // Use 2° spacing so the modest but real offshore phase gradient is
-        // visible. Phase is cyclic; segment() tests the +/-360 seam.
-        const phaseColors = ['#fff7bc', '#e7f6c5', '#a8ddb5', '#7fcdbb', '#41b6c4', '#2c7fb8', '#225ea8', '#253494', '#2c1e78', '#4a1486', '#6a51a3', '#9e9ac8'];
-        for (let level = 0; level < 360; level += 2) {
-          segment(currentFrame.tide_phase_deg, level, phaseColors[Math.floor(level / 15) % phaseColors.length], 1.7, false, true);
+        // The offshore phase gradient is modest, so 1° contours can leave
+        // most of the open ocean visually empty.  One-degree intervals keep
+        // the contours truthful while making the continuous offshore field
+        // legible. Phase is cyclic; segment() tests the +/-360 seam.
+        const phaseColors = ['#fff176', '#e6ee9c', '#b9f6ca', '#80deea', '#4dd0e1', '#81d4fa', '#90caf9', '#9fa8da', '#b39ddb', '#ce93d8', '#f48fb1', '#ffab91'];
+        for (let level = 0; level < 360; level += 0.5) {
+          segment(currentFrame.tide_phase_deg, level, phaseColors[Math.floor(level / 15) % phaseColors.length], 1.8, false, true);
         }
       }
       if (layerVisibility.tide_range && currentFrame.tide_amplitude_ft) {
         const values = currentFrame.tide_amplitude_ft.flat().filter(Number.isFinite);
         if (values.length) {
-          const lo = Math.min(...values), hi = Math.max(...values);
-          for (let i = 1; i <= 24; i++) segment(currentFrame.tide_amplitude_ft, lo + (hi - lo) * i / 25, 'rgba(230,245,255,0.9)', 1.5, true, false);
+          // Dynamic min/max bins are dominated by shallow coastal outliers
+          // and collapse the offshore amplitude contours. Use a stable
+          // 0.05-ft interval instead; clipping is naturally handled by the
+          // finite grid values and the wet-cell mask.
+          const lo = Math.floor(Math.min(...values) / 0.05) * 0.05;
+          const hi = Math.ceil(Math.max(...values) / 0.05) * 0.05;
+          for (let level = lo + 0.05; level < hi; level += 0.05) {
+            segment(currentFrame.tide_amplitude_ft, level, 'rgba(230,245,255,0.95)', 1.8, true, false);
+          }
         }
       }
       ctx.globalAlpha = 1;
