@@ -999,6 +999,9 @@
       else if (def.viz === 'contours') drawIsobars();
       else if (def.viz === 'composite') drawWaveComposite();
       else stopParticleAnimation();
+      // Co-tidal and co-range overlays are independent of the selected base
+      // product and must be redrawn for every product.
+      drawTidalContours();
     }
 
     function drawTidalContours() {
@@ -1090,7 +1093,6 @@
       // switch. This keeps the visual contract deterministic: fill first,
       // then partition streamlines and atmospheric arrows above it.
       drawWaveHeatOverlay();
-      drawTidalContours();
       if (layerVisibility.swell || layerVisibility.wind_wave) drawWavePackets();
       if (layerVisibility.pressure) drawIsobars(true);
       if (layerVisibility.wind) {
