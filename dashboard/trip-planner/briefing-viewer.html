@@ -160,7 +160,6 @@
         <label><input type="checkbox" data-layer="wave_height" checked><span class="bv-dot dot-wave"></span>Significant Wave Height</label>
         <label><input type="checkbox" data-layer="temperature"><span class="bv-dot dot-temp"></span>Temp</label>
         <label><input type="checkbox" data-layer="pressure"><span class="bv-dot dot-press"></span>Pressure</label>
-        <label><input type="checkbox" data-layer="tide" checked><span class="bv-dot dot-tide"></span>OFS water level</label>
         <label><input type="checkbox" data-layer="tide_phase" checked><span class="bv-dot dot-tide"></span>Co-tidal phase</label>
         <label><input type="checkbox" data-layer="tide_range" checked><span class="bv-dot dot-tide"></span>Co-range amplitude (static)</label>
         <label><input type="checkbox" data-layer="wind" checked><span class="bv-dot dot-wind"></span>Wind</label>
@@ -218,7 +217,7 @@
 
     // ---- params / region ----
     const params = new URLSearchParams(window.location.search);
-    // Default to the current UTC hour so newly published near-term OFS frames
+    // Default to the current UTC hour so newly published forecast frames
     // are visible immediately; a ?date=YYYY-MM-DD query still selects a day.
     const targetDate = params.get('date') || new Date().toISOString().slice(0, 13);
     const region = params.get('region') || 'usec_md';
@@ -258,7 +257,6 @@
       wave_composite:{name: 'Significant wave height', unit: 'ft', scale: 'UV', viz: 'composite', dataKey: 'wave_height_ft', dynamicRange: true },
       wind_speed_kn: { name: 'Wind flow',   unit: 'kn',  scale: 'CHL', viz: 'streamlines', dynamicRange: false },
       pressure_hpa:  { name: 'Pressure',    unit: 'hPa', scale: 'SLA', viz: 'contours',    dynamicRange: true  },
-      tide_height_ft:{ name: 'OFS total water level', unit: 'ft model datum', scale: 'TIDE', viz: 'heat', dataKey: 'tide_height_ft', dynamicRange: true },
     };
 
     // viridis-like 7-stop palette (matches captain's UV_SCALE / CHL_ALGAE feel)
@@ -698,21 +696,17 @@
     let currentProduct = 'wave_composite';
     let currentFrame = null;
     let activeRange = null; // {vmin, vmax} computed per-frame when dynamicRange=true
-    const layerVisibility = { wave_height: true, temperature: false, pressure: false, tide: true, tide_phase: true, tide_range: true, swell: true, wind_wave: true, wind: true };
+    const layerVisibility = { wave_height: true, temperature: false, pressure: false, tide_phase: true, tide_range: true, swell: true, wind_wave: true, wind: true };
     const particles = [];
 
     function hasVisibleRasterVariable() {
       // The composite raster is the scalar heat field. Directional variables
       // are drawn on transparent canvases, so they must never keep the raster
       // alive after the scalar checkboxes are cleared.
-      return !!(layerVisibility.tide || layerVisibility.wave_height || layerVisibility.temperature || layerVisibility.pressure);
+      return !!(layerVisibility.wave_height || layerVisibility.temperature || layerVisibility.pressure);
     }
 
     function activeHeatKey() {
-      // Keep the tide toggle latched while scrubbing. If the selected frame
-      // is outside the currently published OFS window, fall back to the
-      // selected wave scalar instead of silently turning the layer off.
-      if (layerVisibility.tide && currentFrame && currentFrame.tide_height_ft) return 'tide_height_ft';
       if (layerVisibility.temperature) return 'temperature_f';
       if (layerVisibility.wave_height) return 'wave_height_ft';
       if (layerVisibility.pressure) return 'pressure_hpa';
@@ -924,7 +918,6 @@
         wave_height: !!(currentFrame && currentFrame.wave_height_ft),
         temperature: !!(currentFrame && currentFrame.temperature_f),
         pressure: !!(currentFrame && currentFrame.pressure_hpa),
-        tide: !!(currentFrame && currentFrame.tide_height_ft),
         tide_phase: !!(currentFrame && currentFrame.tide_phase_deg),
         tide_range: !!(currentFrame && currentFrame.tide_amplitude_ft),
         wind: !!(currentFrame && currentFrame.wind_speed_kn && currentFrame.wind_direction_deg),
@@ -935,31 +928,26 @@
         const input = document.querySelector(`#bv-layers input[data-layer="${key}"]`);
         const label = input?.closest('label');
         if (!input || !label) continue;
-        const anyFrameAvailable = ['tide', 'tide_phase', 'tide_range'].includes(key) && forecastData && forecastData.frames
+        const anyFrameAvailable = ['tide_phase', 'tide_range'].includes(key) && forecastData && forecastData.frames
           ? forecastData.frames.some(frame => key === 'tide_phase'
               ? !!(frame && frame.tide_phase_deg)
-              : key === 'tide_range'
-                ? !!(frame && frame.tide_amplitude_ft)
-                : !!(frame && frame.tide_height_ft))
+              : !!(frame && frame.tide_amplitude_ft))
           : available[key];
-        // Keep the co-line controls interactive even before the gridded HTP
+        // Keep the co-line controls interactive even before the atlas
         // artifact arrives.  A disabled checkbox looks broken and hides the
         // real state (the source is simply unavailable, not unchecked).
         const awaitingHtp = ['tide_phase', 'tide_range'].includes(key) && !anyFrameAvailable;
         input.disabled = !anyFrameAvailable && !awaitingHtp;
         // Preserve an enabled layer's checked state while the time slider
-        // crosses a frame without a regional OFS surface. Only disable and
-        // clear it when the entire payload has no tide grids at all.
+        // crosses a frame without a static atlas field.
         if (!anyFrameAvailable && !awaitingHtp) { input.checked = false; layerVisibility[key] = false; }
-        else if (['tide', 'tide_phase', 'tide_range'].includes(key)) input.checked = layerVisibility[key];
+        else if (['tide_phase', 'tide_range'].includes(key)) input.checked = layerVisibility[key];
         label.classList.toggle('unavailable', !available[key]);
-        label.title = available[key] ? '' : (awaitingHtp ? 'Waiting for NOAA STOFS gridded HTP data' : `No ${key} grid in current forecast frame`);
+        label.title = available[key] ? '' : (awaitingHtp ? 'Waiting for NASA GOT4.10c harmonic atlas data' : `No ${key} grid in current forecast frame`);
       }
       const tideStatus = document.getElementById('bv-menu-status');
-      if (tideStatus && layerVisibility.tide && !available.tide) {
-        tideStatus.textContent = 'OFS water level unavailable at this forecast hour';
-      } else if (tideStatus && (!available.tide_phase || !available.tide_range)) {
-        tideStatus.textContent = 'Co-lines awaiting NOAA STOFS gridded HTP data';
+      if (tideStatus && (!available.tide_phase || !available.tide_range)) {
+        tideStatus.textContent = 'Co-lines awaiting NASA GOT4.10c harmonic atlas data';
       }
       if (available.wave_height && !layerVisibility.temperature && !layerVisibility.wave_height && !layerVisibility.pressure) {
         // no forced fallback: the user may intentionally turn all scalar layers off

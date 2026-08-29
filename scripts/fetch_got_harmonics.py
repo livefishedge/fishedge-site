@@ -60,6 +60,13 @@ def make_fields(model_dir):
 
 def merge_forecast(path, fields):
     payload = json.loads(Path(path).read_text())
+    # This artifact is intentionally atlas-only for the map tide layer. Keep
+    # the separate CO-OPS station predictions, but remove legacy OFS total
+    # water-level grids so consumers cannot silently fall back to them.
+    for frame in payload["frames"]:
+        frame.pop("tide_height_ft", None)
+        frame.pop("tide_model_source", None)
+        frame.pop("tide_model_datum", None)
     amp = fields["M2"]["amplitude_ft"]
     phase = fields["M2"]["phase_deg"]
     first = dt.datetime.strptime(payload["frames"][0]["time"].replace("Z", ""), "%Y-%m-%dT%H:%M")
@@ -69,6 +76,12 @@ def merge_forecast(path, fields):
         frame["tide_amplitude_ft"] = amp
         frame["tide_phase_deg"] = [[None if value is None else float((value + 360.0 * hours / CONSTITUENTS["M2"]) % 360.0) for value in row] for row in phase]
     payload["tide_water_cells"] = fields["wet_mask"]
+    payload.pop("ofs_tidal_forecast", None)
+    payload.get("units", {}).pop("tide_height_ft", None)
+    quality = payload.get("quality", {})
+    quality.pop("ofs_tidal_source", None)
+    quality.pop("coops_tidal_fallback", None)
+    quality["co_tidal_source"] = "NASA GSFC GOT4.10c static harmonic atlas; no OFS water-level layer"
     payload["tide_harmonic_source"] = {
         "provider": "NASA GSFC Goddard Ocean Tide GOT4.10c",
         "model": "GOT4.10c",
