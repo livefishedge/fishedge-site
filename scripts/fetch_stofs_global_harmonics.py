@@ -154,12 +154,28 @@ def fit_and_rasterize(values, x, y, times):
     return result
 
 
+def merge_forecast(path, fields, source):
+    """Attach the compact M2 phase/amplitude fields to viewer frames."""
+    payload = json.loads(Path(path).read_text())
+    amp = fields["M2"]["amplitude_ft"]
+    high_phase = fields["M2"]["phase_deg"]
+    first = dt.datetime.strptime(payload["frames"][0]["time"].replace("Z", ""), "%Y-%m-%dT%H:%M")
+    for frame in payload["frames"]:
+        current = dt.datetime.strptime(frame["time"].replace("Z", ""), "%Y-%m-%dT%H:%M")
+        hours = (current - first).total_seconds() / 3600.0
+        frame["tide_amplitude_ft"] = amp
+        frame["tide_phase_deg"] = [[None if value is None else float((360.0 * hours / M2_HOURS - value) % 360.0) for value in row] for row in high_phase]
+    payload["tide_harmonic_source"] = {"provider": "NOAA STOFS-2D Global HTP", "object": source, "constituents": list(CONSTITUENTS), "primary": "M2", "method": "lazy regional mesh extraction + harmonic fit"}
+    Path(path).write_text(json.dumps(payload, allow_nan=False, separators=(",", ":")))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--date", required=True)
     ap.add_argument("--cycle", default="00")
     ap.add_argument("--hours", type=int, default=126)
     ap.add_argument("--output", required=True, type=Path)
+    ap.add_argument("--merge-forecast", nargs="*", default=[])
     args = ap.parse_args()
     key = find_htp(args.date, args.cycle)
     remote = RemoteClassicNetCDF(f"{S3}/{key}")
@@ -172,6 +188,9 @@ def main():
         remote.close()
     result = {"source": "NOAA STOFS-2D Global HTP", "source_object": key, "constituents": fields, "bbox": BBOX, "grid_step_deg": STEP, "wet_mask": np.isfinite(fields["M2"]["amplitude_ft"]).tolist()}
     args.output.write_text(json.dumps(result, allow_nan=False, separators=(",", ":")))
+    for path in args.merge_forecast:
+        merge_forecast(path, fields, key)
+        print(f"merged STOFS harmonic fields: {path}")
 
 
 if __name__ == "__main__":
