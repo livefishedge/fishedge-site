@@ -942,18 +942,24 @@
                 ? !!(frame && frame.tide_amplitude_ft)
                 : !!(frame && frame.tide_height_ft))
           : available[key];
-        input.disabled = !anyFrameAvailable;
+        // Keep the co-line controls interactive even before the gridded HTP
+        // artifact arrives.  A disabled checkbox looks broken and hides the
+        // real state (the source is simply unavailable, not unchecked).
+        const awaitingHtp = ['tide_phase', 'tide_range'].includes(key) && !anyFrameAvailable;
+        input.disabled = !anyFrameAvailable && !awaitingHtp;
         // Preserve an enabled layer's checked state while the time slider
         // crosses a frame without a regional OFS surface. Only disable and
         // clear it when the entire payload has no tide grids at all.
-        if (!anyFrameAvailable) { input.checked = false; layerVisibility[key] = false; }
+        if (!anyFrameAvailable && !awaitingHtp) { input.checked = false; layerVisibility[key] = false; }
         else if (['tide', 'tide_phase', 'tide_range'].includes(key)) input.checked = layerVisibility[key];
         label.classList.toggle('unavailable', !available[key]);
-        label.title = available[key] ? '' : `No ${key} grid in current forecast frame`;
+        label.title = available[key] ? '' : (awaitingHtp ? 'Waiting for NOAA STOFS gridded HTP data' : `No ${key} grid in current forecast frame`);
       }
       const tideStatus = document.getElementById('bv-menu-status');
       if (tideStatus && layerVisibility.tide && !available.tide) {
         tideStatus.textContent = 'OFS water level unavailable at this forecast hour';
+      } else if (tideStatus && (!available.tide_phase || !available.tide_range)) {
+        tideStatus.textContent = 'Co-lines awaiting NOAA STOFS gridded HTP data';
       }
       if (available.wave_height && !layerVisibility.temperature && !layerVisibility.wave_height && !layerVisibility.pressure) {
         // no forced fallback: the user may intentionally turn all scalar layers off
