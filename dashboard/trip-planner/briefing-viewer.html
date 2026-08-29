@@ -779,6 +779,7 @@
       // quad per cell
       for (let yi = 0; yi < ny - 1; yi++) {
         for (let xi = 0; xi < nx - 1; xi++) {
+          if (!forecastData.tide_water_cells?.[yi]?.[xi]) continue;
           const v00 = grid[yi][xi];
           const v10 = grid[yi][xi+1];
           const v01 = grid[yi+1][xi];
@@ -1129,6 +1130,7 @@
       const r = activeRange || { vmin: 0, vmax: scalarKey === 'temperature_f' ? 90 : 6 };
       for (let yi = 0; yi < lats.length - 1; yi++) {
         for (let xi = 0; xi < lons.length - 1; xi++) {
+          if (!forecastData.tide_water_cells?.[yi]?.[xi]) continue;
           const vals = [grid[yi]?.[xi], grid[yi]?.[xi + 1], grid[yi + 1]?.[xi], grid[yi + 1]?.[xi + 1]];
           if (vals.some(v => v == null || !Number.isFinite(v))) continue;
           const v = vals.reduce((a, b) => a + b, 0) / vals.length;

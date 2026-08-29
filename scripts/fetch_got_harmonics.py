@@ -13,6 +13,9 @@ from pathlib import Path
 
 import numpy as np
 import xarray as xr
+from shapely.geometry import Point
+from shapely.prepared import prep
+import cartopy.io.shapereader as shapereader
 
 CONSTITUENTS = {"M2": 12.4206, "S2": 12.0, "K1": 23.9345, "O1": 25.8193}
 BBOX = (-77.0, 36.0, -72.0, 40.0)
@@ -40,11 +43,25 @@ def atlas_field(model_dir, name):
     return amp_ft, phase, valid
 
 
+def ocean_grid_mask(lats, lons):
+    """Reject atlas cells whose display-grid points fall on geographic land."""
+    land_path = shapereader.natural_earth(resolution="10m", category="physical", name="land")
+    land = [prep(record.geometry) for record in shapereader.Reader(land_path).records()]
+    return np.array([[not any(shape.contains(Point(lon, lat)) for shape in land)
+                      for lon in lons] for lat in lats], dtype=bool)
+
+
 def make_fields(model_dir):
     result = {}
     common = None
+    lons = np.arange(BBOX[0], BBOX[2] + STEP / 2, STEP)
+    lats = np.arange(BBOX[1], BBOX[3] + STEP / 2, STEP)
+    ocean = ocean_grid_mask(lats, lons)
     for name in CONSTITUENTS:
         amp, phase, valid = atlas_field(model_dir, name)
+        valid &= ocean
+        amp = np.where(valid, amp, np.nan)
+        phase = np.where(valid, phase, np.nan)
         common = valid if common is None else (common | valid)
         result[name] = {
             "amplitude_ft": [[None if not np.isfinite(v) else float(v) for v in row] for row in amp],
