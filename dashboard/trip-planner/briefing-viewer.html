@@ -236,6 +236,7 @@
     let playTimer = null;
     let fieldBbox = bbox;
     const rasterProjection = 'EPSG:4326';
+    const mapProjection = 'EPSG:3857';
 
     // ---- product definitions (mirrors captain's dashboard scale choices) ----
     // Inspired by captain's dashboard scales (CHL_ALGAE, SST_SCALE, UV_SCALE,
@@ -605,12 +606,12 @@
       target: 'bv-map',
       layers: [baseLayer],
       view: new ol.View({
-        projection: rasterProjection,
-        center: [(bbox[0]+bbox[2])/2, (bbox[1]+bbox[3])/2],
+        projection: mapProjection,
+        center: ol.proj.fromLonLat([(bbox[0]+bbox[2])/2, (bbox[1]+bbox[3])/2], mapProjection),
         zoom: 5.5,
         minZoom: 4,
         maxZoom: 12,
-        extent: [bbox[0]-1, bbox[1]-1, bbox[2]+1, bbox[3]+1],
+        extent: ol.proj.transformExtent([bbox[0]-1, bbox[1]-1, bbox[2]+1, bbox[3]+1], rasterProjection, mapProjection),
       }),
       controls: ol.control.defaults.defaults({ attribution: true, rotate: false }).extend([
         new ol.control.ScaleLine(),
@@ -632,13 +633,15 @@
     function drawDomainDiagnostics() {
       if (!devDiagnostics || !Array.isArray(fieldBbox)) return;
       domainSource.clear();
-      const ring = extent => ol.geom.Polygon.fromExtent(extent);
+      const ring = extent => ol.geom.Polygon.fromExtent(
+        ol.proj.transformExtent(extent, rasterProjection, mapProjection)
+      );
       const fieldFeature = new ol.Feature(ring(fieldBbox));
       fieldFeature.set('kind', 'field');
       const targetFeature = new ol.Feature(ring(bbox));
       targetFeature.set('kind', 'target');
       domainSource.addFeatures([fieldFeature, targetFeature]);
-      map.getView().set('extent', fieldBbox);
+      map.getView().set('extent', ol.proj.transformExtent(fieldBbox, rasterProjection, mapProjection));
     }
 
     // overlays for wind streamlines + animated particles
@@ -663,8 +666,8 @@
     // client-rendered raster layer (replaces old PNG ImageStatic)
     const rasterLayer = new ol.layer.Image({
       source: new ol.source.ImageCanvas({
-        projection: rasterProjection,
-        extent: bbox,
+        projection: mapProjection,
+        extent: ol.proj.transformExtent(bbox, rasterProjection, mapProjection),
         ratio: 1,
         interpolate: true,
         canvasFunction: (requestedExtent, resolution, pixelRatio, size) => {
@@ -748,10 +751,9 @@
       const vmin = r.vmin, vmax = r.vmax;
       const scale = rasterDef.scale;
 
-      // The map uses EPSG:4326, so ImageCanvas' requested extent is already
-      // in the same lon/lat units as the forecast grid.
-      const toX = lon => ((lon - requestedExtent[0]) / (requestedExtent[2] - requestedExtent[0])) * w;
-      const toY = lat => ((requestedExtent[3] - lat) / (requestedExtent[3] - requestedExtent[1])) * h;
+      const dataExtent = ol.proj.transformExtent(requestedExtent, mapProjection, rasterProjection);
+      const toX = lon => ((lon - dataExtent[0]) / (dataExtent[2] - dataExtent[0])) * w;
+      const toY = lat => ((dataExtent[3] - lat) / (dataExtent[3] - dataExtent[1])) * h;
 
       const nx = lons.length, ny = lats.length;
       const dlon = (lons[nx-1] - lons[0]) / (nx - 1);
@@ -1010,7 +1012,7 @@
       ctx.lineJoin = 'round';
       const lons = forecastData.lons, lats = forecastData.lats;
       const project = (xi, yi) => map.getPixelFromCoordinate(
-        ol.proj.fromLonLat([lons[xi], lats[yi]], rasterProjection)
+        ol.proj.fromLonLat([lons[xi], lats[yi]], mapProjection)
       );
       const segment = (grid, level, style, width, dashed, circular) => {
         ctx.strokeStyle = style;
@@ -1138,10 +1140,10 @@
           if (vals.some(v => v == null || !Number.isFinite(v))) continue;
           const v = vals.reduce((a, b) => a + b, 0) / vals.length;
           const c = hexToRgb(sampleScale(scale, Math.max(0, Math.min(1, scalarNorm(v, r.vmin, r.vmax, scale)))));
-          const p00 = map.getPixelFromCoordinate(ol.proj.fromLonLat([lons[xi], lats[yi]], rasterProjection));
-          const p10 = map.getPixelFromCoordinate(ol.proj.fromLonLat([lons[xi + 1], lats[yi]], rasterProjection));
-          const p11 = map.getPixelFromCoordinate(ol.proj.fromLonLat([lons[xi + 1], lats[yi + 1]], rasterProjection));
-          const p01 = map.getPixelFromCoordinate(ol.proj.fromLonLat([lons[xi], lats[yi + 1]], rasterProjection));
+          const p00 = map.getPixelFromCoordinate(ol.proj.fromLonLat([lons[xi], lats[yi]], mapProjection));
+          const p10 = map.getPixelFromCoordinate(ol.proj.fromLonLat([lons[xi + 1], lats[yi]], mapProjection));
+          const p11 = map.getPixelFromCoordinate(ol.proj.fromLonLat([lons[xi + 1], lats[yi + 1]], mapProjection));
+          const p01 = map.getPixelFromCoordinate(ol.proj.fromLonLat([lons[xi], lats[yi + 1]], mapProjection));
           if (!p00 || !p10 || !p11 || !p01) continue;
           streamlineCtx.fillStyle = `rgba(${c[0]},${c[1]},${c[2]},0.62)`;
           streamlineCtx.beginPath();
@@ -1182,16 +1184,16 @@
         const s = styles[packet.kind];
         const vec = bilinearPartitionVec(currentFrame, packet.kind, packet.lon, packet.lat);
         if (!vec || vec.speed < (packet.kind === 'swell' ? 0.4 : 0.15)) continue;
-        const c = map.getPixelFromCoordinate(ol.proj.fromLonLat([packet.lon, packet.lat], rasterProjection));
+        const c = map.getPixelFromCoordinate(ol.proj.fromLonLat([packet.lon, packet.lat], mapProjection));
         const inv = 1 / vec.speed;
         const tx = -vec.v * inv, ty = vec.u * inv;
         const cosLat = Math.max(0.35, Math.cos(packet.lat * Math.PI / 180));
         const p0 = map.getPixelFromCoordinate(ol.proj.fromLonLat([
           packet.lon - tx * s.half / cosLat, packet.lat - ty * s.half
-        ], rasterProjection));
+        ], mapProjection));
         const p1 = map.getPixelFromCoordinate(ol.proj.fromLonLat([
           packet.lon + tx * s.half / cosLat, packet.lat + ty * s.half
-        ], rasterProjection));
+        ], mapProjection));
         if (!c || !p0 || !p1) continue;
         streamlineCtx.globalAlpha = 0.48 + 0.42 * Math.min(1, vec.speed / s.max);
         streamlineCtx.strokeStyle = s.stroke;
@@ -1397,7 +1399,7 @@
           if (lons[xi] < bbox[0] || lons[xi] > bbox[2] ||
               lats[yi] < bbox[1] || lats[yi] > bbox[3]) continue;
           if (!isOceanPoint(lons[xi], lats[yi])) continue;
-          const seedProj = ol.proj.fromLonLat([lons[xi], lats[yi]], rasterProjection);
+          const seedProj = ol.proj.fromLonLat([lons[xi], lats[yi]], mapProjection);
           const seedPx = map.getPixelFromCoordinate(seedProj);
           if (!seedPx) continue;
           const seedKey = keyFor(seedPx[0], seedPx[1]);
@@ -1428,7 +1430,7 @@
           let prevPx = null;
           for (let pointIdx = 1; pointIdx < faded.length; pointIdx++) {
             const seg = faded[pointIdx];
-            const proj = ol.proj.fromLonLat([seg.pt[0], seg.pt[1]], rasterProjection);
+            const proj = ol.proj.fromLonLat([seg.pt[0], seg.pt[1]], mapProjection);
             const px = map.getPixelFromCoordinate(proj);
             if (!px) { prevPx = null; continue; }
             if (!prevPx) { prevPx = px; continue; }
@@ -1470,17 +1472,17 @@
           if (lon < bbox[0] || lon > bbox[2] || lat < bbox[1] || lat > bbox[3]) continue;
           const vec = bilinearPartitionVec(currentFrame, kind, lon, lat);
           if (!vec || vec.speed < (kind === 'swell' ? 0.4 : 0.15)) continue;
-          const c = map.getPixelFromCoordinate(ol.proj.fromLonLat([lon, lat], rasterProjection));
+          const c = map.getPixelFromCoordinate(ol.proj.fromLonLat([lon, lat], mapProjection));
           if (!c) continue;
           // Rotate the propagation vector by 90° to obtain the crest tangent.
           const inv = 1 / vec.speed;
           const tx = -vec.v * inv, ty = vec.u * inv;
           const p0 = map.getPixelFromCoordinate(ol.proj.fromLonLat([
             lon - tx * crestHalfLength / Math.max(0.35, Math.cos(lat * Math.PI / 180)), lat - ty * crestHalfLength
-          ], rasterProjection));
+          ], mapProjection));
           const p1 = map.getPixelFromCoordinate(ol.proj.fromLonLat([
             lon + tx * crestHalfLength / Math.max(0.35, Math.cos(lat * Math.PI / 180)), lat + ty * crestHalfLength
-          ], rasterProjection));
+          ], mapProjection));
           if (!p0 || !p1) continue;
           const alpha = 0.48 + 0.42 * Math.min(1, vec.speed / maxSpeed);
           streamlineCtx.globalAlpha = alpha;
@@ -1518,7 +1520,7 @@
           if (sp == null || dg == null) continue;
           const rad = dg * Math.PI / 180;
           const u = -Math.sin(rad), v = -Math.cos(rad);
-          const proj = ol.proj.fromLonLat([lon, lat], rasterProjection);
+          const proj = ol.proj.fromLonLat([lon, lat], mapProjection);
           const c = map.getPixelFromCoordinate(proj);
           if (!c) continue;
           const t = Math.max(0, Math.min(1, (sp - r.vmin) / magRange));
@@ -1706,7 +1708,7 @@
           if (lons[xi] < bbox[0] || lons[xi] > bbox[2] ||
               lats[yi] < bbox[1] || lats[yi] > bbox[3]) continue;
           // Compute seed pixel position first (before tracing).
-          const seedProj = ol.proj.fromLonLat([lons[xi], lats[yi]], rasterProjection);
+          const seedProj = ol.proj.fromLonLat([lons[xi], lats[yi]], mapProjection);
           const seedPx = map.getPixelFromCoordinate(seedProj);
           if (!seedPx) continue;
           const seedKey = keyFor(seedPx[0], seedPx[1]);
@@ -1740,7 +1742,7 @@
           const baseAlpha = alpha;
           let prevPx = null;
           for (const seg of faded) {
-            const proj = ol.proj.fromLonLat([seg.pt[0], seg.pt[1]], rasterProjection);
+            const proj = ol.proj.fromLonLat([seg.pt[0], seg.pt[1]], mapProjection);
             const px = map.getPixelFromCoordinate(proj);
             if (!px) { prevPx = null; continue; }
             if (!prevPx) {
@@ -1797,7 +1799,7 @@
           // meteorological: arrow points where it's coming FROM. Flip 180° so the arrow
           // shows where the wave is GOING TO.
           const u = -Math.sin(rad), v = -Math.cos(rad);
-          const proj = ol.proj.fromLonLat([lon, lat], rasterProjection);
+          const proj = ol.proj.fromLonLat([lon, lat], mapProjection);
           const c = map.getPixelFromCoordinate(proj);
           if (!c) continue;
           const t = Math.max(0, Math.min(1, (mag - r.vmin) / magRange));
@@ -1843,8 +1845,8 @@
       flowCtx.lineWidth = 0.8;
       flowCtx.font = '9px monospace';
       flowCtx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-      const toPxX = lon => map.getPixelFromCoordinate(ol.proj.fromLonLat([lon, lats[0]], rasterProjection))?.[0];
-      const toPxY = lat => map.getPixelFromCoordinate(ol.proj.fromLonLat([lons[0], lat], rasterProjection))?.[1];
+      const toPxX = lon => map.getPixelFromCoordinate(ol.proj.fromLonLat([lon, lats[0]], mapProjection))?.[0];
+      const toPxY = lat => map.getPixelFromCoordinate(ol.proj.fromLonLat([lons[0], lat], mapProjection))?.[1];
       const xMin = toPxX(lons[0]), xMax = toPxX(lons[nx-1]);
       const yMin = toPxY(lats[ny-1]), yMax = toPxY(lats[0]);
       const w = xMax - xMin, h = yMin - yMax;
@@ -1979,8 +1981,8 @@
           p.lon += (vec.u / vec.speed) * dt / cosLat;
           p.lat += (vec.v / vec.speed) * dt;
           p.age += 1;
-          const before = ol.proj.fromLonLat([oldLon, oldLat], rasterProjection);
-          const after  = ol.proj.fromLonLat([p.lon, p.lat], rasterProjection);
+          const before = ol.proj.fromLonLat([oldLon, oldLat], mapProjection);
+          const after  = ol.proj.fromLonLat([p.lon, p.lat], mapProjection);
           const beforePx = map.getPixelFromCoordinate(before);
           const afterPx  = map.getPixelFromCoordinate(after);
           if (!beforePx || !afterPx) continue;
@@ -2140,7 +2142,10 @@
         updateLayerAvailability();
         drawColorbar();
         setFrame(startIdx);
-        map.getView().fit(devDiagnostics ? fieldBbox : bbox, { padding: [10, 10, 60, 10] });
+        map.getView().fit(
+          ol.proj.transformExtent(devDiagnostics ? fieldBbox : bbox, rasterProjection, mapProjection),
+          { padding: [10, 10, 60, 10] }
+        );
 
         // Side-panel UI (hamburger + tide station picker) — must be wired
         // after the hamburger markup exists and after forecastData so the
