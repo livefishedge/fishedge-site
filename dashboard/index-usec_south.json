@@ -1,6 +1,6 @@
 {
   "region": "usec_south",
-  "last_updated": "2026-08-29T03:56:20.319013Z",
+  "last_updated": "2026-08-29T04:48:34.568480Z",
   "vars": [
     "chl",
     "sst",
@@ -5451,11 +5451,11 @@
     "online_retention_days": 31
   },
   "_dashboard_rewrite": {
-    "rewritten_at": "2026-08-29T04:38:03.336976+00:00",
+    "rewritten_at": "2026-08-29T05:08:02.878728+00:00",
     "r2_base": "https://data.fishedge.live",
     "retention_days": 14,
     "cutoff_doy": 227,
     "frames_kept": 668,
-    "frames_dropped_outside_retention": 949
+    "frames_dropped_outside_retention": 947
   }
 }
