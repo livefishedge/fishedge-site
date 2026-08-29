@@ -1097,7 +1097,7 @@
       // ImageCanvas implementations that do not invalidate after a product
       // switch. This keeps the visual contract deterministic: fill first,
       // then partition streamlines and atmospheric arrows above it.
-      drawWaveHeatOverlay();
+      if (hasVisibleRasterVariable()) drawWaveHeatOverlay();
       if (layerVisibility.swell || layerVisibility.wind_wave) drawWavePackets();
       if (layerVisibility.pressure) drawIsobars(true);
       if (layerVisibility.wind) {
