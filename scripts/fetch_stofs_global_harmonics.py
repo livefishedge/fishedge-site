@@ -33,6 +33,10 @@ BBOX = [-77.0, 36.0, -72.0, 40.0]
 STEP = 0.25
 CONSTITUENTS = {"M2": 12.4206, "S2": 12.0, "K1": 23.9345, "O1": 25.8193}
 M2_HOURS = CONSTITUENTS["M2"]
+# Below this amplitude the phase of a fitted constituent is effectively
+# undefined.  Keep those cells out of the co-tidal field rather than allowing
+# tiny coastal/noise fits to create false phase contours.
+MIN_M2_AMPLITUDE_M = 0.03
 
 
 class RemoteClassicNetCDF:
@@ -202,13 +206,32 @@ def fit_and_rasterize(values, x, y, times):
         cols.extend((np.cos(2 * np.pi * t / period), np.sin(2 * np.pi * t / period)))
     design = np.column_stack(cols)
     coeff = np.full((design.shape[1], values.shape[1]), np.nan)
-    for i in range(values.shape[1]):
-        ok = np.isfinite(values[:, i])
+    quality = np.zeros(values.shape[1], dtype=bool)
+    finite = np.isfinite(values)
+    complete = finite.all(axis=0)
+    if complete.any():
+        # All complete nodes share the same design matrix; solve them in one
+        # BLAS call instead of thousands of tiny lstsq invocations.
+        coeff[:, complete] = np.linalg.pinv(design) @ values[:, complete]
+    for i in np.flatnonzero(~complete):
+        ok = finite[:, i]
         # The 126-hour source supports a well-conditioned fit with the
         # sampled records; require only an overdetermined set, not 3x the
         # coefficient count (which would reject a 24-sample/3-hour run).
         if ok.sum() >= design.shape[1] + 2:
             coeff[:, i] = np.linalg.lstsq(design[ok], values[ok, i], rcond=None)[0]
+    for i in range(values.shape[1]):
+        if not np.isfinite(coeff[:, i]).all():
+            continue
+        # A short operational forecast contains surge and other
+        # non-astronomical energy. Reject fits whose M2 signal is weak or
+        # whose unexplained residual is comparable to that signal.
+        m2_amp = float(np.hypot(coeff[1, i], coeff[2, i]))
+        ok = finite[:, i]
+        residual = values[ok, i] - design[ok] @ coeff[:, i]
+        rms = float(np.sqrt(np.mean(residual * residual)))
+        quality[i] = m2_amp >= MIN_M2_AMPLITUDE_M and rms <= max(0.04, 0.45 * m2_amp)
+    coeff[:, ~quality] = np.nan
     tree = cKDTree(np.column_stack((x, y)))
     target = np.array([(lon, lat) for lat in lats for lon in lons])
     _, ix = tree.query(target, k=min(8, len(x)))
@@ -256,7 +279,7 @@ def merge_forecast(path, fields, source):
         frame["tide_phase_deg"] = [[None if value is None else float((360.0 * hours / M2_HOURS - value) % 360.0) for value in row] for row in high_phase]
     if wet_mask is not None:
         payload["tide_water_cells"] = wet_mask
-    payload["tide_harmonic_source"] = {"provider": "NOAA STOFS-2D Global HTP", "object": source, "constituents": list(CONSTITUENTS), "primary": "M2", "method": "lazy regional mesh extraction + harmonic fit"}
+    payload["tide_harmonic_source"] = {"provider": "NOAA STOFS-2D Global HTP", "object": source, "constituents": list(CONSTITUENTS), "primary": "M2", "method": "lazy regional mesh extraction + QC harmonic fit", "min_m2_amplitude_m": MIN_M2_AMPLITUDE_M}
     Path(path).write_text(json.dumps(payload, allow_nan=False, separators=(",", ":")))
 
 
@@ -270,12 +293,15 @@ def main():
     ap.add_argument("--merge-forecast", nargs="*", default=[])
     args = ap.parse_args()
     key = find_htp(args.date, args.cycle)
-    mesh_key = find_mesh_file(args.date, args.cycle)
-    mesh_remote = RemoteClassicNetCDF(f"{S3}/{mesh_key}")
-    try:
-        m = mesh(mesh_remote)
-    finally:
-        mesh_remote.close()
+    if MESH_CACHE.exists():
+        m = dict(np.load(MESH_CACHE, allow_pickle=False))
+    else:
+        mesh_key = find_mesh_file(args.date, args.cycle)
+        mesh_remote = RemoteClassicNetCDF(f"{S3}/{mesh_key}")
+        try:
+            m = mesh(mesh_remote)
+        finally:
+            mesh_remote.close()
     remote = RemoteClassicNetCDF(f"{S3}/{key}")
     try:
         time_count = int(remote.ds.variables["zeta"].data.shape[0])
