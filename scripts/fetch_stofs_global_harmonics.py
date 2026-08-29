@@ -13,10 +13,12 @@ for these fields.
 """
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 import datetime as dt
 import json
 import os
 import tempfile
+import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -30,6 +32,7 @@ MESH_CACHE = Path(__file__).resolve().parents[1] / "data" / "usec_md" / "briefin
 BBOX = [-77.0, 36.0, -72.0, 40.0]
 STEP = 0.25
 CONSTITUENTS = {"M2": 12.4206, "S2": 12.0, "K1": 23.9345, "O1": 25.8193}
+M2_HOURS = CONSTITUENTS["M2"]
 
 
 class RemoteClassicNetCDF:
@@ -37,8 +40,16 @@ class RemoteClassicNetCDF:
 
     def __init__(self, url):
         self.url = url
-        head = requests.head(url, timeout=60)
-        head.raise_for_status()
+        head = None
+        for attempt in range(6):
+            try:
+                head = requests.head(url, timeout=180)
+                head.raise_for_status()
+                break
+            except requests.RequestException:
+                if attempt == 5:
+                    raise
+                time.sleep(2.0 * (attempt + 1))
         self.size = int(head.headers["Content-Length"])
         self.tmp = tempfile.NamedTemporaryFile(prefix="stofs-header-", suffix=".nc", delete=False)
         self.path = self.tmp.name
@@ -46,20 +57,41 @@ class RemoteClassicNetCDF:
         os.truncate(self.path, self.size)
         with open(self.path, "r+b") as f:
             f.write(self.range(0, min(self.size, 4 * 1024 * 1024)))
-        self.ds = netcdf_file(self.path, mmap=False)
+        # mmap maps the sparse file without reading record payloads.  The
+        # arrays are only used to discover byte offsets; payload reads below
+        # still go through HTTP Range requests.
+        self.ds = netcdf_file(self.path, mmap=True)
+        self._base_ptr = np.frombuffer(self.ds._mm_buf, dtype=np.uint8).__array_interface__["data"][0]
 
     def range(self, start, length):
         end = start + length - 1
-        r = requests.get(self.url, headers={"Range": f"bytes={start}-{end}"}, timeout=180)
-        r.raise_for_status()
-        if len(r.content) != length:
-            raise RuntimeError(f"short range read {len(r.content)} != {length}")
-        return r.content
+        last_error = None
+        for attempt in range(6):
+            try:
+                r = requests.get(self.url, headers={"Range": f"bytes={start}-{end}"}, timeout=180)
+                r.raise_for_status()
+                if len(r.content) != length:
+                    raise RuntimeError(f"short range read {len(r.content)} != {length}")
+                return r.content
+            except (requests.RequestException, RuntimeError) as exc:
+                last_error = exc
+                if attempt == 5:
+                    raise
+                time.sleep(1.5 * (attempt + 1))
+        raise last_error
 
     def variable_bytes(self, name):
         var = self.ds.variables[name]
         count = int(np.prod(var.data.shape))
-        return self.range(int(var._begin), count * var.data.dtype.itemsize)
+        if var.data.shape and var.data.shape[0] is None:
+            raise RuntimeError(f"record variable {name} cannot be read as one contiguous array")
+        begin = self.offset(name)
+        return self.range(begin, count * var.data.dtype.itemsize)
+
+    def offset(self, name):
+        """Return the NetCDF byte offset from the mmap-backed array view."""
+        array = self.ds.variables[name].data
+        return int(array.__array_interface__["data"][0] - self._base_ptr)
 
     def close(self):
         self.ds.close()
@@ -78,6 +110,19 @@ def find_htp(date, cycle):
     return keys[0]
 
 
+def find_mesh_file(date, cycle):
+    """Find the one-time STOFS mesh companion (same node numbering)."""
+    prefix = f"stofs_2d_glo.{date}/{cycle}/rerun/"
+    r = requests.get(f"{S3}/", params={"list-type": "2", "prefix": prefix, "max-keys": 1000}, timeout=30)
+    r.raise_for_status()
+    root = ET.fromstring(r.text)
+    keys = [e.text for e in root.findall("{*}Contents/{*}Key") if e.text]
+    keys = [k for k in keys if k.endswith("stofs_2d_glo_tide.68.nc")]
+    if not keys:
+        raise RuntimeError(f"no one-timestep STOFS mesh file at {prefix}")
+    return keys[0]
+
+
 def mesh(remote):
     """Read/cache coordinates and triangle connectivity for USEC-MD."""
     if MESH_CACHE.exists():
@@ -85,8 +130,14 @@ def mesh(remote):
     x = np.frombuffer(remote.variable_bytes("x"), dtype=remote.ds.variables["x"].data.dtype).copy()
     y = np.frombuffer(remote.variable_bytes("y"), dtype=remote.ds.variables["y"].data.dtype).copy()
     elements = np.frombuffer(remote.variable_bytes("element"), dtype=remote.ds.variables["element"].data.dtype).copy().reshape((-1, 3)) - 1
-    node_ok = (x >= BBOX[0] - 0.5) & (x <= BBOX[2] + 0.5) & (y >= BBOX[1] - 0.5) & (y <= BBOX[3] + 0.5)
-    selected_nodes = np.flatnonzero(node_ok)
+    # Select only the mesh neighborhood needed by the 17x21 output grid.
+    # The global mesh is highly refined near shore; indexing every node in a
+    # half-degree collar would defeat lazy zeta reads without improving the
+    # published raster.
+    target = np.array([(lon, lat) for lat in np.arange(BBOX[1], BBOX[3] + STEP / 2, STEP) for lon in np.arange(BBOX[0], BBOX[2] + STEP / 2, STEP)])
+    tree = cKDTree(np.column_stack((x, y)))
+    _, nearest = tree.query(target, k=min(32, len(x)))
+    selected_nodes = np.unique(np.asarray(nearest).ravel())
     selected_set = np.zeros(len(x), dtype=bool); selected_set[selected_nodes] = True
     selected_elements = elements[np.all(selected_set[elements], axis=1)]
     MESH_CACHE.parent.mkdir(parents=True, exist_ok=True)
@@ -97,8 +148,8 @@ def mesh(remote):
 def read_zeta(remote, node_ids, hours):
     var = remote.ds.variables["zeta"]
     itemsize = var.data.dtype.itemsize
-    recsize = int(remote.ds._recsz)
-    begin = int(var._begin)
+    recsize = int(remote.ds._recsize)
+    begin = remote.offset("zeta")
     # Group node IDs into contiguous spans so each time step uses a small
     # number of range requests even though the source is unstructured.
     spans = []
@@ -109,14 +160,35 @@ def read_zeta(remote, node_ids, hours):
             spans.append((start, previous + 1)); start = value
         previous = value
     spans.append((start, previous + 1))
+    # NetCDF-3 records are node-contiguous. Coalesce nearby sparse runs into
+    # bounded byte windows to keep HTTP request count low while still avoiding
+    # a full 100-MB-per-hour global record read.
+    joined = []
+    for lo, hi in spans:
+        if joined and lo - joined[-1][1] <= 10_000 and hi - joined[-1][0] <= 2_000_000:
+            joined[-1] = (joined[-1][0], hi)
+        else:
+            joined.append((lo, hi))
+    coalesced = []
+    for lo, hi in joined:
+        while hi - lo > 2_000_000:
+            coalesced.append((lo, lo + 2_000_000)); lo += 2_000_000
+        coalesced.append((lo, hi))
+    spans = coalesced
     out = np.full((len(hours), len(node_ids)), np.nan)
-    positions = {int(node): i for i, node in enumerate(node_ids)}
+    def fetch_span(hour, lo, hi):
+        raw = remote.range(begin + hour * recsize + lo * itemsize, (hi - lo) * itemsize)
+        values = np.frombuffer(raw, dtype=var.data.dtype).astype(float)
+        values[values < -9000] = np.nan
+        return lo, hi, values
     for ti, hour in enumerate(hours):
-        for lo, hi in spans:
-            raw = remote.range(begin + hour * recsize + lo * itemsize, (hi - lo) * itemsize)
-            values = np.frombuffer(raw, dtype=var.data.dtype).astype(float)
-            for offset, value in enumerate(values):
-                out[ti, positions[lo + offset]] = np.nan if value < -9000 else value
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            reads = list(pool.map(lambda span: fetch_span(int(hour), *span), spans))
+        for lo, hi, values in reads:
+            left = int(np.searchsorted(node_ids, lo, side="left"))
+            right = int(np.searchsorted(node_ids, hi, side="left"))
+            selected = values[node_ids[left:right] - lo]
+            out[ti, left:right] = selected
     return out
 
 
@@ -132,7 +204,10 @@ def fit_and_rasterize(values, x, y, times):
     coeff = np.full((design.shape[1], values.shape[1]), np.nan)
     for i in range(values.shape[1]):
         ok = np.isfinite(values[:, i])
-        if ok.sum() >= design.shape[1] * 3:
+        # The 126-hour source supports a well-conditioned fit with the
+        # sampled records; require only an overdetermined set, not 3x the
+        # coefficient count (which would reject a 24-sample/3-hour run).
+        if ok.sum() >= design.shape[1] + 2:
             coeff[:, i] = np.linalg.lstsq(design[ok], values[ok, i], rcond=None)[0]
     tree = cKDTree(np.column_stack((x, y)))
     target = np.array([(lon, lat) for lat in lats for lon in lons])
@@ -150,7 +225,20 @@ def fit_and_rasterize(values, x, y, times):
         b = np.sum(safe_weights * np.where(valid, cb, 0.0), axis=1)
         covered = valid.any(axis=1)
         a[~covered] = np.nan; b[~covered] = np.nan
-        result[name] = {"amplitude_ft": (np.hypot(a, b) * 3.280839895).reshape(len(lats), len(lons)).tolist(), "phase_deg": (np.rad2deg(np.arctan2(b, a)) % 360).reshape(len(lats), len(lons)).tolist()}
+        amplitude = (np.hypot(a, b) * 3.280839895).reshape(len(lats), len(lons))
+        phase = (np.rad2deg(np.arctan2(b, a)) % 360).reshape(len(lats), len(lons))
+        result[name] = {
+            "amplitude_ft": [[None if not np.isfinite(v) else float(v) for v in row] for row in amplitude],
+            "phase_deg": [[None if not np.isfinite(v) else float(v) for v in row] for row in phase],
+        }
+    # A target is wet only when all four surrounding raster corners have a
+    # valid source fit. This conservative mask prevents contour segments from
+    # crossing dry/land cells at the coast.
+    m2_amp = np.asarray(result["M2"]["amplitude_ft"], dtype=float)
+    wet_points = np.isfinite(m2_amp)
+    wet_cells = (wet_points[:-1, :-1] & wet_points[1:, :-1] &
+                 wet_points[:-1, 1:] & wet_points[1:, 1:])
+    result["wet_mask"] = wet_cells.tolist()
     return result
 
 
@@ -159,12 +247,15 @@ def merge_forecast(path, fields, source):
     payload = json.loads(Path(path).read_text())
     amp = fields["M2"]["amplitude_ft"]
     high_phase = fields["M2"]["phase_deg"]
+    wet_mask = fields.get("wet_mask")
     first = dt.datetime.strptime(payload["frames"][0]["time"].replace("Z", ""), "%Y-%m-%dT%H:%M")
     for frame in payload["frames"]:
         current = dt.datetime.strptime(frame["time"].replace("Z", ""), "%Y-%m-%dT%H:%M")
         hours = (current - first).total_seconds() / 3600.0
         frame["tide_amplitude_ft"] = amp
         frame["tide_phase_deg"] = [[None if value is None else float((360.0 * hours / M2_HOURS - value) % 360.0) for value in row] for row in high_phase]
+    if wet_mask is not None:
+        payload["tide_water_cells"] = wet_mask
     payload["tide_harmonic_source"] = {"provider": "NOAA STOFS-2D Global HTP", "object": source, "constituents": list(CONSTITUENTS), "primary": "M2", "method": "lazy regional mesh extraction + harmonic fit"}
     Path(path).write_text(json.dumps(payload, allow_nan=False, separators=(",", ":")))
 
@@ -174,19 +265,26 @@ def main():
     ap.add_argument("--date", required=True)
     ap.add_argument("--cycle", default="00")
     ap.add_argument("--hours", type=int, default=126)
+    ap.add_argument("--stride", type=int, default=3, help="sample every N source hours for the harmonic fit")
     ap.add_argument("--output", required=True, type=Path)
     ap.add_argument("--merge-forecast", nargs="*", default=[])
     args = ap.parse_args()
     key = find_htp(args.date, args.cycle)
+    mesh_key = find_mesh_file(args.date, args.cycle)
+    mesh_remote = RemoteClassicNetCDF(f"{S3}/{mesh_key}")
+    try:
+        m = mesh(mesh_remote)
+    finally:
+        mesh_remote.close()
     remote = RemoteClassicNetCDF(f"{S3}/{key}")
     try:
-        m = mesh(remote)
-        hours = np.arange(min(args.hours, len(remote.ds.dimensions["time"])))
+        time_count = int(remote.ds.variables["zeta"].data.shape[0])
+        hours = np.arange(0, min(args.hours, time_count), max(1, args.stride))
         values = read_zeta(remote, m["node_ids"], hours)
         fields = fit_and_rasterize(values, m["x"], m["y"], hours)
     finally:
         remote.close()
-    result = {"source": "NOAA STOFS-2D Global HTP", "source_object": key, "constituents": fields, "bbox": BBOX, "grid_step_deg": STEP, "wet_mask": np.isfinite(fields["M2"]["amplitude_ft"]).tolist()}
+    result = {"source": "NOAA STOFS-2D Global HTP", "source_object": key, "constituents": fields, "bbox": BBOX, "grid_step_deg": STEP, "wet_mask": fields["wet_mask"]}
     args.output.write_text(json.dumps(result, allow_nan=False, separators=(",", ":")))
     for path in args.merge_forecast:
         merge_forecast(path, fields, key)
