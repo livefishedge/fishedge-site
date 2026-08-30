@@ -69,6 +69,10 @@
     #bv-menu-panel .dot-tide{ background:#4fc3f7; }
     #bv-menu-panel .bv-status{ font-size:11px; color:#9fb0c3; padding:6px 8px; border-top:1px solid rgba(255,255,255,0.1); }
     #bv-menu-panel .bv-briefing-source{ font-size:10px; color:#7a8fa8; margin-top:-3px; }
+    #bv-menu-panel .bv-tide-key{ display:flex; flex-direction:column; gap:6px; padding:4px 8px 2px 34px; color:#9fb0c3; font-size:10px; line-height:1.35; }
+    #bv-menu-panel .bv-tide-key > div{ display:flex; align-items:flex-start; gap:7px; }
+    #bv-menu-panel .bv-key-line{ display:inline-block; flex:0 0 18px; margin-top:5px; height:0; border-top:2px solid #80deea; }
+    #bv-menu-panel .bv-key-range{ border-top:2px dashed #e6f7ff; }
 
     /* Briefing details live inside the hamburger menu so the map remains
        unobstructed. */
@@ -161,8 +165,12 @@
         <label><input type="checkbox" data-layer="temperature"><span class="bv-dot dot-temp"></span>Temp</label>
         <label><input type="checkbox" data-layer="pressure"><span class="bv-dot dot-press"></span>Pressure</label>
         <label><input type="checkbox" data-layer="tide_level"><span class="bv-dot dot-tide"></span>Predicted tide level (low/high)</label>
-        <label><input type="checkbox" data-layer="tide_phase" checked><span class="bv-dot dot-tide"></span>Co-tidal phase</label>
-        <label><input type="checkbox" data-layer="tide_range" checked><span class="bv-dot dot-tide"></span>Co-range amplitude (static)</label>
+        <label><input type="checkbox" data-layer="tide_phase" checked><span class="bv-dot dot-tide"></span>Co-tidal lines — same peak time</label>
+        <label><input type="checkbox" data-layer="tide_range" checked><span class="bv-dot dot-tide"></span>Co-range lines — same tidal strength</label>
+        <div class="bv-tide-key">
+          <div><i class="bv-key-line"></i><span>Co-tidal: places where high tide arrives together. The colored bands show timing through the tide cycle — they do not mean high tide is happening there now.</span></div>
+          <div><i class="bv-key-line bv-key-range"></i><span>Co-range: places with the same tidal amplitude. Each dashed line carries a number; numbers are feet.</span></div>
+        </div>
         <label><input type="checkbox" data-layer="wind" checked><span class="bv-dot dot-wind"></span>Wind</label>
         <label><input type="checkbox" data-layer="wind_wave" checked><span class="bv-dot dot-composite"></span>Wind-Wave</label>
         <label><input type="checkbox" data-layer="swell" checked><span class="bv-dot dot-swell"></span>Swell</label>
@@ -1022,10 +1030,12 @@
       const project = (xi, yi) => map.getPixelFromCoordinate(
         ol.proj.fromLonLat([lons[xi], lats[yi]], mapProjection)
       );
-      const segment = (grid, level, style, width, dashed, circular) => {
+      const segment = (grid, level, style, width, dashed, circular, labelText) => {
         ctx.strokeStyle = style;
         ctx.lineWidth = width;
         ctx.setLineDash(dashed ? [5, 4] : []);
+        let labelCandidate = null;
+        let labelLength = 0;
         for (let yi = 0; yi < lats.length - 1; yi++) {
           for (let xi = 0; xi < lons.length - 1; xi++) {
             // The atlas mask is a cell mask, not a point mask. Fail closed:
@@ -1060,32 +1070,54 @@
             if (points.length >= 2) {
               ctx.beginPath(); ctx.moveTo(points[0][0], points[0][1]);
               ctx.lineTo(points[1][0], points[1][1]); ctx.stroke();
+              if (labelText) {
+                const dx = points[1][0] - points[0][0], dy = points[1][1] - points[0][1];
+                const length = Math.hypot(dx, dy);
+                if (length > labelLength) {
+                  labelLength = length;
+                  labelCandidate = { x: (points[0][0] + points[1][0]) / 2, y: (points[0][1] + points[1][1]) / 2, angle: Math.atan2(dy, dx) };
+                }
+              }
             }
           }
         }
         ctx.setLineDash([]);
+        if (labelCandidate) {
+          let angle = labelCandidate.angle;
+          if (angle > Math.PI / 2 || angle < -Math.PI / 2) angle += Math.PI;
+          ctx.save();
+          ctx.translate(labelCandidate.x, labelCandidate.y);
+          ctx.rotate(angle);
+          ctx.font = '700 10px monospace';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.lineWidth = 3;
+          ctx.strokeStyle = 'rgba(5,11,16,0.92)';
+          ctx.strokeText(labelText, 0, 0);
+          ctx.fillStyle = '#ffffff';
+          ctx.fillText(labelText, 0, 0);
+          ctx.restore();
+        }
       };
       if (layerVisibility.tide_phase && currentFrame.tide_phase_deg) {
-        // The offshore phase gradient is modest, so 1° contours can leave
-        // most of the open ocean visually empty.  One-degree intervals keep
-        // the contours truthful while making the continuous offshore field
-        // legible. Phase is cyclic; segment() tests the +/-360 seam.
+        // Use 15° timing bands (about half an M2 hour) so the phase overlay
+        // remains readable. These colors encode timing, not tide height.
         const phaseColors = ['#fff176', '#e6ee9c', '#b9f6ca', '#80deea', '#4dd0e1', '#81d4fa', '#90caf9', '#9fa8da', '#b39ddb', '#ce93d8', '#f48fb1', '#ffab91'];
-        for (let level = 0; level < 360; level += 0.5) {
+        for (let level = 0; level < 360; level += 15) {
           segment(currentFrame.tide_phase_deg, level, phaseColors[Math.floor(level / 15) % phaseColors.length], 1.8, false, true);
         }
       }
       if (layerVisibility.tide_range && currentFrame.tide_amplitude_ft) {
         const values = currentFrame.tide_amplitude_ft.flat().filter(Number.isFinite);
         if (values.length) {
-          // Dynamic min/max bins are dominated by shallow coastal outliers
-          // and collapse the offshore amplitude contours. Use a stable
-          // 0.05-ft interval instead; clipping is naturally handled by the
-          // finite grid values and the wet-cell mask.
-          const lo = Math.floor(Math.min(...values) / 0.05) * 0.05;
-          const hi = Math.ceil(Math.max(...values) / 0.05) * 0.05;
-          for (let level = lo + 0.05; level < hi; level += 0.05) {
-            segment(currentFrame.tide_amplitude_ft, level, 'rgba(230,245,255,0.95)', 1.8, true, false);
+          // Give each visible contour enough room for one value label. This
+          // is amplitude (half the predicted high-to-low range), not the
+          // instantaneous tide level.
+          const step = 0.10;
+          const lo = Math.floor(Math.min(...values) / step) * step;
+          const hi = Math.ceil(Math.max(...values) / step) * step;
+          for (let level = lo + step; level < hi + step / 2; level += step) {
+            segment(currentFrame.tide_amplitude_ft, level, 'rgba(230,245,255,0.95)', 1.8, true, false, `${level.toFixed(1)}`);
           }
         }
       }
