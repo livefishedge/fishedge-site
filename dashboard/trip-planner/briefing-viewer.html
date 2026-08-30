@@ -161,7 +161,7 @@
         <label><input type="checkbox" data-layer="wave_height" checked><span class="bv-dot dot-wave"></span>Significant Wave Height <button class="bv-unit-toggle" type="button" data-unit-key="wave_height_ft">ft</button></label>
         <label><input type="checkbox" data-layer="temperature"><span class="bv-dot dot-temp"></span>Temp <button class="bv-unit-toggle" type="button" data-unit-key="temperature_f">°F</button></label>
         <label><input type="checkbox" data-layer="pressure"><span class="bv-dot dot-press"></span>Pressure</label>
-        <label title="Tidal stage at each location’s own phase"><input type="checkbox" data-layer="tide_level" checked><span class="bv-dot dot-tide"></span>tidal stage</label>
+        <label title="Tidal stage at each location’s own phase"><input type="checkbox" data-layer="tide_level" checked><span class="bv-dot dot-tide"></span>Tidal Stage</label>
         <label title="Tidal Range contour overlay"><input type="checkbox" data-layer="tide_range" checked><span class="bv-dot dot-tide"></span>Tidal Range</label>
         <label><input type="checkbox" data-layer="wind" checked><span class="bv-dot dot-wind"></span>Wind <button class="bv-unit-toggle" type="button" data-unit-key="wind_speed_kn">kn</button></label>
         <label><input type="checkbox" data-layer="wind_wave" checked><span class="bv-dot dot-composite"></span>Wind-Wave <button class="bv-unit-toggle" type="button" data-unit-key="wind_wave_height_ft">ft</button></label>
@@ -259,7 +259,7 @@
       wave_composite:{name: 'Significant wave height', unit: 'ft', scale: 'UV', viz: 'composite', dataKey: 'wave_height_ft', dynamicRange: true },
       wind_speed_kn: { name: 'Wind flow',   unit: 'kn',  scale: 'CHL', viz: 'streamlines', dynamicRange: false },
       pressure_hpa:  { name: 'Pressure',    unit: 'hPa', scale: 'SLA', viz: 'contours',    dynamicRange: true  },
-      astronomical_tide_ft: { name: 'Local tide stage', unit: 'high → falling → low → rising', scale: 'TIDE', viz: 'heat', dataKey: 'astronomical_tide_ft', dynamicRange: false },
+      astronomical_tide_ft: { name: 'Tidal Stage', unit: 'high → falling → low → rising', scale: 'TIDE', viz: 'heat', dataKey: 'astronomical_tide_ft', dynamicRange: false },
     };
 
     // viridis-like 7-stop palette (matches captain's UV_SCALE / CHL_ALGAE feel)
@@ -937,7 +937,9 @@
       const grids = forecastData?.frames?.map(frame => frame?.[scalarKey]).filter(Boolean) || [];
       const grid = grids[0];
       if (!def.dynamicRange || !grid || !grid.length) {
-        activeRange = { vmin: 0, vmax: 30 };
+        const fixedMax = scalarKey === 'wind_speed_kn' && unitModes.wind_speed_kn === 'metric'
+          ? 30 * 0.514444 : 30;
+        activeRange = { vmin: 0, vmax: fixedMax };
         return;
       }
       const flat = [];

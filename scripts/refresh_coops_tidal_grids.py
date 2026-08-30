@@ -44,15 +44,14 @@ def refresh(path, tides):
     land = land_mask(lats, lons)
     payload["tide_water_cells"] = water_cell_mask(lats, lons)
     add_tide_grids(payload["frames"], tides, lats, lons, preserve_ofs=True, land_mask=land)
+    add_harmonic_phase_amplitude(payload["frames"], tides=tides, lats=lats, lons=lons, land_mask=land)
     for frame in payload["frames"]:
         if "tide_height_ft" in frame and not frame.get("tide_model_source"):
             frame["tide_model_source"] = ["coops_station_blend"]
             frame["tide_model_datum"] = "MLLW"
-    # Co-tidal/co-range fields are populated only by the gridded STOFS HTP
-    # pipeline. Never manufacture offshore lines from station interpolation.
-    for frame in payload["frames"]:
-        frame.pop("tide_phase_deg", None)
-        frame.pop("tide_amplitude_ft", None)
+    # Preserve gridded harmonic fields when this refresh runs after the
+    # STOFS HTP merge. CO-OPS fills only missing total-height frames; it must
+    # never erase the local-stage / Tidal Range fields already in the artifact.
     payload.setdefault("quality", {})["coops_tidal_fallback"] = (
         "CO-OPS harmonic station blend; estimated between stations; "
         "OFS frames take precedence"
@@ -163,6 +162,12 @@ def add_harmonic_phase_amplitude(frames, tides=None, lats=None, lons=None, land_
     for index, frame in enumerate(frames):
         frame["tide_amplitude_ft"] = amp_json
         frame["tide_phase_deg"] = np.where(np.isfinite(phase[index]), phase[index], None).tolist()
+        astro = np.where(
+            np.isfinite(amp) & np.isfinite(phase[index]),
+            amp * np.cos(np.deg2rad(phase[index])),
+            np.nan,
+        )
+        frame["astronomical_tide_ft"] = [[None if not np.isfinite(v) else float(v) for v in row] for row in astro]
 
 
 def main():

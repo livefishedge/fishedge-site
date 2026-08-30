@@ -266,7 +266,7 @@ def fit_and_rasterize(values, x, y, times):
 
 
 def merge_forecast(path, fields, source):
-    """Attach the compact M2 phase/amplitude fields to viewer frames."""
+    """Attach harmonic range and summed astronomical tide to viewer frames."""
     payload = json.loads(Path(path).read_text())
     amp = fields["M2"]["amplitude_ft"]
     high_phase = fields["M2"]["phase_deg"]
@@ -277,6 +277,23 @@ def merge_forecast(path, fields, source):
         hours = (current - first).total_seconds() / 3600.0
         frame["tide_amplitude_ft"] = amp
         frame["tide_phase_deg"] = [[None if value is None else float((360.0 * hours / M2_HOURS - value) % 360.0) for value in row] for row in high_phase]
+        # Build the displayed local tide from all fitted constituents.  The
+        # stored phase is the phase at local high water, so each constituent
+        # contributes amplitude*cos(phase) at the selected forecast hour.
+        summed = []
+        for yi in range(len(amp)):
+            row = []
+            for xi in range(len(amp[yi])):
+                value = 0.0; covered = False
+                for name, period in CONSTITUENTS.items():
+                    a = fields[name]["amplitude_ft"][yi][xi]
+                    p = fields[name]["phase_deg"][yi][xi]
+                    if a is None or p is None: continue
+                    value += float(a) * np.cos(2.0 * np.pi * hours / period - np.deg2rad(float(p)))
+                    covered = True
+                row.append(float(value) if covered else None)
+            summed.append(row)
+        frame["astronomical_tide_ft"] = summed
     if wet_mask is not None:
         payload["tide_water_cells"] = wet_mask
     payload["tide_harmonic_source"] = {"provider": "NOAA STOFS-2D Global HTP", "object": source, "constituents": list(CONSTITUENTS), "primary": "M2", "method": "lazy regional mesh extraction + QC harmonic fit", "min_m2_amplitude_m": MIN_M2_AMPLITUDE_M}
