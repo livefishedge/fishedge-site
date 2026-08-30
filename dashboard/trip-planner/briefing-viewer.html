@@ -88,6 +88,11 @@
     #bv-side-panel .bv-row b{ color:#fff; font-weight:700; }
     #bv-moon-svg{ width:100%; height:auto; max-width:200px; align-self:center; }
     #bv-tide-svg{ width:100%; height:80px; }
+    #bv-station-popup{ min-width:260px; max-width:min(330px, calc(100vw - 28px)); padding:10px; background:rgba(5,11,16,0.96); border:1px solid #4fc3f7; border-radius:7px; box-shadow:0 8px 24px rgba(0,0,0,.55); color:#d6e5f2; }
+    #bv-station-popup h3{ margin:0 0 4px; font-size:12px; color:#fff; }
+    #bv-station-popup .bv-briefing-source{ font-size:10px; color:#7a8fa8; margin-bottom:4px; }
+    #bv-station-popup .bv-row{ display:flex; justify-content:space-between; gap:8px; font-size:10px; padding-top:3px; }
+    #bv-station-popup .bv-row b{ color:#fff; }
     .dot-temp { background: #ff8c00; }
     .dot-wave { background: #00c8ff; }
     .dot-swell { background: #8bd7ff; }
@@ -178,13 +183,6 @@
       <div class="bv-row"><span>Rise / Set</span><b id="bv-moon-rise-set">—</b></div>
     </div>
     <div class="bv-section">
-      <h3>Tide <select id="bv-tide-station" style="font-size:10px;background:#0c1723;color:#b3e5fc;border:1px solid #273649;border-radius:4px;padding:1px 4px;margin-left:4px;"></select></h3>
-      <div class="bv-briefing-source" id="bv-tide-source">CO-OPS harmonic prediction · MLLW datum</div>
-      <svg id="bv-tide-svg" viewBox="0 0 280 80" role="img" aria-label="24-hour tide curve"></svg>
-      <div class="bv-row"><span>Next event</span><b id="bv-tide-next">—</b></div>
-      <div class="bv-row"><span>Range</span><b id="bv-tide-range">—</b></div>
-    </div>
-    <div class="bv-section">
       <h3>Sun</h3>
       <div class="bv-row"><span>Sunrise</span><b id="bv-sun-rise">—</b></div>
       <div class="bv-row"><span>Sunset</span><b id="bv-sun-set">—</b></div>
@@ -193,6 +191,13 @@
   </div>
 
   <div id="bv-map" class="bv-map"></div>
+  <div id="bv-station-popup" style="display:none">
+    <h3 id="bv-station-name">Tide station</h3>
+    <div class="bv-briefing-source">CO-OPS harmonic prediction · MLLW datum</div>
+    <svg id="bv-tide-svg" viewBox="0 0 280 80" role="img" aria-label="24-hour tide prediction curve"></svg>
+    <div class="bv-row"><span>Next event</span><b id="bv-tide-next">—</b></div>
+    <div class="bv-row"><span>Range</span><b id="bv-tide-range">—</b></div>
+  </div>
 
   <div class="bv-framebar">
     <button id="bv-prev" aria-label="Previous frame">‹</button>
@@ -619,6 +624,39 @@
       controls: ol.control.defaults.defaults({ attribution: true, rotate: false }).extend([
         new ol.control.ScaleLine(),
       ]),
+    });
+
+    // CO-OPS stations are map features, not hidden briefing controls. Click a
+    // marker to open its hourly prediction curve at the map location.
+    const stationSource = new ol.source.Vector();
+    const stationLayer = new ol.layer.Vector({
+      source: stationSource,
+      zIndex: 25,
+      style: feature => new ol.style.Style({
+        image: new ol.style.Circle({ radius: 6, fill: new ol.style.Fill({ color: '#ffd166' }), stroke: new ol.style.Stroke({ color: '#111820', width: 2 }) }),
+        text: new ol.style.Text({ text: feature.get('name'), offsetY: -13, font: '700 10px sans-serif', fill: new ol.style.Fill({ color: '#fff' }), stroke: new ol.style.Stroke({ color: '#111820', width: 3 }) }),
+      }),
+    });
+    map.addLayer(stationLayer);
+    const stationPopup = document.getElementById('bv-station-popup');
+    const stationOverlay = new ol.Overlay({ element: stationPopup, positioning: 'bottom-center', offset: [0, -10], stopEvent: true });
+    map.addOverlay(stationOverlay);
+    function drawTideStations() {
+      stationSource.clear();
+      stationSource.addFeatures(TIDE_STATIONS.map(station => {
+        const feature = new ol.Feature({ geometry: new ol.geom.Point(ol.proj.fromLonLat([station.lon, station.lat], mapProjection)), name: station.name, stationId: station.id });
+        return feature;
+      }));
+    }
+    drawTideStations();
+    map.on('singleclick', event => {
+      const feature = map.forEachFeatureAtPixel(event.pixel, value => value, { layerFilter: layer => layer === stationLayer });
+      if (!feature) { stationPopup.style.display = 'none'; stationOverlay.setPosition(undefined); return; }
+      activeTideStation = TIDE_STATIONS.find(station => station.id === feature.get('stationId')) || TIDE_STATIONS[0];
+      document.getElementById('bv-station-name').textContent = activeTideStation.name;
+      renderActiveTide();
+      stationPopup.style.display = 'block';
+      stationOverlay.setPosition(feature.getGeometry().getCoordinates());
     });
 
     // Dev-only domain diagnostics: show the target box and the larger field
@@ -1077,9 +1115,11 @@
       // when streamlines or contours are showing — they carry the viz,
       // and the raster can produce subtle doubling with the basemap.
       if (rasterLayer) {
+        // Composite rendering paints its raster directly onto the overlay
+        // canvas. Keeping the OpenLayers ImageCanvas visible as well creates
+        // a second, slightly differently sampled grid (“ghost” offset).
         rasterLayer.setVisible(
-          (def.viz === 'heat' || def.viz === 'arrows' || def.viz === 'composite') &&
-          hasVisibleRasterVariable()
+          (def.viz === 'heat' || def.viz === 'arrows') && hasVisibleRasterVariable()
         );
         // setProduct calls map.render() before this visibility switch; render
         // again so the newly enabled composite heat layer is painted now.
@@ -2325,7 +2365,6 @@
         // when forecast.tides is absent.
         setupHamburger();
         setupUnitToggles();
-        setupTideStationSelect();
 
         // Sun + moon: pure-math, anchored to the bbox centroid and the
         // currently selected frame date. Cheap enough to render every tick.
