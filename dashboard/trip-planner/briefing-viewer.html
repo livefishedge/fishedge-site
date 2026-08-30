@@ -149,7 +149,7 @@
   <div class="bv-toolbar">
     <a class="bv-back" href="javascript:history.back()">← Back</a>
     <div>
-      <h1 class="bv-title">Briefing Viewer — <span id="bv-region">usec_md</span></h1>
+      <h1 class="bv-title">Marine Forecast</h1>
       <div class="bv-time" id="bv-time">7-Day Outlook · loading forecast…</div>
     </div>
     <button id="bv-hamburger-btn" aria-label="Open layer menu">☰</button>
@@ -1241,6 +1241,8 @@
       // switch. This keeps the visual contract deterministic: fill first,
       // then partition streamlines and atmospheric arrows above it.
       if (hasVisibleRasterVariable()) drawWaveHeatOverlay();
+      if (layerVisibility.wind_wave) drawPartitionMagnitudeHeat('wind_wave');
+      if (layerVisibility.swell) drawPartitionMagnitudeHeat('swell');
       if (layerVisibility.swell || layerVisibility.wind_wave) drawWavePackets();
       if (layerVisibility.pressure) drawIsobars(true);
       if (layerVisibility.wind) {
@@ -1287,6 +1289,42 @@
           streamlineCtx.lineTo(p11[0], p11[1]); streamlineCtx.lineTo(p01[0], p01[1]);
           streamlineCtx.closePath(); streamlineCtx.fill();
         }
+      }
+    }
+
+    const partitionRanges = new Map();
+    function drawPartitionMagnitudeHeat(kind) {
+      const key = kind === 'swell' ? 'swell_height_ft' : 'wind_wave_height_ft';
+      if (!currentFrame?.[key] || !forecastData?.frames) return;
+      const cacheKey = `${key}:${unitModes[key]}`;
+      let range = partitionRanges.get(cacheKey);
+      if (!range) {
+        const values = [];
+        for (const frame of forecastData.frames) {
+          for (const row of frame[key] || []) for (const value of row) {
+            if (Number.isFinite(value)) values.push(convertDisplayValue(key, value));
+          }
+        }
+        if (!values.length) return;
+        range = { vmin: Math.min(...values), vmax: Math.max(...values) };
+        if (range.vmax <= range.vmin) range.vmax = range.vmin + 1;
+        partitionRanges.set(cacheKey, range);
+      }
+      const grid = currentFrame[key], lons = forecastData.lons, lats = forecastData.lats;
+      const mask = forecastData.tide_water_cells;
+      for (let yi = 0; yi < lats.length - 1; yi++) for (let xi = 0; xi < lons.length - 1; xi++) {
+        if (!mask?.[yi]?.[xi]) continue;
+        const vals = [grid[yi]?.[xi], grid[yi]?.[xi + 1], grid[yi + 1]?.[xi], grid[yi + 1]?.[xi + 1]];
+        if (!vals.every(Number.isFinite)) continue;
+        const value = convertDisplayValue(key, vals.reduce((a, b) => a + b, 0) / vals.length);
+        const c = hexToRgb(sampleScale('UV', Math.max(0, Math.min(1, (value - range.vmin) / (range.vmax - range.vmin)))));
+        const points = [[lons[xi], lats[yi]], [lons[xi + 1], lats[yi]], [lons[xi + 1], lats[yi + 1]], [lons[xi], lats[yi + 1]]]
+          .map(coord => map.getPixelFromCoordinate(ol.proj.fromLonLat(coord, mapProjection)));
+        if (points.some(p => !p)) continue;
+        streamlineCtx.fillStyle = `rgba(${c[0]},${c[1]},${c[2]},0.30)`;
+        streamlineCtx.beginPath(); streamlineCtx.moveTo(points[0][0], points[0][1]);
+        for (const p of points.slice(1)) streamlineCtx.lineTo(p[0], p[1]);
+        streamlineCtx.closePath(); streamlineCtx.fill();
       }
     }
 
