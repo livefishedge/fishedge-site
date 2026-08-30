@@ -57,10 +57,21 @@ def ocean_cell_mask(lats, lons):
     land = [prep(record.geometry) for record in shapereader.Reader(land_path).records()]
     def ocean(lon, lat):
         return not any(shape.contains(Point(lon, lat)) for shape in land)
-    return np.array([[ocean((lons[xi] + lons[xi + 1]) / 2,
+    mask = np.array([[ocean((lons[xi] + lons[xi + 1]) / 2,
                             (lats[yi] + lats[yi + 1]) / 2)
                       for xi in range(len(lons) - 1)]
                      for yi in range(len(lats) - 1)], dtype=bool)
+    # At this compact resolution, favor retaining nearshore ocean cells over
+    # a perfectly conservative shoreline. This one-cell halo is documented
+    # and keeps coastal tidal contours continuous.
+    expanded = mask.copy()
+    for yi in range(mask.shape[0]):
+        for xi in range(mask.shape[1]):
+            if any(mask[yj, xj]
+                   for yj in range(max(0, yi - 1), min(mask.shape[0], yi + 2))
+                   for xj in range(max(0, xi - 1), min(mask.shape[1], xi + 2))):
+                expanded[yi, xi] = True
+    return expanded
 
 
 def fill_ocean_gaps(values, valid, ocean):

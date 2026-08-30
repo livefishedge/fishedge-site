@@ -748,7 +748,7 @@
       if (!grid || !grid.length || !grid[0].length) return;
       const lons = forecastData.lons, lats = forecastData.lats;
       if (!lons || !lats || lons.length < 2 || lats.length < 2) return;
-      // dynamic per-frame range — fall back to (0, 30) if activeRange not yet computed.
+      // Timeline-stable range — fall back to (0, 30) if not yet computed.
       // (Bug fix #0f6434f4: PRODUCTS no longer carries vmin/vmax on each entry;
       // drawFrameToTile was reading undefined and rasterizing NaN pixels.)
       const r = activeRange || { vmin: 0, vmax: 30 };
@@ -838,16 +838,19 @@
     function computeActiveRange() {
       const scalarKey = activeHeatKey() || (layerVisibility.pressure ? 'pressure_hpa' : null);
       const def = PRODUCTS[scalarKey || currentProduct];
-      const grid = currentFrame && scalarKey ? currentFrame[scalarKey] : null;
+      const grids = forecastData?.frames?.map(frame => frame?.[scalarKey]).filter(Boolean) || [];
+      const grid = grids[0];
       if (!def.dynamicRange || !grid || !grid.length) {
         activeRange = { vmin: 0, vmax: 30 };
         return;
       }
       const flat = [];
-      for (let yi = 0; yi < grid.length; yi++) {
-        for (let xi = 0; xi < grid[yi].length; xi++) {
-          const v = grid[yi][xi];
-          if (v != null && Number.isFinite(v)) flat.push(v);
+      for (const candidate of grids) {
+        for (let yi = 0; yi < candidate.length; yi++) {
+          for (let xi = 0; xi < candidate[yi].length; xi++) {
+            const v = candidate[yi][xi];
+            if (v != null && Number.isFinite(v)) flat.push(v);
+          }
         }
       }
       if (!flat.length) { activeRange = { vmin: 0, vmax: 30 }; return; }
@@ -856,7 +859,7 @@
       // pad by 5% on each side so the colorbar isn't pinned to extremes
       const pad = (vmax - vmin) * 0.05 || Math.max(1, Math.abs(vmax) * 0.05);
       vmin -= pad; vmax += pad;
-      // Use the padded raw range directly. drawColorbar already produces 5
+      // Use the padded full-timeline range directly. drawColorbar already produces 5
       // evenly-spaced ticks across [vmin, vmax] with decimals based on span
       // size (decimals=0 for span>=50, 1 for >=5, 2 for tighter). Previously
       // I tried rounding to nice numbers but nice() collapsed pressure data
