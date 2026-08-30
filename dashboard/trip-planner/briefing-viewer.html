@@ -164,7 +164,7 @@
         <label><input type="checkbox" data-layer="wave_height" checked><span class="bv-dot dot-wave"></span>Significant Wave Height</label>
         <label><input type="checkbox" data-layer="temperature"><span class="bv-dot dot-temp"></span>Temp</label>
         <label><input type="checkbox" data-layer="pressure"><span class="bv-dot dot-press"></span>Pressure</label>
-        <label><input type="checkbox" data-layer="tide_level"><span class="bv-dot dot-tide"></span>Predicted tide level (low/high)</label>
+        <label><input type="checkbox" data-layer="tide_level"><span class="bv-dot dot-tide"></span>Local tide stage (each place)</label>
         <label><input type="checkbox" data-layer="tide_phase" checked><span class="bv-dot dot-tide"></span>Co-tidal lines — same peak time</label>
         <label><input type="checkbox" data-layer="tide_range" checked><span class="bv-dot dot-tide"></span>Co-range lines — same tidal strength</label>
         <div class="bv-tide-key">
@@ -267,7 +267,7 @@
       wave_composite:{name: 'Significant wave height', unit: 'ft', scale: 'UV', viz: 'composite', dataKey: 'wave_height_ft', dynamicRange: true },
       wind_speed_kn: { name: 'Wind flow',   unit: 'kn',  scale: 'CHL', viz: 'streamlines', dynamicRange: false },
       pressure_hpa:  { name: 'Pressure',    unit: 'hPa', scale: 'SLA', viz: 'contours',    dynamicRange: true  },
-      astronomical_tide_ft: { name: 'Predicted astronomical tide', unit: 'ft relative to mean', scale: 'TIDE', viz: 'heat', dataKey: 'astronomical_tide_ft', dynamicRange: true },
+      astronomical_tide_ft: { name: 'Local tide stage', unit: 'high → falling → low → rising', scale: 'TIDE', viz: 'heat', dataKey: 'astronomical_tide_ft', dynamicRange: false },
     };
 
     // viridis-like 7-stop palette (matches captain's UV_SCALE / CHL_ALGAE feel)
@@ -280,7 +280,9 @@
       // higher positive values move through royal blue into purple. Tide
       // values use a signed-log transform below so small offshore changes
       // remain visible without saturating the shelf signal.
-      TIDE:[[0.0,'#d9f3ff'],[0.18,'#8ed8f8'],[0.38,'#2f8fce'],[0.58,'#1554b7'],[0.78,'#32258f'],[1.0,'#7b2cbf']],
+      // Cyclic local-stage map: high -> falling -> low -> rising -> high.
+      // The endpoints match so the cycle has no artificial seam.
+      TIDE:[[0.0,'#ef4444'],[0.125,'#f97316'],[0.25,'#facc15'],[0.375,'#84cc16'],[0.5,'#1683d8'],[0.625,'#2563eb'],[0.75,'#7c3aed'],[0.875,'#c026d3'],[1.0,'#ef4444']],
     };
 
     function lerp(a, b, t) { return a + (b - a) * t; }
@@ -709,6 +711,7 @@
     let currentProduct = 'wave_composite';
     let currentFrame = null;
     let activeRange = null; // {vmin, vmax} computed per-frame when dynamicRange=true
+    let localTideExtrema = null;
     const layerVisibility = { wave_height: true, temperature: false, pressure: false, tide_level: false, tide_phase: true, tide_range: true, swell: true, wind_wave: true, wind: true };
     const particles = [];
 
@@ -725,6 +728,55 @@
       if (layerVisibility.wave_height) return 'wave_height_ft';
       if (layerVisibility.pressure) return 'pressure_hpa';
       return null;
+    }
+
+    // Derive each cell's local tidal phase from the actual summed harmonic
+    // signal. Phase 0 is that cell's high tide, .25 is falling, .5 is low,
+    // and .75 is rising. The extrema are per-cell, never spatially shared.
+    function computeLocalTideExtrema() {
+      const frames = forecastData?.frames || [];
+      const sample = frames.find(frame => frame?.astronomical_tide_ft);
+      if (!sample) { localTideExtrema = null; return; }
+      const ny = sample.astronomical_tide_ft.length, nx = sample.astronomical_tide_ft[0]?.length || 0;
+      const min = Array.from({length: ny}, () => Array(nx).fill(Infinity));
+      const max = Array.from({length: ny}, () => Array(nx).fill(-Infinity));
+      for (const frame of frames) {
+        const grid = frame?.astronomical_tide_ft;
+        if (!grid) continue;
+        for (let yi = 0; yi < ny; yi++) for (let xi = 0; xi < nx; xi++) {
+          const v = grid[yi]?.[xi];
+          if (Number.isFinite(v)) { min[yi][xi] = Math.min(min[yi][xi], v); max[yi][xi] = Math.max(max[yi][xi], v); }
+        }
+      }
+      localTideExtrema = { min, max };
+    }
+
+    function localTideStage(frameIndex, yi, xi) {
+      const grid = forecastData?.frames?.[frameIndex]?.astronomical_tide_ft;
+      const v = grid?.[yi]?.[xi];
+      const lo = localTideExtrema?.min?.[yi]?.[xi], hi = localTideExtrema?.max?.[yi]?.[xi];
+      if (!Number.isFinite(v) || !Number.isFinite(lo) || !Number.isFinite(hi) || hi - lo < 1e-6) return null;
+      const prev = forecastData.frames[Math.max(0, frameIndex - 1)]?.astronomical_tide_ft?.[yi]?.[xi];
+      const next = forecastData.frames[Math.min(forecastData.frames.length - 1, frameIndex + 1)]?.astronomical_tide_ft?.[yi]?.[xi];
+      const dt = Math.max(1, (parseForecastTime(forecastData.frames[Math.min(forecastData.frames.length - 1, frameIndex + 1)]?.time) - parseForecastTime(forecastData.frames[Math.max(0, frameIndex - 1)]?.time)) / 3600000);
+      const half = (hi - lo) / 2, centered = (v - (hi + lo) / 2) / half;
+      const derivative = Number.isFinite(prev) && Number.isFinite(next) ? (next - prev) / dt : 0;
+      const omega = (2 * Math.PI) / 12.42;
+      let phase = Math.atan2(-derivative / (half * omega), centered) / (2 * Math.PI);
+      if (phase < 0) phase += 1;
+      return phase;
+    }
+
+    function localTideStageCell(frameIndex, yi, xi) {
+      const phases = [
+        localTideStage(frameIndex, yi, xi), localTideStage(frameIndex, yi, xi + 1),
+        localTideStage(frameIndex, yi + 1, xi), localTideStage(frameIndex, yi + 1, xi + 1)
+      ].filter(Number.isFinite);
+      if (!phases.length) return null;
+      const z = phases.reduce((acc, p) => [acc[0] + Math.cos(p * 2 * Math.PI), acc[1] + Math.sin(p * 2 * Math.PI)], [0, 0]);
+      let phase = Math.atan2(z[1], z[0]) / (2 * Math.PI);
+      if (phase < 0) phase += 1;
+      return phase;
     }
 
     function parseForecastTime(value) {
@@ -815,6 +867,7 @@
           if (maxX <= minX || maxY <= minY) continue;
 
           const yDir = py > npy ? 1 : -1; // pixel y goes down, lat y goes up
+          const localStage = dataKey === 'astronomical_tide_ft' ? localTideStageCell(frameIdx, yi, xi) : null;
           for (let yy = minY; yy < maxY; yy++) {
             // tY: 0 at top of cell, 1 at bottom
             const tY = yDir > 0 ? (py - yy) / hpx : (yy - npy) / hpx;
@@ -827,7 +880,9 @@
               const tX = (xx - px) / wpx;
               const ttX = Math.max(0, Math.min(1, tX));
               const v = vTop*(1-ttX) + vBot*ttX;
-              const tNorm = Math.max(0, Math.min(1, scalarNorm(v, vmin, vmax, scale)));
+              const tNorm = localStage == null
+                ? Math.max(0, Math.min(1, scalarNorm(v, vmin, vmax, scale)))
+                : localStage;
               const hex = sampleScale(scale, tNorm);
               const [r,g,b] = hexToRgb(hex);
               const o = (xx - minX) * 4;
@@ -846,6 +901,11 @@
     function computeActiveRange() {
       const scalarKey = activeHeatKey() || (layerVisibility.pressure ? 'pressure_hpa' : null);
       const def = PRODUCTS[scalarKey || currentProduct];
+      if (scalarKey === 'astronomical_tide_ft') {
+        computeLocalTideExtrema();
+        activeRange = { vmin: 0, vmax: 1 };
+        return;
+      }
       const grids = forecastData?.frames?.map(frame => frame?.[scalarKey]).filter(Boolean) || [];
       const grid = grids[0];
       if (!def.dynamicRange || !grid || !grid.length) {
@@ -898,11 +958,13 @@
         const v = r.vmin + (r.vmax - r.vmin) * t;
         const tick = document.createElement('span');
         const decimals = (r.vmax - r.vmin) > 50 ? 0 : (r.vmax - r.vmin) > 5 ? 1 : 2;
-        tick.textContent = v.toFixed(decimals);
+        tick.textContent = scalarKey === 'astronomical_tide_ft'
+          ? ['High', 'Falling', 'Low', 'Rising', 'High'][i]
+          : v.toFixed(decimals);
         ticks.appendChild(tick);
       }
       document.getElementById('bv-cbar-name').textContent = def.name;
-      document.getElementById('bv-cbar-unit').textContent = def.unit;
+      document.getElementById('bv-cbar-unit').textContent = scalarKey === 'astronomical_tide_ft' ? 'local phase' : def.unit;
     }
 
     function primaryDataKey() {
@@ -1180,7 +1242,8 @@
           const vals = [grid[yi]?.[xi], grid[yi]?.[xi + 1], grid[yi + 1]?.[xi], grid[yi + 1]?.[xi + 1]];
           if (vals.some(v => v == null || !Number.isFinite(v))) continue;
           const v = vals.reduce((a, b) => a + b, 0) / vals.length;
-          const c = hexToRgb(sampleScale(scale, Math.max(0, Math.min(1, scalarNorm(v, r.vmin, r.vmax, scale)))));
+          const stage = scalarKey === 'astronomical_tide_ft' ? localTideStageCell(frameIdx, yi, xi) : null;
+          const c = hexToRgb(sampleScale(scale, stage == null ? Math.max(0, Math.min(1, scalarNorm(v, r.vmin, r.vmax, scale))) : stage));
           const p00 = map.getPixelFromCoordinate(ol.proj.fromLonLat([lons[xi], lats[yi]], mapProjection));
           const p10 = map.getPixelFromCoordinate(ol.proj.fromLonLat([lons[xi + 1], lats[yi]], mapProjection));
           const p11 = map.getPixelFromCoordinate(ol.proj.fromLonLat([lons[xi + 1], lats[yi + 1]], mapProjection));
