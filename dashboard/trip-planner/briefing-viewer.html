@@ -164,7 +164,7 @@
         <label><input type="checkbox" data-layer="wave_height" checked><span class="bv-dot dot-wave"></span>Significant Wave Height</label>
         <label><input type="checkbox" data-layer="temperature"><span class="bv-dot dot-temp"></span>Temp</label>
         <label><input type="checkbox" data-layer="pressure"><span class="bv-dot dot-press"></span>Pressure</label>
-        <label><input type="checkbox" data-layer="tide_level"><span class="bv-dot dot-tide"></span>Local tide stage (each place)</label>
+        <label><input type="checkbox" data-layer="tide_level" checked><span class="bv-dot dot-tide"></span>Local tide stage (each place)</label>
         <label><input type="checkbox" data-layer="tide_phase" checked><span class="bv-dot dot-tide"></span>Co-tidal lines — same peak time</label>
         <label><input type="checkbox" data-layer="tide_range" checked><span class="bv-dot dot-tide"></span>Co-range lines — same tidal strength</label>
         <div class="bv-tide-key">
@@ -712,7 +712,7 @@
     let currentFrame = null;
     let activeRange = null; // {vmin, vmax} computed per-frame when dynamicRange=true
     let localTideExtrema = null;
-    const layerVisibility = { wave_height: true, temperature: false, pressure: false, tide_level: false, tide_phase: true, tide_range: true, swell: true, wind_wave: true, wind: true };
+    const layerVisibility = { wave_height: true, temperature: false, pressure: false, tide_level: true, tide_phase: true, tide_range: true, swell: true, wind_wave: true, wind: true };
     const particles = [];
 
     function hasVisibleRasterVariable() {
