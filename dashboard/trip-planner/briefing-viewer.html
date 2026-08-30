@@ -161,8 +161,8 @@
         <label><input type="checkbox" data-layer="wave_height" checked><span class="bv-dot dot-wave"></span>Significant Wave Height <button class="bv-unit-toggle" type="button" data-unit-key="wave_height_ft">ft</button></label>
         <label><input type="checkbox" data-layer="temperature"><span class="bv-dot dot-temp"></span>Temp <button class="bv-unit-toggle" type="button" data-unit-key="temperature_f">°F</button></label>
         <label><input type="checkbox" data-layer="pressure"><span class="bv-dot dot-press"></span>Pressure</label>
-        <label><input type="checkbox" data-layer="tide_level" checked><span class="bv-dot dot-tide"></span>Local tidal stage</label>
-        <label><input type="checkbox" data-layer="tide_range" checked><span class="bv-dot dot-tide"></span>Tidal range contours</label>
+        <label title="Tidal range at each location’s own phase"><input type="checkbox" data-layer="tide_level" checked><span class="bv-dot dot-tide"></span>tidal range</label>
+        <label title="Tidal Range contour overlay"><input type="checkbox" data-layer="tide_range" checked><span class="bv-dot dot-tide"></span>Tidal Range</label>
         <label><input type="checkbox" data-layer="wind" checked><span class="bv-dot dot-wind"></span>Wind <button class="bv-unit-toggle" type="button" data-unit-key="wind_speed_kn">kn</button></label>
         <label><input type="checkbox" data-layer="wind_wave" checked><span class="bv-dot dot-composite"></span>Wind-Wave <button class="bv-unit-toggle" type="button" data-unit-key="wind_wave_height_ft">ft</button></label>
         <label><input type="checkbox" data-layer="swell" checked><span class="bv-dot dot-swell"></span>Swell <button class="bv-unit-toggle" type="button" data-unit-key="swell_height_ft">ft</button></label>
@@ -704,26 +704,27 @@
     let currentFrame = null;
     let activeRange = null; // {vmin, vmax} computed per-frame when dynamicRange=true
     let localTideExtrema = null;
-    let unitSystem = 'imperial';
+    const unitModes = { temperature_f: 'imperial', wave_height_ft: 'imperial', swell_height_ft: 'imperial', wind_wave_height_ft: 'imperial', wind_speed_kn: 'imperial' };
     const UNIT_LABELS = { temperature_f: ['°F', '°C'], wave_height_ft: ['ft', 'm'], swell_height_ft: ['ft', 'm'], wind_wave_height_ft: ['ft', 'm'], wind_speed_kn: ['kn', 'm/s'] };
     function convertDisplayValue(key, value) {
-      if (unitSystem !== 'metric' || !Number.isFinite(value)) return value;
+      if (unitModes[key] !== 'metric' || !Number.isFinite(value)) return value;
       if (key === 'temperature_f') return (value - 32) * 5 / 9;
       if (key === 'wave_height_ft' || key === 'swell_height_ft' || key === 'wind_wave_height_ft') return value * 0.3048;
       if (key === 'wind_speed_kn') return value * 0.514444;
       return value;
     }
     function displayUnit(key, fallback) {
-      if (unitSystem === 'metric' && key === 'temperature_f') return '°C';
-      if (unitSystem === 'metric' && ['wave_height_ft', 'swell_height_ft', 'wind_wave_height_ft'].includes(key)) return 'm';
-      if (unitSystem === 'metric' && key === 'wind_speed_kn') return 'm/s';
+      if (unitModes[key] === 'metric' && key === 'temperature_f') return '°C';
+      if (unitModes[key] === 'metric' && ['wave_height_ft', 'swell_height_ft', 'wind_wave_height_ft'].includes(key)) return 'm';
+      if (unitModes[key] === 'metric' && key === 'wind_speed_kn') return 'm/s';
       return fallback;
     }
     function setupUnitToggles() {
       document.querySelectorAll('.bv-unit-toggle').forEach(button => button.addEventListener('click', event => {
         event.preventDefault(); event.stopPropagation();
-        unitSystem = unitSystem === 'imperial' ? 'metric' : 'imperial';
-        document.querySelectorAll('.bv-unit-toggle').forEach(b => { const k = b.dataset.unitKey; b.textContent = UNIT_LABELS[k]?.[unitSystem === 'metric' ? 1 : 0] || b.textContent; });
+        const key = button.dataset.unitKey;
+        unitModes[key] = unitModes[key] === 'imperial' ? 'metric' : 'imperial';
+        button.textContent = UNIT_LABELS[key]?.[unitModes[key] === 'metric' ? 1 : 0] || button.textContent;
         computeActiveRange(); drawColorbar(); drawOverlaysForProduct();
       }));
     }
