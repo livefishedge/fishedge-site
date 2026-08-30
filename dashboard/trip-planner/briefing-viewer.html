@@ -161,10 +161,10 @@
         <label><input type="checkbox" data-layer="wave_height" checked><span class="bv-dot dot-wave"></span>Significant Wave Height <button class="bv-unit-toggle" type="button" data-unit-key="wave_height_ft">ft</button></label>
         <label><input type="checkbox" data-layer="temperature"><span class="bv-dot dot-temp"></span>Temp <button class="bv-unit-toggle" type="button" data-unit-key="temperature_f">°F</button></label>
         <label><input type="checkbox" data-layer="pressure"><span class="bv-dot dot-press"></span>Pressure</label>
-        <label><input type="checkbox" data-layer="tide_level" checked><span class="bv-dot dot-tide"></span>Tidal range</label>
-        <label><input type="checkbox" data-layer="tide_range" checked><span class="bv-dot dot-tide"></span>Tidal Range</label>
+        <label><input type="checkbox" data-layer="tide_level" checked><span class="bv-dot dot-tide"></span>Local tidal stage</label>
+        <label><input type="checkbox" data-layer="tide_range" checked><span class="bv-dot dot-tide"></span>Tidal range contours</label>
         <label><input type="checkbox" data-layer="wind" checked><span class="bv-dot dot-wind"></span>Wind <button class="bv-unit-toggle" type="button" data-unit-key="wind_speed_kn">kn</button></label>
-        <label><input type="checkbox" data-layer="wind_wave" checked><span class="bv-dot dot-composite"></span>Wind-Wave</label>
+        <label><input type="checkbox" data-layer="wind_wave" checked><span class="bv-dot dot-composite"></span>Wind-Wave <button class="bv-unit-toggle" type="button" data-unit-key="wind_wave_height_ft">ft</button></label>
         <label><input type="checkbox" data-layer="swell" checked><span class="bv-dot dot-swell"></span>Swell <button class="bv-unit-toggle" type="button" data-unit-key="swell_height_ft">ft</button></label>
       </div>
     </div>
@@ -705,7 +705,7 @@
     let activeRange = null; // {vmin, vmax} computed per-frame when dynamicRange=true
     let localTideExtrema = null;
     let unitSystem = 'imperial';
-    const UNIT_LABELS = { temperature_f: ['°F', '°C'], wave_height_ft: ['ft', 'm'], swell_height_ft: ['ft', 'm'], wind_speed_kn: ['kn', 'm/s'] };
+    const UNIT_LABELS = { temperature_f: ['°F', '°C'], wave_height_ft: ['ft', 'm'], swell_height_ft: ['ft', 'm'], wind_wave_height_ft: ['ft', 'm'], wind_speed_kn: ['kn', 'm/s'] };
     function convertDisplayValue(key, value) {
       if (unitSystem !== 'metric' || !Number.isFinite(value)) return value;
       if (key === 'temperature_f') return (value - 32) * 5 / 9;
@@ -894,7 +894,7 @@
           if (maxX <= minX || maxY <= minY) continue;
 
           const yDir = py > npy ? 1 : -1; // pixel y goes down, lat y goes up
-          const localStage = dataKey === 'astronomical_tide_ft' ? localTideStageCell(frameIdx, yi, xi) : null;
+          const localStage = dataKey === 'astronomical_tide_ft' && localTideExtrema ? localTideStageCell(frameIdx, yi, xi) : null;
           for (let yy = minY; yy < maxY; yy++) {
             // tY: 0 at top of cell, 1 at bottom
             const tY = yDir > 0 ? (py - yy) / hpx : (yy - npy) / hpx;
@@ -1271,7 +1271,7 @@
           }
           if (vals.some(v => v == null || !Number.isFinite(v))) continue;
           const v = convertDisplayValue(scalarKey, vals.reduce((a, b) => a + b, 0) / vals.length);
-          const stage = scalarKey === 'astronomical_tide_ft' ? localTideStageCell(frameIdx, yi, xi) : null;
+          const stage = scalarKey === 'astronomical_tide_ft' && localTideExtrema ? localTideStageCell(frameIdx, yi, xi) : null;
           const c = hexToRgb(sampleScale(scale, stage == null ? Math.max(0, Math.min(1, scalarNorm(v, r.vmin, r.vmax, scale))) : stage));
           const p00 = map.getPixelFromCoordinate(ol.proj.fromLonLat([lons[xi], lats[yi]], mapProjection));
           const p10 = map.getPixelFromCoordinate(ol.proj.fromLonLat([lons[xi + 1], lats[yi]], mapProjection));
