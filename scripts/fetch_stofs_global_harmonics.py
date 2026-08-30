@@ -287,7 +287,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--date", required=True)
     ap.add_argument("--cycle", default="00")
-    ap.add_argument("--hours", type=int, default=126)
+    ap.add_argument("--hours", type=int, default=168)
     ap.add_argument("--stride", type=int, default=3, help="sample every N source hours for the harmonic fit")
     ap.add_argument("--output", required=True, type=Path)
     ap.add_argument("--merge-forecast", nargs="*", default=[])

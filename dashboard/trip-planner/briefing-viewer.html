@@ -59,6 +59,7 @@
     #bv-menu-panel label.disabled{ color:#5a6b7d; cursor:not-allowed; }
     #bv-menu-panel label.disabled:hover{ background:transparent; }
     #bv-menu-panel input[type="checkbox"]{ width:18px; height:18px; accent-color:#4fc3f7; margin:0; }
+    #bv-menu-panel .bv-unit-toggle{ margin-left:auto; padding:2px 5px; border:1px solid #466078; border-radius:4px; background:#132333; color:#b3e5fc; font:700 10px monospace; cursor:pointer; }
     #bv-menu-panel .bv-dot{ display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:2px; }
     #bv-menu-panel .dot-temp{ background:#ff8c00; }
     #bv-menu-panel .dot-wave{ background:#00c8ff; }
@@ -157,14 +158,14 @@
     <div class="bv-section">
       <div class="bv-section-title">Map Layers</div>
       <div class="bv-layers" id="bv-layers">
-        <label><input type="checkbox" data-layer="wave_height" checked><span class="bv-dot dot-wave"></span>Significant Wave Height</label>
-        <label><input type="checkbox" data-layer="temperature"><span class="bv-dot dot-temp"></span>Temp</label>
+        <label><input type="checkbox" data-layer="wave_height" checked><span class="bv-dot dot-wave"></span>Significant Wave Height <button class="bv-unit-toggle" type="button" data-unit-key="wave_height_ft">ft</button></label>
+        <label><input type="checkbox" data-layer="temperature"><span class="bv-dot dot-temp"></span>Temp <button class="bv-unit-toggle" type="button" data-unit-key="temperature_f">°F</button></label>
         <label><input type="checkbox" data-layer="pressure"><span class="bv-dot dot-press"></span>Pressure</label>
-        <label><input type="checkbox" data-layer="tide_level" checked><span class="bv-dot dot-tide"></span>Local tide stage (each place)</label>
-        <label><input type="checkbox" data-layer="tide_range" checked><span class="bv-dot dot-tide"></span>Co-range</label>
-        <label><input type="checkbox" data-layer="wind" checked><span class="bv-dot dot-wind"></span>Wind</label>
+        <label><input type="checkbox" data-layer="tide_level" checked><span class="bv-dot dot-tide"></span>Tidal range</label>
+        <label><input type="checkbox" data-layer="tide_range" checked><span class="bv-dot dot-tide"></span>Tidal Range</label>
+        <label><input type="checkbox" data-layer="wind" checked><span class="bv-dot dot-wind"></span>Wind <button class="bv-unit-toggle" type="button" data-unit-key="wind_speed_kn">kn</button></label>
         <label><input type="checkbox" data-layer="wind_wave" checked><span class="bv-dot dot-composite"></span>Wind-Wave</label>
-        <label><input type="checkbox" data-layer="swell" checked><span class="bv-dot dot-swell"></span>Swell</label>
+        <label><input type="checkbox" data-layer="swell" checked><span class="bv-dot dot-swell"></span>Swell <button class="bv-unit-toggle" type="button" data-unit-key="swell_height_ft">ft</button></label>
       </div>
     </div>
     <div class="bv-status" id="bv-menu-status">Loading…</div>
@@ -703,6 +704,29 @@
     let currentFrame = null;
     let activeRange = null; // {vmin, vmax} computed per-frame when dynamicRange=true
     let localTideExtrema = null;
+    let unitSystem = 'imperial';
+    const UNIT_LABELS = { temperature_f: ['°F', '°C'], wave_height_ft: ['ft', 'm'], swell_height_ft: ['ft', 'm'], wind_speed_kn: ['kn', 'm/s'] };
+    function convertDisplayValue(key, value) {
+      if (unitSystem !== 'metric' || !Number.isFinite(value)) return value;
+      if (key === 'temperature_f') return (value - 32) * 5 / 9;
+      if (key === 'wave_height_ft' || key === 'swell_height_ft' || key === 'wind_wave_height_ft') return value * 0.3048;
+      if (key === 'wind_speed_kn') return value * 0.514444;
+      return value;
+    }
+    function displayUnit(key, fallback) {
+      if (unitSystem === 'metric' && key === 'temperature_f') return '°C';
+      if (unitSystem === 'metric' && ['wave_height_ft', 'swell_height_ft', 'wind_wave_height_ft'].includes(key)) return 'm';
+      if (unitSystem === 'metric' && key === 'wind_speed_kn') return 'm/s';
+      return fallback;
+    }
+    function setupUnitToggles() {
+      document.querySelectorAll('.bv-unit-toggle').forEach(button => button.addEventListener('click', event => {
+        event.preventDefault(); event.stopPropagation();
+        unitSystem = unitSystem === 'imperial' ? 'metric' : 'imperial';
+        document.querySelectorAll('.bv-unit-toggle').forEach(b => { const k = b.dataset.unitKey; b.textContent = UNIT_LABELS[k]?.[unitSystem === 'metric' ? 1 : 0] || b.textContent; });
+        computeActiveRange(); drawColorbar(); drawOverlaysForProduct();
+      }));
+    }
     const layerVisibility = { wave_height: true, temperature: false, pressure: false, tide_level: true, tide_range: true, swell: true, wind_wave: true, wind: true };
     const particles = [];
 
@@ -839,10 +863,10 @@
           if (oceanOnly && dataKey !== 'astronomical_tide_ft' && !forecastData.tide_water_cells?.[yi]?.[xi]) continue;
           if (oceanOnly && dataKey === 'astronomical_tide_ft' && !forecastData.tide_water_cells?.[yi]?.[xi] &&
               ![grid[yi]?.[xi], grid[yi]?.[xi + 1], grid[yi + 1]?.[xi], grid[yi + 1]?.[xi + 1]].some(v => Number.isFinite(v))) continue;
-          const v00 = grid[yi][xi];
-          const v10 = grid[yi][xi+1];
-          const v01 = grid[yi+1][xi];
-          const v11 = grid[yi+1][xi+1];
+          let v00 = grid[yi][xi];
+          let v10 = grid[yi][xi+1];
+          let v01 = grid[yi+1][xi];
+          let v11 = grid[yi+1][xi+1];
           if (dataKey === 'astronomical_tide_ft' && [v00, v10, v01, v11].some(v => !Number.isFinite(v))) {
             const finite = [v00, v10, v01, v11].filter(Number.isFinite);
             if (!finite.length) continue;
@@ -850,6 +874,10 @@
             v00 = Number.isFinite(v00) ? v00 : fill; v10 = Number.isFinite(v10) ? v10 : fill;
             v01 = Number.isFinite(v01) ? v01 : fill; v11 = Number.isFinite(v11) ? v11 : fill;
           } else if (v00 == null || v10 == null || v01 == null || v11 == null) continue;
+          if (dataKey !== 'astronomical_tide_ft') {
+            v00 = convertDisplayValue(dataKey, v00); v10 = convertDisplayValue(dataKey, v10);
+            v01 = convertDisplayValue(dataKey, v01); v11 = convertDisplayValue(dataKey, v11);
+          }
           const px = toX(lons[xi]);
           const py = toY(lats[yi]);
           const npx = toX(lons[xi+1]);
@@ -916,7 +944,7 @@
         for (let yi = 0; yi < candidate.length; yi++) {
           for (let xi = 0; xi < candidate[yi].length; xi++) {
             const v = candidate[yi][xi];
-            if (v != null && Number.isFinite(v)) flat.push(v);
+            if (v != null && Number.isFinite(v)) flat.push(convertDisplayValue(scalarKey, v));
           }
         }
       }
@@ -963,7 +991,7 @@
         ticks.appendChild(tick);
       }
       document.getElementById('bv-cbar-name').textContent = def.name;
-      document.getElementById('bv-cbar-unit').textContent = scalarKey === 'astronomical_tide_ft' ? 'local phase' : def.unit;
+      document.getElementById('bv-cbar-unit').textContent = scalarKey === 'astronomical_tide_ft' ? 'local phase' : displayUnit(scalarKey, def.unit);
     }
 
     function primaryDataKey() {
@@ -1091,7 +1119,8 @@
         ctx.strokeStyle = style;
         ctx.lineWidth = width;
         ctx.setLineDash(dashed ? [5, 4] : []);
-        const labelCandidates = [];
+        let labelCandidate = null;
+        let labelLength = 0;
         for (let yi = 0; yi < lats.length - 1; yi++) {
           for (let xi = 0; xi < lons.length - 1; xi++) {
             // The atlas mask is a cell mask, not a point mask. Fail closed:
@@ -1135,13 +1164,16 @@
               if (labelText) {
                 const dx = points[1][0] - points[0][0], dy = points[1][1] - points[0][1];
                 const length = Math.hypot(dx, dy);
-                if (length >= 18) labelCandidates.push({ x: (points[0][0] + points[1][0]) / 2, y: (points[0][1] + points[1][1]) / 2, angle: Math.atan2(dy, dx) });
+                if (length > labelLength) {
+                  labelLength = length;
+                  labelCandidate = { x: (points[0][0] + points[1][0]) / 2, y: (points[0][1] + points[1][1]) / 2, angle: Math.atan2(dy, dx) };
+                }
               }
             }
           }
         }
         ctx.setLineDash([]);
-        for (const labelCandidate of labelCandidates) {
+        if (labelCandidate) {
           let angle = labelCandidate.angle;
           if (angle > Math.PI / 2 || angle < -Math.PI / 2) angle += Math.PI;
           ctx.save();
@@ -1238,7 +1270,7 @@
             for (let i = 0; i < vals.length; i++) if (!Number.isFinite(vals[i])) vals[i] = fill;
           }
           if (vals.some(v => v == null || !Number.isFinite(v))) continue;
-          const v = vals.reduce((a, b) => a + b, 0) / vals.length;
+          const v = convertDisplayValue(scalarKey, vals.reduce((a, b) => a + b, 0) / vals.length);
           const stage = scalarKey === 'astronomical_tide_ft' ? localTideStageCell(frameIdx, yi, xi) : null;
           const c = hexToRgb(sampleScale(scale, stage == null ? Math.max(0, Math.min(1, scalarNorm(v, r.vmin, r.vmax, scale))) : stage));
           const p00 = map.getPixelFromCoordinate(ol.proj.fromLonLat([lons[xi], lats[yi]], mapProjection));
@@ -2252,6 +2284,7 @@
         // station dropdown can fall back to the inline TIDE_STATIONS list
         // when forecast.tides is absent.
         setupHamburger();
+        setupUnitToggles();
         setupTideStationSelect();
 
         // Sun + moon: pure-math, anchored to the bbox centroid and the

@@ -57,7 +57,7 @@ TIDE_STATIONS = [
     {"id": "8651370", "name": "Duck, NC",           "lat": 36.183, "lon": -75.747},
 ]
 COOPS_API = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter"
-COOPS_HOURS = 24  # viewer renders a 24h window starting at run time
+COOPS_HOURS = 168  # viewer renders today through seven days later
 
 
 def fetch_coops_curve(station_id, hours=COOPS_HOURS, begin=None):
@@ -233,7 +233,7 @@ def build_square_grid(bbox, step, n):
     return lats, lons
 
 
-def fetch_grid(lats_grid, lons_grid, forecast_days=3):
+def fetch_grid(lats_grid, lons_grid, forecast_days=7):
     """Open-Meteo zips lat/lon positionally — a list of (npts) dicts is returned,
     one per coordinate pair, in the same order as the input arrays.
 
@@ -363,7 +363,7 @@ def interp_to_display(frames, src_lats, src_lons, dst_lats, dst_lons):
     return out
 
 
-def fetch_atmospheric_wind(lats_grid, lons_grid, forecast_days=3):
+def fetch_atmospheric_wind(lats_grid, lons_grid, forecast_days=7):
     """Atmospheric 10-m wind from Open-Meteo's main forecast endpoint (NOT marine).
 
     Same coordinate shape as the marine call, same forecast_days, same timezone.

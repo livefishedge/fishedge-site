@@ -167,7 +167,7 @@ def add_harmonic_phase_amplitude(frames, tides=None, lats=None, lons=None, land_
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--hours", type=int, default=72)
+    parser.add_argument("--hours", type=int, default=168)
     parser.add_argument("paths", nargs="+", type=Path)
     args = parser.parse_args()
     first_time = json.loads(args.paths[0].read_text())["frames"][0]["time"]
