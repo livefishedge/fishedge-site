@@ -222,7 +222,6 @@
     // are visible immediately; a ?date=YYYY-MM-DD query still selects a day.
     const targetDate = params.get('date') || new Date().toISOString().slice(0, 13);
     const region = params.get('region') || 'usec_md';
-    document.getElementById('bv-region').textContent = region;
 
     const BBOXES = {
       usec_md:    [-77.0, 36.0, -72.0, 40.0],
