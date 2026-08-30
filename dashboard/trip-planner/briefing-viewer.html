@@ -69,10 +69,6 @@
     #bv-menu-panel .dot-tide{ background:#4fc3f7; }
     #bv-menu-panel .bv-status{ font-size:11px; color:#9fb0c3; padding:6px 8px; border-top:1px solid rgba(255,255,255,0.1); }
     #bv-menu-panel .bv-briefing-source{ font-size:10px; color:#7a8fa8; margin-top:-3px; }
-    #bv-menu-panel .bv-tide-key{ display:flex; flex-direction:column; gap:6px; padding:4px 8px 2px 34px; color:#9fb0c3; font-size:10px; line-height:1.35; }
-    #bv-menu-panel .bv-tide-key > div{ display:flex; align-items:flex-start; gap:7px; }
-    #bv-menu-panel .bv-key-line{ display:inline-block; flex:0 0 18px; margin-top:5px; height:0; border-top:2px solid #80deea; }
-    #bv-menu-panel .bv-key-range{ border-top:2px dashed #e6f7ff; }
 
     /* Briefing details live inside the hamburger menu so the map remains
        unobstructed. */
@@ -165,10 +161,7 @@
         <label><input type="checkbox" data-layer="temperature"><span class="bv-dot dot-temp"></span>Temp</label>
         <label><input type="checkbox" data-layer="pressure"><span class="bv-dot dot-press"></span>Pressure</label>
         <label><input type="checkbox" data-layer="tide_level" checked><span class="bv-dot dot-tide"></span>Local tide stage (each place)</label>
-        <label><input type="checkbox" data-layer="tide_range" checked><span class="bv-dot dot-tide"></span>Co-range lines — same tidal strength</label>
-        <div class="bv-tide-key">
-          <div><i class="bv-key-line bv-key-range"></i><span>Co-range: a line connects places with the same tidal strength. Each dashed line carries a number; numbers are feet. Co-tidal timing lines are intentionally omitted because the local-stage colors answer the captain’s immediate question.</span></div>
-        </div>
+        <label><input type="checkbox" data-layer="tide_range" checked><span class="bv-dot dot-tide"></span>Co-range</label>
         <label><input type="checkbox" data-layer="wind" checked><span class="bv-dot dot-wind"></span>Wind</label>
         <label><input type="checkbox" data-layer="wind_wave" checked><span class="bv-dot dot-composite"></span>Wind-Wave</label>
         <label><input type="checkbox" data-layer="swell" checked><span class="bv-dot dot-swell"></span>Swell</label>
@@ -1098,8 +1091,7 @@
         ctx.strokeStyle = style;
         ctx.lineWidth = width;
         ctx.setLineDash(dashed ? [5, 4] : []);
-        let labelCandidate = null;
-        let labelLength = 0;
+        const labelCandidates = [];
         for (let yi = 0; yi < lats.length - 1; yi++) {
           for (let xi = 0; xi < lons.length - 1; xi++) {
             // The atlas mask is a cell mask, not a point mask. Fail closed:
@@ -1143,16 +1135,13 @@
               if (labelText) {
                 const dx = points[1][0] - points[0][0], dy = points[1][1] - points[0][1];
                 const length = Math.hypot(dx, dy);
-                if (length > labelLength) {
-                  labelLength = length;
-                  labelCandidate = { x: (points[0][0] + points[1][0]) / 2, y: (points[0][1] + points[1][1]) / 2, angle: Math.atan2(dy, dx) };
-                }
+                if (length >= 18) labelCandidates.push({ x: (points[0][0] + points[1][0]) / 2, y: (points[0][1] + points[1][1]) / 2, angle: Math.atan2(dy, dx) });
               }
             }
           }
         }
         ctx.setLineDash([]);
-        if (labelCandidate) {
+        for (const labelCandidate of labelCandidates) {
           let angle = labelCandidate.angle;
           if (angle > Math.PI / 2 || angle < -Math.PI / 2) angle += Math.PI;
           ctx.save();
