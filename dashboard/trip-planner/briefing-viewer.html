@@ -276,7 +276,7 @@
       SLA: [[0.0,'#2166ac'],[0.25,'#67a9cf'],[0.5,'#f7f7f7'],[0.75,'#ef8a62'],[1.0,'#b2182b']],
       // Cyclic local-stage map: high -> falling -> low -> rising -> high.
       // The endpoints match so the cycle has no artificial seam.
-      TIDE:[[0.0,'#ef4444'],[0.125,'#f97316'],[0.25,'#facc15'],[0.375,'#84cc16'],[0.5,'#1683d8'],[0.625,'#2563eb'],[0.75,'#7c3aed'],[0.875,'#c026d3'],[1.0,'#ef4444']],
+      TIDE:[[0.0,'#d73027'],[0.125,'#fc8d59'],[0.25,'#fee08b'],[0.375,'#91cf60'],[0.5,'#4575b4'],[0.625,'#91cf60'],[0.75,'#fee08b'],[0.875,'#fc8d59'],[1.0,'#d73027']],
     };
 
     function lerp(a, b, t) { return a + (b - a) * t; }
@@ -1109,6 +1109,12 @@
             let v00 = grid[yi]?.[xi], v10 = grid[yi]?.[xi + 1];
             let v01 = grid[yi + 1]?.[xi], v11 = grid[yi + 1]?.[xi + 1];
             if (!waterCells?.[yi]?.[xi] && ![v00, v10, v01, v11].some(v => Number.isFinite(v))) continue;
+            if (!waterCells?.[yi]?.[xi] && [v00, v10, v01, v11].some(v => !Number.isFinite(v))) {
+              const finite = [v00, v10, v01, v11].filter(Number.isFinite);
+              const fill = finite.reduce((a, b) => a + b, 0) / finite.length;
+              v00 = Number.isFinite(v00) ? v00 : fill; v10 = Number.isFinite(v10) ? v10 : fill;
+              v01 = Number.isFinite(v01) ? v01 : fill; v11 = Number.isFinite(v11) ? v11 : fill;
+            }
             if (![v00, v10, v01, v11].every(v => Number.isFinite(v))) continue;
             if (circular) {
               const base = v00;
