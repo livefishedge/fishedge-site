@@ -165,11 +165,9 @@
         <label><input type="checkbox" data-layer="temperature"><span class="bv-dot dot-temp"></span>Temp</label>
         <label><input type="checkbox" data-layer="pressure"><span class="bv-dot dot-press"></span>Pressure</label>
         <label><input type="checkbox" data-layer="tide_level" checked><span class="bv-dot dot-tide"></span>Local tide stage (each place)</label>
-        <label><input type="checkbox" data-layer="tide_phase" checked><span class="bv-dot dot-tide"></span>Co-tidal lines — same peak time</label>
         <label><input type="checkbox" data-layer="tide_range" checked><span class="bv-dot dot-tide"></span>Co-range lines — same tidal strength</label>
         <div class="bv-tide-key">
-          <div><i class="bv-key-line"></i><span>Co-tidal: places where high tide arrives together. The colored bands show timing through the tide cycle — they do not mean high tide is happening there now.</span></div>
-          <div><i class="bv-key-line bv-key-range"></i><span>Co-range: places with the same tidal amplitude. Each dashed line carries a number; numbers are feet.</span></div>
+          <div><i class="bv-key-line bv-key-range"></i><span>Co-range: a line connects places with the same tidal strength. Each dashed line carries a number; numbers are feet. Co-tidal timing lines are intentionally omitted because the local-stage colors answer the captain’s immediate question.</span></div>
         </div>
         <label><input type="checkbox" data-layer="wind" checked><span class="bv-dot dot-wind"></span>Wind</label>
         <label><input type="checkbox" data-layer="wind_wave" checked><span class="bv-dot dot-composite"></span>Wind-Wave</label>
@@ -276,10 +274,6 @@
       UV:  [[0.0,'#440154'],[0.17,'#443983'],[0.34,'#31688e'],[0.5,'#35b779'],[0.67,'#90d743'],[0.83,'#fde725'],[1.0,'#fff7bc']],
       CHL: [[0.0,'#001f3f'],[0.2,'#0074d9'],[0.4,'#39cccc'],[0.5,'#2ecc40'],[0.7,'#ffdc00'],[0.85,'#ff851b'],[1.0,'#ff4136']],
       SLA: [[0.0,'#2166ac'],[0.25,'#67a9cf'],[0.5,'#f7f7f7'],[0.75,'#ef8a62'],[1.0,'#b2182b']],
-      // Offshore water-level contrast: low/negative values stay pale blue;
-      // higher positive values move through royal blue into purple. Tide
-      // values use a signed-log transform below so small offshore changes
-      // remain visible without saturating the shelf signal.
       // Cyclic local-stage map: high -> falling -> low -> rising -> high.
       // The endpoints match so the cycle has no artificial seam.
       TIDE:[[0.0,'#ef4444'],[0.125,'#f97316'],[0.25,'#facc15'],[0.375,'#84cc16'],[0.5,'#1683d8'],[0.625,'#2563eb'],[0.75,'#7c3aed'],[0.875,'#c026d3'],[1.0,'#ef4444']],
@@ -296,6 +290,10 @@
     }
     function sampleScale(scale, t) {
       const stops = SCALES[scale] || SCALES.SST;
+      if (scale === 'TIDE') {
+        const index = Math.min(stops.length - 1, Math.floor(Math.max(0, Math.min(1, t)) * (stops.length - 1) + 0.5));
+        return stops[index][1];
+      }
       for (let i = 0; i < stops.length - 1; i++) {
         if (t <= stops[i+1][0]) {
           const u = (t - stops[i][0]) / (stops[i+1][0] - stops[i][0]);
@@ -712,7 +710,7 @@
     let currentFrame = null;
     let activeRange = null; // {vmin, vmax} computed per-frame when dynamicRange=true
     let localTideExtrema = null;
-    const layerVisibility = { wave_height: true, temperature: false, pressure: false, tide_level: true, tide_phase: true, tide_range: true, swell: true, wind_wave: true, wind: true };
+    const layerVisibility = { wave_height: true, temperature: false, pressure: false, tide_level: true, tide_range: true, swell: true, wind_wave: true, wind: true };
     const particles = [];
 
     function hasVisibleRasterVariable() {
@@ -845,12 +843,20 @@
       // quad per cell
       for (let yi = 0; yi < ny - 1; yi++) {
         for (let xi = 0; xi < nx - 1; xi++) {
-          if (oceanOnly && !forecastData.tide_water_cells?.[yi]?.[xi]) continue;
+          if (oceanOnly && dataKey !== 'astronomical_tide_ft' && !forecastData.tide_water_cells?.[yi]?.[xi]) continue;
+          if (oceanOnly && dataKey === 'astronomical_tide_ft' && !forecastData.tide_water_cells?.[yi]?.[xi] &&
+              ![grid[yi]?.[xi], grid[yi]?.[xi + 1], grid[yi + 1]?.[xi], grid[yi + 1]?.[xi + 1]].some(v => Number.isFinite(v))) continue;
           const v00 = grid[yi][xi];
           const v10 = grid[yi][xi+1];
           const v01 = grid[yi+1][xi];
           const v11 = grid[yi+1][xi+1];
-          if (v00 == null || v10 == null || v01 == null || v11 == null) continue;
+          if (dataKey === 'astronomical_tide_ft' && [v00, v10, v01, v11].some(v => !Number.isFinite(v))) {
+            const finite = [v00, v10, v01, v11].filter(Number.isFinite);
+            if (!finite.length) continue;
+            const fill = finite.reduce((a, b) => a + b, 0) / finite.length;
+            v00 = Number.isFinite(v00) ? v00 : fill; v10 = Number.isFinite(v10) ? v10 : fill;
+            v01 = Number.isFinite(v01) ? v01 : fill; v11 = Number.isFinite(v11) ? v11 : fill;
+          } else if (v00 == null || v10 == null || v01 == null || v11 == null) continue;
           const px = toX(lons[xi]);
           const py = toY(lats[yi]);
           const npx = toX(lons[xi+1]);
@@ -999,7 +1005,6 @@
         temperature: !!(currentFrame && currentFrame.temperature_f),
         pressure: !!(currentFrame && currentFrame.pressure_hpa),
         tide_level: !!(currentFrame && currentFrame.astronomical_tide_ft),
-        tide_phase: !!(currentFrame && currentFrame.tide_phase_deg),
         tide_range: !!(currentFrame && currentFrame.tide_amplitude_ft),
         wind: !!(currentFrame && currentFrame.wind_speed_kn && currentFrame.wind_direction_deg),
         wind_wave: !!(currentFrame && currentFrame.wind_wave_height_ft && currentFrame.wind_wave_direction_deg),
@@ -1009,26 +1014,24 @@
         const input = document.querySelector(`#bv-layers input[data-layer="${key}"]`);
         const label = input?.closest('label');
         if (!input || !label) continue;
-        const anyFrameAvailable = ['tide_phase', 'tide_range'].includes(key) && forecastData && forecastData.frames
-          ? forecastData.frames.some(frame => key === 'tide_phase'
-              ? !!(frame && frame.tide_phase_deg)
-              : !!(frame && frame.tide_amplitude_ft))
+        const anyFrameAvailable = ['tide_range'].includes(key) && forecastData && forecastData.frames
+          ? forecastData.frames.some(frame => !!(frame && frame.tide_amplitude_ft))
           : available[key];
         // Keep the co-line controls interactive even before the atlas
         // artifact arrives.  A disabled checkbox looks broken and hides the
         // real state (the source is simply unavailable, not unchecked).
-        const awaitingHtp = ['tide_phase', 'tide_range'].includes(key) && !anyFrameAvailable;
+        const awaitingHtp = ['tide_range'].includes(key) && !anyFrameAvailable;
         input.disabled = !anyFrameAvailable && !awaitingHtp;
         // Preserve an enabled layer's checked state while the time slider
         // crosses a frame without a static atlas field.
         if (!anyFrameAvailable && !awaitingHtp) { input.checked = false; layerVisibility[key] = false; }
-        else if (['tide_phase', 'tide_range'].includes(key)) input.checked = layerVisibility[key];
+        else if (['tide_range'].includes(key)) input.checked = layerVisibility[key];
         label.classList.toggle('unavailable', !available[key]);
         label.title = available[key] ? '' : (awaitingHtp ? 'Waiting for NASA GOT4.10c harmonic atlas data' : `No ${key} grid in current forecast frame`);
       }
       const tideStatus = document.getElementById('bv-menu-status');
-      if (tideStatus && (!available.tide_phase || !available.tide_range)) {
-        tideStatus.textContent = 'Co-lines awaiting NASA GOT4.10c harmonic atlas data';
+      if (tideStatus && !available.tide_range) {
+        tideStatus.textContent = 'Co-range lines awaiting NASA GOT4.10c harmonic atlas data';
       }
       if (available.wave_height && !layerVisibility.temperature && !layerVisibility.wave_height && !layerVisibility.pressure) {
         // no forced fallback: the user may intentionally turn all scalar layers off
@@ -1069,8 +1072,7 @@
       else if (def.viz === 'contours') drawIsobars();
       else if (def.viz === 'composite') drawWaveComposite();
       else stopParticleAnimation();
-      // Co-tidal and co-range overlays are independent of the selected base
-      // product and must be redrawn for every product.
+      // Co-range overlay is independent of the selected base product.
       drawTidalContours();
     }
 
@@ -1104,9 +1106,9 @@
             // only an explicit wet cell may emit a contour. This prevents a
             // missing/misaligned mask row from ever drawing tide lines over
             // the basemap's land.
-            if (!waterCells?.[yi]?.[xi]) continue;
             let v00 = grid[yi]?.[xi], v10 = grid[yi]?.[xi + 1];
             let v01 = grid[yi + 1]?.[xi], v11 = grid[yi + 1]?.[xi + 1];
+            if (!waterCells?.[yi]?.[xi] && ![v00, v10, v01, v11].some(v => Number.isFinite(v))) continue;
             if (![v00, v10, v01, v11].every(v => Number.isFinite(v))) continue;
             if (circular) {
               const base = v00;
@@ -1161,14 +1163,6 @@
           ctx.restore();
         }
       };
-      if (layerVisibility.tide_phase && currentFrame.tide_phase_deg) {
-        // Use 15° timing bands (about half an M2 hour) so the phase overlay
-        // remains readable. These colors encode timing, not tide height.
-        const phaseColors = ['#fff176', '#e6ee9c', '#b9f6ca', '#80deea', '#4dd0e1', '#81d4fa', '#90caf9', '#9fa8da', '#b39ddb', '#ce93d8', '#f48fb1', '#ffab91'];
-        for (let level = 0; level < 360; level += 15) {
-          segment(currentFrame.tide_phase_deg, level, phaseColors[Math.floor(level / 15) % phaseColors.length], 1.8, false, true);
-        }
-      }
       if (layerVisibility.tide_range && currentFrame.tide_amplitude_ft) {
         const values = currentFrame.tide_amplitude_ft.flat().filter(Number.isFinite);
         if (values.length) {
@@ -1237,9 +1231,17 @@
       const r = activeRange || { vmin: 0, vmax: scalarKey === 'temperature_f' ? 90 : 6 };
       for (let yi = 0; yi < lats.length - 1; yi++) {
         for (let xi = 0; xi < lons.length - 1; xi++) {
-          if (['wave_height_ft', 'swell_height_ft', 'wind_wave_height_ft', 'astronomical_tide_ft'].includes(scalarKey) &&
-              !forecastData.tide_water_cells?.[yi]?.[xi]) continue;
           const vals = [grid[yi]?.[xi], grid[yi]?.[xi + 1], grid[yi + 1]?.[xi], grid[yi + 1]?.[xi + 1]];
+          if (['wave_height_ft', 'swell_height_ft', 'wind_wave_height_ft'].includes(scalarKey) &&
+              !forecastData.tide_water_cells?.[yi]?.[xi]) continue;
+          if (scalarKey === 'astronomical_tide_ft' && !forecastData.tide_water_cells?.[yi]?.[xi] &&
+              !vals.some(v => Number.isFinite(v))) continue;
+          if (scalarKey === 'astronomical_tide_ft' && vals.some(v => !Number.isFinite(v))) {
+            const finite = vals.filter(Number.isFinite);
+            if (!finite.length) continue;
+            const fill = finite.reduce((a, b) => a + b, 0) / finite.length;
+            for (let i = 0; i < vals.length; i++) if (!Number.isFinite(vals[i])) vals[i] = fill;
+          }
           if (vals.some(v => v == null || !Number.isFinite(v))) continue;
           const v = vals.reduce((a, b) => a + b, 0) / vals.length;
           const stage = scalarKey === 'astronomical_tide_ft' ? localTideStageCell(frameIdx, yi, xi) : null;
