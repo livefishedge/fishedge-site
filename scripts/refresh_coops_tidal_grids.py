@@ -43,6 +43,7 @@ def refresh(path, tides):
     lats, lons = grid()
     land = land_mask(lats, lons)
     payload["tide_water_cells"] = water_cell_mask(lats, lons)
+    payload["tides"] = tides
     add_tide_grids(payload["frames"], tides, lats, lons, preserve_ofs=True, land_mask=land)
     add_harmonic_phase_amplitude(payload["frames"], tides=tides, lats=lats, lons=lons, land_mask=land)
     for frame in payload["frames"]:

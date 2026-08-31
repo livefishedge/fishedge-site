@@ -71,10 +71,11 @@ def fetch_coops_curve(station_id, hours=COOPS_HOURS, begin=None):
     """
     begin = begin or datetime.utcnow().replace(minute=0, second=0, microsecond=0)
     end = begin + timedelta(hours=hours)
+    query_begin = begin - timedelta(hours=24)
     params = {
         "product": "predictions",
         "application": "FishEdge.Briefing",
-        "begin_date": begin.strftime("%Y%m%d %H:%M"),
+        "begin_date": query_begin.strftime("%Y%m%d %H:%M"),
         "end_date": end.strftime("%Y%m%d %H:%M"),
         "datum": "MLLW",
         "station": station_id,
@@ -100,7 +101,7 @@ def fetch_coops_curve(station_id, hours=COOPS_HOURS, begin=None):
                     curve.append({"t": epoch_ms, "v": float(p["v"])})
                 vs = [c["v"] for c in curve]
                 rng = {"vmin": min(vs), "vmax": max(vs)}
-                next_event = _find_next_tide_event(curve)
+                next_event = _find_next_tide_event(curve, int(begin.replace(tzinfo=timezone.utc).timestamp() * 1000))
                 return {"curve": curve, "range": rng, "next_event": next_event}
             last_err = f"http {r.status_code}: {r.text[:200]}"
         except Exception as e:
@@ -109,7 +110,24 @@ def fetch_coops_curve(station_id, hours=COOPS_HOURS, begin=None):
     raise RuntimeError(f"CO-OPS fetch failed for {station_id} after 3 tries: {last_err}")
 
 
-def _find_next_tide_event(curve):
+def fetch_coops_observed(station_id, end=None, hours=24):
+    """Fetch the recent measured water-level series for a station."""
+    end = end or datetime.utcnow().replace(minute=0, second=0, microsecond=0)
+    begin = end - timedelta(hours=hours)
+    params = {
+        "product": "water_level", "application": "FishEdge.Briefing",
+        "begin_date": begin.strftime("%Y%m%d %H:%M"),
+        "end_date": end.strftime("%Y%m%d %H:%M"), "datum": "MLLW",
+        "station": station_id, "time_zone": "gmt", "units": "english",
+        "interval": "6", "format": "json",
+    }
+    r = requests.get(COOPS_API, params=params, timeout=30)
+    if r.status_code != 200: raise RuntimeError(f"observed http {r.status_code}")
+    values = r.json().get("data") or []
+    return [{"t": int(datetime.strptime(p["t"], "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc).timestamp() * 1000), "v": float(p["v"])} for p in values if p.get("v") not in (None, "")]
+
+
+def _find_next_tide_event(curve, now_ms=None):
     """Find the first high or low tide after the first point in the curve.
 
     A tide event is a local extremum where the sign of (v[i+1] - v[i]) flips.
@@ -117,7 +135,7 @@ def _find_next_tide_event(curve):
     """
     if len(curve) < 3:
         return None
-    now_ms = curve[0]["t"]
+    now_ms = curve[0]["t"] if now_ms is None else now_ms
     for i in range(1, len(curve) - 1):
         dv_prev = curve[i]["v"] - curve[i - 1]["v"]
         dv_next = curve[i + 1]["v"] - curve[i]["v"]
@@ -153,6 +171,7 @@ def fetch_all_tides(hours=COOPS_HOURS, begin=None):
         "curves": {},
         "range": {},
         "next_event": {},
+        "observed": {},
         "generated_at": int(time.time() * 1000),
         "source": "NOAA CO-OPS api/data/ (predictions, MLLW, hourly)",
     }
@@ -163,6 +182,10 @@ def fetch_all_tides(hours=COOPS_HOURS, begin=None):
             out["curves"][st["id"]] = res["curve"]
             out["range"][st["id"]] = res["range"]
             out["next_event"][st["id"]] = res["next_event"]
+            try:
+                out["observed"][st["id"]] = fetch_coops_observed(st["id"])
+            except Exception as e:
+                print(f"  observed {st['id']}: unavailable ({e})")
             print(f"  tides {st['id']} {st['name']}: {len(res['curve'])} pts, range {res['range']['vmin']:.1f}-{res['range']['vmax']:.1f} ft")
         except Exception as e:
             failures.append(f"{st['id']} ({st['name']}): {e}")
