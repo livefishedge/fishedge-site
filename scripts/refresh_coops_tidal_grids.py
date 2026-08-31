@@ -45,8 +45,16 @@ def refresh(path, tides):
     payload["tide_water_cells"] = water_cell_mask(lats, lons)
     payload["tides"] = tides
     add_tide_grids(payload["frames"], tides, lats, lons, preserve_ofs=True, land_mask=land)
-    add_tidal_range_field(payload["frames"])
-    add_harmonic_phase_amplitude(payload["frames"], tides=tides, lats=lats, lons=lons, land_mask=land)
+    # A NASA GOT4.10c merge is authoritative for the map model.  The CO-OPS
+    # refresh may add station observations/predictions, but must never replace
+    # the static atlas amplitude, phase, or derived astronomical tide fields.
+    has_static_harmonics = all(
+        any(frame.get(key) is not None for frame in payload["frames"])
+        for key in ("tide_amplitude_ft", "tide_phase_deg", "astronomical_tide_ft")
+    )
+    if not has_static_harmonics:
+        add_tidal_range_field(payload["frames"])
+        add_harmonic_phase_amplitude(payload["frames"], tides=tides, lats=lats, lons=lons, land_mask=land)
     for frame in payload["frames"]:
         if "tide_height_ft" in frame and not frame.get("tide_model_source"):
             frame["tide_model_source"] = ["coops_station_blend"]
@@ -54,10 +62,15 @@ def refresh(path, tides):
     # Preserve gridded harmonic fields when this refresh runs after the
     # STOFS HTP merge. CO-OPS fills only missing total-height frames; it must
     # never erase the local-stage / Tidal Range fields already in the artifact.
-    payload.setdefault("quality", {})["coops_tidal_fallback"] = (
-        "CO-OPS harmonic station blend; estimated between stations; "
-        "OFS frames take precedence"
-    )
+    quality = payload.setdefault("quality", {})
+    if has_static_harmonics:
+        quality.pop("coops_tidal_fallback", None)
+        quality["co_tidal_source"] = "NASA GSFC GOT4.10c static harmonic atlas; CO-OPS observations are validation only"
+    else:
+        quality["coops_tidal_fallback"] = (
+            "CO-OPS harmonic station blend; estimated between stations; "
+            "OFS frames take precedence"
+        )
     tmp = Path(path).with_suffix(Path(path).suffix + ".tmp")
     tmp.write_text(json.dumps(payload, allow_nan=False, separators=(",", ":")))
     tmp.replace(path)
