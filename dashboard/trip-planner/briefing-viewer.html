@@ -262,12 +262,12 @@
     //    so the colorbar isn't clipped when the data sits outside the default range.
     const PRODUCTS = {
       temperature_f: { name: 'Air temperature', unit: '°F', scale: 'SST', viz: 'heat', dataKey: 'temperature_f', dynamicRange: true },
-      wave_height_ft:{ name: 'Significant wave height', unit: 'ft', scale: 'UV', viz: 'arrows', dataKey: 'wave_height_ft', dirKey: 'wave_direction_deg', dynamicRange: true },
-      swell_height_ft:{name: 'Swell height',unit: 'ft', scale: 'UV', viz: 'arrows', dataKey: 'swell_height_ft', dirKey: 'swell_direction_deg', dynamicRange: true },
+      wave_height_ft:{ name: 'Significant wave height', unit: 'ft', scale: 'UV', viz: 'arrows', dataKey: 'wave_height_ft', dirKey: 'wave_direction_deg', dynamicRange: false, fixedRange: [0, 10] },
+      swell_height_ft:{name: 'Swell height',unit: 'ft', scale: 'UV', viz: 'arrows', dataKey: 'swell_height_ft', dirKey: 'swell_direction_deg', dynamicRange: false, fixedRange: [0, 8] },
       // Composite heat uses significant wave height; partition directions are
       // rendered as the swell and wind-wave overlays below.
-      wave_composite:{name: 'Significant wave height', unit: 'ft', scale: 'UV', viz: 'composite', dataKey: 'wave_height_ft', dynamicRange: true },
-      wind_wave_height_ft:{name: 'Wave (wind)', unit: 'ft', scale: 'UV', viz: 'heat', dataKey: 'wind_wave_height_ft', dynamicRange: true },
+      wave_composite:{name: 'Significant wave height', unit: 'ft', scale: 'UV', viz: 'composite', dataKey: 'wave_height_ft', dynamicRange: false, fixedRange: [0, 10] },
+      wind_wave_height_ft:{name: 'Wave (wind)', unit: 'ft', scale: 'UV', viz: 'heat', dataKey: 'wind_wave_height_ft', dynamicRange: false, fixedRange: [0, 6] },
       wind_speed_kn: { name: 'Wind flow',   unit: 'kn',  scale: 'CHL', viz: 'streamlines', dynamicRange: false },
       pressure_hpa:  { name: 'Pressure',    unit: 'hPa', scale: 'SLA', viz: 'contours',    dynamicRange: true  },
       astronomical_tide_ft: { name: 'Tidal Stage', unit: 'high → falling → low → rising', scale: 'TIDE', viz: 'heat', dataKey: 'astronomical_tide_ft', dynamicRange: false },
@@ -477,10 +477,13 @@
     const TIDE_STATIONS = (forecastData && forecastData.tides && Array.isArray(forecastData.tides.stations))
       ? forecastData.tides.stations
       : [
-          { id: '8635750', name: 'Cape May, NJ',     lat: 38.968, lon: -74.960 },
+          { id: '8536110', name: 'Cape May, NJ',     lat: 38.9683, lon: -74.9600 },
           { id: '8534720', name: 'Atlantic City, NJ',lat: 39.355, lon: -74.418 },
           { id: '8570283', name: 'Ocean City Inlet', lat: 38.328, lon: -75.092 },
-          { id: '8638863', name: 'CBBT, Chesapeake', lat: 36.967, lon: -76.117 },
+          { id: '8632200', name: 'Kiptopeke',         lat: 37.1652, lon: -75.9884 },
+          { id: '8638610', name: 'Sewells Point',     lat: 36.9428, lon: -76.3286 },
+          { id: '8639348', name: 'Money Point',       lat: 36.7782, lon: -76.3019 },
+          { id: '8637689', name: 'Yorktown USCG',     lat: 37.2265, lon: -76.4788 },
           { id: '8651370', name: 'Duck, NC',         lat: 36.183, lon: -75.747 },
         ];
     let activeTideStation = TIDE_STATIONS[0];
@@ -538,7 +541,24 @@
       set('bv-tide-measured', measuredValues.length
         ? `${Math.min(...measuredValues).toFixed(1)}–${Math.max(...measuredValues).toFixed(1)} ft`
         : 'unavailable');
-      set('bv-tide-next', nextEvent ? nextEvent.label : '—');
+      // Convert the Python label's UTC HH:MM to Eastern Time and append "ET".
+      // Python label format: "high 2.5 ft @ 14:00" (UTC, no zone suffix after fix).
+      let tideNextLabel = nextEvent ? nextEvent.label : '—';
+      if (nextEvent && nextEvent.label) {
+        const m = nextEvent.label.match(/(\d{2}:\d{2})$/);
+        if (m) {
+          try {
+            const [hh, mm] = m[1].split(':').map(Number);
+            const utcDate = new Date(Date.UTC(2000, 0, 1, hh, mm, 0));
+            tideNextLabel = nextEvent.label.replace(/\d{2}:\d{2}$/, '') +
+              new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' }).format(utcDate) +
+              ' ET';
+          } catch (_) { tideNextLabel = nextEvent.label + ' ET'; }
+        } else {
+          tideNextLabel = nextEvent.label + ' ET';
+        }
+      }
+      set('bv-tide-next', tideNextLabel);
     }
 
     function setupTideStationSelect() {
@@ -563,7 +583,12 @@
       const curve = tides.curves[activeTideStation.id];
       const observed = (tides.observed || {})[activeTideStation.id] || [];
       const next = (tides.next_event || {})[activeTideStation.id];
-      const range = tides.range && tides.range[activeTideStation.id];
+      // M2 harmonic amplitude: co-range lines use 2× amplitude, so use it here
+      // so the popup "Predicted range" matches the contour overlay exactly.
+      const amplitude_ft = (tides.amplitude_ft || {})[activeTideStation.id];
+      const range = amplitude_ft != null
+        ? { vmin: 0, vmax: amplitude_ft * 2 }  // 2× M2 amplitude = spring tidal range
+        : (tides.range && tides.range[activeTideStation.id]);
       renderTideChart(curve, range, next || null, observed);
     }
 
@@ -794,25 +819,27 @@
       // The composite raster is the scalar heat field. Directional variables
       // are drawn on transparent canvases, so they must never keep the raster
       // alive after the scalar checkboxes are cleared.
-      return !!(layerVisibility.wave_height || layerVisibility.temperature || layerVisibility.pressure || layerVisibility.tide_level);
+      return !!(layerVisibility.wave_height || layerVisibility.swell || layerVisibility.wind_wave || layerVisibility.temperature || layerVisibility.pressure || layerVisibility.tide_level);
     }
 
+    // Priority: significant wave height > exactly one partition > temperature > tide > pressure.
+    // When both partitions (swell + wind-wave) are checked, significant wave takes over
+    // as the heat map; partitions still render as directional arrow overlays on top.
+    // When exactly one partition is checked, that partition's heat map fills the display.
     function activeHeatKey() {
-      const selectedLayer = { wave_height_ft: 'wave_height', temperature_f: 'temperature', pressure_hpa: 'pressure', astronomical_tide_ft: 'tide_level', wind_wave_height_ft: 'wind_wave', swell_height_ft: 'swell' };
-      // Significant Wave Height is the combined sea-state field. It remains
-      // the scalar background when both partition animations are enabled;
-      // only the two partition heat fields are suppressed in that case.
-      if (hasWavePartitionConflict() && layerVisibility.wave_height) return 'wave_height_ft';
-      if (selectedLayer[selectedHeatKey] && layerVisibility[selectedLayer[selectedHeatKey]]) return selectedHeatKey;
+      if (layerVisibility.wave_height) return 'wave_height_ft';
+      const partitionCount = Number(!!layerVisibility.wind_wave) + Number(!!layerVisibility.swell);
+      // A single remaining partition is the scalar heat field. With both
+      // partitions selected, show their motion/direction overlays only;
+      // never blend two independent magnitude color maps.
+      if (partitionCount === 1) {
+        if (layerVisibility.swell) return 'swell_height_ft';
+        if (layerVisibility.wind_wave) return 'wind_wave_height_ft';
+      }
       if (layerVisibility.temperature) return 'temperature_f';
       if (layerVisibility.tide_level) return 'astronomical_tide_ft';
-      if (layerVisibility.wave_height) return 'wave_height_ft';
       if (layerVisibility.pressure) return 'pressure_hpa';
       return null;
-    }
-
-    function hasWavePartitionConflict() {
-      return !!layerVisibility.wind_wave && !!layerVisibility.swell;
     }
 
     // Derive each cell's local tidal phase from the actual summed harmonic
@@ -1006,6 +1033,11 @@
       const grids = forecastData?.frames?.map(frame => frame?.[scalarKey]).filter(Boolean) || [];
       const grid = grids[0];
       if (!def.dynamicRange || !grid || !grid.length) {
+        if (def.fixedRange) {
+          const factor = unitModes[scalarKey] === 'metric' ? 0.3048 : 1;
+          activeRange = { vmin: def.fixedRange[0] * factor, vmax: def.fixedRange[1] * factor };
+          return;
+        }
         const fixedMax = scalarKey === 'wind_speed_kn' && unitModes.wind_speed_kn === 'metric'
           ? 30 * 0.514444 : 30;
         activeRange = { vmin: 0, vmax: fixedMax };
@@ -1038,14 +1070,14 @@
 
     function drawColorbar() {
       const ranges = document.querySelector('.bv-ranges');
-      if (hasWavePartitionConflict() && !layerVisibility.wave_height) {
-        // With both partition layers selected there is deliberately no scalar
-        // heat field, so do not leave a colorbar that implies one is active.
+      const scalarKey = activeHeatKey();
+      if (!scalarKey) {
+        // With both partition layers selected there is deliberately no wave
+        // scalar heat field, so do not leave a colorbar that implies one.
         ranges.style.display = 'none';
         return;
       }
       ranges.style.display = '';
-      const scalarKey = activeHeatKey() || (layerVisibility.pressure ? 'pressure_hpa' : null);
       const def = PRODUCTS[scalarKey || currentProduct];
       const r = activeRange || { vmin: 0, vmax: 30 };
       const canvas = document.getElementById('bv-cbar');
@@ -1396,8 +1428,14 @@
           }
         }
         if (!values.length) return;
-        range = { vmin: Math.min(...values), vmax: Math.max(...values) };
-        if (range.vmax <= range.vmin) range.vmax = range.vmin + 1;
+        const fixedRange = PRODUCTS[key]?.fixedRange;
+        if (fixedRange) {
+          const factor = unitModes[key] === 'metric' ? 0.3048 : 1;
+          range = { vmin: fixedRange[0] * factor, vmax: fixedRange[1] * factor };
+        } else {
+          range = { vmin: Math.min(...values), vmax: Math.max(...values) };
+          if (range.vmax <= range.vmin) range.vmax = range.vmin + 1;
+        }
         partitionRanges.set(cacheKey, range);
       }
       const grid = currentFrame[key], lons = forecastData.lons, lats = forecastData.lats;

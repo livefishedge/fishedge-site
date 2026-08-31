@@ -42,18 +42,21 @@ DASHBOARD_OUT_PATH = Path(__file__).resolve().parents[1] / "dashboard" / "trip-p
 # ---- CO-OPS tide stations (curators: NJ/DE/MD/VA inshore + outer banks) ----
 # NOAA Center for Operational Oceanographic Products and Services publishes
 # free harmonic tide predictions in plain text via api/data/. We precompute the
-# request URL per station here so the viewer never needs a live API hop. Five
-# stations cover the usec_md bbox (36-40N, 77-72W) with adequate redundancy:
+# request URL per station here so the viewer never needs a live API hop. These
+# stations cover the usec_md bbox with measured-water-level redundancy:
 #   - Cape May + Atlantic City = NJ inshore reference
 #   - Ocean City Inlet = MD eastern shore (inside the display bbox)
-#   - CBBT = lower Chesapeake Bay mouth
+#   - Kiptopeke + Sewells Point + Money Point + Yorktown = Chesapeake references
 #   - Duck, NC = outer banks (Hatteras corridor edge)
 # Units: feet (CO-OPS MLLW datum, the same as the USEC captain convention).
 TIDE_STATIONS = [
-    {"id": "8635750", "name": "Cape May, NJ",       "lat": 38.968, "lon": -74.960},
+    {"id": "8536110", "name": "Cape May, NJ",       "lat": 38.9683, "lon": -74.9600},
     {"id": "8534720", "name": "Atlantic City, NJ",  "lat": 39.355, "lon": -74.418},
     {"id": "8570283", "name": "Ocean City Inlet",   "lat": 38.328, "lon": -75.092},
-    {"id": "8638863", "name": "CBBT, Chesapeake",   "lat": 36.967, "lon": -76.117},
+    {"id": "8632200", "name": "Kiptopeke",          "lat": 37.1652, "lon": -75.9884},
+    {"id": "8638610", "name": "Sewells Point",      "lat": 36.9428, "lon": -76.3286},
+    {"id": "8639348", "name": "Money Point",        "lat": 36.7782, "lon": -76.3019},
+    {"id": "8637689", "name": "Yorktown USCG",      "lat": 37.2265, "lon": -76.4788},
     {"id": "8651370", "name": "Duck, NC",           "lat": 36.183, "lon": -75.747},
 ]
 COOPS_API = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter"
@@ -147,7 +150,7 @@ def _find_next_tide_event(curve, now_ms=None):
                 continue
             kind = "high" if dv_prev > 0 else "low"
             dt = datetime.fromtimestamp(t_iso / 1000, tz=timezone.utc)
-            label = f"{kind} {curve[i]['v']:.1f} ft @ {dt.strftime('%H:%M UTC')}"
+            label = f"{kind} {curve[i]['v']:.1f} ft @ {dt.strftime('%H:%M')}"
             return {"t": t_iso, "label": label}
     return None
 
@@ -182,6 +185,9 @@ def fetch_all_tides(hours=COOPS_HOURS, begin=None):
             out["curves"][st["id"]] = res["curve"]
             out["range"][st["id"]] = res["range"]
             out["next_event"][st["id"]] = res["next_event"]
+            # M2 harmonic amplitude matches the co-range contour lines:
+            # co-range = 2 × amplitude at each grid cell or station.
+            out.setdefault("amplitude_ft", {})[st["id"]] = res.get("amplitude_ft")
             try:
                 out["observed"][st["id"]] = fetch_coops_observed(st["id"])
             except Exception as e:
