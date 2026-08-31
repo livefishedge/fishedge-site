@@ -799,6 +799,10 @@
 
     function activeHeatKey() {
       const selectedLayer = { wave_height_ft: 'wave_height', temperature_f: 'temperature', pressure_hpa: 'pressure', astronomical_tide_ft: 'tide_level', wind_wave_height_ft: 'wind_wave', swell_height_ft: 'swell' };
+      // Significant Wave Height is the combined sea-state field. It remains
+      // the scalar background when both partition animations are enabled;
+      // only the two partition heat fields are suppressed in that case.
+      if (hasWavePartitionConflict() && layerVisibility.wave_height) return 'wave_height_ft';
       if (selectedLayer[selectedHeatKey] && layerVisibility[selectedLayer[selectedHeatKey]]) return selectedHeatKey;
       if (layerVisibility.temperature) return 'temperature_f';
       if (layerVisibility.tide_level) return 'astronomical_tide_ft';
@@ -1034,7 +1038,7 @@
 
     function drawColorbar() {
       const ranges = document.querySelector('.bv-ranges');
-      if (hasWavePartitionConflict()) {
+      if (hasWavePartitionConflict() && !layerVisibility.wave_height) {
         // With both partition layers selected there is deliberately no scalar
         // heat field, so do not leave a colorbar that implies one is active.
         ranges.style.display = 'none';
@@ -1322,7 +1326,7 @@
       const partitionCount = Number(!!layerVisibility.wind_wave) + Number(!!layerVisibility.swell);
       // Two partition layers may animate together, but their scalar color
       // fields must never overlap. With both selected, show motion only.
-      if (partitionCount < 2 && ['wave_height_ft', 'temperature_f', 'pressure_hpa', 'astronomical_tide_ft'].includes(heatKey)) drawWaveHeatOverlay();
+      if (['wave_height_ft', 'temperature_f', 'pressure_hpa', 'astronomical_tide_ft'].includes(heatKey)) drawWaveHeatOverlay();
       // The wave checkboxes independently control animation visibility, but
       // only the selected scalar may paint the magnitude field. Otherwise
       // simultaneous Wave (wind), Swell, and Significant Wave Height layers
@@ -1506,7 +1510,7 @@
         flowCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
         const heatKey = activeHeatKey();
         const partitionCount = Number(!!layerVisibility.wind_wave) + Number(!!layerVisibility.swell);
-        if (partitionCount < 2 && ['wave_height_ft', 'temperature_f', 'pressure_hpa', 'astronomical_tide_ft'].includes(heatKey)) drawWaveHeatOverlay();
+        if (['wave_height_ft', 'temperature_f', 'pressure_hpa', 'astronomical_tide_ft'].includes(heatKey)) drawWaveHeatOverlay();
         if (partitionCount === 1 && heatKey === 'wind_wave_height_ft' && layerVisibility.wind_wave) drawPartitionMagnitudeHeat('wind_wave');
         if (partitionCount === 1 && heatKey === 'swell_height_ft' && layerVisibility.swell) drawPartitionMagnitudeHeat('swell');
         if (layerVisibility.swell || layerVisibility.wind_wave) drawWavePackets();
