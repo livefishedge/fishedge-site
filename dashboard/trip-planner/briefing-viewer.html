@@ -88,7 +88,11 @@
     #bv-side-panel .bv-row b{ color:#fff; font-weight:700; }
     #bv-moon-svg{ width:100%; height:auto; max-width:200px; align-self:center; }
     #bv-tide-svg{ width:100%; height:112px; }
-    #bv-station-popup{ position:relative; z-index:3000; min-width:260px; max-width:min(330px, calc(100vw - 28px)); padding:10px; background:rgba(5,11,16,0.98); border:1px solid #4fc3f7; border-radius:7px; box-shadow:0 8px 24px rgba(0,0,0,.55); color:#d6e5f2; }
+    /* OpenLayers puts overlays in their own container. Keep station charts
+       above every raster/animation canvas and interactive map layer. */
+    #bv-map .ol-overlaycontainer,
+    #bv-map .ol-overlaycontainer-stopevent{ z-index:1000 !important; }
+    #bv-station-popup{ position:relative; z-index:9999; min-width:260px; max-width:min(330px, calc(100vw - 28px)); padding:10px; background:rgba(5,11,16,0.98); border:1px solid #4fc3f7; border-radius:7px; box-shadow:0 8px 24px rgba(0,0,0,.55); color:#d6e5f2; }
     #bv-station-popup h3{ margin:0 0 4px; font-size:12px; color:#fff; }
     #bv-station-popup .bv-briefing-source{ font-size:10px; color:#7a8fa8; margin-bottom:4px; }
     #bv-station-popup .bv-row{ display:flex; justify-content:space-between; gap:8px; font-size:10px; padding-top:3px; }
@@ -1295,9 +1299,14 @@
       // ImageCanvas implementations that do not invalidate after a product
       // switch. This keeps the visual contract deterministic: fill first,
       // then partition streamlines and atmospheric arrows above it.
-      if (['wave_height_ft', 'temperature_f', 'pressure_hpa', 'astronomical_tide_ft'].includes(activeHeatKey())) drawWaveHeatOverlay();
-      if (layerVisibility.wind_wave) drawPartitionMagnitudeHeat('wind_wave');
-      if (layerVisibility.swell) drawPartitionMagnitudeHeat('swell');
+      const heatKey = activeHeatKey();
+      if (['wave_height_ft', 'temperature_f', 'pressure_hpa', 'astronomical_tide_ft'].includes(heatKey)) drawWaveHeatOverlay();
+      // The wave checkboxes independently control animation visibility, but
+      // only the selected scalar may paint the magnitude field. Otherwise
+      // simultaneous Wave (wind), Swell, and Significant Wave Height layers
+      // blend three unrelated color scales over the same pixels.
+      if (heatKey === 'wind_wave_height_ft' && layerVisibility.wind_wave) drawPartitionMagnitudeHeat('wind_wave');
+      if (heatKey === 'swell_height_ft' && layerVisibility.swell) drawPartitionMagnitudeHeat('swell');
       if (layerVisibility.swell || layerVisibility.wind_wave) drawWavePackets();
       if (layerVisibility.pressure) drawIsobars(true);
       if (layerVisibility.wind) {
