@@ -262,6 +262,7 @@
       // Composite heat uses significant wave height; partition directions are
       // rendered as the swell and wind-wave overlays below.
       wave_composite:{name: 'Significant wave height', unit: 'ft', scale: 'UV', viz: 'composite', dataKey: 'wave_height_ft', dynamicRange: true },
+      wind_wave_height_ft:{name: 'Wave (wind)', unit: 'ft', scale: 'UV', viz: 'heat', dataKey: 'wind_wave_height_ft', dynamicRange: true },
       wind_speed_kn: { name: 'Wind flow',   unit: 'kn',  scale: 'CHL', viz: 'streamlines', dynamicRange: false },
       pressure_hpa:  { name: 'Pressure',    unit: 'hPa', scale: 'SLA', viz: 'contours',    dynamicRange: true  },
       astronomical_tide_ft: { name: 'Tidal Stage', unit: 'high → falling → low → rising', scale: 'TIDE', viz: 'heat', dataKey: 'astronomical_tide_ft', dynamicRange: false },
@@ -775,6 +776,7 @@
       }));
     }
     const layerVisibility = { wave_height: true, temperature: false, pressure: false, tide_level: true, tide_range: true, swell: true, wind_wave: true, wind: true };
+    let selectedHeatKey = 'wave_height_ft';
     const particles = [];
 
     function hasVisibleRasterVariable() {
@@ -785,6 +787,8 @@
     }
 
     function activeHeatKey() {
+      const selectedLayer = { wave_height_ft: 'wave_height', temperature_f: 'temperature', pressure_hpa: 'pressure', astronomical_tide_ft: 'tide_level', wind_wave_height_ft: 'wind_wave', swell_height_ft: 'swell' };
+      if (selectedLayer[selectedHeatKey] && layerVisibility[selectedLayer[selectedHeatKey]]) return selectedHeatKey;
       if (layerVisibility.temperature) return 'temperature_f';
       if (layerVisibility.tide_level) return 'astronomical_tide_ft';
       if (layerVisibility.wave_height) return 'wave_height_ft';
@@ -1291,7 +1295,7 @@
       // ImageCanvas implementations that do not invalidate after a product
       // switch. This keeps the visual contract deterministic: fill first,
       // then partition streamlines and atmospheric arrows above it.
-      if (hasVisibleRasterVariable()) drawWaveHeatOverlay();
+      if (['wave_height_ft', 'temperature_f', 'pressure_hpa', 'astronomical_tide_ft'].includes(activeHeatKey())) drawWaveHeatOverlay();
       if (layerVisibility.wind_wave) drawPartitionMagnitudeHeat('wind_wave');
       if (layerVisibility.swell) drawPartitionMagnitudeHeat('swell');
       if (layerVisibility.swell || layerVisibility.wind_wave) drawWavePackets();
@@ -2259,9 +2263,11 @@
     document.querySelectorAll('.bv-products button').forEach(btn => {
       btn.addEventListener('click', () => setProduct(btn.dataset.prod));
     });
-    document.querySelectorAll('#bv-layers input[data-layer]').forEach(input => {
+      document.querySelectorAll('#bv-layers input[data-layer]').forEach(input => {
       input.addEventListener('change', () => {
         layerVisibility[input.dataset.layer] = input.checked;
+        const selectedKey = { wave_height: 'wave_height_ft', temperature: 'temperature_f', pressure: 'pressure_hpa', tide_level: 'astronomical_tide_ft', wind_wave: 'wind_wave_height_ft', swell: 'swell_height_ft' }[input.dataset.layer];
+        if (input.checked && selectedKey) selectedHeatKey = selectedKey;
         if (input.dataset.layer === 'temperature' && input.checked) {
           layerVisibility.wave_height = false;
           document.querySelector('#bv-layers input[data-layer="wave_height"]').checked = false;
