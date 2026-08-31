@@ -584,13 +584,43 @@
       const y0 = Math.max(0, Math.min(lats.length - 2, Math.floor(yf)));
       const tx = xf - x0, ty = yf - y0;
       const a = grid[y0]?.[x0], b = grid[y0]?.[x0 + 1], c = grid[y0 + 1]?.[x0], d = grid[y0 + 1]?.[x0 + 1];
-      if (![a, b, c, d].every(Number.isFinite)) return null;
-      return a * (1 - tx) * (1 - ty) + b * tx * (1 - ty) + c * (1 - tx) * ty + d * tx * ty;
+      if ([a, b, c, d].every(Number.isFinite)) {
+        return a * (1 - tx) * (1 - ty) + b * tx * (1 - ty) + c * (1 - tx) * ty + d * tx * ty;
+      }
+      // Station markers commonly fall on shoreline/land cells. Use a small
+      // inverse-distance fallback so the nearby ocean model remains visible
+      // instead of incorrectly reporting "tide unavailable".
+      const candidates = [];
+      const radius = 2;
+      const cx = Math.round(xf), cy = Math.round(yf);
+      for (let yi = Math.max(0, cy - radius); yi <= Math.min(lats.length - 1, cy + radius); yi++) {
+        for (let xi = Math.max(0, cx - radius); xi <= Math.min(lons.length - 1, cx + radius); xi++) {
+          const value = grid[yi]?.[xi];
+          if (Number.isFinite(value)) {
+            const dx = xi - xf, dy = yi - yf, dist2 = dx * dx + dy * dy;
+            candidates.push({ value, weight: dist2 < 1e-9 ? 1e9 : 1 / dist2 });
+          }
+        }
+      }
+      if (!candidates.length) return null;
+      const weightTotal = candidates.reduce((sum, item) => sum + item.weight, 0);
+      return candidates.reduce((sum, item) => sum + item.value * item.weight, 0) / weightTotal;
     }
 
     function modelTideCurve(station) {
       return (forecastData?.frames || []).map(frame => {
-        const v = sampleGridAtPoint(frame.astronomical_tide_ft, station.lat, station.lon);
+        // Prefer the summed NASA harmonic prediction. Older static artifacts
+        // contain only the shared M2 amplitude/phase fields, so derive the
+        // equivalent model value from those fields rather than showing an
+        // empty popup.
+        let v = sampleGridAtPoint(frame.astronomical_tide_ft, station.lat, station.lon);
+        if (!Number.isFinite(v)) {
+          const amplitude = sampleGridAtPoint(frame.tide_amplitude_ft, station.lat, station.lon);
+          const phase = sampleGridAtPoint(frame.tide_phase_deg, station.lat, station.lon);
+          if (Number.isFinite(amplitude) && Number.isFinite(phase)) {
+            v = amplitude * Math.cos(phase * Math.PI / 180);
+          }
+        }
         const t = parseForecastTime(frame.time);
         return Number.isFinite(v) && Number.isFinite(t) ? { t, v } : null;
       }).filter(Boolean);
@@ -611,7 +641,7 @@
 
     function renderActiveTide() {
       const tides = (forecastData && forecastData.tides) || null;
-      if (!tides || !tides.curves) {
+      if (!tides) {
         renderTideChart(null, null, null);
         return;
       }
