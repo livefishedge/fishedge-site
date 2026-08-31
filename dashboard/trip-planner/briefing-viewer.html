@@ -262,12 +262,12 @@
     //    so the colorbar isn't clipped when the data sits outside the default range.
     const PRODUCTS = {
       temperature_f: { name: 'Air temperature', unit: '°F', scale: 'SST', viz: 'heat', dataKey: 'temperature_f', dynamicRange: true },
-      wave_height_ft:{ name: 'Significant wave height', unit: 'ft', scale: 'UV', viz: 'arrows', dataKey: 'wave_height_ft', dirKey: 'wave_direction_deg', dynamicRange: false, fixedRange: [0, 10] },
-      swell_height_ft:{name: 'Swell height',unit: 'ft', scale: 'UV', viz: 'arrows', dataKey: 'swell_height_ft', dirKey: 'swell_direction_deg', dynamicRange: false, fixedRange: [0, 8] },
+      wave_height_ft:{ name: 'Significant wave height', unit: 'ft', scale: 'UV', viz: 'arrows', dataKey: 'wave_height_ft', dirKey: 'wave_direction_deg', dynamicRange: false, fixedRange: [0, 5] },
+      swell_height_ft:{name: 'Swell height',unit: 'ft', scale: 'UV', viz: 'arrows', dataKey: 'swell_height_ft', dirKey: 'swell_direction_deg', dynamicRange: false, fixedRange: [0, 5] },
       // Composite heat uses significant wave height; partition directions are
       // rendered as the swell and wind-wave overlays below.
-      wave_composite:{name: 'Significant wave height', unit: 'ft', scale: 'UV', viz: 'composite', dataKey: 'wave_height_ft', dynamicRange: false, fixedRange: [0, 10] },
-      wind_wave_height_ft:{name: 'Wave (wind)', unit: 'ft', scale: 'UV', viz: 'heat', dataKey: 'wind_wave_height_ft', dynamicRange: false, fixedRange: [0, 6] },
+      wave_composite:{name: 'Significant wave height', unit: 'ft', scale: 'UV', viz: 'composite', dataKey: 'wave_height_ft', dynamicRange: false, fixedRange: [0, 5] },
+      wind_wave_height_ft:{name: 'Wave (wind)', unit: 'ft', scale: 'UV', viz: 'heat', dataKey: 'wind_wave_height_ft', dynamicRange: false, fixedRange: [0, 5] },
       wind_speed_kn: { name: 'Wind flow',   unit: 'kn',  scale: 'CHL', viz: 'streamlines', dynamicRange: false },
       pressure_hpa:  { name: 'Pressure',    unit: 'hPa', scale: 'SLA', viz: 'contours',    dynamicRange: true  },
       astronomical_tide_ft: { name: 'Tidal Stage', unit: 'high → falling → low → rising', scale: 'TIDE', viz: 'heat', dataKey: 'astronomical_tide_ft', dynamicRange: false },
