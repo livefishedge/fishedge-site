@@ -45,6 +45,7 @@ def refresh(path, tides):
     payload["tide_water_cells"] = water_cell_mask(lats, lons)
     payload["tides"] = tides
     add_tide_grids(payload["frames"], tides, lats, lons, preserve_ofs=True, land_mask=land)
+    add_tidal_range_field(payload["frames"])
     add_harmonic_phase_amplitude(payload["frames"], tides=tides, lats=lats, lons=lons, land_mask=land)
     for frame in payload["frames"]:
         if "tide_height_ft" in frame and not frame.get("tide_model_source"):
@@ -68,6 +69,23 @@ def land_mask(lats, lons):
     reader = shapereader.natural_earth(resolution="10m", category="physical", name="land")
     geometries = list(shapereader.Reader(reader).geometries())
     return [[any(geometry.contains(Point(lon, lat)) for geometry in geometries) for lon in lons] for lat in lats]
+
+
+def add_tidal_range_field(frames):
+    """Derive one full high-to-low range field from the displayed tide curves."""
+    if not frames: return
+    source = [frame.get("tide_height_ft") for frame in frames]
+    sample = next((grid for grid in source if grid), None)
+    if not sample: return
+    ny, nx = len(sample), len(sample[0])
+    ranges = []
+    for yi in range(ny):
+        row = []
+        for xi in range(nx):
+            values = [grid[yi][xi] for grid in source if grid and grid[yi][xi] is not None]
+            row.append(float(max(values) - min(values)) if values else None)
+        ranges.append(row)
+    for frame in frames: frame["tide_range_ft"] = ranges
 
 
 def water_cell_mask(lats, lons):

@@ -166,7 +166,7 @@
         <label><input type="checkbox" data-layer="temperature"><span class="bv-dot dot-temp"></span>Air Temp <button class="bv-unit-toggle" type="button" data-unit-key="temperature_f">°F</button></label>
         <label><input type="checkbox" data-layer="pressure"><span class="bv-dot dot-press"></span>Pressure <button class="bv-unit-toggle" type="button" data-unit-key="pressure_hpa">hPa</button></label>
         <label title="Tidal stage at each location’s own phase"><input type="checkbox" data-layer="tide_level" checked><span class="bv-dot dot-tide"></span>Tidal Stage</label>
-        <label title="Tidal Range contour overlay"><input type="checkbox" data-layer="tide_range" checked><span class="bv-dot dot-tide"></span>Tidal Range <button class="bv-unit-toggle" type="button" data-unit-key="tide_amplitude_ft">ft</button></label>
+        <label title="Tidal Range contour overlay"><input type="checkbox" data-layer="tide_range" checked><span class="bv-dot dot-tide"></span>Tidal Range <button class="bv-unit-toggle" type="button" data-unit-key="tide_range_ft">ft</button></label>
         <label><input type="checkbox" data-layer="wind" checked><span class="bv-dot dot-wind"></span>Wind <button class="bv-unit-toggle" type="button" data-unit-key="wind_speed_kn">kn</button></label>
         <label title="Wind-wave height is the locally wind-generated wave magnitude; arrows show direction"><input type="checkbox" data-layer="wind_wave" checked><span class="bv-dot dot-composite"></span>Wave (wind) <button class="bv-unit-toggle" type="button" data-unit-key="wind_wave_height_ft">ft</button></label>
         <label title="Swell height is the remotely generated wave magnitude; arrows show direction"><input type="checkbox" data-layer="swell" checked><span class="bv-dot dot-swell"></span>Swell <button class="bv-unit-toggle" type="button" data-unit-key="swell_height_ft">ft</button></label>
@@ -745,12 +745,12 @@
     let currentFrame = null;
     let activeRange = null; // {vmin, vmax} computed per-frame when dynamicRange=true
     let localTideExtrema = null;
-    const unitModes = { temperature_f: 'imperial', wave_height_ft: 'imperial', swell_height_ft: 'imperial', wind_wave_height_ft: 'imperial', wind_speed_kn: 'imperial', pressure_hpa: 'metric', tide_amplitude_ft: 'imperial' };
-    const UNIT_LABELS = { temperature_f: ['°F', '°C'], wave_height_ft: ['ft', 'm'], swell_height_ft: ['ft', 'm'], wind_wave_height_ft: ['ft', 'm'], wind_speed_kn: ['kn', 'm/s'], pressure_hpa: ['hPa', 'inHg'], tide_amplitude_ft: ['ft', 'm'] };
+    const unitModes = { temperature_f: 'imperial', wave_height_ft: 'imperial', swell_height_ft: 'imperial', wind_wave_height_ft: 'imperial', wind_speed_kn: 'imperial', pressure_hpa: 'metric', tide_range_ft: 'imperial' };
+    const UNIT_LABELS = { temperature_f: ['°F', '°C'], wave_height_ft: ['ft', 'm'], swell_height_ft: ['ft', 'm'], wind_wave_height_ft: ['ft', 'm'], wind_speed_kn: ['kn', 'm/s'], pressure_hpa: ['hPa', 'inHg'], tide_range_ft: ['ft', 'm'] };
     function convertDisplayValue(key, value) {
       if (!Number.isFinite(value)) return value;
       if (key === 'pressure_hpa' && unitModes[key] === 'imperial') return value * 0.0295299831;
-      if (key === 'tide_amplitude_ft' && unitModes[key] === 'metric') return value * 0.3048;
+      if (key === 'tide_range_ft' && unitModes[key] === 'metric') return value * 0.3048;
       if (unitModes[key] !== 'metric') return value;
       if (key === 'temperature_f') return (value - 32) * 5 / 9;
       if (key === 'wave_height_ft' || key === 'swell_height_ft' || key === 'wind_wave_height_ft') return value * 0.3048;
@@ -762,7 +762,7 @@
       if (unitModes[key] === 'metric' && ['wave_height_ft', 'swell_height_ft', 'wind_wave_height_ft'].includes(key)) return 'm';
       if (unitModes[key] === 'metric' && key === 'wind_speed_kn') return 'm/s';
       if (unitModes[key] === 'imperial' && key === 'pressure_hpa') return 'inHg';
-      if (unitModes[key] === 'metric' && key === 'tide_amplitude_ft') return 'm';
+      if (unitModes[key] === 'metric' && key === 'tide_range_ft') return 'm';
       return fallback;
     }
     function setupUnitToggles() {
@@ -1075,7 +1075,7 @@
         temperature: !!(currentFrame && currentFrame.temperature_f),
         pressure: !!(currentFrame && currentFrame.pressure_hpa),
         tide_level: !!(currentFrame && currentFrame.astronomical_tide_ft),
-        tide_range: !!(currentFrame && currentFrame.tide_amplitude_ft),
+        tide_range: !!(currentFrame && (currentFrame.tide_range_ft || currentFrame.tide_amplitude_ft)),
         wind: !!(currentFrame && currentFrame.wind_speed_kn && currentFrame.wind_direction_deg),
         wind_wave: !!(currentFrame && currentFrame.wind_wave_height_ft && currentFrame.wind_wave_direction_deg),
         swell: !!(currentFrame && currentFrame.swell_height_ft && currentFrame.swell_direction_deg),
@@ -1085,7 +1085,7 @@
         const label = input?.closest('label');
         if (!input || !label) continue;
         const anyFrameAvailable = ['tide_range'].includes(key) && forecastData && forecastData.frames
-          ? forecastData.frames.some(frame => !!(frame && frame.tide_amplitude_ft))
+          ? forecastData.frames.some(frame => !!(frame && (frame.tide_range_ft || frame.tide_amplitude_ft)))
           : available[key];
         // Keep the co-line controls interactive even before the atlas
         // artifact arrives.  A disabled checkbox looks broken and hides the
@@ -1241,10 +1241,12 @@
           ctx.restore();
         }
       };
-      if (layerVisibility.tide_range && currentFrame.tide_amplitude_ft) {
-        // Tidal Range is the full predicted high-to-low range. The stored
-        // harmonic field is amplitude (half-range), so convert before drawing.
-        const contourGrid = currentFrame.tide_amplitude_ft.map(row => row.map(value => Number.isFinite(value) ? 2 * convertDisplayValue('tide_amplitude_ft', value) : value));
+      const rangeField = currentFrame.tide_range_ft || currentFrame.tide_amplitude_ft;
+      if (layerVisibility.tide_range && rangeField) {
+        // Prefer the full high-to-low forecast range. Older harmonic artifacts
+        // retain amplitude, so double that legacy field only as a fallback.
+        const legacyAmplitude = !currentFrame.tide_range_ft;
+        const contourGrid = rangeField.map(row => row.map(value => Number.isFinite(value) ? (legacyAmplitude ? 2 : 1) * convertDisplayValue('tide_range_ft', value) : value));
         const values = contourGrid.flat().filter(Number.isFinite);
         if (values.length) {
           // One label per continuous contour; values are full high-to-low range.
