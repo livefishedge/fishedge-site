@@ -201,7 +201,8 @@
     <div class="bv-briefing-source">CO-OPS harmonic prediction · MLLW datum</div>
     <svg id="bv-tide-svg" viewBox="0 0 280 112" role="img" aria-label="24-hour tide prediction curve"></svg>
     <div class="bv-row"><span>Next event</span><b id="bv-tide-next">—</b></div>
-    <div class="bv-row"><span>Range</span><b id="bv-tide-range">—</b></div>
+    <div class="bv-row"><span>Predicted range</span><b id="bv-tide-range">—</b></div>
+    <div class="bv-row"><span>Measured</span><b id="bv-tide-measured">—</b></div>
   </div>
 
   <div class="bv-framebar">
@@ -515,22 +516,28 @@
       const mlwLine = `<line x1="${padL}" y1="${y(0)}" x2="${padL+innerW}" y2="${y(0)}" stroke="#4fc3f7" stroke-width="0.5" stroke-dasharray="3 3" opacity="0.6"/>`;
       const nowLine = `<line x1="${x(now)}" y1="${padT}" x2="${x(now)}" y2="${padT+innerH}" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="3 2"/><text x="${x(now)+3}" y="${padT+10}" fill="#ffd166" font-size="9" font-family="monospace">NOW</text>`;
       const yLabels = [vmin, (vmin + vmax) / 2, vmax].map(value => `<text x="1" y="${y(value)+3}" fill="#9fb0c3" font-size="8" font-family="monospace">${value.toFixed(1)}</text>`).join('');
-      const evLabel = nextEvent
-        ? `<text x="${padL}" y="${padT+8}" font-size="9" fill="#ffd166" font-family="ui-monospace,Menlo,Consolas,monospace">${nextEvent.label}</text>`
-        : '';
+      const legend = `<line x1="150" y1="7" x2="165" y2="7" stroke="#4fc3f7" stroke-width="1.6" stroke-dasharray="4 2"/><text x="168" y="10" fill="#9fb0c3" font-size="8">Predicted</text>`
+        + `<line x1="220" y1="7" x2="235" y2="7" stroke="#ffd166" stroke-width="1.8"/><text x="238" y="10" fill="#9fb0c3" font-size="8">Measured</text>`;
       svg.innerHTML = `
         <rect x="${padL}" y="${padT}" width="${innerW}" height="${innerH}" fill="rgba(79,195,247,0.04)" stroke="#273649" stroke-width="0.5"/>
         ${mlwLine}
-        <polyline points="${pts(predicted)}" fill="none" stroke="#4fc3f7" stroke-width="1.6"/>
-        <polyline points="${pts(measured)}" fill="none" stroke="#ffd166" stroke-width="1.8" stroke-dasharray="4 2"/>
+        <polyline points="${pts(predicted)}" fill="none" stroke="#4fc3f7" stroke-width="1.6" stroke-dasharray="4 2"/>
+        <polyline points="${pts(measured)}" fill="none" stroke="#ffd166" stroke-width="1.8"/>
         ${nowLine}
         ${yLabels}
         ${ticks.join('')}
-        ${evLabel}
+        ${legend}
       `;
       const set = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
-      const r = (vmax - vmin);
-      set('bv-tide-range', `${r.toFixed(1)} ft`);
+      const predictedValues = (curve || []).map(p => p.v).filter(Number.isFinite);
+      const predictedRange = Number.isFinite(range?.vmin) && Number.isFinite(range?.vmax)
+        ? range.vmax - range.vmin
+        : (predictedValues.length ? Math.max(...predictedValues) - Math.min(...predictedValues) : 0);
+      set('bv-tide-range', `${predictedRange.toFixed(1)} ft`);
+      const measuredValues = (observed || []).map(p => p.v).filter(Number.isFinite);
+      set('bv-tide-measured', measuredValues.length
+        ? `${Math.min(...measuredValues).toFixed(1)}–${Math.max(...measuredValues).toFixed(1)} ft`
+        : 'unavailable');
       set('bv-tide-next', nextEvent ? nextEvent.label : '—');
     }
 
@@ -1497,7 +1504,11 @@
         const dpr = flowCanvas.width / mapEl.clientWidth;
         streamlineCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
         flowCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        drawWaveHeatOverlay();
+        const heatKey = activeHeatKey();
+        const partitionCount = Number(!!layerVisibility.wind_wave) + Number(!!layerVisibility.swell);
+        if (partitionCount < 2 && ['wave_height_ft', 'temperature_f', 'pressure_hpa', 'astronomical_tide_ft'].includes(heatKey)) drawWaveHeatOverlay();
+        if (partitionCount === 1 && heatKey === 'wind_wave_height_ft' && layerVisibility.wind_wave) drawPartitionMagnitudeHeat('wind_wave');
+        if (partitionCount === 1 && heatKey === 'swell_height_ft' && layerVisibility.swell) drawPartitionMagnitudeHeat('swell');
         if (layerVisibility.swell || layerVisibility.wind_wave) drawWavePackets();
         if (layerVisibility.pressure) drawIsobars(true);
         if (layerVisibility.wind) drawStreamlines(true);
