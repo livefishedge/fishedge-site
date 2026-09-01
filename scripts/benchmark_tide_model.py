@@ -52,7 +52,7 @@ def main():
     ap.add_argument("--apply-global-bias", action="store_true")
     ap.add_argument("--output", type=Path)
     args = ap.parse_args()
-    payload = json.loads(args.forecast.read_text())
+    payload = json.loads(Path(args.forecast).read_text()) if str(args.forecast) != "-" else json.load(__import__("sys").stdin)
     source = payload.get("tide_harmonic_source") or {}
     model_name = source.get("model", "")
     stations = payload.get("tides", {}).get("stations", [])
@@ -65,6 +65,11 @@ def main():
         model = []
         for frame in frames:
             value = sample(frame.get("astronomical_tide_ft"), lats, lons, station["lat"], station["lon"])
+            if value is None:
+                amplitude = sample(frame.get("tide_amplitude_ft"), lats, lons, station["lat"], station["lon"])
+                phase = sample(frame.get("tide_phase_deg"), lats, lons, station["lat"], station["lon"])
+                if amplitude is not None and phase is not None:
+                    value = amplitude * math.cos(math.radians(phase))
             if value is not None:
                 model.append((forecast_time(frame), value))
         observed = {int(point["t"]): float(point["v"]) for point in curves.get(station["id"], [])}
@@ -74,11 +79,29 @@ def main():
             continue
         diff = np.array([coops - model_value for model_value, coops in pairs])
         residuals.extend(diff.tolist())
+        model_values = np.array([model_value for model_value, _ in pairs])
+        coops_values = np.array([coops for _, coops in pairs])
+        omega = 2.0 * math.pi / 12.4206
+        times = np.array([t / 1000.0 / 3600.0 for t in sorted(observed) if t in {time for time, _ in model}])
+        # Fit both series to the same M2 frequency. This distinguishes a
+        # vertical datum bias from amplitude and phase disagreement.
+        fit_times = np.array([t / 1000.0 / 3600.0 for t, _ in model if t in observed])
+        design = np.column_stack((np.ones(len(fit_times)), np.cos(omega * fit_times), np.sin(omega * fit_times)))
+        model_coeff, *_ = np.linalg.lstsq(design, model_values, rcond=None)
+        coops_coeff, *_ = np.linalg.lstsq(design, coops_values, rcond=None)
+        model_amp = float(np.hypot(model_coeff[1], model_coeff[2]))
+        coops_amp = float(np.hypot(coops_coeff[1], coops_coeff[2]))
+        phase_error = math.degrees(math.atan2(coops_coeff[2], coops_coeff[1]) - math.atan2(model_coeff[2], model_coeff[1]))
+        phase_error = (phase_error + 180.0) % 360.0 - 180.0
         rows.append({
             "id": station["id"], "name": station["name"], "samples": len(diff),
             "bias_ft": round(float(np.mean(diff)), 4),
             "mae_ft": round(float(np.mean(np.abs(diff))), 4),
             "rmse_ft": round(float(np.sqrt(np.mean(diff ** 2))), 4),
+            "model_m2_amplitude_ft": round(model_amp, 4),
+            "coops_m2_amplitude_ft": round(coops_amp, 4),
+            "amplitude_error_ft": round(coops_amp - model_amp, 4),
+            "phase_error_deg": round(phase_error, 3),
         })
     if not residuals:
         raise SystemExit("no overlapping model/CO-OPS samples")
