@@ -500,8 +500,11 @@
       // Keep the x-axis tied to actual wall-clock time. Observations are
       // validation data and must never be shifted to make them overlap.
       const now = Date.now();
-      const t0 = now - 24 * 3600000;
-      const tN = now + 24 * 3600000;
+      // Keep NOW exactly centered on the real wall clock. Use a 72-hour
+      // viewport so the latest 24-hour CO-OPS validation series remains
+      // visible at the forecast boundary without translating its timestamps.
+      const t0 = now - 36 * 3600000;
+      const tN = now + 36 * 3600000;
       const allValues = [...curve, ...(observed || [])].map(p => p.v).filter(Number.isFinite);
       const predictedValues = (curve || []).map(p => p.v).filter(Number.isFinite);
       // The curve shows +/-24 hours, but the reported/co-range is the full
@@ -523,7 +526,7 @@
       const measured = visible(observed);
       const pts = points => points.map(p => `${x(p.t).toFixed(2)},${y(p.v).toFixed(2)}`).join(' ');
       const ticks = [];
-      for (let h = -24; h <= 24; h += 6) {
+      for (let h = -36; h <= 36; h += 6) {
         const tt = now + h * 3600000;
         ticks.push(`<line x1="${x(tt)}" y1="${padT+innerH}" x2="${x(tt)}" y2="${padT+innerH+3}" stroke="#5a6b7d"/>`);
         ticks.push(`<text x="${x(tt)}" y="${H-2}" text-anchor="middle" font-size="8" fill="#7a8fa8" font-family="ui-monospace,Menlo,Consolas,monospace">${h === 0 ? 'now' : (h > 0 ? '+' : '') + h + 'h'}</text>`);
@@ -667,7 +670,7 @@
     // instead of reusing an older cached JSON response.
     // Bump whenever the JSON artifact changes; otherwise a Pages/browser
     // cache can keep serving a pre-calibration tide field after HTML deploy.
-    const FORECAST_DATA_BUILD = 'coops-refresh-20260901-1105';
+    const FORECAST_DATA_BUILD = 'coops-refresh-20260901-1553';
     const DEV_FORECAST_URL = `/dashboard/trip-planner/data/${region}/briefing/forecast.json?v=${FORECAST_DATA_BUILD}`;
     const CORS_PROXY = 'https://corsproxy.io/?';
     const MAX_FORECAST_AGE_HOURS = 12;
