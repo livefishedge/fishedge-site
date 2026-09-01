@@ -497,7 +497,17 @@
         svg.innerHTML = `<text x="${W/2}" y="${H/2}" text-anchor="middle" fill="#7a8fa8" font-size="10" font-family="ui-monospace,Menlo,Consolas,monospace">tide unavailable</text>`;
         return;
       }
-      const now = Date.now();
+      const curveTimes = (curve || []).map(p => p.t).filter(Number.isFinite);
+      const observedTimes = (observed || []).map(p => p.t).filter(Number.isFinite);
+      const overlapStart = curveTimes.length && observedTimes.length
+        ? Math.max(Math.min(...curveTimes), Math.min(...observedTimes)) : NaN;
+      const overlapEnd = curveTimes.length && observedTimes.length
+        ? Math.min(Math.max(...curveTimes), Math.max(...observedTimes)) : NaN;
+      // Plot around the actual model/measurement overlap. Anchoring only to
+      // wall-clock now can hide an otherwise valid field series at a data
+      // window boundary (especially after a forecast refresh).
+      const now = Number.isFinite(overlapStart) && Number.isFinite(overlapEnd) && overlapStart <= overlapEnd
+        ? (overlapStart + overlapEnd) / 2 : Date.now();
       const t0 = now - 24 * 3600000;
       const tN = now + 24 * 3600000;
       const allValues = [...curve, ...(observed || [])].map(p => p.v).filter(Number.isFinite);
