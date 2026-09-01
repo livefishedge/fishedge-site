@@ -41,7 +41,9 @@ def find_regional_htp(date, cycle="00"):
     day = dt.datetime.strptime(date, "%Y%m%d")
     for offset in range(0, 3):
         run_day = (day - dt.timedelta(days=offset)).strftime("%Y%m%d")
-        for base in (f"stofs_2d_glo.{run_day}/{cycle}/", f"stofs_2d_glo.{run_day}/{cycle}/rerun/"):
+        # NOAA publishes the pre-gridded HTP products at the date root. The
+        # cycle/rerun tree contains the native tide NetCDF files instead.
+        for base in (f"stofs_2d_glo.{run_day}/", f"stofs_2d_glo.{run_day}/{cycle}/", f"stofs_2d_glo.{run_day}/{cycle}/rerun/"):
             keys = list_keys(base)
             matches = [k for k in keys if re.search(r"conus\.east.*htp.*\.grib2$", k, re.I)]
             if matches:
@@ -94,7 +96,7 @@ def fit_m2(values, hours):
     return amp, high_phase
 
 
-def merge(path, amp, phase, source, run_date, lats, lons):
+def merge(path, amp, phase, source, run_date, lats, lons, datum_shift_ft=0.0):
     payload = json.loads(Path(path).read_text())
     # Resample the regional field to the viewer grid by nearest-neighbour.
     dst_lats = payload["lats"]; dst_lons = payload["lons"]
@@ -109,12 +111,22 @@ def merge(path, amp, phase, source, run_date, lats, lons):
         hours = (current - first).total_seconds() / 3600.0
         frame["tide_amplitude_ft"] = amp_grid
         frame["tide_phase_deg"] = [[None if value is None else float((360.0 * hours / M2_HOURS - value) % 360.0) for value in row] for row in high_grid]
+        # Materialize the actual tide-only model field consumed by the
+        # viewer.  fit_m2 returns a high-water phase for the convention
+        # value = amplitude*cos(omega*t - phase).
+        frame["astronomical_tide_ft"] = [[
+            None if amp_grid[yi][xi] is None or high_grid[yi][xi] is None else
+            float(amp_grid[yi][xi] * np.cos(2.0 * np.pi * hours / M2_HOURS - np.deg2rad(high_grid[yi][xi])) + datum_shift_ft)
+            for xi in range(len(dst_lons))
+        ] for yi in range(len(dst_lats))]
+        frame["tide_range_ft"] = [[None if v is None else float(2.0 * v) for v in row] for row in amp_grid]
     payload["tide_harmonic_source"] = {
         "provider": "NOAA",
         "model": "STOFS-2D Global HTP",
         "run": run_date,
         "object": source,
-        "datum": "STOFS model free-surface datum; transform required before MLLW",
+        "datum": "CO-OPS MLLW (STOFS HTP MSL-like field + validated regional datum shift)",
+        "vertical_datum_shift_ft": float(datum_shift_ft),
         "constituents": ["M2"],
         "constituent": "M2",
         "units": "m amplitude; degrees phase",
@@ -127,13 +139,15 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--date", default=dt.datetime.now(dt.timezone.utc).strftime("%Y%m%d"))
     ap.add_argument("--cycle", default="00")
+    ap.add_argument("--datum-shift-ft", type=float, default=0.0,
+                    help="validated uniform MSL-like to MLLW offset")
     ap.add_argument("paths", nargs="+")
     args = ap.parse_args()
     run_date, key = find_regional_htp(args.date, args.cycle)
     values, lats, lons = read_window(key)
     amp, phase = fit_m2(values, np.arange(values.shape[0]))
     for path in args.paths:
-        merge(path, amp, phase, key, run_date, lats, lons)
+        merge(path, amp, phase, key, run_date, lats, lons, args.datum_shift_ft)
         print(f"merged STOFS HTP M2 phase/amplitude: {path}")
 
 
