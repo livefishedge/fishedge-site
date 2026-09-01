@@ -41,7 +41,7 @@
     return `${d.getFullYear()}${pad2(d.getMonth()+1)}${pad2(d.getDate())}`;
   }
 
-  function buildPredictionsUrl(stationId, { begin, end, datum = 'MLLW', interval = 'hilo', units = 'english', tz = 'lst_ldt' } = {}) {
+  function buildPredictionsUrl(stationId, { begin, end, datum = 'MLLW', interval = 'hilo', units = 'english', tz = 'gmt' } = {}) {
     const u = new URL(`${COOPS_BASE}`);
     u.searchParams.set('product', 'predictions');
     u.searchParams.set('application', 'FishEdge-dev');
@@ -142,7 +142,7 @@
     const begin = fmtLocalDate(now);
     const end   = fmtLocalDate(new Date(now.getTime() + 2 * 86400 * 1000));
     const url = buildPredictionsUrl(meta.station_id, {
-      begin, end, datum: 'MLLW', interval: 'hilo', units: 'english', tz: 'lst_ldt',
+        begin, end, datum: 'MLLW', interval: 'hilo', units: 'english', tz: 'gmt',
     });
     const res = await fetchImpl(url, { method: 'GET' });
     if (!res.ok) {
