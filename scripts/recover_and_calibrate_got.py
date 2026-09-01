@@ -141,7 +141,11 @@ def main():
     quality.pop("coops_tidal_fallback", None)
     quality["co_tidal_source"] = "NASA GSFC GOT4.10c M2 harmonic field with station-calibrated datum offset; CO-OPS observations are validation only"
     quality["tide_benchmark"] = report
-    if not args.report_only:
+    if args.report_only and args.output:
+        refreshed = json.loads(args.forecast.read_text())
+        refreshed.setdefault("quality", {})["tide_benchmark"] = report
+        args.output.write_text(json.dumps(refreshed, allow_nan=False, separators=(",", ":")))
+    elif not args.report_only:
         output = args.output or args.forecast
         output.write_text(json.dumps(payload, allow_nan=False, separators=(",", ":")))
     print(json.dumps(report, indent=2))
