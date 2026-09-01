@@ -9,7 +9,8 @@
 (function () {
   try {
     var p = location.pathname;
-    if (p !== '/planner' && p !== '/planner/') return;
+    var briefingPath = '/dashboard/trip-planner/briefing-viewer';
+    if (p !== '/planner' && p !== '/planner/' && p !== briefingPath) return;
 
     /* Bare /planner (no trailing slash) — fix URL once, then load viewer. */
     if (p === '/planner') {
@@ -20,7 +21,10 @@
        dashboard/planner/ build output (verified 200 OK). We need sync so the
        captain dashboard HTML never paints before we swap it out. */
     var xhr = new XMLHttpRequest();
-    xhr.open('GET', 'planner/viewer.html', false);
+    var viewerPath = p === briefingPath
+      ? '/dashboard/trip-planner/briefing-viewer.html'
+      : 'planner/viewer.html';
+    xhr.open('GET', viewerPath, false);
     xhr.send();
     if (xhr.status !== 200) {
       console.error('[planner-spa-router] viewer.html fetch failed', xhr.status);

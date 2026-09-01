@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <script src="planner-spa-router.js?v=20260821-1"></script>
+  <script src="/planner-spa-router.js?v=20260901-tide-route"></script>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <title>Captain's Dashboard</title>
@@ -1567,6 +1567,14 @@
         <button id="combined-bathy-unit-toggle" class="combined-unit-button" type="button">fathom</button>
       </div>
       <div id="combined-bathy-legend" class="combined-inline-legend"></div>
+      <div class="combined-product-row" id="combined-canyon-row" style="display:none">
+        <label class="combined-toggle">
+          <input type="checkbox" id="chk-combined-canyon" checked>
+          <span class="box"></span>
+          <span class="combined-dot" style="background:#ff6b6b"></span>
+          <span>Canyon priority structure</span>
+        </label>
+      </div>
     </div>
     <div id="combined-account-link" style="margin-top:auto;padding-top:12px;border-top:1px solid var(--border);text-align:center;">
       <a href="account.html" style="text-decoration:none;">MY ACCOUNT</a>
@@ -6555,6 +6563,42 @@ async function renderCombinedMode() {
     surveyBathyLayer.setVisible(document.getElementById("chk-combined-bathy")?.checked ?? true);
     map.addLayer(surveyBathyLayer);
     window._combinedSurveyBathyLayer = surveyBathyLayer;
+  }
+  // ── Layer: Canyon priority structure ──────────────────────────────
+  // Overlay over the survey composite; toggleable via #chk-combined-canyon.
+  // Region-gated to usec_md; PNG bbox matches REGION_FALLBACKS.usec_md.bbox.
+  if (REGION_ID === "usec_md") {
+    const canyonRow = document.getElementById("combined-canyon-row");
+    if (canyonRow) canyonRow.style.display = "";
+    try {
+      const canyonExtent = ol.proj.transformExtent(
+        [BBOX[0], BBOX[1], BBOX[2], BBOX[3]],
+        "EPSG:4326", "EPSG:3857"
+      );
+      const canyonSource = new ol.source.ImageStatic({
+        url: "data/survey_bathy/offshore_priority_canyon.png",
+        projection: "EPSG:3857",
+        imageExtent: canyonExtent,
+      });
+      const canyonLayer = new ol.layer.Image({
+        source: canyonSource,
+        opacity: 0.6,
+        zIndex: 15, // one above survey tiles (14)
+      });
+      const canyonChk = document.getElementById("chk-combined-canyon");
+      canyonLayer.setVisible(canyonChk?.checked ?? true);
+      map.addLayer(canyonLayer);
+      window._combinedCanyonLayer = canyonLayer;
+      if (canyonChk) {
+        canyonChk.addEventListener("change", e => {
+          if (window._combinedCanyonLayer) {
+            window._combinedCanyonLayer.setVisible(e.target.checked);
+          }
+        });
+      }
+    } catch (canyonErr) {
+      console.warn("[combined] canyon overlay unavailable; continuing without it", canyonErr);
+    }
   }
   const bathyLayer = buildBathyContourLayer(bathyData, bathyGridInfo, map);
   if (bathyLayer) { map.addLayer(bathyLayer); window._combinedBathyLayer = bathyLayer; }
