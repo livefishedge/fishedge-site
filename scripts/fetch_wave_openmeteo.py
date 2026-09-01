@@ -251,6 +251,30 @@ def add_tide_grids(frames, tides, lats, lons, preserve_ofs=True, land_mask=None)
     return frames
 
 
+def add_tide_display_fields(frames):
+    """Keep popup prediction, stage raster, and co-range on one series.
+
+    The live refresh path creates ``tide_height_ft`` from the current CO-OPS
+    station blend.  The viewer also needs the explicit stage/range fields;
+    derive both from that exact serialized series rather than leaving stale
+    or absent fields after a refresh.
+    """
+    if not frames or not frames[0].get("tide_height_ft"):
+        return
+    source = [frame.get("tide_height_ft") for frame in frames]
+    ny, nx = len(source[0]), len(source[0][0])
+    ranges = []
+    for yi in range(ny):
+        row = []
+        for xi in range(nx):
+            values = [grid[yi][xi] for grid in source if grid and grid[yi][xi] is not None]
+            row.append(float(max(values) - min(values)) if values else None)
+        ranges.append(row)
+    for frame in frames:
+        frame["astronomical_tide_ft"] = frame["tide_height_ft"]
+        frame["tide_range_ft"] = ranges
+
+
 def build_square_grid(bbox, step, n):
     """Build NxN lat/lon grid covering bbox (centered)."""
     lon_span = (n - 1) * step
@@ -528,6 +552,7 @@ def main():
 
     frames = interp_to_display(frames, fetch_lats, fetch_lons, dst_lats, dst_lons)
     frames = add_tide_grids(frames, tides, dst_lats, dst_lons)
+    add_tide_display_fields(frames)
 
     # Normalize the mixed upstream names into one stable viewer contract.
     rename = {
