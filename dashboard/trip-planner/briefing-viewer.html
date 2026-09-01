@@ -607,37 +607,13 @@
       return candidates.reduce((sum, item) => sum + item.value * item.weight, 0) / weightTotal;
     }
 
-    function samplePhaseAtPoint(grid, lat, lon) {
-      // Phase is circular. Interpolating degrees directly turns a 359°/1°
-      // neighborhood into ~180°, which creates the apparent phase jump and
-      // an artificially small tidal range at shoreline stations.
-      if (!grid) return null;
-      const cosine = grid.map(row => row.map(value => Number.isFinite(value) ? Math.cos(value * Math.PI / 180) : null));
-      const sine = grid.map(row => row.map(value => Number.isFinite(value) ? Math.sin(value * Math.PI / 180) : null));
-      const c = sampleGridAtPoint(cosine, lat, lon), s = sampleGridAtPoint(sine, lat, lon);
-      return Number.isFinite(c) && Number.isFinite(s) && Math.hypot(c, s) > 1e-6
-        ? Math.atan2(s, c) * 180 / Math.PI
-        : null;
-    }
-
     function modelTideCurve(station) {
-      const frames = forecastData?.frames || [];
-      if (!frames.length) return [];
-      // Anchor the station coefficient once. Advancing this fixed complex
-      // coefficient analytically avoids re-interpolating a wrapped phase
-      // surface independently at every frame.
-      const first = frames[0];
-      const amplitude = sampleGridAtPoint(first.tide_amplitude_ft, station.lat, station.lon);
-      const phase = samplePhaseAtPoint(first.tide_phase_deg, station.lat, station.lon);
-      const start = parseForecastTime(first.time);
-      if (!Number.isFinite(amplitude) || !Number.isFinite(phase) || !Number.isFinite(start)) return [];
-      const omega = 2 * Math.PI / 12.4206;
-      const bias = Number(forecastData?.tide_harmonic_source?.global_bias_correction_ft) || 0;
-      return frames.map(frame => {
+      return (forecastData?.frames || []).map(frame => {
+        // Use the stored NASA astronomical field directly. Its time phase was
+        // already correct; only the datum offset was calibrated.
+        const v = sampleGridAtPoint(frame.astronomical_tide_ft, station.lat, station.lon);
         const t = parseForecastTime(frame.time);
-        if (!Number.isFinite(t)) return null;
-        const v = amplitude * Math.cos(phase * Math.PI / 180 + omega * ((t - start) / 3600000)) + bias;
-        return { t, v };
+        return Number.isFinite(v) && Number.isFinite(t) ? { t, v } : null;
       }).filter(Boolean);
     }
 
