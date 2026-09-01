@@ -128,6 +128,13 @@ def main():
         phase = [[None if v is None else float((v + 360 * hours / M2_HOURS) % 360) for v in row] for row in phase_grid]
         frame["tide_amplitude_ft"] = amp_grid
         frame["tide_phase_deg"] = phase
+        # Keep the serialized co-range field synchronized with the harmonic
+        # coefficient used by the viewer. Never preserve a stale CO-OPS or
+        # prior-generation range grid during a GOT4.10c restore.
+        frame["tide_range_ft"] = [[
+            None if value is None else float(value * 2)
+            for value in row
+        ] for row in amp_grid]
         frame["astronomical_tide_ft"] = [[
             None if amp_grid[yi][xi] is None or phase[yi][xi] is None else
             float(amp_grid[yi][xi] * math.cos(math.radians(phase[yi][xi])) + bias)
