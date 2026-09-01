@@ -46,10 +46,12 @@ phase degrees directly.
 
 Apply VDatum's station/grid vertical offset as a separate elevation-reference
 term during output/validation. Do not use a datum offset to modify phase or
-amplitude. Compute nodal factors, astronomical arguments, and predictions in
-UTC. Derive the displayed co-range from the same synthesized prediction field
-and label whether it is a forecast-window range or a long-term spring/neap
-range.
+amplitude. `scripts/synthesize_got_vdatum_tide.py` evaluates the standard
+summation over every shared constituent using explicit UTC astronomical
+arguments and nodal factors. MSL is the default output; MLLW adds the VDatum
+offset grid. Derive the displayed co-range from the same synthesized
+prediction field and label whether it is a forecast-window range or a
+long-term spring/neap range.
 
 ## Validation and promotion gates
 
@@ -66,6 +68,11 @@ range.
 5. Promote only if the blend improves or does not regress the untouched
    baselines on all required gates. Otherwise retain the current dev artifact.
 
+The coastal gauge acceptance target is `<0.1 ft` only after the model is
+evaluated at the station's actual point, in the correct datum and UTC window.
+It is a gate, not an assumed result. Offshore validation requires an
+independent altimetry matchup; missing altimetry data blocks that claim.
+
 ## Implementation
 
 `scripts/build_got_vdatum_blend.py` consumes normalized GOT and coastal
@@ -73,6 +80,10 @@ harmonic artifacts plus an optional normalized VDatum offset/weight grid. It
 refuses fewer than four shared constituents, grid mismatches, and implicit
 VDatum constituent inference. The output is a shadow candidate; a separate
 benchmark/promotion command must approve it before changing the viewer JSON.
+
+`scripts/synthesize_got_vdatum_tide.py` consumes that blend and writes UTC
+prediction frames plus the max-minus-min range from the same frames. It does
+not use station values to fill cells.
 
 The current dev site is not changed until real GOT, coastal harmonic, and
 VDatum assets are acquired and the validation report passes.
