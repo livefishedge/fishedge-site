@@ -48,8 +48,13 @@ def validate_source(payload):
     if not frames or not payload.get("lats") or not payload.get("lons"):
         raise ValueError("candidate lacks frames or grid coordinates")
     key = source.get("prediction_field", "astronomical_tide_ft")
-    if not any(finite_values(frame.get(key)) for frame in frames):
+    values = [v for frame in frames for v in finite_values(frame.get(key))]
+    if not values:
         raise ValueError(f"candidate has no finite {key} model field")
+    if max(abs(v) for v in values) > 20.0:
+        raise ValueError(f"candidate {key} exceeds physical USEC-MD bound: {max(abs(v) for v in values):.3f} ft")
+    if not any(finite_values(frame.get("tide_range_ft")) for frame in frames):
+        raise ValueError("candidate lacks finite tide_range_ft field")
     return source, key
 
 
@@ -59,7 +64,21 @@ def sample(grid, lats, lons, lat, lon):
     xi = min(len(lons) - 1, max(0, min(range(len(lons)), key=lambda i: abs(lons[i] - lon))))
     yi = min(len(lats) - 1, max(0, min(range(len(lats)), key=lambda i: abs(lats[i] - lat))))
     value = grid[yi][xi]
-    return float(value) if value is not None and math.isfinite(value) else None
+    if value is not None and math.isfinite(value):
+        return float(value)
+    # Stations often sit on the shoreline while the raster cell is land.
+    # Validate against the nearest finite wet cell, never against a land fill.
+    candidates = []
+    for radius in range(1, 5):
+        for yj in range(max(0, yi-radius), min(len(lats), yi+radius+1)):
+            for xj in range(max(0, xi-radius), min(len(lons), xi+radius+1)):
+                candidate = grid[yj][xj]
+                if candidate is not None and math.isfinite(candidate):
+                    distance = ((float(lats[yj])-lat)**2 + (float(lons[xj])-lon)**2) ** 0.5
+                    candidates.append((distance, float(candidate)))
+        if candidates:
+            return min(candidates)[1]
+    return None
 
 
 def metrics(payload, field):
@@ -107,7 +126,12 @@ def main():
     report = metrics(payload, field)
     report.update({"status": "pass" if report["stations_with_overlap"] >= args.min_stations else "fail",
                    "source": source, "prediction_field": field,
-                   "candidate": str(args.candidate), "sha256": sha256(args.candidate),
+                   "candidate": str(args.candidate),
+                   # This is intentionally the hash of the candidate before
+                   # the validation report is embedded.  Calling it an
+                   # artifact hash after embedding made the serialized
+                   # provenance self-inconsistent.
+                   "candidate_sha256": sha256(args.candidate),
                    "created_at": dt.datetime.now(dt.timezone.utc).isoformat()})
     if args.report:
         args.report.parent.mkdir(parents=True, exist_ok=True)
@@ -116,7 +140,7 @@ def main():
         if report["status"] != "pass":
             raise SystemExit("refusing promotion: station-overlap gate failed")
         promoted = dict(payload)
-        promoted["regional_tide_source"] = {**source, "artifact_sha256": report["sha256"], "validation": report}
+        promoted["regional_tide_source"] = {**source, "candidate_sha256": report["candidate_sha256"], "validation": report}
         promoted["regional_tide_prediction_field"] = field
         args.promote_to.parent.mkdir(parents=True, exist_ok=True)
         args.promote_to.write_text(json.dumps(promoted, allow_nan=False, separators=(",", ":")))

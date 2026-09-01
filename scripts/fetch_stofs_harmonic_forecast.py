@@ -51,29 +51,38 @@ def find_regional_htp(date, cycle="00"):
     raise RuntimeError("NOAA STOFS regional Eastern-CONUS HTP GRIB2 was not published for the requested runs")
 
 
-def read_window(key):
-    """Read only the USEC-MD window from a regular regional GRIB2 object."""
-    path = f"/vsicurl/{S3}/{key}"
+def read_window(key, local_file=None):
+    """Read/reproject the USEC-MD window from the regional GRIB2 object.
+
+    The CONUS HTP GRIB is Lambert/projected (metres), not a lon/lat raster.
+    Treating its geotransform as degrees silently selected the wrong pixels
+    and produced a nearly constant, physically impossible tide field.
+    """
+    path = str(local_file) if local_file else f"/vsicurl/{S3}/{key}"
     ds = gdal.Open(path)
     if ds is None:
         raise RuntimeError(f"GDAL could not open regional HTP object: {key}")
-    gt = ds.GetGeoTransform()
-    if not gt or gt[2] or gt[4]:
-        raise RuntimeError("regional HTP grid is not north-up; refusing an unsafe window read")
-    px0 = int(np.floor((BBOX[0] - gt[0]) / gt[1]))
-    px1 = int(np.ceil((BBOX[2] - gt[0]) / gt[1]))
-    py0 = int(np.floor((BBOX[3] - gt[3]) / gt[5]))
-    py1 = int(np.ceil((BBOX[1] - gt[3]) / gt[5]))
-    xoff, yoff = max(0, px0), max(0, py0)
-    xsize, ysize = min(ds.RasterXSize, px1) - xoff, min(ds.RasterYSize, py1) - yoff
-    if xsize <= 0 or ysize <= 0:
-        raise RuntimeError("regional HTP grid does not intersect USEC-MD")
     bands = min(ds.RasterCount, 181)
-    values = np.stack([ds.GetRasterBand(i).ReadAsArray(xoff, yoff, xsize, ysize).astype(float) for i in range(1, bands + 1)])
-    values[values < -9000] = np.nan
-    lons = gt[0] + (xoff + np.arange(xsize) + 0.5) * gt[1]
-    lats = gt[3] + (yoff + np.arange(ysize) + 0.5) * gt[5]
-    return values, lats.tolist(), lons.tolist()
+    warped = gdal.Warp(
+        "", ds, format="MEM", dstSRS="EPSG:4326", outputBounds=BBOX,
+        width=21, height=17, resampleAlg="bilinear", srcNodata=9999,
+        dstNodata=np.nan, multithread=True,
+    )
+    if warped is None:
+        raise RuntimeError("GDAL could not reproject regional HTP window")
+    values = np.stack([warped.GetRasterBand(i).ReadAsArray().astype(float) for i in range(1, bands + 1)])
+    # NOAA GRIB uses +9999 as the missing-value sentinel for land/masked
+    # cells (not the negative fill value used by some NetCDF products).
+    values[(values < -9000) | (values >= 9990)] = np.nan
+    # HTP is a tide-only sea-surface field.  The regional GRIB also carries
+    # positive land elevations that are not marked as nodata; exclude them
+    # before fitting so terrain cannot become a tidal amplitude.
+    # USEC-MD astronomical sea-surface elevations are well inside +/-5 m;
+    # lower bounds still admit coastal terrain pixels from the GRIB warp.
+    values[np.abs(values) >= 5.0] = np.nan
+    lons = np.linspace(BBOX[0], BBOX[2], 21).tolist()
+    lats = np.linspace(BBOX[3], BBOX[1], 17).tolist()
+    return values, lats, lons
 
 
 def fit_m2(values, hours):
@@ -129,7 +138,7 @@ def merge(path, amp, phase, source, run_date, lats, lons, datum_shift_ft=0.0):
         "vertical_datum_shift_ft": float(datum_shift_ft),
         "constituents": ["M2"],
         "constituent": "M2",
-        "units": "m amplitude; degrees phase",
+        "units": "ft amplitude; degrees phase",
         "prediction_field": "astronomical_tide_ft",
     }
     Path(path).write_text(json.dumps(payload, allow_nan=False, separators=(",", ":")))
@@ -141,10 +150,12 @@ def main():
     ap.add_argument("--cycle", default="00")
     ap.add_argument("--datum-shift-ft", type=float, default=0.0,
                     help="validated uniform MSL-like to MLLW offset")
+    ap.add_argument("--local-grib", type=Path,
+                    help="local cached HTP GRIB; avoids repeated remote GDAL range reads")
     ap.add_argument("paths", nargs="+")
     args = ap.parse_args()
     run_date, key = find_regional_htp(args.date, args.cycle)
-    values, lats, lons = read_window(key)
+    values, lats, lons = read_window(key, args.local_grib)
     amp, phase = fit_m2(values, np.arange(values.shape[0]))
     for path in args.paths:
         merge(path, amp, phase, key, run_date, lats, lons, args.datum_shift_ft)
