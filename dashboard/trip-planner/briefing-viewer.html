@@ -501,8 +501,18 @@
       const t0 = now - 24 * 3600000;
       const tN = now + 24 * 3600000;
       const allValues = [...curve, ...(observed || [])].map(p => p.v).filter(Number.isFinite);
-      const vmin = allValues.length ? Math.min(...allValues) : (range?.vmin ?? 0);
-      const vmax = allValues.length ? Math.max(...allValues) : (range?.vmax ?? 1);
+      const predictedValues = (curve || []).map(p => p.v).filter(Number.isFinite);
+      // The curve shows +/-24 hours, but the reported/co-range is the full
+      // forecast-horizon span. Center that span on the model curve so the
+      // chart cannot visually imply a smaller tidal range just because the
+      // visible 48-hour slice misses one of the full-horizon extrema.
+      let vmin = allValues.length ? Math.min(...allValues) : (range?.vmin ?? 0);
+      let vmax = allValues.length ? Math.max(...allValues) : (range?.vmax ?? 1);
+      if (Number.isFinite(range?.vmax) && range.vmax > range.vmin && predictedValues.length) {
+        const center = (Math.min(...predictedValues) + Math.max(...predictedValues)) / 2;
+        vmin = center - (range.vmax - range.vmin) / 2;
+        vmax = center + (range.vmax - range.vmin) / 2;
+      }
       const span = Math.max(0.1, vmax - vmin);
       const x = t => padL + ((t - t0) / (tN - t0)) * innerW;
       const y = v => padT + innerH - ((v - vmin) / span) * innerH;
@@ -532,7 +542,6 @@
         ${legend}
       `;
       const set = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
-      const predictedValues = (curve || []).map(p => p.v).filter(Number.isFinite);
       const predictedRange = Number.isFinite(range?.vmin) && Number.isFinite(range?.vmax)
         ? range.vmax - range.vmin
         : (predictedValues.length ? Math.max(...predictedValues) - Math.min(...predictedValues) : 0);
