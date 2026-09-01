@@ -117,7 +117,7 @@ def make_fields(model_dir):
     return result
 
 
-def merge_forecast(path, fields):
+def merge_forecast(path, fields, provenance):
     payload = json.loads(Path(path).read_text())
     # This artifact is intentionally atlas-only for the map tide layer. Keep
     # the separate CO-OPS station predictions, but remove legacy OFS total
@@ -153,8 +153,22 @@ def merge_forecast(path, fields):
                 row.append(float(value) if usable else None)
             tide.append(row)
         frame["astronomical_tide_ft"] = tide
+    # Range must come from the exact serialized prediction frames, never from
+    # a stale source field or a separate harmonic shortcut.
+    stack = np.asarray([
+        [[np.nan if value is None else value for value in row]
+         for row in frame["astronomical_tide_ft"]]
+        for frame in payload["frames"]
+    ], dtype=float)
+    ranges = np.nanmax(stack, axis=0) - np.nanmin(stack, axis=0)
+    for frame in payload["frames"]:
+        frame["tide_range_ft"] = [[None if not np.isfinite(value) else float(value)
+                                    for value in row] for row in ranges]
     payload["tide_water_cells"] = fields["wet_mask"]
     payload.pop("ofs_tidal_forecast", None)
+    # Remove any prior STOFS/operational tide provenance from the copied
+    # marine payload.  The generated tide layer is GOT-only in this mode.
+    payload.pop("regional_tide_source", None)
     payload.get("units", {}).pop("tide_height_ft", None)
     quality = payload.get("quality", {})
     quality.pop("ofs_tidal_source", None)
@@ -167,6 +181,9 @@ def merge_forecast(path, fields):
         "primary": "M2",
         "method": "regional bilinear extraction from global harmonic atlas",
         "amplitude_units": "ft (converted from atlas cm)",
+        "archive_sha256": provenance.get("got_archive_sha256"),
+        "normalized_artifact_sha256": provenance.get("got_artifact_sha256"),
+        "vdatum": provenance.get("vdatum"),
     }
     Path(path).write_text(json.dumps(payload, allow_nan=False, separators=(",", ":")))
 
@@ -176,13 +193,24 @@ def main():
     ap.add_argument("--model-dir", required=True, type=Path, help="GOT4.10c directory")
     ap.add_argument("--output", required=True, type=Path)
     ap.add_argument("--merge-forecast", nargs="*", default=[])
+    ap.add_argument("--source-archive-sha256")
+    ap.add_argument("--normalized-artifact-sha256")
+    ap.add_argument("--vdatum-manifest")
     args = ap.parse_args()
     fields = make_fields(args.model_dir)
     lats = np.arange(BBOX[1], BBOX[3] + STEP / 2, STEP)
     lons = np.arange(BBOX[0], BBOX[2] + STEP / 2, STEP)
-    args.output.write_text(json.dumps({"source": "NASA GSFC GOT4.10c", "provider": "NASA GSFC", "model": "GOT4.10c", "datum": "MSL", "constituents": {k: v for k, v in fields.items() if k != "wet_mask"}, "lats": lats.tolist(), "lons": lons.tolist(), "bbox": BBOX, "grid_step_deg": STEP, "wet_mask": fields["wet_mask"]}, allow_nan=False, separators=(",", ":")))
+    vdatum = None
+    if args.vdatum_manifest:
+        vdatum = json.loads(Path(args.vdatum_manifest).read_text())
+    provenance = {
+        "got_archive_sha256": args.source_archive_sha256,
+        "got_artifact_sha256": args.normalized_artifact_sha256,
+        "vdatum": {"manifest": args.vdatum_manifest, "role": "output vertical datum only"} if vdatum else None,
+    }
+    args.output.write_text(json.dumps({"source": "NASA GSFC GOT4.10c", "provider": "NASA GSFC", "model": "GOT4.10c", "datum": "MSL", "constituents": {k: v for k, v in fields.items() if k != "wet_mask"}, "lats": lats.tolist(), "lons": lons.tolist(), "bbox": BBOX, "grid_step_deg": STEP, "wet_mask": fields["wet_mask"], "provenance": provenance}, allow_nan=False, separators=(",", ":")))
     for path in args.merge_forecast:
-        merge_forecast(path, fields)
+        merge_forecast(path, fields, provenance)
         print(f"merged GOT4.10c harmonic fields: {path}")
 
 
