@@ -109,7 +109,17 @@ def merge(path, amp, phase, source, run_date, lats, lons):
         hours = (current - first).total_seconds() / 3600.0
         frame["tide_amplitude_ft"] = amp_grid
         frame["tide_phase_deg"] = [[None if value is None else float((360.0 * hours / M2_HOURS - value) % 360.0) for value in row] for row in high_grid]
-    payload["tide_harmonic_source"] = {"provider": "NOAA STOFS-2D Global HTP", "run": run_date, "object": source, "constituent": "M2", "units": "m amplitude; degrees phase"}
+    payload["tide_harmonic_source"] = {
+        "provider": "NOAA",
+        "model": "STOFS-2D Global HTP",
+        "run": run_date,
+        "object": source,
+        "datum": "STOFS model free-surface datum; transform required before MLLW",
+        "constituents": ["M2"],
+        "constituent": "M2",
+        "units": "m amplitude; degrees phase",
+        "prediction_field": "astronomical_tide_ft",
+    }
     Path(path).write_text(json.dumps(payload, allow_nan=False, separators=(",", ":")))
 
 
