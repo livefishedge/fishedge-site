@@ -198,7 +198,7 @@
   <div id="bv-map" class="bv-map"></div>
   <div id="bv-station-popup" style="display:none">
     <h3 id="bv-station-name">Tide station</h3>
-    <div class="bv-briefing-source">Harmonic model prediction · same model as co-range lines</div>
+    <div class="bv-briefing-source">Model prediction · same serialized field as co-range lines</div>
     <svg id="bv-tide-svg" viewBox="0 0 280 112" role="img" aria-label="24-hour tide prediction curve"></svg>
     <div class="bv-row"><span>Next event</span><b id="bv-tide-next">—</b></div>
     <div class="bv-row"><span>Predicted range</span><b id="bv-tide-range">—</b></div>
@@ -609,8 +609,8 @@
 
     function modelTideCurve(station) {
       return (forecastData?.frames || []).map(frame => {
-        // Use the stored NASA astronomical field directly. Its time phase was
-        // already correct; only the datum offset was calibrated.
+        // Use the original serialized prediction directly. Do not rebuild it
+        // from harmonic phase/amplitude; that changes the phase convention.
         const v = sampleGridAtPoint(frame.astronomical_tide_ft, station.lat, station.lon);
         const t = parseForecastTime(frame.time);
         return Number.isFinite(v) && Number.isFinite(t) ? { t, v } : null;
@@ -636,16 +636,13 @@
         renderTideChart(null, null, null);
         return;
       }
-      // The popup prediction must be the same harmonic model displayed by
-      // the NASA co-range overlay. CO-OPS observations remain validation only.
+      // Popup prediction and co-range use the same stored series. CO-OPS
+      // observations remain a separate validation line.
       const curve = modelTideCurve(activeTideStation);
       const observed = (tides.observed || {})[activeTideStation.id] || [];
       const firstFrame = forecastData.frames[0];
-      const amplitudeGrid = firstFrame?.tide_amplitude_ft;
-      const amplitude_ft = sampleGridAtPoint(amplitudeGrid, activeTideStation.lat, activeTideStation.lon);
-      const range = Number.isFinite(amplitude_ft)
-        ? { vmin: 0, vmax: amplitude_ft * 2 }
-        : null;
+      const range_ft = sampleGridAtPoint(firstFrame?.tide_range_ft, activeTideStation.lat, activeTideStation.lon);
+      const range = Number.isFinite(range_ft) ? { vmin: 0, vmax: range_ft } : null;
       renderTideChart(curve, range, nextModelTideEvent(curve), observed);
     }
 
@@ -659,7 +656,7 @@
     // instead of reusing an older cached JSON response.
     // Bump whenever the JSON artifact changes; otherwise a Pages/browser
     // cache can keep serving a pre-calibration tide field after HTML deploy.
-    const FORECAST_DATA_BUILD = 'fb864f46';
+    const FORECAST_DATA_BUILD = 'phase-baseline-20260901';
     const DEV_FORECAST_URL = `/dashboard/trip-planner/data/${region}/briefing/forecast.json?v=${FORECAST_DATA_BUILD}`;
     const CORS_PROXY = 'https://corsproxy.io/?';
     const MAX_FORECAST_AGE_HOURS = 12;
@@ -1200,7 +1197,7 @@
         temperature: !!(currentFrame && currentFrame.temperature_f),
         pressure: !!(currentFrame && currentFrame.pressure_hpa),
         tide_level: !!(currentFrame && currentFrame.astronomical_tide_ft),
-        tide_range: !!(currentFrame && currentFrame.tide_amplitude_ft),
+        tide_range: !!(currentFrame && currentFrame.tide_range_ft),
         wind: !!(currentFrame && currentFrame.wind_speed_kn && currentFrame.wind_direction_deg),
         wind_wave: !!(currentFrame && currentFrame.wind_wave_height_ft && currentFrame.wind_wave_direction_deg),
         swell: !!(currentFrame && currentFrame.swell_height_ft && currentFrame.swell_direction_deg),
@@ -1210,7 +1207,7 @@
         const label = input?.closest('label');
         if (!input || !label) continue;
         const anyFrameAvailable = ['tide_range'].includes(key) && forecastData && forecastData.frames
-          ? forecastData.frames.some(frame => !!(frame && frame.tide_amplitude_ft))
+          ? forecastData.frames.some(frame => !!(frame && frame.tide_range_ft))
           : available[key];
         // The co-range control is available only when the static harmonic
         // amplitude field is present in the current forecast artifact.
@@ -1221,11 +1218,11 @@
         if (!anyFrameAvailable && !awaitingHtp) { input.checked = false; layerVisibility[key] = false; }
         else if (['tide_range'].includes(key)) input.checked = layerVisibility[key];
         label.classList.toggle('unavailable', !available[key]);
-        label.title = available[key] ? '' : (awaitingHtp ? 'Waiting for NASA GOT4.10c harmonic atlas data' : `No ${key} grid in current forecast frame`);
+        label.title = available[key] ? '' : (awaitingHtp ? 'Waiting for harmonic tide data' : `No ${key} grid in current forecast frame`);
       }
       const tideStatus = document.getElementById('bv-menu-status');
       if (tideStatus && !available.tide_range) {
-        tideStatus.textContent = 'Co-range lines awaiting NASA GOT4.10c harmonic atlas data';
+        tideStatus.textContent = 'Co-range lines awaiting harmonic tide data';
       }
       if (available.wave_height && !layerVisibility.temperature && !layerVisibility.wave_height && !layerVisibility.pressure) {
         // no forced fallback: the user may intentionally turn all scalar layers off
@@ -1365,12 +1362,11 @@
           ctx.restore();
         }
       };
-      // Co-range is the M2 harmonic amplitude multiplied by two. Keep this
-      // field identical to the station-popup range calculation; the legacy
-      // CO-OPS curve-span field is not the static model range.
-      const rangeField = currentFrame.tide_amplitude_ft;
+      // Co-range is derived from the same stored prediction series used by
+      // the station popup; do not mix in reconstructed harmonics.
+      const rangeField = currentFrame.tide_range_ft;
       if (layerVisibility.tide_range && rangeField) {
-        const contourGrid = rangeField.map(row => row.map(value => Number.isFinite(value) ? 2 * convertDisplayValue('tide_range_ft', value) : value));
+        const contourGrid = rangeField.map(row => row.map(value => Number.isFinite(value) ? convertDisplayValue('tide_range_ft', value) : value));
         const values = contourGrid.flat().filter(Number.isFinite);
         if (values.length) {
           // One label per continuous contour; values are full high-to-low range.
