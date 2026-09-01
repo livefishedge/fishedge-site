@@ -11,7 +11,8 @@ contains only the reproducible acquisition/normalization code.
 - URL: `https://earth.gsfc.nasa.gov/sites/default/files/2023-12/got4.10c.tar.gz`
 - Archive SHA-256:
   `2431decebe847414925289e4904bce09709bf668ce3c888700cc884a1236e038`
-- Normalized USEC-MD artifact: `got/got4.10c-usec-md.json`
+- Normalized USEC-MD artifact: `got/got4.10c-usec-md.json` (generated outside
+  the web tree; SHA-256 `389de440316b774a0111aa9d16a73681e387bcc46a3db060e896ee0ab229d8df`)
 - Constituents extracted: M2, S2, N2, K2, K1, O1, P1, Q1
 - Normalization bbox: 77–72°W, 36–40°N; 17×21 grid
 

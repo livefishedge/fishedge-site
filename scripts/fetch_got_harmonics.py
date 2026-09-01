@@ -17,7 +17,10 @@ from shapely.geometry import Point
 from shapely.prepared import prep
 import cartopy.io.shapereader as shapereader
 
-CONSTITUENTS = {"M2": 12.4206, "S2": 12.0, "K1": 23.9345, "O1": 25.8193}
+CONSTITUENTS = {
+    "M2": 12.4206, "S2": 12.0, "N2": 12.6583, "K2": 11.9672,
+    "K1": 23.9345, "O1": 25.8193, "P1": 24.0659, "Q1": 26.8684,
+}
 BBOX = (-77.0, 36.0, -72.0, 40.0)
 STEP = 0.25
 CM_TO_FT = 0.032808399
