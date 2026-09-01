@@ -81,9 +81,10 @@ def sample(grid, lats, lons, lat, lon):
     return None
 
 
-def metrics(payload, field):
+def metrics(payload, field, series="observed", datum_offsets=None):
     stations = (payload.get("tides") or {}).get("stations") or []
-    observed = (payload.get("tides") or {}).get("observed") or {}
+    observed = (payload.get("tides") or {}).get(series) or {}
+    datum_offsets = datum_offsets or {}
     frames = payload.get("frames") or []
     lats, lons = payload.get("lats") or [], payload.get("lons") or []
     rows, residuals = [], []
@@ -94,7 +95,13 @@ def metrics(payload, field):
             t = epoch_ms(frame["time"])
             value = sample(frame.get(field), lats, lons, float(station["lat"]), float(station["lon"]))
             if value is not None and t in obs:
-                pairs.append((value, obs[t]))
+                # Convert station MLLW-referenced values into the model's
+                # MSL-like frame using NOAA's station datum metadata. This is
+                # a validation transform only; it never changes the offshore
+                # STOFS field.
+                offset = datum_offsets.get(str(station["id"]), 0.0)
+                if isinstance(offset, dict): offset = offset.get("msl_minus_mllw_ft", 0.0)
+                pairs.append((value, obs[t] - float(offset)))
         if not pairs:
             rows.append({"id": station["id"], "name": station["name"], "samples": 0})
             continue
@@ -120,12 +127,18 @@ def main():
     ap.add_argument("--report", type=Path)
     ap.add_argument("--promote-to", type=Path)
     ap.add_argument("--min-stations", type=int, default=5)
+    ap.add_argument("--series", choices=("observed", "curves"), default="observed",
+                    help="validation series: observed total water level or CO-OPS astronomical predictions")
+    ap.add_argument("--datum-offsets", type=Path,
+                    help="JSON station_id -> MSL-minus-MLLW offset in feet")
     args = ap.parse_args()
     payload = json.loads(args.candidate.read_text())
     source, field = validate_source(payload)
-    report = metrics(payload, field)
+    offsets = json.loads(args.datum_offsets.read_text()) if args.datum_offsets else {}
+    report = metrics(payload, field, args.series, offsets)
     report.update({"status": "pass" if report["stations_with_overlap"] >= args.min_stations else "fail",
                    "source": source, "prediction_field": field,
+                   "validation_series": args.series,
                    "candidate": str(args.candidate),
                    # This is intentionally the hash of the candidate before
                    # the validation report is embedded.  Calling it an
