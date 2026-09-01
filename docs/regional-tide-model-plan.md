@@ -45,3 +45,21 @@ artifact and report path. Promotion is refused unless provenance and station
 overlap gates pass. Existing STOFS/OFS scripts are source adapters. The dev
 site receives the orchestration code and plan; the live reference field is not
 replaced until an independent candidate passes validation.
+
+### Multi-constituent calibration implementation
+
+`scripts/calibrate_regional_tide.py` consumes a normalized independent harmonic
+source containing `lats`, `lons`, and at least M2, S2, K1, and O1 amplitude/phase
+grids. The existing STOFS and GOT adapters now emit that grid contract; FES and
+TPXO exports can be supplied through the same contract without changing the
+calibrator. For every held-out station it fits the observed time series on the
+training half, computes complex cosine/sine residuals, applies distance-decayed
+spatial corrections without phase-degree interpolation, synthesizes the second
+half, and requires both leave-one-station-out and chronological time-held-out
+passes. A failed gate writes no candidate output.
+
+The native STOFS HTP regional GRIB is an operational tide-only time series, not
+a constituent atlas. It remains a separate adapter/candidate and is not
+pretended to satisfy the multi-constituent gate. FES/TPXO files must be
+licensed/obtained outside the repository and their source hashes recorded in
+the normalized artifact before ingestion.

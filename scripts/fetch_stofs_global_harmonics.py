@@ -327,7 +327,7 @@ def main():
         fields = fit_and_rasterize(values, m["x"], m["y"], hours)
     finally:
         remote.close()
-    result = {"source": "NOAA STOFS-2D Global HTP", "source_object": key, "constituents": fields, "bbox": BBOX, "grid_step_deg": STEP, "wet_mask": fields["wet_mask"]}
+    result = {"source": "NOAA STOFS-2D Global HTP", "provider": "NOAA", "model": "STOFS-2D Global HTP", "source_object": key, "constituents": fields, "lats": np.arange(BBOX[1], BBOX[3] + STEP / 2, STEP).tolist(), "lons": np.arange(BBOX[0], BBOX[2] + STEP / 2, STEP).tolist(), "bbox": BBOX, "grid_step_deg": STEP, "wet_mask": fields["wet_mask"]}
     args.output.write_text(json.dumps(result, allow_nan=False, separators=(",", ":")))
     for path in args.merge_forecast:
         merge_forecast(path, fields, key)

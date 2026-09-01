@@ -175,7 +175,7 @@ def main():
     ap.add_argument("--merge-forecast", nargs="*", default=[])
     args = ap.parse_args()
     fields = make_fields(args.model_dir)
-    args.output.write_text(json.dumps({"source": "NASA GSFC GOT4.10c", "constituents": fields, "bbox": BBOX, "grid_step_deg": STEP, "wet_mask": fields["wet_mask"]}, allow_nan=False, separators=(",", ":")))
+    args.output.write_text(json.dumps({"source": "NASA GSFC GOT4.10c", "provider": "NASA GSFC", "model": "GOT4.10c", "constituents": fields, "lats": lats.tolist(), "lons": lons.tolist(), "bbox": BBOX, "grid_step_deg": STEP, "wet_mask": fields["wet_mask"]}, allow_nan=False, separators=(",", ":")))
     for path in args.merge_forecast:
         merge_forecast(path, fields)
         print(f"merged GOT4.10c harmonic fields: {path}")
