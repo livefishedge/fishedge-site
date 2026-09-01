@@ -35,6 +35,11 @@ def main():
         for frame in frames:
             frame["astronomical_tide_ft"] = frame.get("tide_height_ft")
             frame["tide_range_ft"] = ranges
+            # Do not leave an unrelated NASA M2 coefficient beside the
+            # displayed CO-OPS blend. That stale field was the source of the
+            # apparent small-at-gage / large-contour contradiction.
+            frame.pop("tide_amplitude_ft", None)
+            frame.pop("tide_phase_deg", None)
         payload["tide_harmonic_source"] = {
             "provider": "NOAA CO-OPS",
             "model": "CO-OPS station harmonic prediction blend",
