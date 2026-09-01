@@ -750,7 +750,10 @@
     }
     drawTideStations();
     map.on('singleclick', event => {
-      const feature = map.forEachFeatureAtPixel(event.pixel, value => value, { layerFilter: layer => layer === stationLayer });
+      const feature = map.forEachFeatureAtPixel(event.pixel, value => value, {
+        layerFilter: layer => layer === stationLayer,
+        hitTolerance: 12,
+      });
       if (!feature) { stationPopup.style.display = 'none'; stationOverlay.setPosition(undefined); return; }
       activeTideStation = TIDE_STATIONS.find(station => station.id === feature.get('stationId')) || TIDE_STATIONS[0];
       document.getElementById('bv-station-name').textContent = activeTideStation.name;
