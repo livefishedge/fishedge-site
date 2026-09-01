@@ -607,22 +607,37 @@
       return candidates.reduce((sum, item) => sum + item.value * item.weight, 0) / weightTotal;
     }
 
+    function samplePhaseAtPoint(grid, lat, lon) {
+      // Phase is circular. Interpolating degrees directly turns a 359°/1°
+      // neighborhood into ~180°, which creates the apparent phase jump and
+      // an artificially small tidal range at shoreline stations.
+      if (!grid) return null;
+      const cosine = grid.map(row => row.map(value => Number.isFinite(value) ? Math.cos(value * Math.PI / 180) : null));
+      const sine = grid.map(row => row.map(value => Number.isFinite(value) ? Math.sin(value * Math.PI / 180) : null));
+      const c = sampleGridAtPoint(cosine, lat, lon), s = sampleGridAtPoint(sine, lat, lon);
+      return Number.isFinite(c) && Number.isFinite(s) && Math.hypot(c, s) > 1e-6
+        ? Math.atan2(s, c) * 180 / Math.PI
+        : null;
+    }
+
     function modelTideCurve(station) {
-      return (forecastData?.frames || []).map(frame => {
-        // Prefer the summed NASA harmonic prediction. Older static artifacts
-        // contain only the shared M2 amplitude/phase fields, so derive the
-        // equivalent model value from those fields rather than showing an
-        // empty popup.
-        let v = sampleGridAtPoint(frame.astronomical_tide_ft, station.lat, station.lon);
-        if (!Number.isFinite(v)) {
-          const amplitude = sampleGridAtPoint(frame.tide_amplitude_ft, station.lat, station.lon);
-          const phase = sampleGridAtPoint(frame.tide_phase_deg, station.lat, station.lon);
-          if (Number.isFinite(amplitude) && Number.isFinite(phase)) {
-            v = amplitude * Math.cos(phase * Math.PI / 180);
-          }
-        }
+      const frames = forecastData?.frames || [];
+      if (!frames.length) return [];
+      // Anchor the station coefficient once. Advancing this fixed complex
+      // coefficient analytically avoids re-interpolating a wrapped phase
+      // surface independently at every frame.
+      const first = frames[0];
+      const amplitude = sampleGridAtPoint(first.tide_amplitude_ft, station.lat, station.lon);
+      const phase = samplePhaseAtPoint(first.tide_phase_deg, station.lat, station.lon);
+      const start = parseForecastTime(first.time);
+      if (!Number.isFinite(amplitude) || !Number.isFinite(phase) || !Number.isFinite(start)) return [];
+      const omega = 2 * Math.PI / 12.4206;
+      const bias = Number(forecastData?.tide_harmonic_source?.global_bias_correction_ft) || 0;
+      return frames.map(frame => {
         const t = parseForecastTime(frame.time);
-        return Number.isFinite(v) && Number.isFinite(t) ? { t, v } : null;
+        if (!Number.isFinite(t)) return null;
+        const v = amplitude * Math.cos(phase * Math.PI / 180 + omega * ((t - start) / 3600000)) + bias;
+        return { t, v };
       }).filter(Boolean);
     }
 
@@ -649,7 +664,8 @@
       // the NASA co-range overlay. CO-OPS observations remain validation only.
       const curve = modelTideCurve(activeTideStation);
       const observed = (tides.observed || {})[activeTideStation.id] || [];
-      const amplitudeGrid = currentFrame?.tide_amplitude_ft;
+      const firstFrame = forecastData.frames[0];
+      const amplitudeGrid = firstFrame?.tide_amplitude_ft;
       const amplitude_ft = sampleGridAtPoint(amplitudeGrid, activeTideStation.lat, activeTideStation.lon);
       const range = Number.isFinite(amplitude_ft)
         ? { vmin: 0, vmax: amplitude_ft * 2 }

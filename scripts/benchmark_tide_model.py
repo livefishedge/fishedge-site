@@ -46,6 +46,16 @@ def forecast_time(frame):
     return int(np.datetime64(str(frame["time"]).replace("Z", "")).astype("datetime64[ms]").astype(int))
 
 
+def sample_phase(grid, lats, lons, lat, lon):
+    """Sample circular phase through its unit-vector representation."""
+    if not grid:
+        return None
+    cosine = [[None if value is None else math.cos(math.radians(value)) for value in row] for row in grid]
+    sine = [[None if value is None else math.sin(math.radians(value)) for value in row] for row in grid]
+    c, s = sample(cosine, lats, lons, lat, lon), sample(sine, lats, lons, lat, lon)
+    return math.degrees(math.atan2(s, c)) if c is not None and s is not None and math.hypot(c, s) > 1e-6 else None
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("forecast", type=Path)
@@ -63,15 +73,17 @@ def main():
     residuals = []
     for station in stations:
         model = []
-        for frame in frames:
-            value = sample(frame.get("astronomical_tide_ft"), lats, lons, station["lat"], station["lon"])
-            if value is None:
-                amplitude = sample(frame.get("tide_amplitude_ft"), lats, lons, station["lat"], station["lon"])
-                phase = sample(frame.get("tide_phase_deg"), lats, lons, station["lat"], station["lon"])
-                if amplitude is not None and phase is not None:
-                    value = amplitude * math.cos(math.radians(phase))
-            if value is not None:
-                model.append((forecast_time(frame), value))
+        first = frames[0] if frames else None
+        amplitude = sample(first.get("tide_amplitude_ft"), lats, lons, station["lat"], station["lon"]) if first else None
+        phase = sample_phase(first.get("tide_phase_deg"), lats, lons, station["lat"], station["lon"]) if first else None
+        bias_offset = float(source.get("global_bias_correction_ft") or 0)
+        if amplitude is not None and phase is not None:
+            start = forecast_time(first)
+            omega = 2.0 * math.pi / 12.4206
+            for frame in frames:
+                t = forecast_time(frame)
+                value = amplitude * math.cos(math.radians(phase) + omega * ((t - start) / 3600000.0)) + bias_offset
+                model.append((t, value))
         observed = {int(point["t"]): float(point["v"]) for point in curves.get(station["id"], [])}
         pairs = [(m, observed[t]) for t, m in model if t in observed]
         if not pairs:
