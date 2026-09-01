@@ -6,8 +6,8 @@ data, not the regional model.
 
 ## Design
 
-- Ingest independent candidates (NOAA STOFS tide-only first; FES2022/TPXO10
-  when source/licensing permits) as immutable, provenance-rich artifacts.
+- Ingest NOAA STOFS tide-only output as the sole production candidate, as an
+  immutable, provenance-rich artifact.
 - Keep CBOFS/DBOFS `zeta` separate as total water level because it can include
   surge, river, and meteorological effects.
 - Fit/synthesize constituents consistently and interpolate complex cosine/sine
@@ -66,12 +66,9 @@ the normalized artifact before ingestion.
 
 ### Acquisition and promotion command
 
-`scripts/acquire_harmonic_source.py` is the bounded acquisition boundary. It
-accepts either a local licensed atlas directory or an explicit archive URL with
-an expected SHA-256, extracts outside the web tree, and writes a manifest. It
-rejects absent, unhashed, or unrecognized inputs. The normalized source is then
-passed to `scripts/calibrate_regional_tide.py`, which benchmarks the untouched
-atlas first and promotes only when every station has a leave-one-station-out
-result, the chronological holdout exists, and calibrated RMSE does not regress
-against the untouched baseline. No source file is currently bundled here, so no
-candidate is promoted until an actual atlas archive is acquired.
+`scripts/build_stofs_htp_native.py` is the bounded acquisition/normalization
+boundary for STOFS. It consumes the downloaded regional HTP GRIB, records its
+SHA-256, preserves every native hourly field, masks fill/terrain cells, and
+derives range from the complete native horizon. It never fits M2 or uses
+CO-OPS interpolation. The candidate remains shadow-only until current and
+historical validation gates pass.
