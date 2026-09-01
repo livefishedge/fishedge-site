@@ -6,8 +6,16 @@ data, not the regional model.
 
 ## Design
 
-- Ingest NOAA STOFS tide-only output as the sole production candidate, as an
-  immutable, provenance-rich artifact.
+The current USEC-MD source strategy is documented in
+`docs/usec-md-got-vdatum-blend-plan.md`. NASA GOT is the offshore harmonic
+base; an independently supplied coastal harmonic field is used in the bays,
+estuaries, and nearshore zone; NOAA VDatum supplies vertical-reference
+transforms only. VDatum is not treated as a tidal constituent atlas.
+
+- Keep NOAA STOFS as an independent coastal/hydrodynamic candidate and
+  benchmark source. For the current GOT/VDatum experiment, it may be the
+  coastal harmonic source only when an explicit constituent export is present;
+  an HTP time series is never silently relabeled as an atlas.
 - Keep CBOFS/DBOFS `zeta` separate as total water level because it can include
   surge, river, and meteorological effects.
 - Fit/synthesize constituents consistently and interpolate complex cosine/sine
@@ -63,6 +71,19 @@ a constituent atlas. It remains a separate adapter/candidate and is not
 pretended to satisfy the multi-constituent gate. FES/TPXO files must be
 licensed/obtained outside the repository and their source hashes recorded in
 the normalized artifact before ingestion.
+
+### GOT/VDatum blend implementation
+
+`scripts/build_got_vdatum_blend.py` creates a shadow normalized harmonic
+artifact from a real NASA GOT source and an independent coastal harmonic
+source. It blends shared constituents in Re/Im space, carries an explicit
+VDatum MSL-to-MLLW offset and coastal-weight grid, and embeds SHA-256 hashes
+for every input artifact. It refuses missing shared constituents, mismatched
+grids, and implicit inference of tidal fields from VDatum.
+
+The artifact is not promoted merely because it can be generated. It must pass
+the untouched-source benchmark, leave-one-station-out validation,
+separate-period validation, and separate offshore/estuary continuity gates.
 
 ### Acquisition and promotion command
 
