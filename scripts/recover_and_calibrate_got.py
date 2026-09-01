@@ -49,6 +49,8 @@ def main():
     ap.add_argument("forecast", type=Path)
     ap.add_argument("--output", type=Path)
     ap.add_argument("--report-only", action="store_true")
+    ap.add_argument("--no-global-shift", action="store_true",
+                    help="restore the GOT4.10c field without applying a datum correction")
     args = ap.parse_args()
     model_ref = str(args.model_artifact)
     if model_ref.startswith("git:"):
@@ -107,7 +109,7 @@ def main():
     if not residuals:
         raise SystemExit("no current CO-OPS station samples could be benchmarked")
     residuals = np.asarray(residuals)
-    bias = float(np.median(residuals))
+    bias = 0.0 if args.no_global_shift else float(np.median(residuals))
     corrected = residuals - bias
     report = {
         "model": "GOT4.10c",
@@ -118,7 +120,8 @@ def main():
         "pre_correction_rmse_ft": round(float(np.sqrt(np.mean(residuals ** 2))), 4),
         "post_correction_rmse_ft": round(float(np.sqrt(np.mean(corrected ** 2))), 4),
         "post_correction_mean_bias_ft": round(float(np.mean(corrected)), 4),
-        "correction": "global median CO-OPS prediction minus GOT4.10c M2 model",
+        "correction": ("none (raw GOT4.10c field)" if args.no_global_shift
+                       else "global median CO-OPS prediction minus GOT4.10c M2 model"),
     }
     for frame in payload["frames"]:
         hours = (epoch_ms(frame["time"]) - model_start) / 3600000
@@ -135,11 +138,15 @@ def main():
         "available_constituents": ["M2"],
         "field_recovered_from": "Git commit 27172aa8",
         "global_bias_correction_ft": round(bias, 4),
+        "calibration_applied": not args.no_global_shift,
         "calibration_reference": "current eight CO-OPS station prediction curves",
     }
     quality = payload.setdefault("quality", {})
     quality.pop("coops_tidal_fallback", None)
-    quality["co_tidal_source"] = "NASA GSFC GOT4.10c M2 harmonic field with station-calibrated datum offset; CO-OPS observations are validation only"
+    quality["co_tidal_source"] = ("NASA GSFC GOT4.10c M2 harmonic field; no global shift applied; "
+                                   "CO-OPS observations are validation only"
+                                   if args.no_global_shift else
+                                   "NASA GSFC GOT4.10c M2 harmonic field with station-calibrated datum offset; CO-OPS observations are validation only")
     quality["tide_benchmark"] = report
     if args.report_only and args.output:
         refreshed = json.loads(args.forecast.read_text())
