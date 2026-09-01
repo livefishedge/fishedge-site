@@ -151,6 +151,11 @@ def evaluate(payload, coeff, names, reference_ms, station_ids, start_ms, end_ms)
             "status": "pass"}
 
 
+def benchmark_source(payload, source_coeff, source, names, reference_ms, station_ids, start_ms, end_ms):
+    """Benchmark the untouched atlas using the same held-out window."""
+    return evaluate(payload, source_coeff, names, reference_ms, station_ids, start_ms, end_ms)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("source", type=Path, help="normalized independent harmonic source JSON")
@@ -176,6 +181,8 @@ def main():
     source_coeff = source_coefficients(source, names)
     stations = {str(s["id"]): s for s in payload["tides"]["stations"]}
     loo_rows = []
+    baseline = benchmark_source(payload, source_coeff, source, names, reference_ms,
+                                station_ids, split_ms, max(all_times) + 1)
     for held_out in station_ids:
         train = [sid for sid in station_ids if sid != held_out]
         _, fits = station_residuals(payload, source, names, train, reference_ms, end_ms=split_ms)
@@ -186,12 +193,19 @@ def main():
     calibrated = calibrated_coefficients(source_coeff, source["lats"], source["lons"], stations, time_fits, names, args.decay_deg)
     time_result = evaluate(payload, calibrated, names, reference_ms, station_ids, split_ms, max(all_times) + 1)
     loo_valid = [r for r in loo_rows if r.get("status") == "pass"]
-    gate = len(loo_valid) >= args.min_stations and time_result.get("status") == "pass"
+    # Promotion is a no-regression decision, not merely a successful fit.
+    # Every station must have a held-out result, and the aggregate calibrated
+    # error must improve on the untouched atlas over the same time window.
+    gate = (len(loo_valid) == len(station_ids) and len(station_ids) >= args.min_stations
+            and time_result.get("status") == "pass"
+            and time_result.get("rmse_ft", float("inf")) <= baseline.get("rmse_ft", float("inf")))
     report = {"status": "pass" if gate else "fail", "method": "complex constituent residual calibration",
-              "constituents": names, "leave_one_station_out": loo_rows,
+              "constituents": names, "unmodified_baseline": baseline,
+              "leave_one_station_out": loo_rows,
               "time_held_out": time_result, "held_out_stations": len(loo_valid),
               "created_at": dt.datetime.now(dt.timezone.utc).isoformat(),
-              "source_model": source.get("model"), "offshore_independent": True}
+              "source_model": source.get("model"), "offshore_independent": True,
+              "promotion_gate": "all stations held out; chronological holdout; calibrated RMSE <= untouched baseline"}
     if not gate:
         print(json.dumps(report, indent=2)); raise SystemExit("refusing promotion: held-out gate failed")
     frames = []

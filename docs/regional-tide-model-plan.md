@@ -63,3 +63,15 @@ a constituent atlas. It remains a separate adapter/candidate and is not
 pretended to satisfy the multi-constituent gate. FES/TPXO files must be
 licensed/obtained outside the repository and their source hashes recorded in
 the normalized artifact before ingestion.
+
+### Acquisition and promotion command
+
+`scripts/acquire_harmonic_source.py` is the bounded acquisition boundary. It
+accepts either a local licensed atlas directory or an explicit archive URL with
+an expected SHA-256, extracts outside the web tree, and writes a manifest. It
+rejects absent, unhashed, or unrecognized inputs. The normalized source is then
+passed to `scripts/calibrate_regional_tide.py`, which benchmarks the untouched
+atlas first and promotes only when every station has a leave-one-station-out
+result, the chronological holdout exists, and calibrated RMSE does not regress
+against the untouched baseline. No source file is currently bundled here, so no
+candidate is promoted until an actual atlas archive is acquired.
