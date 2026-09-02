@@ -1620,7 +1620,12 @@
         image.decoding = 'async';
         image.onload = () => { nativePhaseImages.set(key, image); drawOverlaysForProduct(); };
         image.onerror = () => nativePhaseImages.set(key, null);
-        const asset = tiles.pattern.replace('{frame}', String(frame).padStart(3, '0'));
+        const frameName = String(frame).padStart(3, '0');
+        // The manifest uses Python-style formatting (`{frame:03d}`), while
+        // older manifests used the simpler `{frame}` token.
+        const asset = tiles.pattern
+          .replace('{frame:03d}', frameName)
+          .replace('{frame}', frameName);
         image.src = new URL(`/trip-planner/data/${region}/briefing/${asset}`, location.origin).href;
         nativePhaseImages.set(key, image);
         return true;
