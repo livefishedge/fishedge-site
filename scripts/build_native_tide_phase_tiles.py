@@ -120,10 +120,12 @@ def main():
     # TIDE palette in B,G,R,A order for OpenCV. Rendering one fillPoly call
     # per palette bucket is orders of magnitude cheaper and more bounded than
     # asking Matplotlib to retain a half-million native paths per frame.
+    # Must match the viewer's TIDE scale exactly, in B,G,R,A order. Falling
+    # colors are darker than rising colors by design.
     palette = np.array([
-        [39,48,215,166], [89,141,252,166], [139,224,254,166],
-        [96,207,145,166], [180,117,69,166], [96,207,145,166],
-        [139,224,254,166], [89,141,252,166], [39,48,215,166]
+        [39,48,215,166], [50,106,214,166], [63,181,212,166],
+        [69,159,95,166], [180,117,69,166], [106,214,155,166],
+        [138,240,255,166], [114,173,255,166], [39,48,215,166]
     ], dtype=np.uint8)
     tri_valid = np.isfinite(phase[0])[tri].all(axis=1)
     tri_indices = tri[tri_valid]

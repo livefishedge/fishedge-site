@@ -280,8 +280,9 @@
       CHL: [[0.0,'#001f3f'],[0.2,'#0074d9'],[0.4,'#39cccc'],[0.5,'#2ecc40'],[0.7,'#ffdc00'],[0.85,'#ff851b'],[1.0,'#ff4136']],
       SLA: [[0.0,'#2166ac'],[0.25,'#67a9cf'],[0.5,'#f7f7f7'],[0.75,'#ef8a62'],[1.0,'#b2182b']],
       // Cyclic local-stage map: high -> falling -> low -> rising -> high.
-      // The endpoints match so the cycle has no artificial seam.
-      TIDE:[[0.0,'#d73027'],[0.125,'#fc8d59'],[0.25,'#fee08b'],[0.375,'#91cf60'],[0.5,'#4575b4'],[0.625,'#91cf60'],[0.75,'#fee08b'],[0.875,'#fc8d59'],[1.0,'#d73027']],
+      // Falling tones are intentionally darker than their rising counterparts
+      // so direction is readable even when adjacent phases are similar.
+      TIDE:[[0.0,'#d73027'],[0.125,'#d66a32'],[0.25,'#d4b53f'],[0.375,'#5f9f45'],[0.5,'#4575b4'],[0.625,'#9bd66a'],[0.75,'#fff08a'],[0.875,'#ffad72'],[1.0,'#d73027']],
     };
 
     function lerp(a, b, t) { return a + (b - a) * t; }
@@ -683,7 +684,7 @@
     // instead of reusing an older cached JSON response.
     // Bump whenever the JSON artifact changes; otherwise a Pages/browser
     // cache can keep serving a pre-calibration tide field after HTML deploy.
-    const FORECAST_DATA_BUILD = 'native-stofs-mesh-complete-20260901-t00-v6-circular-phase-168h';
+    const FORECAST_DATA_BUILD = 'native-stofs-mesh-complete-20260901-t00-v7-stage-palette-168h';
     const DEV_FORECAST_URL = `/trip-planner/data/${region}/briefing/forecast.json?v=${FORECAST_DATA_BUILD}`;
     const CORS_PROXY = 'https://corsproxy.io/?';
     const MAX_FORECAST_AGE_HOURS = 12;
@@ -742,7 +743,7 @@
         center: ol.proj.fromLonLat([(bbox[0]+bbox[2])/2, (bbox[1]+bbox[3])/2], mapProjection),
         zoom: 5.5,
         minZoom: 4,
-        maxZoom: 12,
+        maxZoom: 19,
         extent: ol.proj.transformExtent([bbox[0]-1, bbox[1]-1, bbox[2]+1, bbox[3]+1], rasterProjection, mapProjection),
       }),
       controls: ol.control.defaults.defaults({ attribution: true, rotate: false }).extend([
@@ -1453,14 +1454,28 @@
             const midVisible = visible(a) || visible(b) || visible([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]);
             if (!midVisible) { run = null; continue; }
             const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
-            if (!run) run = {start: a, end: b, length: len};
-            else { run.end = b; run.length += len; }
-            if (!best || run.length > best.length) best = {...run};
+            if (!run) run = {points: [a, b], length: len};
+            else { run.points.push(b); run.length += len; }
+            if (!best || run.length > best.length) best = {points: run.points.slice(), length: run.length};
           }
           if (best && best.length >= 120) {
-            labels.push({level: Number(line.level_ft), x: (best.start[0] + best.end[0]) / 2,
-              y: (best.start[1] + best.end[1]) / 2,
-              angle: Math.atan2(best.end[1] - best.start[1], best.end[0] - best.start[0]), length: best.length});
+            // Place the label at the actual half-length point on the
+            // polyline, not at the midpoint of its endpoint chord. The
+            // latter can float away from a curved contour.
+            let remaining = best.length / 2, anchor = best.points[0], tangent = [1, 0];
+            for (let j = 1; j < best.points.length; j++) {
+              const a = best.points[j - 1], b = best.points[j];
+              const seg = Math.hypot(b[0] - a[0], b[1] - a[1]);
+              if (remaining <= seg) {
+                const u = seg ? remaining / seg : 0;
+                anchor = [a[0] + u * (b[0] - a[0]), a[1] + u * (b[1] - a[1])];
+                tangent = [b[0] - a[0], b[1] - a[1]];
+                break;
+              }
+              remaining -= seg;
+            }
+            labels.push({level: Number(line.level_ft), x: anchor[0], y: anchor[1],
+              angle: Math.atan2(tangent[1], tangent[0]), length: best.length});
           }
         }
         ctx.setLineDash([]);
