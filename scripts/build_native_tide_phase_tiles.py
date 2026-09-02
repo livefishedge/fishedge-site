@@ -123,9 +123,9 @@ def main():
     # Must match the viewer's TIDE scale exactly, in B,G,R,A order. Falling
     # colors are darker than rising colors by design.
     palette = np.array([
-        [39,48,215,166], [50,106,214,166], [63,181,212,166],
-        [69,159,95,166], [180,117,69,166], [106,214,155,166],
-        [138,240,255,166], [114,173,255,166], [39,48,215,166]
+        [39,48,215,255], [50,106,214,255], [63,181,212,255],
+        [69,159,95,255], [180,117,69,255], [106,214,155,255],
+        [138,240,255,255], [114,173,255,255], [39,48,215,255]
     ], dtype=np.uint8)
     tri_valid = np.isfinite(phase[0])[tri].all(axis=1)
     tri_indices = tri[tri_valid]

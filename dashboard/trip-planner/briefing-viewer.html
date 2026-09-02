@@ -684,7 +684,7 @@
     // instead of reusing an older cached JSON response.
     // Bump whenever the JSON artifact changes; otherwise a Pages/browser
     // cache can keep serving a pre-calibration tide field after HTML deploy.
-    const FORECAST_DATA_BUILD = 'native-stofs-mesh-complete-20260901-t00-v7-stage-palette-168h';
+    const FORECAST_DATA_BUILD = 'native-stofs-mesh-complete-20260901-t00-v8-opaque-stage-168h';
     const DEV_FORECAST_URL = `/trip-planner/data/${region}/briefing/forecast.json?v=${FORECAST_DATA_BUILD}`;
     const CORS_PROXY = 'https://corsproxy.io/?';
     const MAX_FORECAST_AGE_HOURS = 12;
@@ -1660,7 +1660,9 @@
       if (!p0 || !p1) return false;
       const w = p1[0] - p0[0], h = p1[1] - p0[1];
       if (!(w > 0 && h > 0)) return false;
-      streamlineCtx.globalAlpha = 0.66;
+      // Valid phase pixels are opaque so their colors match the colorbar;
+      // transparency remains only in empty pixels outside valid water.
+      streamlineCtx.globalAlpha = 1;
       streamlineCtx.drawImage(image, p0[0], p0[1], w, h);
       streamlineCtx.globalAlpha = 1;
       return true;
