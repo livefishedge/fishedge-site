@@ -18,7 +18,11 @@ def build_mask(payload, mesh_path, depth_path, scale=100, mask_output=None):
     if nodes.ndim != 2 or nodes.shape[1] != 2 or triangles.ndim != 2 or triangles.shape[1] != 3:
         raise SystemExit('forecast has no usable native mesh geometry')
     if len(ranges) != len(nodes): raise SystemExit('native mesh range/node dimensions differ')
-    wet = np.array([v is not None and np.isfinite(float(v)) for v in ranges], bool)
+    # STOFS depth is signed: positive values are wet water depth; land nodes
+    # also carry finite elevation values.  Testing only for finite values
+    # therefore rasterizes the land mesh as ocean and produces the exact
+    # rectangular land patches seen in the viewer.
+    wet = np.isfinite(ranges) & (ranges > 0.0)
     triangles = triangles[np.all(wet[triangles], axis=1)]
     if not len(triangles): raise SystemExit('native mesh has no wet triangles')
     width, height = (len(lons)-1)*scale, (len(lats)-1)*scale
