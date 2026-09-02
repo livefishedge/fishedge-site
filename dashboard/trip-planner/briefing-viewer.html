@@ -1319,7 +1319,6 @@
             // to emit a contour, and missing corners are never filled across
             // land or an atlas gap.
             if (waterCells?.[yi]?.[xi] !== true) continue;
-            if (![v00, v10, v01, v11].every(v => Number.isFinite(v))) continue;
             if (circular) {
               const base = v00;
               const unwrap = v => base + ((((v - base) + 540) % 360) - 180);
@@ -1330,6 +1329,7 @@
             for (const contourLevel of levels) {
               const candidate = [];
             const edge = (a, b, pa, pb) => {
+              if (!Number.isFinite(a) || !Number.isFinite(b)) return;
               if ((a < contourLevel) === (b < contourLevel) || a === b) return;
               const t = (contourLevel - a) / (b - a);
               candidate.push([pa[0] + t * (pb[0] - pa[0]), pa[1] + t * (pb[1] - pa[1])]);
@@ -1383,7 +1383,7 @@
         const values = contourGrid.flat().filter(Number.isFinite);
         if (values.length) {
           // One label per continuous contour; values are full high-to-low range.
-          const step = 0.50;
+          const step = 0.20;
           const lo = Math.floor(Math.min(...values) / step) * step;
           const hi = Math.ceil(Math.max(...values) / step) * step;
           for (let level = lo + step; level < hi + step / 2; level += step) {

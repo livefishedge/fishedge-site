@@ -37,9 +37,16 @@ def main():
         mask_row = []
         for xi in range(nx - 1):
             corners = [g[y][x] for g in grids for y, x in ((yi, xi), (yi, xi + 1), (yi + 1, xi), (yi + 1, xi + 1))]
-            ok = all(finite(v) for v in corners)
+            # Permit a shoreline cell with one land corner. The renderer
+            # draws only finite-to-finite edges, so this extends contours to
+            # the coastline without fabricating values over land.
+            corner_ok = []
+            for offset in ((0, 0), (0, 1), (1, 0), (1, 1)):
+                corner_ok.append(all(finite(g[yi + offset[0]][xi + offset[1]]) for g in grids))
+            ok = sum(corner_ok) >= 3
             mask_row.append(ok)
-            range_row.append(max(corners) - min(corners) if ok else None)
+            usable = [v for v, is_ok in zip(corners, corner_ok * len(frames)) if is_ok and finite(v)]
+            range_row.append(max(usable) - min(usable) if ok else None)
         ranges.append(range_row)
         wet_cells.append(mask_row)
 
@@ -48,6 +55,7 @@ def main():
     # Keep this conservative: only reject a cell with at least four finite
     # neighbors and a >1.5 ft / >45% departure from their median.
     rejected = []
+    original_ranges = [row[:] for row in ranges]
     for yi in range(ny - 1):
         for xi in range(nx - 1):
             value = ranges[yi][xi]
@@ -59,15 +67,17 @@ def main():
                     if not dx and not dy:
                         continue
                     yy, xx = yi + dy, xi + dx
-                    if 0 <= yy < ny - 1 and 0 <= xx < nx - 1 and ranges[yy][xx] is not None:
-                        neighbors.append(ranges[yy][xx])
+                    if 0 <= yy < ny - 1 and 0 <= xx < nx - 1 and original_ranges[yy][xx] is not None:
+                        neighbors.append(original_ranges[yy][xx])
             if len(neighbors) < 4:
                 continue
             median = statistics.median(neighbors)
             if abs(value - median) > max(1.5, 0.45 * median):
-                ranges[yi][xi] = None
-                wet_cells[yi][xi] = False
                 rejected.append({"cell": [yi, xi], "range_ft": round(value, 4), "neighbor_median_ft": round(median, 4)})
+    for item in rejected:
+        yi, xi = item["cell"]
+        ranges[yi][xi] = None
+        wet_cells[yi][xi] = False
 
     # Store the static range on every frame for backward-compatible viewers;
     # all copies are identical by construction.
