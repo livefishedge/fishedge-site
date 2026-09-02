@@ -1052,7 +1052,7 @@
       // quad per cell
       for (let yi = 0; yi < ny - 1; yi++) {
         for (let xi = 0; xi < nx - 1; xi++) {
-          if (oceanOnly && dataKey !== 'astronomical_tide_ft' && !forecastData.tide_water_cells?.[yi]?.[xi]) continue;
+          if (oceanOnly && dataKey !== 'astronomical_tide_ft' && !(forecastData.wave_water_cells || forecastData.tide_water_cells)?.[yi]?.[xi]) continue;
           if (oceanOnly && dataKey === 'astronomical_tide_ft' && !forecastData.tide_water_cells?.[yi]?.[xi] &&
               ![grid[yi]?.[xi], grid[yi]?.[xi + 1], grid[yi + 1]?.[xi], grid[yi + 1]?.[xi + 1]].some(v => Number.isFinite(v))) continue;
           let v00 = grid[yi][xi];
@@ -1533,10 +1533,10 @@
       return true;
     }
 
-    // Shared coarse ocean mask for all animated overlays. The tide artifact
-    // is the only regional field with an authoritative land/ocean mask.
+    // Wave packets use the native-mesh wave footprint; tide contours retain
+    // their stricter complete-horizon tide mask.
     function isOceanPoint(lon, lat) {
-      const mask = forecastData?.tide_water_cells;
+      const mask = forecastData?.wave_water_cells || forecastData?.tide_water_cells;
       const lons = forecastData?.lons, lats = forecastData?.lats;
       if (!mask || !lons || !lats || lons.length < 2 || lats.length < 2) return false;
       const xi = Math.max(0, Math.min(lons.length - 2, Math.floor((lon - lons[0]) / (lons[1] - lons[0]))));
@@ -1599,7 +1599,7 @@
         for (let xi = 0; xi < lons.length - 1; xi++) {
           const vals = [grid[yi]?.[xi], grid[yi]?.[xi + 1], grid[yi + 1]?.[xi], grid[yi + 1]?.[xi + 1]];
           if (['wave_height_ft', 'swell_height_ft', 'wind_wave_height_ft'].includes(scalarKey) &&
-              !forecastData.tide_water_cells?.[yi]?.[xi]) continue;
+              !(forecastData.wave_water_cells || forecastData.tide_water_cells)?.[yi]?.[xi]) continue;
           if (scalarKey === 'astronomical_tide_ft' && !forecastData.tide_water_cells?.[yi]?.[xi] &&
               !vals.some(v => Number.isFinite(v))) continue;
           if (scalarKey === 'astronomical_tide_ft' && vals.some(v => !Number.isFinite(v))) {
@@ -1699,7 +1699,7 @@
         partitionRanges.set(cacheKey, range);
       }
       const grid = currentFrame[key], lons = forecastData.lons, lats = forecastData.lats;
-      const mask = forecastData.tide_water_cells;
+      const mask = forecastData.wave_water_cells || forecastData.tide_water_cells;
       for (let yi = 0; yi < lats.length - 1; yi++) for (let xi = 0; xi < lons.length - 1; xi++) {
         if (!mask?.[yi]?.[xi]) continue;
         const vals = [grid[yi]?.[xi], grid[yi]?.[xi + 1], grid[yi + 1]?.[xi], grid[yi + 1]?.[xi + 1]];
