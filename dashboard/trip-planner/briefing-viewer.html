@@ -687,7 +687,7 @@
     // instead of reusing an older cached JSON response.
     // Bump whenever the JSON artifact changes; otherwise a Pages/browser
     // cache can keep serving a pre-calibration tide field after HTML deploy.
-    const FORECAST_DATA_BUILD = 'native-stofs-mesh-complete-20260901-t00-v13-wave-coast-mask';
+    const FORECAST_DATA_BUILD = 'native-stofs-mesh-complete-20260901-t00-v14-wave-coast-mask-rerender';
     const DEV_FORECAST_URL = `/trip-planner/data/${region}/briefing/forecast.json?v=${FORECAST_DATA_BUILD}`;
     const WAVE_MASK_URL = `/trip-planner/data/${region}/briefing/native_wave_mask.png?v=${FORECAST_DATA_BUILD}`;
     const CORS_PROXY = 'https://corsproxy.io/?';
@@ -1634,7 +1634,7 @@
     function ensureWaveMaskImage() {
       if (waveMaskImage !== null) return;
       waveMaskImage = new Image();
-      waveMaskImage.onload = () => drawOverlaysForProduct();
+      waveMaskImage.onload = () => { drawOverlaysForProduct(); map.render(); };
       waveMaskImage.onerror = () => { waveMaskImage = false; };
       waveMaskImage.src = WAVE_MASK_URL;
     }
