@@ -2,8 +2,9 @@
 """Repair and validate the viewer's static co-range contract.
 
 The range is the full forecast-horizon max-min of the serialized astronomical
-tide field.  A cell is drawable only when all four corner points are finite for
-every frame; no missing corner is interpolated across land.
+tide field. A shoreline cell is drawable when at least two corner points are
+valid for every frame; the renderer draws only finite-to-finite edges and never
+fills a missing corner across land.
 """
 import argparse
 import json
@@ -43,7 +44,7 @@ def main():
             corner_ok = []
             for offset in ((0, 0), (0, 1), (1, 0), (1, 1)):
                 corner_ok.append(all(finite(g[yi + offset[0]][xi + offset[1]]) for g in grids))
-            ok = sum(corner_ok) >= 3
+            ok = sum(corner_ok) >= 2
             mask_row.append(ok)
             usable = [v for v, is_ok in zip(corners, corner_ok * len(frames)) if is_ok and finite(v)]
             range_row.append(max(usable) - min(usable) if ok else None)
@@ -89,7 +90,7 @@ def main():
     payload["tide_range_field"] = "tide_range_ft"
     payload["tide_range_contract"] = {
         "kind": "static_cell_field",
-        "mask": "tide_water_cells; all four corners finite across the complete horizon",
+        "mask": "tide_water_cells; at least two corners finite across the complete horizon",
         "missing_policy": "null; never interpolate land or missing corners",
         "frame_copy_invariant": True,
         "spatial_outlier_qc": {"method": "8-neighbor median", "rejected_cells": rejected},
