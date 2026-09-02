@@ -913,6 +913,11 @@
     // as the heat map; partitions still render as directional arrow overlays on top.
     // When exactly one partition is checked, that partition's heat map fills the display.
     function activeHeatKey() {
+      // Explicit layer selection wins over the default wave priority. This is
+      // essential for Tidal Stage: the checkbox is an independent scalar
+      // layer, and must activate the native phase renderer even while the
+      // wave controls remain checked.
+      if (selectedHeatKey === 'astronomical_tide_ft' && layerVisibility.tide_level) return 'astronomical_tide_ft';
       if (layerVisibility.wave_height) return 'wave_height_ft';
       const partitionCount = Number(!!layerVisibility.wind_wave) + Number(!!layerVisibility.swell);
       // A single remaining partition is the scalar heat field. With both
