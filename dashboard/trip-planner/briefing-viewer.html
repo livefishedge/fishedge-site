@@ -683,7 +683,7 @@
     // instead of reusing an older cached JSON response.
     // Bump whenever the JSON artifact changes; otherwise a Pages/browser
     // cache can keep serving a pre-calibration tide field after HTML deploy.
-    const FORECAST_DATA_BUILD = 'native-stofs-mesh-complete-20260901-t00-v2';
+    const FORECAST_DATA_BUILD = 'native-stofs-mesh-complete-20260901-t00-v3-phase';
     const DEV_FORECAST_URL = `/trip-planner/data/${region}/briefing/forecast.json?v=${FORECAST_DATA_BUILD}`;
     const CORS_PROXY = 'https://corsproxy.io/?';
     const MAX_FORECAST_AGE_HOURS = 12;
@@ -1426,17 +1426,54 @@
         ctx.strokeStyle = 'rgba(230,245,255,0.95)';
         ctx.lineWidth = 1.5;
         ctx.setLineDash([5, 4]);
+        const labels = [];
+        const vw = mapEl.clientWidth, vh = mapEl.clientHeight;
         for (const line of mesh.native_contours) {
           const coords = line.coordinates || [];
           if (coords.length < 2) continue;
+          const pixels = coords.map(lonlat => map.getPixelFromCoordinate(ol.proj.fromLonLat(lonlat, mapProjection)));
           ctx.beginPath();
-          coords.forEach((lonlat, i) => {
-            const p = map.getPixelFromCoordinate(ol.proj.fromLonLat(lonlat, mapProjection));
+          pixels.forEach((p, i) => {
             if (i === 0) ctx.moveTo(p[0], p[1]); else ctx.lineTo(p[0], p[1]);
           });
           ctx.stroke();
+          // Find the longest portion actually visible in the current
+          // viewport. This makes labels appear as users zoom in, while short
+          // clipped fragments remain unlabeled.
+          let best = null, run = null;
+          const visible = p => p && p[0] >= 0 && p[0] <= vw && p[1] >= 0 && p[1] <= vh;
+          for (let i = 1; i < pixels.length; i++) {
+            const a = pixels[i - 1], b = pixels[i];
+            if (!a || !b) { run = null; continue; }
+            const midVisible = visible(a) || visible(b) || visible([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]);
+            if (!midVisible) { run = null; continue; }
+            const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+            if (!run) run = {start: a, end: b, length: len};
+            else { run.end = b; run.length += len; }
+            if (!best || run.length > best.length) best = {...run};
+          }
+          if (best && best.length >= 120) {
+            labels.push({level: Number(line.level_ft), x: (best.start[0] + best.end[0]) / 2,
+              y: (best.start[1] + best.end[1]) / 2,
+              angle: Math.atan2(best.end[1] - best.start[1], best.end[0] - best.start[0]), length: best.length});
+          }
         }
         ctx.setLineDash([]);
+        // Draw only well-separated labels, longest visible lines first.
+        labels.sort((a, b) => b.length - a.length);
+        const placed = [];
+        ctx.font = '700 10px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        for (const label of labels) {
+          if (placed.some(p => Math.hypot(p.x - label.x, p.y - label.y) < 70)) continue;
+          let angle = label.angle;
+          if (angle > Math.PI / 2 || angle < -Math.PI / 2) angle += Math.PI;
+          ctx.save(); ctx.translate(label.x, label.y); ctx.rotate(angle);
+          ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(5,11,16,0.92)';
+          ctx.strokeText(label.level.toFixed(1), 0, 0);
+          ctx.fillStyle = '#ffffff'; ctx.fillText(label.level.toFixed(1), 0, 0);
+          ctx.restore(); placed.push(label);
+          if (placed.length >= 80) break;
+        }
         return true;
       }
       if (!mesh?.nodes?.length || !mesh?.triangles?.length || !mesh?.range_ft?.length) return false;
@@ -1523,6 +1560,10 @@
 
     function drawWaveHeatOverlay() {
       const scalarKey = activeHeatKey();
+      // Tidal stage is rendered from native-mesh tiles generated from the
+      // same HTP nodes/elements as co-range. Fall back to the legacy grid only
+      // for older payloads without phase tiles.
+      if (scalarKey === 'astronomical_tide_ft' && drawNativeTidePhaseOverlay()) return;
       const grid = scalarKey && currentFrame[scalarKey];
       const lons = forecastData.lons, lats = forecastData.lats;
       if (!grid || !lons || !lats) return;
@@ -1557,6 +1598,40 @@
           streamlineCtx.closePath(); streamlineCtx.fill();
         }
       }
+    }
+
+    const nativePhaseImages = new Map();
+    function drawNativeTidePhaseOverlay() {
+      const tiles = forecastData?.native_mesh?.phase_tiles;
+      if (!tiles || !Number.isFinite(tiles.frames) || !tiles.pattern) return false;
+      // Do not display a stale native phase image after the native HTP horizon;
+      // the legacy grid remains the honest fallback for later forecast frames.
+      if (frameIdx >= tiles.frames) return false;
+      const frame = Math.max(0, frameIdx);
+      const key = String(frame);
+      let image = nativePhaseImages.get(key);
+      if (!image) {
+        image = new Image();
+        image.decoding = 'async';
+        image.onload = () => { nativePhaseImages.set(key, image); drawOverlaysForProduct(); };
+        image.onerror = () => nativePhaseImages.set(key, null);
+        const asset = tiles.pattern.replace('{frame}', String(frame).padStart(3, '0'));
+        image.src = new URL(`/trip-planner/data/${region}/briefing/${asset}`, location.origin).href;
+        nativePhaseImages.set(key, image);
+        return true;
+      }
+      if (!image.complete || !image.naturalWidth) return true;
+      const b = tiles.bbox_mercator;
+      if (!Array.isArray(b) || b.length !== 4) return false;
+      const p0 = map.getPixelFromCoordinate([b[0], b[3]]);
+      const p1 = map.getPixelFromCoordinate([b[2], b[1]]);
+      if (!p0 || !p1) return false;
+      const w = p1[0] - p0[0], h = p1[1] - p0[1];
+      if (!(w > 0 && h > 0)) return false;
+      streamlineCtx.globalAlpha = 0.66;
+      streamlineCtx.drawImage(image, p0[0], p0[1], w, h);
+      streamlineCtx.globalAlpha = 1;
+      return true;
     }
 
     const partitionRanges = new Map();
