@@ -670,7 +670,7 @@
     // instead of reusing an older cached JSON response.
     // Bump whenever the JSON artifact changes; otherwise a Pages/browser
     // cache can keep serving a pre-calibration tide field after HTML deploy.
-    const FORECAST_DATA_BUILD = 'stofs-coops-harmonic-calibrated-20260902-0044';
+    const FORECAST_DATA_BUILD = 'co-range-contract-v2-20260901-2212';
     const DEV_FORECAST_URL = `/trip-planner/data/${region}/briefing/forecast.json?v=${FORECAST_DATA_BUILD}`;
     const CORS_PROXY = 'https://corsproxy.io/?';
     const MAX_FORECAST_AGE_HOURS = 12;
@@ -1315,13 +1315,10 @@
             // the basemap's land.
             let v00 = grid[yi]?.[xi], v10 = grid[yi]?.[xi + 1];
             let v01 = grid[yi + 1]?.[xi], v11 = grid[yi + 1]?.[xi + 1];
-            if (!waterCells?.[yi]?.[xi] && ![v00, v10, v01, v11].some(v => Number.isFinite(v))) continue;
-            if (!waterCells?.[yi]?.[xi] && [v00, v10, v01, v11].some(v => !Number.isFinite(v))) {
-              const finite = [v00, v10, v01, v11].filter(Number.isFinite);
-              const fill = finite.reduce((a, b) => a + b, 0) / finite.length;
-              v00 = Number.isFinite(v00) ? v00 : fill; v10 = Number.isFinite(v10) ? v10 : fill;
-              v01 = Number.isFinite(v01) ? v01 : fill; v11 = Number.isFinite(v11) ? v11 : fill;
-            }
+            // Fail closed. A missing mask or a masked cell is never allowed
+            // to emit a contour, and missing corners are never filled across
+            // land or an atlas gap.
+            if (waterCells?.[yi]?.[xi] !== true) continue;
             if (![v00, v10, v01, v11].every(v => Number.isFinite(v))) continue;
             if (circular) {
               const base = v00;
@@ -1378,13 +1375,15 @@
       };
       // Co-range is derived from the same stored prediction series used by
       // the station popup; do not mix in reconstructed harmonics.
-      const rangeField = currentFrame.tide_range_ft;
+      // The range is static over the complete forecast horizon. Prefer a
+      // top-level field when present, with the legacy frame copy as fallback.
+      const rangeField = forecastData.tide_range_ft || currentFrame.tide_range_ft;
       if (layerVisibility.tide_range && rangeField) {
         const contourGrid = rangeField.map(row => row.map(value => Number.isFinite(value) ? convertDisplayValue('tide_range_ft', value) : value));
         const values = contourGrid.flat().filter(Number.isFinite);
         if (values.length) {
           // One label per continuous contour; values are full high-to-low range.
-          const step = 0.10;
+          const step = 0.50;
           const lo = Math.floor(Math.min(...values) / step) * step;
           const hi = Math.ceil(Math.max(...values) / step) * step;
           for (let level = lo + step; level < hi + step / 2; level += step) {
