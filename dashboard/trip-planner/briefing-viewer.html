@@ -655,9 +655,22 @@
       const curve = modelTideCurve(activeTideStation);
       const observed = (tides.observed || {})[activeTideStation.id] || [];
       const firstFrame = forecastData.frames[0];
-      const range_ft = sampleGridAtPoint(firstFrame?.tide_range_ft, activeTideStation.lat, activeTideStation.lon);
+      const range_ft = nativeRangeAtPoint(activeTideStation.lon, activeTideStation.lat) ??
+        sampleGridAtPoint(firstFrame?.tide_range_ft, activeTideStation.lat, activeTideStation.lon);
       const range = Number.isFinite(range_ft) ? { vmin: 0, vmax: range_ft } : null;
       renderTideChart(curve, range, nextModelTideEvent(curve), observed);
+    }
+
+    function nativeRangeAtPoint(lon, lat) {
+      const mesh = forecastData?.native_mesh;
+      if (!mesh?.nodes?.length || !mesh.range_ft?.length) return null;
+      let best = -1, bestD = Infinity;
+      for (let i = 0; i < mesh.nodes.length; i++) {
+        const n = mesh.nodes[i];
+        const d = (n[0] - lon) ** 2 + (n[1] - lat) ** 2;
+        if (d < bestD && Number.isFinite(mesh.range_ft[i])) { bestD = d; best = i; }
+      }
+      return best >= 0 ? Number(mesh.range_ft[best]) : null;
     }
 
     // ---- data ----
@@ -670,7 +683,7 @@
     // instead of reusing an older cached JSON response.
     // Bump whenever the JSON artifact changes; otherwise a Pages/browser
     // cache can keep serving a pre-calibration tide field after HTML deploy.
-    const FORECAST_DATA_BUILD = 'co-range-contract-v4-20260901-2242';
+    const FORECAST_DATA_BUILD = 'native-stofs-mesh-20260901-t00-v1';
     const DEV_FORECAST_URL = `/trip-planner/data/${region}/briefing/forecast.json?v=${FORECAST_DATA_BUILD}`;
     const CORS_PROXY = 'https://corsproxy.io/?';
     const MAX_FORECAST_AGE_HOURS = 12;
@@ -1297,6 +1310,11 @@
       ctx.globalAlpha = 1;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
+      if (layerVisibility.tide_range && drawNativeTidalContours(ctx)) {
+        ctx.globalAlpha = 1;
+        ctx.globalCompositeOperation = 'source-over';
+        return;
+      }
       const lons = forecastData.lons, lats = forecastData.lats;
       const project = (xi, yi) => map.getPixelFromCoordinate(
         ol.proj.fromLonLat([lons[xi], lats[yi]], mapProjection)
@@ -1393,6 +1411,42 @@
       }
       ctx.globalAlpha = 1;
       ctx.globalCompositeOperation = 'source-over';
+    }
+
+    // Native STOFS ADCIRC triangle contours. This is the primary path for
+    // co-range; the regular-grid renderer below remains a compatibility
+    // fallback for older artifacts. Values are node ranges in feet.
+    function drawNativeTidalContours(ctx) {
+      const mesh = forecastData?.native_mesh;
+      if (!mesh?.nodes?.length || !mesh?.triangles?.length || !mesh?.range_ft?.length) return false;
+      const vals = mesh.range_ft.filter(Number.isFinite).map(Number);
+      if (!vals.length) return false;
+      const step = 0.20;
+      const lo = Math.floor(Math.min(...vals) / step) * step;
+      const hi = Math.ceil(Math.max(...vals) / step) * step;
+      const point = n => map.getPixelFromCoordinate(ol.proj.fromLonLat(n, mapProjection));
+      ctx.strokeStyle = 'rgba(230,245,255,0.95)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([5, 4]);
+      for (let level = lo + step; level < hi + step / 2; level += step) {
+        for (const tri of mesh.triangles) {
+          const ids = [tri[0], tri[1], tri[2]];
+          const vv = ids.map(i => Number(mesh.range_ft[i]));
+          if (!vv.every(Number.isFinite)) continue;
+          const pp = ids.map(i => point(mesh.nodes[i]));
+          const hits = [];
+          for (const [a, b] of [[0,1],[1,2],[2,0]]) {
+            if ((vv[a] < level) === (vv[b] < level) || vv[a] === vv[b]) continue;
+            const t = (level - vv[a]) / (vv[b] - vv[a]);
+            hits.push([pp[a][0] + t * (pp[b][0] - pp[a][0]), pp[a][1] + t * (pp[b][1] - pp[a][1])]);
+          }
+          if (hits.length >= 2) {
+            ctx.beginPath(); ctx.moveTo(hits[0][0], hits[0][1]); ctx.lineTo(hits[1][0], hits[1][1]); ctx.stroke();
+          }
+        }
+      }
+      ctx.setLineDash([]);
+      return true;
     }
 
     // Shared coarse ocean mask for all animated overlays. The tide artifact

@@ -169,14 +169,17 @@ def read_zeta(remote, node_ids, hours):
     # a full 100-MB-per-hour global record read.
     joined = []
     for lo, hi in spans:
-        if joined and lo - joined[-1][1] <= 10_000 and hi - joined[-1][0] <= 2_000_000:
+        # Native mesh node IDs are spatially scattered in the global file.
+        # For a regional subset, fewer larger reads are materially faster than
+        # thousands of tiny HTTP requests.  Keep each window bounded.
+        if joined and lo - joined[-1][1] <= 100_000 and hi - joined[-1][0] <= 10_000_000:
             joined[-1] = (joined[-1][0], hi)
         else:
             joined.append((lo, hi))
     coalesced = []
     for lo, hi in joined:
-        while hi - lo > 2_000_000:
-            coalesced.append((lo, lo + 2_000_000)); lo += 2_000_000
+        while hi - lo > 10_000_000:
+            coalesced.append((lo, lo + 10_000_000)); lo += 10_000_000
         coalesced.append((lo, hi))
     spans = coalesced
     out = np.full((len(hours), len(node_ids)), np.nan)
