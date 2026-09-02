@@ -1284,8 +1284,11 @@
         // Composite rendering paints its raster directly onto the overlay
         // canvas. Keeping the OpenLayers ImageCanvas visible as well creates
         // a second, slightly differently sampled grid (“ghost” offset).
+        const nativeTideActive = activeHeatKey() === 'astronomical_tide_ft' &&
+          !!forecastData?.native_mesh?.phase_tiles;
         rasterLayer.setVisible(
-          (def.viz === 'heat' || def.viz === 'arrows') && hasVisibleRasterVariable()
+          (def.viz === 'heat' || def.viz === 'arrows') &&
+          hasVisibleRasterVariable() && !nativeTideActive
         );
         // setProduct calls map.render() before this visibility switch; render
         // again so the newly enabled composite heat layer is painted now.
