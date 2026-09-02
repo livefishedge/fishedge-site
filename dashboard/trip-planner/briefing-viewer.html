@@ -687,7 +687,7 @@
     // instead of reusing an older cached JSON response.
     // Bump whenever the JSON artifact changes; otherwise a Pages/browser
     // cache can keep serving a pre-calibration tide field after HTML deploy.
-    const FORECAST_DATA_BUILD = 'native-stofs-mesh-complete-20260901-t00-v16-signed-depth-mask';
+    const FORECAST_DATA_BUILD = 'wave-product-validity-coast-mask-v17';
     const DEV_FORECAST_URL = `/trip-planner/data/${region}/briefing/forecast.json?v=${FORECAST_DATA_BUILD}`;
     const WAVE_MASK_URL = `/trip-planner/data/${region}/briefing/native_wave_mask.png?v=${FORECAST_DATA_BUILD}`;
     const CORS_PROXY = 'https://corsproxy.io/?';
@@ -856,10 +856,6 @@
           // carry the visual signal. Skip drawFrameToTile so the raster layer
           // is transparent for those products.
           const viz = (PRODUCTS[currentProduct] || {}).viz;
-          // Wave products are rendered exclusively on the coastline-clipped
-          // overlay canvas. Never let ImageCanvas paint a coarse full-cell
-          // quad, even briefly or from a stale OpenLayers cache.
-          if (['wave_composite', 'wave_height_ft', 'swell_height_ft', 'wind_wave_height_ft'].includes(currentProduct)) return c;
           if (viz === 'streamlines' || viz === 'contours') return c;
           drawFrameToTile(ctx, currentFrame, currentProduct, requestedExtent, c.width, c.height);
           return c;
@@ -1058,7 +1054,6 @@
       // quad per cell
       for (let yi = 0; yi < ny - 1; yi++) {
         for (let xi = 0; xi < nx - 1; xi++) {
-          if (oceanOnly && dataKey !== 'astronomical_tide_ft' && !(forecastData.wave_water_cells || forecastData.tide_water_cells)?.[yi]?.[xi]) continue;
           if (oceanOnly && dataKey === 'astronomical_tide_ft' && !forecastData.tide_water_cells?.[yi]?.[xi] &&
               ![grid[yi]?.[xi], grid[yi]?.[xi + 1], grid[yi + 1]?.[xi], grid[yi + 1]?.[xi + 1]].some(v => Number.isFinite(v))) continue;
           let v00 = grid[yi][xi];
@@ -1295,8 +1290,8 @@
         const nativeTideActive = activeHeatKey() === 'astronomical_tide_ft' &&
           !!forecastData?.native_mesh?.phase_tiles;
         rasterLayer.setVisible(
-          (def.viz === 'heat' || def.viz === 'arrows') &&
-          hasVisibleRasterVariable() && !nativeTideActive && !waveProduct
+          (waveProduct || def.viz === 'heat' || def.viz === 'arrows') &&
+          hasVisibleRasterVariable() && !nativeTideActive
         );
         // setProduct calls map.render() before this visibility switch; render
         // again so the newly enabled composite heat layer is painted now.
@@ -1312,13 +1307,7 @@
         // Wave products must use the coastline-clipped canvas path. The
         // OpenLayers raster path paints whole 0.25-degree quads and can put
         // rectangular color blocks over land near the shoreline.
-        if (waveProduct) {
-          ensureWaveMaskImage();
-          if (currentProduct === 'swell_height_ft') drawPartitionMagnitudeHeat('swell');
-          else if (currentProduct === 'wind_wave_height_ft') drawPartitionMagnitudeHeat('wind_wave');
-          else drawWaveHeatOverlay();
-          clipCanvasToWaveMask();
-        }
+        if (waveProduct) ensureWaveMaskImage();
         drawDirectionArrows();
       }
       else if (def.viz === 'contours') drawIsobars();
@@ -1555,13 +1544,38 @@
 
     // Wave packets use the native-mesh wave footprint; tide contours retain
     // their stricter complete-horizon tide mask.
-    function isOceanPoint(lon, lat) {
-      const mask = forecastData?.wave_water_cells || forecastData?.tide_water_cells;
+    function sourceCellValid(kind, yi, xi) {
+      const key = kind === 'swell' ? 'swell_height_ft' : kind === 'wind_wave' ? 'wind_wave_height_ft' : 'wave_height_ft';
+      const grid = currentFrame?.[key];
+      if (!grid) return false;
+      return [grid[yi]?.[xi], grid[yi]?.[xi + 1], grid[yi + 1]?.[xi], grid[yi + 1]?.[xi + 1]]
+        .every(v => Number.isFinite(v));
+    }
+
+    let waveMaskCanvas = null;
+    let waveMaskCtx = null;
+    function isCoastWaterPoint(lon, lat) {
+      const mask = waveMaskImage;
+      const b = forecastData?.display_bbox || forecastData?.bbox || [-77, 36, -72, 40];
+      if (!mask || !mask.complete || !mask.naturalWidth || lon < b[0] || lon > b[2] || lat < b[1] || lat > b[3]) return false;
+      if (!waveMaskCanvas) {
+        waveMaskCanvas = document.createElement('canvas');
+        waveMaskCanvas.width = mask.naturalWidth; waveMaskCanvas.height = mask.naturalHeight;
+        waveMaskCtx = waveMaskCanvas.getContext('2d', { willReadFrequently: true });
+        waveMaskCtx.drawImage(mask, 0, 0);
+      }
+      const x = Math.max(0, Math.min(waveMaskCanvas.width - 1, Math.round((lon - b[0]) / (b[2] - b[0]) * (waveMaskCanvas.width - 1))));
+      const y = Math.max(0, Math.min(waveMaskCanvas.height - 1, Math.round((b[3] - lat) / (b[3] - b[1]) * (waveMaskCanvas.height - 1))));
+      return waveMaskCtx.getImageData(x, y, 1, 1).data[0] >= 128;
+    }
+
+    function isOceanPoint(lon, lat, kind = 'wave') {
+      if (!isCoastWaterPoint(lon, lat)) return false;
       const lons = forecastData?.lons, lats = forecastData?.lats;
-      if (!mask || !lons || !lats || lons.length < 2 || lats.length < 2) return false;
+      if (!lons || !lats || lons.length < 2 || lats.length < 2) return false;
       const xi = Math.max(0, Math.min(lons.length - 2, Math.floor((lon - lons[0]) / (lons[1] - lons[0]))));
       const yi = Math.max(0, Math.min(lats.length - 2, Math.floor((lat - lats[0]) / (lats[1] - lats[0]))));
-      return mask[yi]?.[xi] === true;
+      return sourceCellValid(kind, yi, xi);
     }
 
     // ---- wave composite: heat fill + swell streamlines + wind-wave streamlines + wind arrows ----
@@ -1578,21 +1592,14 @@
       flowCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
       streamlineCtx.clearRect(0, 0, flowCanvas.width, flowCanvas.height);
       flowCtx.clearRect(0, 0, flowCanvas.width, flowCanvas.height);
-      // Paint the composite heat directly on the overlay as a fallback for
-      // ImageCanvas implementations that do not invalidate after a product
-      // switch. This keeps the visual contract deterministic: fill first,
-      // then partition streamlines and atmospheric arrows above it.
       const heatKey = activeHeatKey();
       const partitionCount = Number(!!layerVisibility.wind_wave) + Number(!!layerVisibility.swell);
       // Two partition layers may animate together, but their scalar color
       // fields must never overlap. With both selected, show motion only.
-      if (['wave_height_ft', 'temperature_f', 'pressure_hpa', 'astronomical_tide_ft'].includes(heatKey)) drawWaveHeatOverlay();
       // The wave checkboxes independently control animation visibility, but
       // only the selected scalar may paint the magnitude field. Otherwise
       // simultaneous Wave (wind), Swell, and Significant Wave Height layers
       // blend three unrelated color scales over the same pixels.
-      if (partitionCount === 1 && heatKey === 'wind_wave_height_ft' && layerVisibility.wind_wave) drawPartitionMagnitudeHeat('wind_wave');
-      if (partitionCount === 1 && heatKey === 'swell_height_ft' && layerVisibility.swell) drawPartitionMagnitudeHeat('swell');
       if (layerVisibility.swell || layerVisibility.wind_wave) drawWavePackets();
       if (layerVisibility.pressure) drawIsobars(true);
       if (layerVisibility.wind) {
@@ -1619,7 +1626,7 @@
         for (let xi = 0; xi < lons.length - 1; xi++) {
           const vals = [grid[yi]?.[xi], grid[yi]?.[xi + 1], grid[yi + 1]?.[xi], grid[yi + 1]?.[xi + 1]];
           if (['wave_height_ft', 'swell_height_ft', 'wind_wave_height_ft'].includes(scalarKey) &&
-              !(forecastData.wave_water_cells || forecastData.tide_water_cells)?.[yi]?.[xi]) continue;
+              ![vals[0], vals[1], vals[2], vals[3]].every(v => Number.isFinite(v))) continue;
           if (scalarKey === 'astronomical_tide_ft' && !forecastData.tide_water_cells?.[yi]?.[xi] &&
               !vals.some(v => Number.isFinite(v))) continue;
           if (scalarKey === 'astronomical_tide_ft' && vals.some(v => !Number.isFinite(v))) {
@@ -1652,6 +1659,8 @@
       if (waveMaskImage !== null) return;
       waveMaskImage = new Image();
       waveMaskImage.onload = () => {
+        waveMaskCanvas = null;
+        waveMaskCtx = null;
         drawOverlaysForProduct();
         // ImageCanvas caches rendered canvases by extent/resolution. A plain
         // map.render() can reuse the old unmasked raster, so invalidate the
@@ -1758,9 +1767,7 @@
         partitionRanges.set(cacheKey, range);
       }
       const grid = currentFrame[key], lons = forecastData.lons, lats = forecastData.lats;
-      const mask = forecastData.wave_water_cells || forecastData.tide_water_cells;
       for (let yi = 0; yi < lats.length - 1; yi++) for (let xi = 0; xi < lons.length - 1; xi++) {
-        if (!mask?.[yi]?.[xi]) continue;
         const vals = [grid[yi]?.[xi], grid[yi]?.[xi + 1], grid[yi + 1]?.[xi], grid[yi + 1]?.[xi + 1]];
         if (!vals.every(Number.isFinite)) continue;
         const value = convertDisplayValue(key, vals.reduce((a, b) => a + b, 0) / vals.length);
@@ -1801,7 +1808,7 @@
       };
       for (const packet of wavePackets) {
         if (!layerVisibility[packet.kind]) continue;
-        if (!isOceanPoint(packet.lon, packet.lat)) continue;
+        if (!isOceanPoint(packet.lon, packet.lat, packet.kind)) continue;
         const s = styles[packet.kind];
         const vec = bilinearPartitionVec(currentFrame, packet.kind, packet.lon, packet.lat);
         if (!vec || vec.speed < (packet.kind === 'swell' ? 0.4 : 0.15)) continue;
@@ -1840,7 +1847,7 @@
         for (const packet of wavePackets) {
           packet.age += dt;
           const vec = bilinearPartitionVec(currentFrame, packet.kind, packet.lon, packet.lat);
-          if (!isOceanPoint(packet.lon, packet.lat) || !vec || vec.speed < (packet.kind === 'swell' ? 0.4 : 0.15)) {
+          if (!isOceanPoint(packet.lon, packet.lat, packet.kind) || !vec || vec.speed < (packet.kind === 'swell' ? 0.4 : 0.15)) {
             // Do not leave a packet stranded in a calm/null cell: drawWavePackets
             // intentionally suppresses those marks, so recover it immediately
             // through the appropriate physical source model.
@@ -1865,13 +1872,7 @@
         const dpr = flowCanvas.width / mapEl.clientWidth;
         streamlineCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
         flowCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const heatKey = activeHeatKey();
-      if (['wave_height_ft', 'swell_height_ft', 'wind_wave_height_ft'].includes(heatKey) ||
-          layerVisibility.swell || layerVisibility.wind_wave) ensureWaveMaskImage();
-        const partitionCount = Number(!!layerVisibility.wind_wave) + Number(!!layerVisibility.swell);
-        if (['wave_height_ft', 'temperature_f', 'pressure_hpa', 'astronomical_tide_ft'].includes(heatKey)) drawWaveHeatOverlay();
-        if (partitionCount === 1 && heatKey === 'wind_wave_height_ft' && layerVisibility.wind_wave) drawPartitionMagnitudeHeat('wind_wave');
-      if (partitionCount === 1 && heatKey === 'swell_height_ft' && layerVisibility.swell) drawPartitionMagnitudeHeat('swell');
+        if (layerVisibility.swell || layerVisibility.wind_wave) ensureWaveMaskImage();
       if (layerVisibility.swell || layerVisibility.wind_wave) drawWavePackets();
       if (['wave_height_ft', 'swell_height_ft', 'wind_wave_height_ft'].includes(heatKey) ||
           layerVisibility.swell || layerVisibility.wind_wave) clipCanvasToWaveMask();
