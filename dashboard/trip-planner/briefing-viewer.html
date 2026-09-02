@@ -687,7 +687,7 @@
     // instead of reusing an older cached JSON response.
     // Bump whenever the JSON artifact changes; otherwise a Pages/browser
     // cache can keep serving a pre-calibration tide field after HTML deploy.
-    const FORECAST_DATA_BUILD = 'native-stofs-mesh-complete-20260901-t00-v14-wave-coast-mask-rerender';
+    const FORECAST_DATA_BUILD = 'native-stofs-mesh-complete-20260901-t00-v15-wave-canvas-only';
     const DEV_FORECAST_URL = `/trip-planner/data/${region}/briefing/forecast.json?v=${FORECAST_DATA_BUILD}`;
     const WAVE_MASK_URL = `/trip-planner/data/${region}/briefing/native_wave_mask.png?v=${FORECAST_DATA_BUILD}`;
     const CORS_PROXY = 'https://corsproxy.io/?';
@@ -1278,6 +1278,7 @@
     function drawOverlaysForProduct() {
       clearOverlays();
       const def = PRODUCTS[currentProduct];
+      const waveProduct = ['wave_composite', 'wave_height_ft', 'swell_height_ft', 'wind_wave_height_ft'].includes(currentProduct);
       // Mike #34713: 'doubling' effect on coastlines was caused by the
       // rasterLayer still being in the layer stack at opacity 0.85 even
       // when drawFrameToTile returned early. Hide the layer entirely
@@ -1291,7 +1292,7 @@
           !!forecastData?.native_mesh?.phase_tiles;
         rasterLayer.setVisible(
           (def.viz === 'heat' || def.viz === 'arrows') &&
-          hasVisibleRasterVariable() && !nativeTideActive
+          hasVisibleRasterVariable() && !nativeTideActive && !waveProduct
         );
         // setProduct calls map.render() before this visibility switch; render
         // again so the newly enabled composite heat layer is painted now.
@@ -1303,7 +1304,19 @@
         // mask is still a future refinement, but disabling the layer leaves
         // the diagnostic map visibly empty in broad low-wind areas.
         startParticleAnimation();
-      } else if (def.viz === 'arrows') drawDirectionArrows();
+      } else if (def.viz === 'arrows') {
+        // Wave products must use the coastline-clipped canvas path. The
+        // OpenLayers raster path paints whole 0.25-degree quads and can put
+        // rectangular color blocks over land near the shoreline.
+        if (waveProduct) {
+          ensureWaveMaskImage();
+          if (currentProduct === 'swell_height_ft') drawPartitionMagnitudeHeat('swell');
+          else if (currentProduct === 'wind_wave_height_ft') drawPartitionMagnitudeHeat('wind_wave');
+          else drawWaveHeatOverlay();
+          clipCanvasToWaveMask();
+        }
+        drawDirectionArrows();
+      }
       else if (def.viz === 'contours') drawIsobars();
       else if (def.viz === 'composite') drawWaveComposite();
       else stopParticleAnimation();
