@@ -10,6 +10,7 @@ import argparse, json
 from pathlib import Path
 import numpy as np
 from scipy.io import netcdf_file
+from scipy.signal import hilbert
 import matplotlib.pyplot as plt
 import matplotlib.tri as mtri
 from matplotlib.colors import ListedColormap, Normalize
@@ -57,17 +58,21 @@ def main():
     lo[good] = np.nanmin(np.where(finite[:, good], z[:, good], np.nan), axis=0)
     hi[good] = np.nanmax(np.where(finite[:, good], z[:, good], np.nan), axis=0)
     half = (hi - lo) / 2
-    valid = good & np.isfinite(half) & (half > 1e-4)
-    # One-hour central differences in the HTP horizon; this is the same local
-    # high/falling/low/rising phase convention used by the existing mosaic.
-    deriv = np.empty_like(z)
-    deriv[1:-1] = (z[2:] - z[:-2]) / 2.0
-    deriv[0] = z[1] - z[0]; deriv[-1] = z[-1] - z[-2]
+    valid = good & np.isfinite(half) & (half > 1e-4) & finite.all(axis=0)
+    # The phase map represents the combined HTP waveform, not M2.  The
+    # analytic-signal phase is the instantaneous phase of all constituents
+    # together; for a cosine it advances high(0) -> falling(.25) -> low(.5)
+    # -> rising(.75). It therefore preserves the direction a user cares about
+    # without imposing a fixed M2 frequency on a multi-constituent signal.
     phase = np.full_like(z, np.nan)
-    for k in range(count):
-        centered = (z[k] - (hi + lo) / 2) / half
-        phase[k] = (np.arctan2(-deriv[k] / (half * (2*np.pi/12.42)), centered) / (2*np.pi)) % 1.0
-        phase[k, ~valid] = np.nan
+    chunk = 50000
+    for left in range(0, z.shape[1], chunk):
+        right = min(z.shape[1], left + chunk)
+        ok = valid[left:right]
+        if not ok.any(): continue
+        analytic = hilbert(z[:, left:right], axis=0)
+        block = (np.angle(analytic) / (2*np.pi)) % 1.0
+        phase[:, left:right] = np.where(ok[None, :], block, np.nan)
 
     mx, my = mercator(x, y)
     # TIDE palette: high red, falling/yellow-green, low blue, rising back red.
@@ -91,7 +96,7 @@ def main():
         'pattern': 'native_phase/frame-{frame:03d}.png', 'frames': count,
         'width': args.width, 'height': args.height, 'projection': 'EPSG:3857',
         'bbox_mercator': [xmin, ymin, xmax, ymax],
-        'definition': 'native STOFS HTP local stage from complete horizon; depth>0; same native triangles as co-range'
+        'definition': 'combined-signal analytic phase (Hilbert transform) of complete native STOFS HTP horizon; depth>0; same native triangles as co-range'
     }
     args.forecast.write_text(json.dumps(payload, allow_nan=False, separators=(',', ':')))
     print(json.dumps({'frames': count, 'nodes': int(len(x)), 'triangles': int(tri_valid.sum()), 'out_dir': str(args.out_dir)}))
