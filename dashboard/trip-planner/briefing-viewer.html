@@ -683,7 +683,7 @@
     // instead of reusing an older cached JSON response.
     // Bump whenever the JSON artifact changes; otherwise a Pages/browser
     // cache can keep serving a pre-calibration tide field after HTML deploy.
-    const FORECAST_DATA_BUILD = 'native-stofs-mesh-20260901-t00-v1';
+    const FORECAST_DATA_BUILD = 'native-stofs-mesh-complete-20260901-t00-v2';
     const DEV_FORECAST_URL = `/trip-planner/data/${region}/briefing/forecast.json?v=${FORECAST_DATA_BUILD}`;
     const CORS_PROXY = 'https://corsproxy.io/?';
     const MAX_FORECAST_AGE_HOURS = 12;
@@ -1419,6 +1419,27 @@
     function drawNativeTidalContours(ctx) {
       const mesh = forecastData?.native_mesh;
       if (!mesh?.nodes?.length || !mesh?.triangles?.length || !mesh?.range_ft?.length) return false;
+      // Prefer server-generated contour paths for a complete native mesh.
+      // Iterating 2M triangles x 43 levels on the main thread freezes the
+      // viewer; the paths were generated from the same native triangles and
+      // ranges, so this is a rendering optimization, not a data fallback.
+      if (Array.isArray(mesh.native_contours) && mesh.native_contours.length) {
+        ctx.strokeStyle = 'rgba(230,245,255,0.95)';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([5, 4]);
+        for (const line of mesh.native_contours) {
+          const coords = line.coordinates || [];
+          if (coords.length < 2) continue;
+          ctx.beginPath();
+          coords.forEach((lonlat, i) => {
+            const p = map.getPixelFromCoordinate(ol.proj.fromLonLat(lonlat, mapProjection));
+            if (i === 0) ctx.moveTo(p[0], p[1]); else ctx.lineTo(p[0], p[1]);
+          });
+          ctx.stroke();
+        }
+        ctx.setLineDash([]);
+        return true;
+      }
       const vals = mesh.range_ft.filter(Number.isFinite).map(Number);
       if (!vals.length) return false;
       const step = 0.20;
