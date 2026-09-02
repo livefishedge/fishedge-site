@@ -1623,6 +1623,13 @@
       if (!image.complete || !image.naturalWidth) return true;
       const b = tiles.bbox_mercator;
       if (!Array.isArray(b) || b.length !== 4) return false;
+      // This path runs before the legacy grid renderer, so it must establish
+      // the same CSS-pixel/DPR canvas contract itself. Without this, the
+      // phase image is drawn in backing-pixel coordinates and disappears or
+      // is confined to the wrong portion of high-DPI viewports.
+      resizeOverlayCanvases();
+      const dpr = streamlineCanvas.width / Math.max(1, mapEl.clientWidth);
+      streamlineCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
       const p0 = map.getPixelFromCoordinate([b[0], b[3]]);
       const p1 = map.getPixelFromCoordinate([b[2], b[1]]);
       if (!p0 || !p1) return false;
