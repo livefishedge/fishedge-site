@@ -120,12 +120,14 @@ def main():
     # TIDE palette in B,G,R,A order for OpenCV. Rendering one fillPoly call
     # per palette bucket is orders of magnitude cheaper and more bounded than
     # asking Matplotlib to retain a half-million native paths per frame.
-    # Must match the viewer's TIDE scale exactly, in B,G,R,A order. Falling
-    # colors are darker than rising colors by design.
+    # Must match the viewer's TIDE scale exactly, in RGBA order. The canvas is
+    # an RGBA NumPy array passed to Pillow; using OpenCV's BGR convention here
+    # swaps red/blue in the shipped PNG and makes the map disagree with the
+    # colorbar. Falling colors are darker than rising colors by design.
     palette = np.array([
-        [39,48,215,255], [50,106,214,255], [63,181,212,255],
-        [69,159,95,255], [180,117,69,255], [106,214,155,255],
-        [138,240,255,255], [114,173,255,255], [39,48,215,255]
+        [215,48,39,255], [214,106,50,255], [212,181,63,255],
+        [95,159,69,255], [69,117,180,255], [155,214,106,255],
+        [255,240,138,255], [255,173,114,255], [215,48,39,255]
     ], dtype=np.uint8)
     tri_valid = np.isfinite(phase[0])[tri].all(axis=1)
     tri_indices = tri[tri_valid]
