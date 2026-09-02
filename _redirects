@@ -1,2 +1,4 @@
 /planner/* /dashboard/planner/:splat 200
+/trip-planner/briefing-viewer /dashboard/trip-planner/briefing-viewer.html 200
+/trip-planner/data/* /dashboard/trip-planner/data/:splat 200
 /subsurface-fronts/* /
