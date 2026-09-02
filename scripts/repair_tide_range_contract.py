@@ -7,6 +7,7 @@ every frame; no missing corner is interpolated across land.
 """
 import argparse
 import json
+import statistics
 from pathlib import Path
 
 
@@ -42,6 +43,32 @@ def main():
         ranges.append(range_row)
         wet_cells.append(mask_row)
 
+    # Reject isolated range spikes.  A single 8+ ft cell surrounded by ~4 ft
+    # cells is a remapping/calibration artifact, not a resolved tidal front.
+    # Keep this conservative: only reject a cell with at least four finite
+    # neighbors and a >1.5 ft / >45% departure from their median.
+    rejected = []
+    for yi in range(ny - 1):
+        for xi in range(nx - 1):
+            value = ranges[yi][xi]
+            if value is None:
+                continue
+            neighbors = []
+            for dy in (-1, 0, 1):
+                for dx in (-1, 0, 1):
+                    if not dx and not dy:
+                        continue
+                    yy, xx = yi + dy, xi + dx
+                    if 0 <= yy < ny - 1 and 0 <= xx < nx - 1 and ranges[yy][xx] is not None:
+                        neighbors.append(ranges[yy][xx])
+            if len(neighbors) < 4:
+                continue
+            median = statistics.median(neighbors)
+            if abs(value - median) > max(1.5, 0.45 * median):
+                ranges[yi][xi] = None
+                wet_cells[yi][xi] = False
+                rejected.append({"cell": [yi, xi], "range_ft": round(value, 4), "neighbor_median_ft": round(median, 4)})
+
     # Store the static range on every frame for backward-compatible viewers;
     # all copies are identical by construction.
     for frame in frames:
@@ -55,6 +82,7 @@ def main():
         "mask": "tide_water_cells; all four corners finite across the complete horizon",
         "missing_policy": "null; never interpolate land or missing corners",
         "frame_copy_invariant": True,
+        "spatial_outlier_qc": {"method": "8-neighbor median", "rejected_cells": rejected},
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(payload, allow_nan=False, separators=(",", ":")))
