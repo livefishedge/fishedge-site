@@ -687,8 +687,9 @@
     // instead of reusing an older cached JSON response.
     // Bump whenever the JSON artifact changes; otherwise a Pages/browser
     // cache can keep serving a pre-calibration tide field after HTML deploy.
-    const FORECAST_DATA_BUILD = 'native-stofs-mesh-complete-20260901-t00-v12-wave-footprint-75pct';
+    const FORECAST_DATA_BUILD = 'native-stofs-mesh-complete-20260901-t00-v13-wave-coast-mask';
     const DEV_FORECAST_URL = `/trip-planner/data/${region}/briefing/forecast.json?v=${FORECAST_DATA_BUILD}`;
+    const WAVE_MASK_URL = `/trip-planner/data/${region}/briefing/native_wave_mask.png?v=${FORECAST_DATA_BUILD}`;
     const CORS_PROXY = 'https://corsproxy.io/?';
     const MAX_FORECAST_AGE_HOURS = 12;
 
@@ -1011,6 +1012,7 @@
       const dataKey = productKey === 'wave_composite' ? (activeHeatKey() || def.dataKey) : (def.dataKey || productKey);
       const rasterDef = PRODUCTS[dataKey] || def;
       const oceanOnly = ['wave_height_ft', 'swell_height_ft', 'wind_wave_height_ft', 'astronomical_tide_ft'].includes(dataKey);
+      if (['wave_height_ft', 'swell_height_ft', 'wind_wave_height_ft'].includes(dataKey)) ensureWaveMaskImage();
       const grid = frame[dataKey];
       if (!grid || !grid.length || !grid[0].length) return;
       const lons = forecastData.lons, lats = forecastData.lats;
@@ -1114,6 +1116,7 @@
           }
         }
       }
+      if (['wave_height_ft', 'swell_height_ft', 'wind_wave_height_ft'].includes(dataKey)) clipTileToWaveMask(ctx, toX, toY);
     }
 
     // ---- colorbar ----
@@ -1627,6 +1630,38 @@
     }
 
     const nativePhaseImages = new Map();
+    let waveMaskImage = null;
+    function ensureWaveMaskImage() {
+      if (waveMaskImage !== null) return;
+      waveMaskImage = new Image();
+      waveMaskImage.onload = () => drawOverlaysForProduct();
+      waveMaskImage.onerror = () => { waveMaskImage = false; };
+      waveMaskImage.src = WAVE_MASK_URL;
+    }
+    function clipCanvasToWaveMask() {
+      if (!waveMaskImage || !waveMaskImage.complete || !waveMaskImage.naturalWidth) return;
+      const dpr = streamlineCanvas.width / Math.max(1, mapEl.clientWidth);
+      const b = forecastData?.display_bbox || forecastData?.bbox || [-77, 36, -72, 40];
+      const p0 = map.getPixelFromCoordinate(ol.proj.fromLonLat([b[0], b[3]], mapProjection));
+      const p1 = map.getPixelFromCoordinate(ol.proj.fromLonLat([b[2], b[1]], mapProjection));
+      if (!p0 || !p1) return;
+      streamlineCtx.save();
+      streamlineCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      streamlineCtx.globalCompositeOperation = 'destination-in';
+      streamlineCtx.drawImage(waveMaskImage, p0[0], p0[1], p1[0] - p0[0], p1[1] - p0[1]);
+      streamlineCtx.restore();
+      streamlineCtx.globalCompositeOperation = 'source-over';
+    }
+    function clipTileToWaveMask(ctx, toX, toY) {
+      if (!waveMaskImage || !waveMaskImage.complete || !waveMaskImage.naturalWidth) return;
+      const b = forecastData?.display_bbox || [-77, 36, -72, 40];
+      const x0 = toX(b[0]), x1 = toX(b[2]), y0 = toY(b[3]), y1 = toY(b[1]);
+      ctx.save();
+      ctx.globalCompositeOperation = 'destination-in';
+      ctx.drawImage(waveMaskImage, x0, y0, x1 - x0, y1 - y0);
+      ctx.restore();
+      ctx.globalCompositeOperation = 'source-over';
+    }
     function drawNativeTidePhaseOverlay() {
       const tiles = forecastData?.native_mesh?.phase_tiles;
       if (!tiles || !Number.isFinite(tiles.frames) || !tiles.pattern) return false;
@@ -1806,12 +1841,16 @@
         const dpr = flowCanvas.width / mapEl.clientWidth;
         streamlineCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
         flowCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        const heatKey = activeHeatKey();
+      const heatKey = activeHeatKey();
+      if (['wave_height_ft', 'swell_height_ft', 'wind_wave_height_ft'].includes(heatKey) ||
+          layerVisibility.swell || layerVisibility.wind_wave) ensureWaveMaskImage();
         const partitionCount = Number(!!layerVisibility.wind_wave) + Number(!!layerVisibility.swell);
         if (['wave_height_ft', 'temperature_f', 'pressure_hpa', 'astronomical_tide_ft'].includes(heatKey)) drawWaveHeatOverlay();
         if (partitionCount === 1 && heatKey === 'wind_wave_height_ft' && layerVisibility.wind_wave) drawPartitionMagnitudeHeat('wind_wave');
-        if (partitionCount === 1 && heatKey === 'swell_height_ft' && layerVisibility.swell) drawPartitionMagnitudeHeat('swell');
-        if (layerVisibility.swell || layerVisibility.wind_wave) drawWavePackets();
+      if (partitionCount === 1 && heatKey === 'swell_height_ft' && layerVisibility.swell) drawPartitionMagnitudeHeat('swell');
+      if (layerVisibility.swell || layerVisibility.wind_wave) drawWavePackets();
+      if (['wave_height_ft', 'swell_height_ft', 'wind_wave_height_ft'].includes(heatKey) ||
+          layerVisibility.swell || layerVisibility.wind_wave) clipCanvasToWaveMask();
         if (layerVisibility.pressure) drawIsobars(true);
         if (layerVisibility.wind) drawStreamlines(true);
         wavePacketRaf = requestAnimationFrame(tick);

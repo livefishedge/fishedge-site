@@ -5,8 +5,9 @@ from pathlib import Path
 import cv2
 import numpy as np
 from scipy.io import netcdf_file
+from PIL import Image
 
-def build_mask(payload, mesh_path, depth_path, scale=100):
+def build_mask(payload, mesh_path, depth_path, scale=100, mask_output=None):
     lats = np.asarray(payload['lats'], float); lons = np.asarray(payload['lons'], float)
     mesh = np.load(mesh_path, allow_pickle=False)
     nodes = np.column_stack((mesh['x'], mesh['y'])).astype(float)
@@ -27,6 +28,9 @@ def build_mask(payload, mesh_path, depth_path, scale=100):
     for chunk in np.array_split(triangles, max(1, len(triangles)//20000)):
         poly = np.rint(np.stack((px[chunk], py[chunk]), axis=2)).astype(np.int32)
         cv2.fillPoly(canvas, poly, 1)
+    if mask_output:
+        mask_output.parent.mkdir(parents=True, exist_ok=True)
+        Image.fromarray(canvas * 255, mode='L').save(mask_output, optimize=True)
     # Require at least 75% of the cell to be native wet area.  “Any
     # intersection” admits tiny offshore/shoreline slivers and visibly paints
     # wave colors across land at this coarse grid spacing.
@@ -36,7 +40,8 @@ def build_mask(payload, mesh_path, depth_path, scale=100):
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument('input', type=Path); ap.add_argument('outputs', nargs='+', type=Path)
     ap.add_argument('--mesh', type=Path, required=True); ap.add_argument('--depth-source', type=Path, required=True)
-    args = ap.parse_args(); payload = json.loads(args.input.read_text()); mask = build_mask(payload, args.mesh, args.depth_source)
+    ap.add_argument('--mask-output', type=Path)
+    args = ap.parse_args(); payload = json.loads(args.input.read_text()); mask = build_mask(payload, args.mesh, args.depth_source, mask_output=args.mask_output)
     payload['wave_water_cells'] = mask
     payload['wave_water_mask_contract'] = {'kind':'native_mesh_cell_footprint', 'source':'native mesh wet triangles (positive native depth)', 'purpose':'wave, swell, wind-wave and significant-wave-height overlays', 'cell_rule':'cell is drawable when native wet coverage is at least 75 percent', 'tidal_mask_separate':True}
     encoded = json.dumps(payload, allow_nan=False, separators=(',', ':'))
