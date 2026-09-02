@@ -10,7 +10,6 @@ import argparse, json
 from pathlib import Path
 import numpy as np
 from scipy.io import netcdf_file
-from scipy.signal import hilbert
 import matplotlib.pyplot as plt
 import matplotlib.tri as mtri
 from matplotlib.colors import ListedColormap, Normalize
@@ -59,20 +58,23 @@ def main():
     hi[good] = np.nanmax(np.where(finite[:, good], z[:, good], np.nan), axis=0)
     half = (hi - lo) / 2
     valid = good & np.isfinite(half) & (half > 1e-4) & finite.all(axis=0)
-    # The phase map represents the combined HTP waveform, not M2.  The
-    # analytic-signal phase is the instantaneous phase of all constituents
-    # together; for a cosine it advances high(0) -> falling(.25) -> low(.5)
-    # -> rising(.75). It therefore preserves the direction a user cares about
-    # without imposing a fixed M2 frequency on a multi-constituent signal.
+    # The phase map represents the combined HTP waveform, not M2. There is no
+    # unique harmonic phase for a multi-constituent signal, and a Hilbert
+    # transform creates severe edge artifacts at the first/last forecast
+    # frame. Use the total signal value plus its edge-safe time derivative:
+    # high(0) -> falling(.25) -> low(.5) -> rising(.75). The M2 period below
+    # is only a dimensionless slope normalization; all constituents remain in
+    # z and determine the actual direction.
     phase = np.full_like(z, np.nan)
-    chunk = 50000
-    for left in range(0, z.shape[1], chunk):
-        right = min(z.shape[1], left + chunk)
-        ok = valid[left:right]
-        if not ok.any(): continue
-        analytic = hilbert(z[:, left:right], axis=0)
-        block = (np.angle(analytic) / (2*np.pi)) % 1.0
-        phase[:, left:right] = np.where(ok[None, :], block, np.nan)
+    derivative = np.empty_like(z)
+    derivative[1:-1] = (z[2:] - z[:-2]) / 2.0
+    derivative[0] = z[1] - z[0]
+    derivative[-1] = z[-1] - z[-2]
+    omega_ref = 2 * np.pi / 12.42
+    for k in range(count):
+        centered = z[k] - (hi + lo) / 2
+        phase[k] = (np.arctan2(-derivative[k], centered * omega_ref) / (2*np.pi)) % 1.0
+        phase[k, ~valid] = np.nan
 
     mx, my = mercator(x, y)
     # TIDE palette: high red, falling/yellow-green, low blue, rising back red.
@@ -96,7 +98,7 @@ def main():
         'pattern': 'native_phase/frame-{frame:03d}.png', 'frames': count,
         'width': args.width, 'height': args.height, 'projection': 'EPSG:3857',
         'bbox_mercator': [xmin, ymin, xmax, ymax],
-        'definition': 'combined-signal analytic phase (Hilbert transform) of complete native STOFS HTP horizon; depth>0; same native triangles as co-range'
+        'definition': 'combined-signal stage from total HTP value and edge-safe time derivative; high/falling/low/rising; same native triangles as co-range'
     }
     args.forecast.write_text(json.dumps(payload, allow_nan=False, separators=(',', ':')))
     print(json.dumps({'frames': count, 'nodes': int(len(x)), 'triangles': int(tri_valid.sum()), 'out_dir': str(args.out_dir)}))
