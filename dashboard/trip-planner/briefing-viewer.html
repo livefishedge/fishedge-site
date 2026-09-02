@@ -1634,7 +1634,14 @@
     function ensureWaveMaskImage() {
       if (waveMaskImage !== null) return;
       waveMaskImage = new Image();
-      waveMaskImage.onload = () => { drawOverlaysForProduct(); map.render(); };
+      waveMaskImage.onload = () => {
+        drawOverlaysForProduct();
+        // ImageCanvas caches rendered canvases by extent/resolution. A plain
+        // map.render() can reuse the old unmasked raster, so invalidate the
+        // source explicitly after the asynchronous coastline mask arrives.
+        rasterLayer?.getSource()?.changed();
+        map.render();
+      };
       waveMaskImage.onerror = () => { waveMaskImage = false; };
       waveMaskImage.src = WAVE_MASK_URL;
     }
