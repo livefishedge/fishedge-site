@@ -687,7 +687,7 @@
     // instead of reusing an older cached JSON response.
     // Bump whenever the JSON artifact changes; otherwise a Pages/browser
     // cache can keep serving a pre-calibration tide field after HTML deploy.
-    const FORECAST_DATA_BUILD = 'wave-product-validity-coast-mask-v17';
+    const FORECAST_DATA_BUILD = 'wave-product-validity-coast-mask-v18-fine';
     const DEV_FORECAST_URL = `/trip-planner/data/${region}/briefing/forecast.json?v=${FORECAST_DATA_BUILD}`;
     const WAVE_MASK_URL = `/trip-planner/data/${region}/briefing/native_wave_mask.png?v=${FORECAST_DATA_BUILD}`;
     const CORS_PROXY = 'https://corsproxy.io/?';
@@ -1636,6 +1636,13 @@
       if (!grid || !lons || !lats) return;
       const scale = PRODUCTS[scalarKey]?.scale || 'UV';
       const r = activeRange || { vmin: 0, vmax: scalarKey === 'temperature_f' ? 90 : 6 };
+      // Wave products are rendered on a fine display mesh below.  Keep the
+      // legacy quad path for non-wave scalar layers only; the old whole-cell
+      // quads were the source of coarse shoreline cutoffs and land blocks.
+      if (['wave_height_ft', 'swell_height_ft', 'wind_wave_height_ft'].includes(scalarKey)) {
+        drawFineWaveHeatGrid(scalarKey, grid, lons, lats, scale, r, 4, 0.62);
+        return;
+      }
       for (let yi = 0; yi < lats.length - 1; yi++) {
         for (let xi = 0; xi < lons.length - 1; xi++) {
           const vals = [grid[yi]?.[xi], grid[yi]?.[xi + 1], grid[yi + 1]?.[xi], grid[yi + 1]?.[xi + 1]];
@@ -1663,6 +1670,50 @@
           streamlineCtx.moveTo(p00[0], p00[1]); streamlineCtx.lineTo(p10[0], p10[1]);
           streamlineCtx.lineTo(p11[0], p11[1]); streamlineCtx.lineTo(p01[0], p01[1]);
           streamlineCtx.closePath(); streamlineCtx.fill();
+        }
+      }
+    }
+
+    // Interpolate each valid source cell onto a small display mesh, then let
+    // clipCanvasToWaveMask() remove land pixels.  Source validity and
+    // coastline visibility are intentionally separate: a valid calm-water
+    // value of zero is retained, while null/NaN corners are never invented.
+    function drawFineWaveHeatGrid(key, grid, lons, lats, scale, range, subdivisions = 4, alpha = 0.62) {
+      const projected = lats.map((lat, yi) => lons.map((lon, xi) =>
+        map.getPixelFromCoordinate(ol.proj.fromLonLat([lon, lat], mapProjection))));
+      const finite = v => Number.isFinite(v);
+      const paint = (points, value) => {
+        if (!points || points.length < 3 || !finite(value)) return;
+        const c = hexToRgb(sampleScale(scale, Math.max(0, Math.min(1,
+          scalarNorm(convertDisplayValue(key, value), range.vmin, range.vmax, scale)))));
+        streamlineCtx.fillStyle = `rgba(${c[0]},${c[1]},${c[2]},${alpha})`;
+        streamlineCtx.beginPath(); streamlineCtx.moveTo(points[0][0], points[0][1]);
+        for (const p of points.slice(1)) streamlineCtx.lineTo(p[0], p[1]);
+        streamlineCtx.closePath(); streamlineCtx.fill();
+      };
+      for (let yi = 0; yi < lats.length - 1; yi++) for (let xi = 0; xi < lons.length - 1; xi++) {
+        const v00 = grid[yi]?.[xi], v10 = grid[yi]?.[xi + 1];
+        const v11 = grid[yi + 1]?.[xi + 1], v01 = grid[yi + 1]?.[xi];
+        const vals = [v00, v10, v11, v01];
+        const corners = [projected[yi][xi], projected[yi][xi + 1], projected[yi + 1][xi + 1], projected[yi + 1][xi]];
+        if (corners.some(p => !p)) continue;
+        if (vals.every(finite)) {
+          for (let sy = 0; sy < subdivisions; sy++) for (let sx = 0; sx < subdivisions; sx++) {
+            const u0 = sx / subdivisions, u1 = (sx + 1) / subdivisions;
+            const v0 = sy / subdivisions, v1 = (sy + 1) / subdivisions;
+            const bilinear = (u, v) => v00 * (1-u) * (1-v) + v10 * u * (1-v) + v11 * u * v + v01 * (1-u) * v;
+            const point = (u, v) => [
+              corners[0][0] * (1-u) * (1-v) + corners[1][0] * u * (1-v) + corners[2][0] * u * v + corners[3][0] * (1-u) * v,
+              corners[0][1] * (1-u) * (1-v) + corners[1][1] * u * (1-v) + corners[2][1] * u * v + corners[3][1] * (1-u) * v
+            ];
+            paint([point(u0,v0), point(u1,v0), point(u1,v1), point(u0,v1)],
+              (bilinear(u0,v0) + bilinear(u1,v0) + bilinear(u1,v1) + bilinear(u0,v1)) / 4);
+          }
+        } else {
+          // A shoreline/source gap is represented only by the finite source
+          // triangle; do not extrapolate a missing corner across the cell.
+          const finiteIds = vals.map(finite).map((ok, i) => ok ? i : -1).filter(i => i >= 0);
+          if (finiteIds.length >= 3) paint(finiteIds.map(i => corners[i]), finiteIds.reduce((sum, i) => sum + vals[i], 0) / finiteIds.length);
         }
       }
     }
@@ -1781,19 +1832,7 @@
         partitionRanges.set(cacheKey, range);
       }
       const grid = currentFrame[key], lons = forecastData.lons, lats = forecastData.lats;
-      for (let yi = 0; yi < lats.length - 1; yi++) for (let xi = 0; xi < lons.length - 1; xi++) {
-        const vals = [grid[yi]?.[xi], grid[yi]?.[xi + 1], grid[yi + 1]?.[xi], grid[yi + 1]?.[xi + 1]];
-        if (!vals.every(Number.isFinite)) continue;
-        const value = convertDisplayValue(key, vals.reduce((a, b) => a + b, 0) / vals.length);
-        const c = hexToRgb(sampleScale('UV', Math.max(0, Math.min(1, (value - range.vmin) / (range.vmax - range.vmin)))));
-        const points = [[lons[xi], lats[yi]], [lons[xi + 1], lats[yi]], [lons[xi + 1], lats[yi + 1]], [lons[xi], lats[yi + 1]]]
-          .map(coord => map.getPixelFromCoordinate(ol.proj.fromLonLat(coord, mapProjection)));
-        if (points.some(p => !p)) continue;
-        streamlineCtx.fillStyle = `rgba(${c[0]},${c[1]},${c[2]},0.30)`;
-        streamlineCtx.beginPath(); streamlineCtx.moveTo(points[0][0], points[0][1]);
-        for (const p of points.slice(1)) streamlineCtx.lineTo(p[0], p[1]);
-        streamlineCtx.closePath(); streamlineCtx.fill();
-      }
+      drawFineWaveHeatGrid(key, grid, lons, lats, 'UV', range, 4, 0.30);
     }
 
     let wavePackets = null;
