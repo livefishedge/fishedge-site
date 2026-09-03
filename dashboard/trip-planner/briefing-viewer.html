@@ -703,7 +703,7 @@
     // instead of reusing an older cached JSON response.
     // Bump whenever the JSON artifact changes; otherwise a Pages/browser
     // cache can keep serving a pre-calibration tide field after HTML deploy.
-    const FORECAST_DATA_BUILD = 'wave-product-validity-coast-mask-v22-packet-spacing';
+    const FORECAST_DATA_BUILD = 'wave-product-validity-coast-mask-v23-tide-opacity-choppy-wave';
     const DEV_FORECAST_URL = `/trip-planner/data/${region}/briefing/forecast.json?v=${FORECAST_DATA_BUILD}`;
     const WAVE_MASK_URL = `/trip-planner/data/${region}/briefing/native_wave_mask.png?v=${FORECAST_DATA_BUILD}`;
     const CORS_PROXY = 'https://corsproxy.io/?';
@@ -1905,7 +1905,9 @@
       if (!(w > 0 && h > 0)) return false;
       // Valid phase pixels are opaque so their colors match the colorbar;
       // transparency remains only in empty pixels outside valid water.
-      streamlineCtx.globalAlpha = 1;
+      // Keep the astronomical stage visible while allowing the basemap's
+      // roads, labels, ports, and other local structure to remain readable.
+      streamlineCtx.globalAlpha = 0.78;
       streamlineCtx.drawImage(image, p0[0], p0[1], w, h);
       streamlineCtx.globalAlpha = 1;
       return true;
@@ -1967,7 +1969,7 @@
       ensureWavePackets();
       const styles = {
         swell: { stroke: 'rgba(0, 0, 0, 0.95)', width: 1.5, half: 0.14, max: 4.0 },
-        wind_wave: { stroke: 'rgba(255, 105, 180, 0.92)', width: 1.25, half: 0.105, max: 2.0 },
+        wind_wave: { stroke: 'rgba(255, 105, 180, 0.92)', width: 1.25, half: 0.070, max: 2.0 },
       };
       const occupied = { swell: [], wind_wave: [] };
       for (const packet of wavePackets) {
@@ -2270,7 +2272,7 @@
       const stride = 1;
       const phasePeriod = 8;
       const phase = frameIdx % phasePeriod;
-      const crestHalfLength = kind === 'swell' ? 0.13 : 0.10;
+      const crestHalfLength = kind === 'swell' ? 0.13 : 0.07;
       const maxSpeed = kind === 'swell' ? 4.0 : 2.0;
       for (let yi = 1; yi < lats.length - 1; yi += stride) {
         for (let xi = 1; xi < lons.length - 1; xi += stride) {
