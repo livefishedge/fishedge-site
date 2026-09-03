@@ -40,6 +40,8 @@ def main():
                     help='Web-Mercator tile zoom for the browser asset pyramid')
     ap.add_argument('--tile-size', type=int, default=512,
                     help='pixel size of each native stage tile')
+    ap.add_argument('--hotspot-bbox', type=float, nargs=4, metavar=('WEST','SOUTH','EAST','NORTH'),
+                    help='optional WGS84 bbox for a selective high-resolution patch')
     args = ap.parse_args()
 
     mesh = dict(np.load(args.mesh_cache, allow_pickle=False))
@@ -158,7 +160,11 @@ def main():
     # with subtly different clipped extents.
     contour_points = [point for line in forecast_payload.get('native_mesh', {}).get('native_contours', [])
                       for point in line.get('coordinates', [])]
-    if contour_points:
+    if args.hotspot_bbox:
+        west, south, east, north = args.hotspot_bbox
+        xmin, ymin = mercator(west, south)
+        xmax, ymax = mercator(east, north)
+    elif contour_points:
         contour_x, contour_y = mercator(np.asarray([p[0] for p in contour_points]),
                                         np.asarray([p[1] for p in contour_points]))
         xmin, xmax = float(contour_x.min()), float(contour_x.max())
@@ -223,7 +229,7 @@ def main():
         if k % 4 == 3:
             gc.collect()
     payload = forecast_payload
-    payload.setdefault('native_mesh', {})['phase_tiles'] = {
+    phase_manifest = {
         'pattern': f'native_phase_tiles/z{args.tile_zoom}/{{x}}/{{y}}/frame-{{frame:03d}}.png',
         'frames': count, 'tile_zoom': args.tile_zoom, 'tile_size': args.tile_size,
         'tile_indices': tile_indices, 'width': args.width, 'height': args.height,
@@ -234,6 +240,19 @@ def main():
         'extension_method': ('eight-constituent least-squares continuation of native HTP'
                              if extension_hours else 'none')
     }
+    native_payload = payload.setdefault('native_mesh', {})
+    if args.hotspot_bbox:
+        # Keep the nationwide/base atlas untouched; selective patches are
+        # loaded only after the map zooms into this bbox.
+        existing = native_payload.setdefault('phase_tiles', {})
+        patches = existing.setdefault('patches', [])
+        patch = dict(phase_manifest)
+        patch['hotspot_bbox'] = [float(v) for v in args.hotspot_bbox]
+        patches[:] = [p for p in patches if p.get('tile_zoom') != args.tile_zoom or p.get('hotspot_bbox') != patch['hotspot_bbox']]
+        patches.append(patch)
+        native_payload['phase_tiles'] = existing
+    else:
+        native_payload['phase_tiles'] = phase_manifest
     args.forecast.write_text(json.dumps(payload, allow_nan=False, separators=(',', ':')))
     print(json.dumps({'frames': count, 'nodes': int(len(x)), 'triangles': int(tri_valid.sum()), 'out_dir': str(args.out_dir)}))
 
