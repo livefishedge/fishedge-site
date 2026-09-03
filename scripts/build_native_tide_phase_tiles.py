@@ -138,7 +138,11 @@ def main():
         [95,159,69,255], [69,117,180,255], [155,214,106,255],
         [255,240,138,255], [255,173,114,255], [215,48,39,255]
     ], dtype=np.uint8)
-    tri_valid = np.isfinite(phase[0])[tri].all(axis=1)
+    # Match the co-range contour builder exactly: a face belongs to the
+    # footprint when all three of its nodes have a finite native range. Do
+    # not use frame 0 phase finiteness here; a missing value in one phase
+    # frame must not make that coastal face disappear from the atlas.
+    tri_valid = valid[tri].all(axis=1)
     tri_indices = tri[tri_valid]
     # Anchor the raster to the same valid native wet-face envelope used by
     # the contour product. The full mesh cache includes a narrow outer frame
@@ -189,9 +193,11 @@ def main():
         # native triangle in unit-vector space and paint one face value. This
         # removes the false bands caused by linear interpolation through 0.5.
         values = phase[k][tri_indices]
-        face_phase = np.mod(np.arctan2(np.sin(values * 2*np.pi).sum(axis=1),
-                                       np.cos(values * 2*np.pi).sum(axis=1)) / (2*np.pi), 1.0)
-        buckets = np.minimum(8, (face_phase * 9).astype(np.int32))
+        face_phase = np.mod(np.arctan2(np.nansum(np.sin(values * 2*np.pi), axis=1),
+                                       np.nansum(np.cos(values * 2*np.pi), axis=1)) / (2*np.pi), 1.0)
+        buckets = np.full(len(face_phase), -1, dtype=np.int32)
+        finite_faces = np.isfinite(face_phase)
+        buckets[finite_faces] = np.minimum(8, (face_phase[finite_faces] * 9).astype(np.int32))
         for tile in tile_indices:
             tx, ty = tile['x'], tile['y']
             tile_img = np.zeros((args.tile_size, args.tile_size, 4), dtype=np.uint8)
