@@ -694,7 +694,7 @@
     // instead of reusing an older cached JSON response.
     // Bump whenever the JSON artifact changes; otherwise a Pages/browser
     // cache can keep serving a pre-calibration tide field after HTML deploy.
-    const FORECAST_DATA_BUILD = 'wave-product-validity-coast-mask-v21-projected-source';
+    const FORECAST_DATA_BUILD = 'wave-product-validity-coast-mask-v22-packet-spacing';
     const DEV_FORECAST_URL = `/trip-planner/data/${region}/briefing/forecast.json?v=${FORECAST_DATA_BUILD}`;
     const WAVE_MASK_URL = `/trip-planner/data/${region}/briefing/native_wave_mask.png?v=${FORECAST_DATA_BUILD}`;
     const CORS_PROXY = 'https://corsproxy.io/?';
@@ -1917,6 +1917,10 @@
     let wavePackets = null;
     let wavePacketRaf = 0;
     let wavePacketLastTs = 0;
+    // Keep the initial frame from presenting a wall of crests.  The packets
+    // still advect continuously; these limits only control visual density.
+    const WAVE_PACKET_TARGETS = { swell: 54, wind_wave: 54 };
+    const WAVE_PACKET_MIN_SPACING_PX = { swell: 42, wind_wave: 34 };
 
     function ensureWavePackets() {
       if (wavePackets) return;
@@ -1924,8 +1928,10 @@
       for (const kind of ['swell', 'wind_wave']) {
         // Seed the initial visible population through the same source model
         // used for later births; do not paint an unweighted uniform cloud.
-        for (let i = 0; i < 90; i++) {
-          const packet = { kind, lon: bbox[0], lat: bbox[1], age: Math.random() * 12000 };
+        for (let i = 0; i < WAVE_PACKET_TARGETS[kind]; i++) {
+          // Start with a distributed age so packet births do not synchronize
+          // when the animation is first enabled.
+          const packet = { kind, lon: bbox[0], lat: bbox[1], age: Math.random() * 6000 };
           respawnWavePacket(packet);
           wavePackets.push(packet);
         }
@@ -1938,6 +1944,7 @@
         swell: { stroke: 'rgba(0, 0, 0, 0.95)', width: 1.5, half: 0.14, max: 4.0 },
         wind_wave: { stroke: 'rgba(255, 105, 180, 0.92)', width: 1.25, half: 0.105, max: 2.0 },
       };
+      const occupied = { swell: [], wind_wave: [] };
       for (const packet of wavePackets) {
         if (!layerVisibility[packet.kind]) continue;
         if (!isOceanPoint(packet.lon, packet.lat, packet.kind)) continue;
@@ -1955,6 +1962,16 @@
           packet.lon + tx * s.half / cosLat, packet.lat + ty * s.half
         ], mapProjection));
         if (!c || !p0 || !p1) continue;
+        // Enforce spacing in screen coordinates, where the user actually
+        // perceives the segments. This prevents a dense burst when several
+        // valid source cells happen to respawn together, while preserving
+        // the underlying packet trajectories and source values.
+        const minSpacing = WAVE_PACKET_MIN_SPACING_PX[packet.kind];
+        const tooClose = occupied[packet.kind].some(q =>
+          Math.hypot(c[0] - q[0], c[1] - q[1]) < minSpacing
+        );
+        if (tooClose) continue;
+        occupied[packet.kind].push(c);
         streamlineCtx.globalAlpha = 0.48 + 0.42 * Math.min(1, vec.speed / s.max);
         streamlineCtx.strokeStyle = s.stroke;
         streamlineCtx.lineWidth = s.width;
