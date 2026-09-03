@@ -2410,7 +2410,10 @@
 
     function resizeOverlayCanvases() {
       const rect = mapEl.getBoundingClientRect();
-      const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+      // Keep zoom/resize redraws within a bounded canvas memory budget. Two
+      // animated canvases plus the tide canvas at DPR 2 can exceed mobile
+      // GPU limits and take the page down during a zoom gesture.
+      const dpr = Math.max(1, Math.min(1.5, window.devicePixelRatio || 1));
       const W = Math.max(1, Math.round(rect.width * dpr));
       const H = Math.max(1, Math.round(rect.height * dpr));
       [flowCanvas, streamlineCanvas, tideCanvas].forEach(c => {
@@ -2895,11 +2898,22 @@
     }
     playBtn.addEventListener('click', () => { playTimer ? pause() : play(); });
 
-    map.on('moveend', () => { drawOverlaysForProduct(); });
+    // Zoom gestures can emit several view events in quick succession. Queue
+    // one redraw after the gesture settles instead of rebuilding all overlay
+    // canvases repeatedly in the same burst.
+    let overlayRedrawTimer = 0;
+    function scheduleOverlayRedraw() {
+      if (overlayRedrawTimer) clearTimeout(overlayRedrawTimer);
+      overlayRedrawTimer = setTimeout(() => {
+        overlayRedrawTimer = 0;
+        drawOverlaysForProduct();
+      }, 80);
+    }
+    map.on('moveend', scheduleOverlayRedraw);
     map.on('change:size', () => {
       // re-seed particles to new viewport area, redraw
       seedWindParticles();
-      drawOverlaysForProduct();
+      scheduleOverlayRedraw();
     });
 
     // ---- bootstrap ----
