@@ -42,12 +42,14 @@
       box-shadow:0 4px 16px rgba(0,0,0,0.62); padding:0;
     }
     #bv-menu-panel{
-      position:fixed; top:54px; right:8px; z-index:2200;
+      /* Open upward from above the timeline so the layer menu never covers
+         the time-progress controls at the bottom of the viewport. */
+      position:fixed; top:auto; bottom:116px; right:8px; z-index:2200;
       width:clamp(280px, 82vw, 360px); max-width:calc(100vw - 16px); min-width:280px;
       display:none; flex-direction:column; gap:10px; padding:12px;
       background:rgba(5,11,16,0.94); border:1px solid rgba(255,255,255,0.22); border-radius:8px;
       box-shadow:0 12px 30px rgba(0,0,0,0.45); backdrop-filter:blur(8px);
-      box-sizing:border-box; max-height:min(640px, calc(100dvh - 66px)); overflow:auto;
+      box-sizing:border-box; max-height:min(640px, calc(100dvh - 124px)); overflow:auto;
       touch-action:pan-y !important; overscroll-behavior:contain; -webkit-text-size-adjust:100%; zoom:1 !important;
     }
     #bv-menu-panel.open{ display:flex; }
@@ -182,7 +184,7 @@
         <label title="Total significant wave height combines the sea-state wave energy, including wind waves and swell"><input type="checkbox" data-layer="wave_height" checked><span class="bv-dot dot-wave"></span>Significant Wave Height <button class="bv-unit-toggle" type="button" data-unit-key="wave_height_ft">ft</button></label>
       </div>
     </div>
-    <div class="bv-status" id="bv-menu-status">Loading…</div>
+    <div class="bv-status" id="bv-menu-status"></div>
     <div id="bv-side-panel" aria-label="Tide and moon briefing">
     <div class="bv-section">
       <h3>Moon</h3>
