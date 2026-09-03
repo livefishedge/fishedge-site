@@ -1968,8 +1968,8 @@
     function drawWavePackets() {
       ensureWavePackets();
       const styles = {
-        swell: { stroke: 'rgba(0, 0, 0, 0.95)', width: 1.5, half: 0.14, max: 4.0 },
-        wind_wave: { stroke: 'rgba(255, 105, 180, 0.92)', width: 1.25, half: 0.070, max: 2.0 },
+        swell: { stroke: 'rgba(0, 0, 0, 0.95)', width: 1.5, half: 0.14, max: 4.0, dash: [] },
+        wind_wave: { stroke: 'rgba(255, 105, 180, 0.92)', width: 1.25, half: 0.14, max: 2.0, dash: [4, 3] },
       };
       const occupied = { swell: [], wind_wave: [] };
       for (const packet of wavePackets) {
@@ -2002,12 +2002,14 @@
         streamlineCtx.globalAlpha = 0.48 + 0.42 * Math.min(1, vec.speed / s.max);
         streamlineCtx.strokeStyle = s.stroke;
         streamlineCtx.lineWidth = s.width;
+        streamlineCtx.setLineDash(s.dash);
         streamlineCtx.lineCap = 'round';
         streamlineCtx.beginPath();
         streamlineCtx.moveTo(p0[0], p0[1]);
         streamlineCtx.lineTo(p1[0], p1[1]);
         streamlineCtx.stroke();
       }
+      streamlineCtx.setLineDash([]);
       streamlineCtx.globalAlpha = 1;
     }
 
@@ -2278,8 +2280,9 @@
       const stride = 1;
       const phasePeriod = 8;
       const phase = frameIdx % phasePeriod;
-      const crestHalfLength = kind === 'swell' ? 0.13 : 0.07;
+      const crestHalfLength = 0.13;
       const maxSpeed = kind === 'swell' ? 4.0 : 2.0;
+      streamlineCtx.setLineDash(kind === 'wind_wave' ? [4, 3] : []);
       for (let yi = 1; yi < lats.length - 1; yi += stride) {
         for (let xi = 1; xi < lons.length - 1; xi += stride) {
           // Animate packets through the lattice instead of drawing every
@@ -2313,6 +2316,7 @@
           streamlineCtx.stroke();
         }
       }
+      streamlineCtx.setLineDash([]);
       streamlineCtx.globalAlpha = 1;
     }
 
