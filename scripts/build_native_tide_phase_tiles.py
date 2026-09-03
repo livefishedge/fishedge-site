@@ -135,7 +135,13 @@ def main():
     ], dtype=np.uint8)
     tri_valid = np.isfinite(phase[0])[tri].all(axis=1)
     tri_indices = tri[tri_valid]
-    xmin, xmax = float(mx.min()), float(mx.max()); ymin, ymax = float(my.min()), float(my.max())
+    # Anchor the raster to the same valid native wet-face envelope used by
+    # the contour product. The full mesh cache includes a narrow outer frame
+    # of boundary/land nodes; using it as the image extent subtly shifts the
+    # apparent shoreline relative to native co-range contours.
+    valid_nodes = np.unique(tri_indices)
+    xmin, xmax = float(mx[valid_nodes].min()), float(mx[valid_nodes].max())
+    ymin, ymax = float(my[valid_nodes].min()), float(my[valid_nodes].max())
     px = np.rint((mx - xmin) / (xmax - xmin) * (args.width - 1)).astype(np.int32)
     py = np.rint((ymax - my) / (ymax - ymin) * (args.height - 1)).astype(np.int32)
     pixel_triangles = np.stack((px[tri_indices], py[tri_indices]), axis=2)
