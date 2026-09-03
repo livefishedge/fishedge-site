@@ -154,9 +154,6 @@ def main():
                                         np.asarray([p[1] for p in contour_points]))
         xmin, xmax = float(contour_x.min()), float(contour_x.max())
         ymin, ymax = float(contour_y.min()), float(contour_y.max())
-    px = np.rint((mx - xmin) / (xmax - xmin) * (args.width - 1)).astype(np.int32)
-    py = np.rint((ymax - my) / (ymax - ymin) * (args.height - 1)).astype(np.int32)
-    pixel_triangles = np.stack((px[tri_indices], py[tri_indices]), axis=2)
     args.out_dir.mkdir(parents=True, exist_ok=True)
     world = 2 * np.pi * R
     tile_n = 2 ** args.tile_zoom
@@ -168,6 +165,19 @@ def main():
     tile_indices = [{'x': tx, 'y': ty} for tx in range(tx0, tx1 + 1)
                     for ty in range(ty0, ty1 + 1)]
     tile_root = args.out_dir.parent / f'{args.out_dir.name}_tiles' / f'z{args.tile_zoom}'
+    # Project vertices directly into the global XYZ tile pixel coordinate
+    # system.  The previous implementation rasterized into a cropped bbox,
+    # then resized/cropped that image into tiles; that made the valid-face
+    # shoreline subtly disagree with the vector co-range geometry at tile
+    # boundaries.  Direct tile-pixel projection has one authoritative
+    # Web-Mercator transform on both the generator and the browser.
+    gx = (mx + world / 2) / tile_world * args.tile_size
+    gy = (world / 2 - my) / tile_world * args.tile_size
+    global_triangles = np.stack((gx[tri_indices], gy[tri_indices]), axis=2)
+    tri_x0 = global_triangles[:, :, 0].min(axis=1)
+    tri_x1 = global_triangles[:, :, 0].max(axis=1)
+    tri_y0 = global_triangles[:, :, 1].min(axis=1)
+    tri_y1 = global_triangles[:, :, 1].max(axis=1)
     for k in range(count):
         # Phase is circular. Never interpolate scalar phase values across the
         # 0/1 seam (0.99 and 0.01 are neighbours, not opposites). Reduce each
@@ -176,44 +186,28 @@ def main():
         values = phase[k][tri_indices]
         face_phase = np.mod(np.arctan2(np.sin(values * 2*np.pi).sum(axis=1),
                                        np.cos(values * 2*np.pi).sum(axis=1)) / (2*np.pi), 1.0)
-        canvas = np.zeros((args.height, args.width, 4), dtype=np.uint8)
         buckets = np.minimum(8, (face_phase * 9).astype(np.int32))
-        for bucket in range(9):
-            selected = pixel_triangles[buckets == bucket]
-            if len(selected):
-                cv2.fillPoly(canvas, selected, tuple(int(v) for v in palette[bucket]))
-        # Save optimized RGBA PNG; no axes/background pixels are shipped.
-        # The tile pyramid is cut from this native-triangle raster, not from
-        # the legacy regular-grid tide field. Land/invalid triangles retain
-        # alpha=0 all the way into the browser.
-        full = Image.fromarray(canvas, mode='RGBA')
         for tile in tile_indices:
             tx, ty = tile['x'], tile['y']
-            wx0 = tx * tile_world - world / 2
-            wx1 = (tx + 1) * tile_world - world / 2
-            wy1 = world / 2 - ty * tile_world
-            wy0 = world / 2 - (ty + 1) * tile_world
-            sx0 = (wx0 - xmin) / (xmax - xmin) * (args.width - 1)
-            sx1 = (wx1 - xmin) / (xmax - xmin) * (args.width - 1)
-            sy0 = (ymax - wy1) / (ymax - ymin) * (args.height - 1)
-            sy1 = (ymax - wy0) / (ymax - ymin) * (args.height - 1)
-            ix0, ix1 = max(0, int(np.floor(sx0))), min(args.width, int(np.ceil(sx1)) + 1)
-            iy0, iy1 = max(0, int(np.floor(sy0))), min(args.height, int(np.ceil(sy1)) + 1)
-            if ix1 <= ix0 or iy1 <= iy0: continue
-            inter_x0, inter_x1 = max(wx0, xmin), min(wx1, xmax)
-            inter_y0, inter_y1 = max(wy0, ymin), min(wy1, ymax)
-            target_w = max(1, int(round((inter_x1 - inter_x0) / tile_world * args.tile_size)))
-            target_h = max(1, int(round((inter_y1 - inter_y0) / tile_world * args.tile_size)))
-            crop = full.crop((ix0, iy0, ix1, iy1)).resize(
-                (target_w, target_h), Image.Resampling.LANCZOS)
-            tile_img = Image.new('RGBA', (args.tile_size, args.tile_size), (0, 0, 0, 0))
-            # Crop bounds are clipped at the native bbox; use the actual
-            # world-to-pixel offset for robust placement at edge tiles.
-            ox = int(round((inter_x0 - wx0) / tile_world * args.tile_size))
-            oy = int(round((wy1 - inter_y1) / tile_world * args.tile_size))
-            tile_img.alpha_composite(crop, (ox, oy))
+            tile_img = np.zeros((args.tile_size, args.tile_size, 4), dtype=np.uint8)
+            # Only submit faces whose projected bounds intersect this tile;
+            # this keeps the direct-projection path bounded on the large mesh.
+            xlo, xhi = tx * args.tile_size, (tx + 1) * args.tile_size
+            ylo, yhi = ty * args.tile_size, (ty + 1) * args.tile_size
+            intersects = ((tri_x1 >= xlo) & (tri_x0 <= xhi) &
+                          (tri_y1 >= ylo) & (tri_y0 <= yhi))
+            for bucket in range(9):
+                selected = global_triangles[intersects & (buckets == bucket)].copy()
+                if len(selected):
+                    selected[:, :, 0] -= xlo
+                    selected[:, :, 1] -= ylo
+                    cv2.fillPoly(tile_img, selected.astype(np.int32),
+                                 tuple(int(v) for v in palette[bucket]))
+            tile_img = Image.fromarray(tile_img, mode='RGBA')
             tile_out = tile_root / str(tx) / str(ty) / f'frame-{k:03d}.png'
             tile_out.parent.mkdir(parents=True, exist_ok=True)
+            # Land/invalid triangles retain alpha=0 all the way into the
+            # browser; no regular-grid or bbox resampling is involved.
             tile_img.save(tile_out, optimize=True)
         if k % 4 == 3:
             gc.collect()
