@@ -856,6 +856,10 @@
           // carry the visual signal. Skip drawFrameToTile so the raster layer
           // is transparent for those products.
           const viz = (PRODUCTS[currentProduct] || {}).viz;
+          // Wave products are animated on the coastline-clipped overlay canvas.
+          // Keep the cached ImageCanvas transparent so it cannot freeze a
+          // scalar frame underneath the animation.
+          if (['wave_composite', 'wave_height_ft', 'swell_height_ft', 'wind_wave_height_ft'].includes(currentProduct)) return c;
           if (viz === 'streamlines' || viz === 'contours') return c;
           drawFrameToTile(ctx, currentFrame, currentProduct, requestedExtent, c.width, c.height);
           return c;
@@ -1290,8 +1294,8 @@
         const nativeTideActive = activeHeatKey() === 'astronomical_tide_ft' &&
           !!forecastData?.native_mesh?.phase_tiles;
         rasterLayer.setVisible(
-          (waveProduct || def.viz === 'heat' || def.viz === 'arrows') &&
-          hasVisibleRasterVariable() && !nativeTideActive
+          (def.viz === 'heat' || def.viz === 'arrows') &&
+          hasVisibleRasterVariable() && !nativeTideActive && !waveProduct
         );
         // setProduct calls map.render() before this visibility switch; render
         // again so the newly enabled composite heat layer is painted now.
@@ -1307,7 +1311,13 @@
         // Wave products must use the coastline-clipped canvas path. The
         // OpenLayers raster path paints whole 0.25-degree quads and can put
         // rectangular color blocks over land near the shoreline.
-        if (waveProduct) ensureWaveMaskImage();
+        if (waveProduct) {
+          ensureWaveMaskImage();
+          if (currentProduct === 'swell_height_ft') drawPartitionMagnitudeHeat('swell');
+          else if (currentProduct === 'wind_wave_height_ft') drawPartitionMagnitudeHeat('wind_wave');
+          else drawWaveHeatOverlay();
+          clipCanvasToWaveMask();
+        }
         drawDirectionArrows();
       }
       else if (def.viz === 'contours') drawIsobars();
@@ -1600,7 +1610,11 @@
       // only the selected scalar may paint the magnitude field. Otherwise
       // simultaneous Wave (wind), Swell, and Significant Wave Height layers
       // blend three unrelated color scales over the same pixels.
+      if (['wave_height_ft', 'temperature_f', 'pressure_hpa', 'astronomical_tide_ft'].includes(heatKey)) drawWaveHeatOverlay();
+      if (partitionCount === 1 && heatKey === 'wind_wave_height_ft' && layerVisibility.wind_wave) drawPartitionMagnitudeHeat('wind_wave');
+      if (partitionCount === 1 && heatKey === 'swell_height_ft' && layerVisibility.swell) drawPartitionMagnitudeHeat('swell');
       if (layerVisibility.swell || layerVisibility.wind_wave) drawWavePackets();
+      if (layerVisibility.swell || layerVisibility.wind_wave) clipCanvasToWaveMask();
       if (layerVisibility.pressure) drawIsobars(true);
       if (layerVisibility.wind) {
         drawStreamlines(true);
@@ -1872,10 +1886,16 @@
         const dpr = flowCanvas.width / mapEl.clientWidth;
         streamlineCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
         flowCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        if (layerVisibility.swell || layerVisibility.wind_wave) ensureWaveMaskImage();
-      if (layerVisibility.swell || layerVisibility.wind_wave) drawWavePackets();
-      if (['wave_height_ft', 'swell_height_ft', 'wind_wave_height_ft'].includes(heatKey) ||
-          layerVisibility.swell || layerVisibility.wind_wave) clipCanvasToWaveMask();
+        const heatKey = activeHeatKey();
+        if (['wave_height_ft', 'swell_height_ft', 'wind_wave_height_ft'].includes(heatKey) ||
+            layerVisibility.swell || layerVisibility.wind_wave) ensureWaveMaskImage();
+        const partitionCount = Number(!!layerVisibility.wind_wave) + Number(!!layerVisibility.swell);
+        if (['wave_height_ft', 'temperature_f', 'pressure_hpa', 'astronomical_tide_ft'].includes(heatKey)) drawWaveHeatOverlay();
+        if (partitionCount === 1 && heatKey === 'wind_wave_height_ft' && layerVisibility.wind_wave) drawPartitionMagnitudeHeat('wind_wave');
+        if (partitionCount === 1 && heatKey === 'swell_height_ft' && layerVisibility.swell) drawPartitionMagnitudeHeat('swell');
+        if (layerVisibility.swell || layerVisibility.wind_wave) drawWavePackets();
+        if (['wave_height_ft', 'swell_height_ft', 'wind_wave_height_ft'].includes(heatKey) ||
+            layerVisibility.swell || layerVisibility.wind_wave) clipCanvasToWaveMask();
         if (layerVisibility.pressure) drawIsobars(true);
         if (layerVisibility.wind) drawStreamlines(true);
         wavePacketRaf = requestAnimationFrame(tick);
