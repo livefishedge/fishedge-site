@@ -198,7 +198,7 @@
   <div id="bv-map" class="bv-map"></div>
   <div id="bv-station-popup" style="display:none">
     <h3 id="bv-station-name">Tide station</h3>
-    <div class="bv-briefing-source">Model prediction · same serialized field as co-range lines</div>
+    <div class="bv-briefing-source">Astronomical tide prediction</div>
     <svg id="bv-tide-svg" viewBox="0 0 280 112" role="img" aria-label="24-hour tide prediction curve"></svg>
     <div class="bv-row"><span>Next event</span><b id="bv-tide-next">—</b></div>
     <div class="bv-row"><span>Predicted range</span><b id="bv-tide-range">—</b></div>
@@ -760,7 +760,9 @@
     const stationSource = new ol.source.Vector();
     const stationLayer = new ol.layer.Vector({
       source: stationSource,
-      zIndex: 25,
+      // Stations must remain above every map layer, including the native
+      // tide/phase canvases and any future raster/vector additions.
+      zIndex: 1000,
       style: feature => new ol.style.Style({
         image: new ol.style.Circle({ radius: 6, fill: new ol.style.Fill({ color: '#ffd166' }), stroke: new ol.style.Stroke({ color: '#111820', width: 2 }) }),
         text: new ol.style.Text({ text: feature.get('name'), offsetY: -13, font: '700 10px sans-serif', fill: new ol.style.Fill({ color: '#fff' }), stroke: new ol.style.Stroke({ color: '#111820', width: 3 }) }),
@@ -909,6 +911,11 @@
     const layerVisibility = { wave_height: true, temperature: false, pressure: false, tide_level: true, tide_range: true, swell: true, wind_wave: true, wind: true };
     function syncStationVisibility() {
       stationLayer.setVisible(!!(layerVisibility.tide_level || layerVisibility.tide_range));
+      // Reassert the ordering whenever a layer changes. This prevents a
+      // later-added overlay from obscuring station markers while tidal data
+      // are visible.
+      stationLayer.setZIndex(1000);
+      map.render();
     }
     let selectedHeatKey = 'wave_height_ft';
     const particles = [];
@@ -2828,13 +2835,8 @@
           ? await fetchJson(DEV_FORECAST_URL)
           : await fetchJson(FORECAST_URL);
         forecastData = normalizeForecastPayload(forecastData);
-        const tideSource = forecastData.tide_harmonic_source;
         const tideSourceEl = document.querySelector('#bv-station-popup .bv-briefing-source');
-        if (tideSourceEl) {
-          tideSourceEl.textContent = tideSource
-            ? `${tideSource.provider || 'Harmonic'} ${tideSource.model || 'model'} · same model as co-range lines`
-            : 'Harmonic model prediction · same model as co-range lines';
-        }
+        if (tideSourceEl) tideSourceEl.textContent = 'Astronomical tide prediction';
         // Dev carries a NOAA GFS diagnostic payload while the shared feed is
         // migrated off Open-Meteo. Fall back to local if the prod CDN still
         // serves the legacy schema.
