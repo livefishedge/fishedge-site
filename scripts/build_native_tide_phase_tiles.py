@@ -36,7 +36,7 @@ def main():
     ap.add_argument('--height', type=int, default=650)
     ap.add_argument('--frames', type=int, default=0,
                     help='number of phase frames to publish; 0 uses source horizon')
-    ap.add_argument('--tile-zoom', type=int, default=6,
+    ap.add_argument('--tile-zoom', type=int, default=8,
                     help='Web-Mercator tile zoom for the browser asset pyramid')
     ap.add_argument('--tile-size', type=int, default=512,
                     help='pixel size of each native stage tile')
