@@ -687,7 +687,7 @@
     // instead of reusing an older cached JSON response.
     // Bump whenever the JSON artifact changes; otherwise a Pages/browser
     // cache can keep serving a pre-calibration tide field after HTML deploy.
-    const FORECAST_DATA_BUILD = 'wave-product-validity-coast-mask-v18-fine';
+    const FORECAST_DATA_BUILD = 'wave-product-validity-coast-mask-v19-alpha';
     const DEV_FORECAST_URL = `/trip-planner/data/${region}/briefing/forecast.json?v=${FORECAST_DATA_BUILD}`;
     const WAVE_MASK_URL = `/trip-planner/data/${region}/briefing/native_wave_mask.png?v=${FORECAST_DATA_BUILD}`;
     const CORS_PROXY = 'https://corsproxy.io/?';
@@ -1564,6 +1564,7 @@
 
     let waveMaskCanvas = null;
     let waveMaskCtx = null;
+    let waveMaskAlphaCanvas = null;
     function isCoastWaterPoint(lon, lat) {
       const mask = waveMaskImage;
       const b = forecastData?.display_bbox || forecastData?.bbox || [-77, 36, -72, 40];
@@ -1726,6 +1727,22 @@
       waveMaskImage.onload = () => {
         waveMaskCanvas = null;
         waveMaskCtx = null;
+        // The source is an 8-bit grayscale PNG. Canvas compositing uses
+        // alpha, not luminance, so drawing the grayscale image directly with
+        // destination-in leaves land opaque. Build an explicit alpha canvas:
+        // water brightness becomes alpha and land becomes transparent.
+        waveMaskAlphaCanvas = document.createElement('canvas');
+        waveMaskAlphaCanvas.width = waveMaskImage.naturalWidth;
+        waveMaskAlphaCanvas.height = waveMaskImage.naturalHeight;
+        const alphaCtx = waveMaskAlphaCanvas.getContext('2d', { willReadFrequently: true });
+        alphaCtx.drawImage(waveMaskImage, 0, 0);
+        const maskData = alphaCtx.getImageData(0, 0, waveMaskAlphaCanvas.width, waveMaskAlphaCanvas.height);
+        for (let i = 0; i < maskData.data.length; i += 4) {
+          const water = maskData.data[i];
+          maskData.data[i] = 255; maskData.data[i + 1] = 255; maskData.data[i + 2] = 255;
+          maskData.data[i + 3] = water;
+        }
+        alphaCtx.putImageData(maskData, 0, 0);
         drawOverlaysForProduct();
         // ImageCanvas caches rendered canvases by extent/resolution. A plain
         // map.render() can reuse the old unmasked raster, so invalidate the
@@ -1737,7 +1754,7 @@
       waveMaskImage.src = WAVE_MASK_URL;
     }
     function clipCanvasToWaveMask() {
-      if (!waveMaskImage || !waveMaskImage.complete || !waveMaskImage.naturalWidth) return;
+      if (!waveMaskAlphaCanvas) return;
       const dpr = streamlineCanvas.width / Math.max(1, mapEl.clientWidth);
       const b = forecastData?.display_bbox || forecastData?.bbox || [-77, 36, -72, 40];
       const p0 = map.getPixelFromCoordinate(ol.proj.fromLonLat([b[0], b[3]], mapProjection));
@@ -1746,17 +1763,17 @@
       streamlineCtx.save();
       streamlineCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
       streamlineCtx.globalCompositeOperation = 'destination-in';
-      streamlineCtx.drawImage(waveMaskImage, p0[0], p0[1], p1[0] - p0[0], p1[1] - p0[1]);
+      streamlineCtx.drawImage(waveMaskAlphaCanvas, p0[0], p0[1], p1[0] - p0[0], p1[1] - p0[1]);
       streamlineCtx.restore();
       streamlineCtx.globalCompositeOperation = 'source-over';
     }
     function clipTileToWaveMask(ctx, toX, toY) {
-      if (!waveMaskImage || !waveMaskImage.complete || !waveMaskImage.naturalWidth) return;
+      if (!waveMaskAlphaCanvas) return;
       const b = forecastData?.display_bbox || [-77, 36, -72, 40];
       const x0 = toX(b[0]), x1 = toX(b[2]), y0 = toY(b[3]), y1 = toY(b[1]);
       ctx.save();
       ctx.globalCompositeOperation = 'destination-in';
-      ctx.drawImage(waveMaskImage, x0, y0, x1 - x0, y1 - y0);
+      ctx.drawImage(waveMaskAlphaCanvas, x0, y0, x1 - x0, y1 - y0);
       ctx.restore();
       ctx.globalCompositeOperation = 'source-over';
     }
