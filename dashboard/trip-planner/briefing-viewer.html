@@ -147,6 +147,8 @@
     .bv-streamlines-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3; }
     .bv-tide-overlay-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 6; mix-blend-mode: normal; }
     #bv-map > canvas.bv-tide-overlay-canvas { position: absolute !important; inset: 0 !important; z-index: 6 !important; pointer-events: none !important; }
+    .bv-land-overlay-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 7; }
+    #bv-map > canvas.bv-land-overlay-canvas { position: absolute !important; inset: 0 !important; z-index: 7 !important; pointer-events: none !important; }
 
     .ol-attribution { color: #6b7d92 !important; background: rgba(5, 11, 16, 0.8) !important; font-size: 10px !important; pointer-events: none; }
     .ol-control button { background-color: rgba(5, 11, 16, 0.8) !important; color: #b3e5fc !important; }
@@ -178,13 +180,13 @@
       <div class="bv-section-title">Map Layers</div>
       <div class="bv-layers" id="bv-layers">
         <div class="bv-layer-group">
-          <div class="bv-layer-group-title">Atmospheric</div>
+          <div class="bv-layer-group-title">Atmosphere</div>
           <label><input type="checkbox" data-layer="temperature"><span class="bv-dot dot-temp"></span>Air Temp <button class="bv-unit-toggle" type="button" data-unit-key="temperature_f">°F</button></label>
           <label><input type="checkbox" data-layer="pressure"><span class="bv-dot dot-press"></span>Pressure <button class="bv-unit-toggle" type="button" data-unit-key="pressure_hpa">hPa</button></label>
           <label><input type="checkbox" data-layer="wind" checked><span class="bv-dot dot-wind"></span>Wind <button class="bv-unit-toggle" type="button" data-unit-key="wind_speed_kn">kn</button></label>
         </div>
         <div class="bv-layer-group">
-          <div class="bv-layer-group-title">Oceanic</div>
+          <div class="bv-layer-group-title">Ocean &amp; Tides</div>
           <label title="Tidal stage at each location’s own phase"><input type="checkbox" data-layer="tide_level" checked><span class="bv-dot dot-tide"></span>Tidal Stage</label>
           <label title="Tidal Range contour overlay"><input type="checkbox" data-layer="tide_range" checked><span class="bv-dot dot-tide"></span>Tidal Range <button class="bv-unit-toggle" type="button" data-unit-key="tide_range_ft">ft</button></label>
           <label title="Wind-wave height is the locally wind-generated wave magnitude; arrows show direction"><input type="checkbox" data-layer="wind_wave" checked><span class="bv-dot dot-composite"></span>Wave (wind) <button class="bv-unit-toggle" type="button" data-unit-key="wind_wave_height_ft">ft</button></label>
@@ -879,6 +881,13 @@
     tideCanvas.setAttribute('aria-hidden', 'true');
     mapEl.appendChild(tideCanvas);
     const tideCtx = tideCanvas.getContext('2d');
+    // High-resolution land pass. It is drawn after every data canvas so thin
+    // barrier islands and shoreline strips remain visible above all fields.
+    const landCanvas = document.createElement('canvas');
+    landCanvas.className = 'bv-land-overlay-canvas';
+    landCanvas.setAttribute('aria-hidden', 'true');
+    mapEl.appendChild(landCanvas);
+    const landCtx = landCanvas.getContext('2d');
 
     // client-rendered raster layer (replaces old PNG ImageStatic)
     const rasterLayer = new ol.layer.Image({
@@ -1383,6 +1392,7 @@
       else stopParticleAnimation();
       // Co-range overlay is independent of the selected base product.
       drawTidalContours();
+      drawLandOverlay();
     }
 
     function drawTidalContours() {
@@ -1623,6 +1633,7 @@
     let waveMaskCanvas = null;
     let waveMaskCtx = null;
     let waveMaskAlphaCanvas = null;
+    let landMaskCanvas = null;
     function isCoastWaterPoint(lon, lat) {
       const mask = waveMaskImage;
       const b = forecastData?.display_bbox || forecastData?.bbox || [-77, 36, -72, 40];
@@ -1785,6 +1796,25 @@
 
     const nativePhaseImages = new Map();
     let waveMaskImage = null;
+    function drawLandOverlay() {
+      if (!landCtx || !landMaskCanvas || !forecastData) return;
+      const dpr = landCanvas.width / Math.max(1, mapEl.clientWidth);
+      const contract = forecastData.wave_coast_mask_contract || {};
+      const b = contract.extent_web_mercator;
+      if (!Array.isArray(b) || b.length !== 4) return;
+      const p0 = map.getPixelFromCoordinate([b[0], b[3]]);
+      const p1 = map.getPixelFromCoordinate([b[2], b[1]]);
+      if (!p0 || !p1 || !(p1[0] > p0[0] && p1[1] > p0[1])) return;
+      landCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      landCtx.clearRect(0, 0, landCanvas.width, landCanvas.height);
+      landCtx.globalAlpha = 0.92;
+      landCtx.drawImage(landMaskCanvas, p0[0], p0[1], p1[0] - p0[0], p1[1] - p0[1]);
+      // landMaskCanvas contains inverted source alpha: land is opaque and
+      // water is transparent. Keep the fill subtle so basemap labels remain
+      // readable while the coastline itself stays above every data canvas.
+      landCtx.globalCompositeOperation = 'source-over';
+      landCtx.globalAlpha = 1;
+    }
     function ensureWaveMaskImage() {
       if (waveMaskImage !== null) return;
       waveMaskImage = new Image();
@@ -1812,6 +1842,16 @@
           projected.data[i + 3] = source[i];
         }
         alphaCtx.putImageData(projected, 0, 0);
+        landMaskCanvas = document.createElement('canvas');
+        landMaskCanvas.width = waveMaskImage.naturalWidth;
+        landMaskCanvas.height = waveMaskImage.naturalHeight;
+        const landCtxSource = landMaskCanvas.getContext('2d');
+        const landPixels = landCtxSource.createImageData(sourceCanvas.width, sourceCanvas.height);
+        for (let i = 0; i < source.length; i += 4) {
+          landPixels.data[i] = 7; landPixels.data[i + 1] = 17; landPixels.data[i + 2] = 29;
+          landPixels.data[i + 3] = 255 - source[i];
+        }
+        landCtxSource.putImageData(landPixels, 0, 0);
         waveMaskCanvas = waveMaskAlphaCanvas;
         waveMaskCtx = alphaCtx;
         drawOverlaysForProduct();
@@ -2395,7 +2435,7 @@
       const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
       const W = Math.max(1, Math.round(rect.width * dpr));
       const H = Math.max(1, Math.round(rect.height * dpr));
-      [flowCanvas, streamlineCanvas, tideCanvas].forEach(c => {
+      [flowCanvas, streamlineCanvas, tideCanvas, landCanvas].forEach(c => {
         if (c.width !== W || c.height !== H) {
           c.width = W; c.height = H;
           c.style.width = rect.width + 'px';
@@ -2962,9 +3002,9 @@
         // shipped them; otherwise the SVG renders "tide unavailable" cleanly.
         renderActiveTide();
 
-        // soft auto-play so the planner viewer visibly lives
-        // (Mike's directive: looks like captain's dashboard, not a static PNG)
-        play();
+        // Start paused so the user sees a stable frame and can choose when
+        // to animate the forecast.
+        pause();
       } catch (e) {
         document.getElementById('bv-frame-label').textContent = 'load failed: ' + e.message;
         console.error(e);
