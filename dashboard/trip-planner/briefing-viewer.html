@@ -687,7 +687,7 @@
     // instead of reusing an older cached JSON response.
     // Bump whenever the JSON artifact changes; otherwise a Pages/browser
     // cache can keep serving a pre-calibration tide field after HTML deploy.
-    const FORECAST_DATA_BUILD = 'wave-product-validity-coast-mask-v19-alpha';
+    const FORECAST_DATA_BUILD = 'wave-product-validity-coast-mask-v20-mercator-stations';
     const DEV_FORECAST_URL = `/trip-planner/data/${region}/briefing/forecast.json?v=${FORECAST_DATA_BUILD}`;
     const WAVE_MASK_URL = `/trip-planner/data/${region}/briefing/native_wave_mask.png?v=${FORECAST_DATA_BUILD}`;
     const CORS_PROXY = 'https://corsproxy.io/?';
@@ -907,6 +907,9 @@
       }));
     }
     const layerVisibility = { wave_height: true, temperature: false, pressure: false, tide_level: true, tide_range: true, swell: true, wind_wave: true, wind: true };
+    function syncStationVisibility() {
+      stationLayer.setVisible(!!(layerVisibility.tide_level || layerVisibility.tide_range));
+    }
     let selectedHeatKey = 'wave_height_ft';
     const particles = [];
 
@@ -1269,6 +1272,7 @@
       if (available.wave_height && !layerVisibility.temperature && !layerVisibility.wave_height && !layerVisibility.pressure) {
         // no forced fallback: the user may intentionally turn all scalar layers off
       }
+      syncStationVisibility();
     }
 
     function clearOverlays() {
@@ -1576,7 +1580,13 @@
         waveMaskCtx.drawImage(mask, 0, 0);
       }
       const x = Math.max(0, Math.min(waveMaskCanvas.width - 1, Math.round((lon - b[0]) / (b[2] - b[0]) * (waveMaskCanvas.width - 1))));
-      const y = Math.max(0, Math.min(waveMaskCanvas.height - 1, Math.round((b[3] - lat) / (b[3] - b[1]) * (waveMaskCanvas.height - 1))));
+      // The mask is stored in geographic rows, while the basemap is
+      // EPSG:3857.  Sample it in the same Web-Mercator-normalized space used
+      // by render clipping so the shoreline cannot drift with latitude.
+      const merc = value => Math.log(Math.tan(Math.PI / 4 + value * Math.PI / 360));
+      const north = merc(b[3]), south = merc(b[1]);
+      const y = Math.max(0, Math.min(waveMaskCanvas.height - 1, Math.round(
+        (north - merc(lat)) / (north - south) * (waveMaskCanvas.height - 1))));
       return waveMaskCtx.getImageData(x, y, 1, 1).data[0] >= 128;
     }
 
@@ -1734,15 +1744,33 @@
         waveMaskAlphaCanvas = document.createElement('canvas');
         waveMaskAlphaCanvas.width = waveMaskImage.naturalWidth;
         waveMaskAlphaCanvas.height = waveMaskImage.naturalHeight;
+        const sourceCanvas = document.createElement('canvas');
+        sourceCanvas.width = waveMaskImage.naturalWidth;
+        sourceCanvas.height = waveMaskImage.naturalHeight;
+        const sourceCtx = sourceCanvas.getContext('2d', { willReadFrequently: true });
+        sourceCtx.drawImage(waveMaskImage, 0, 0);
+        const source = sourceCtx.getImageData(0, 0, sourceCanvas.width, sourceCanvas.height).data;
         const alphaCtx = waveMaskAlphaCanvas.getContext('2d', { willReadFrequently: true });
-        alphaCtx.drawImage(waveMaskImage, 0, 0);
-        const maskData = alphaCtx.getImageData(0, 0, waveMaskAlphaCanvas.width, waveMaskAlphaCanvas.height);
-        for (let i = 0; i < maskData.data.length; i += 4) {
-          const water = maskData.data[i];
-          maskData.data[i] = 255; maskData.data[i + 1] = 255; maskData.data[i + 2] = 255;
-          maskData.data[i + 3] = water;
+        const projected = alphaCtx.createImageData(sourceCanvas.width, sourceCanvas.height);
+        const b = forecastData?.display_bbox || forecastData?.bbox || [-77, 36, -72, 40];
+        const merc = value => Math.log(Math.tan(Math.PI / 4 + value * Math.PI / 360));
+        const north = merc(b[3]), south = merc(b[1]);
+        // Convert the geographic grayscale mask into projected rows once.
+        // This alpha canvas is shared by heat clipping and packet tests.
+        for (let dy = 0; dy < sourceCanvas.height; dy++) {
+          const projectedY = dy / Math.max(1, sourceCanvas.height - 1);
+          const lat = 360 / Math.PI * Math.atan(Math.sinh(north - projectedY * (north - south)));
+          const sourceY = Math.max(0, Math.min(sourceCanvas.height - 1, Math.round(
+            (b[3] - lat) / (b[3] - b[1]) * (sourceCanvas.height - 1))));
+          for (let x = 0; x < sourceCanvas.width; x++) {
+            const di = (dy * sourceCanvas.width + x) * 4;
+            projected.data[di] = 255; projected.data[di + 1] = 255; projected.data[di + 2] = 255;
+            projected.data[di + 3] = source[(sourceY * sourceCanvas.width + x) * 4];
+          }
         }
-        alphaCtx.putImageData(maskData, 0, 0);
+        alphaCtx.putImageData(projected, 0, 0);
+        waveMaskCanvas = waveMaskAlphaCanvas;
+        waveMaskCtx = alphaCtx;
         drawOverlaysForProduct();
         // ImageCanvas caches rendered canvases by extent/resolution. A plain
         // map.render() can reuse the old unmasked raster, so invalidate the
@@ -2743,6 +2771,7 @@
       document.querySelectorAll('#bv-layers input[data-layer]').forEach(input => {
       input.addEventListener('change', () => {
         layerVisibility[input.dataset.layer] = input.checked;
+        syncStationVisibility();
         const selectedKey = { wave_height: 'wave_height_ft', temperature: 'temperature_f', pressure: 'pressure_hpa', tide_level: 'astronomical_tide_ft', wind_wave: 'wind_wave_height_ft', swell: 'swell_height_ft' }[input.dataset.layer];
         if (input.checked && selectedKey) selectedHeatKey = selectedKey;
         if (input.dataset.layer === 'temperature' && input.checked) {
