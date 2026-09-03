@@ -687,7 +687,7 @@
     // instead of reusing an older cached JSON response.
     // Bump whenever the JSON artifact changes; otherwise a Pages/browser
     // cache can keep serving a pre-calibration tide field after HTML deploy.
-    const FORECAST_DATA_BUILD = 'wave-product-validity-coast-mask-v20-mercator-stations';
+    const FORECAST_DATA_BUILD = 'wave-product-validity-coast-mask-v21-projected-source';
     const DEV_FORECAST_URL = `/trip-planner/data/${region}/briefing/forecast.json?v=${FORECAST_DATA_BUILD}`;
     const WAVE_MASK_URL = `/trip-planner/data/${region}/briefing/native_wave_mask.png?v=${FORECAST_DATA_BUILD}`;
     const CORS_PROXY = 'https://corsproxy.io/?';
@@ -1737,10 +1737,9 @@
       waveMaskImage.onload = () => {
         waveMaskCanvas = null;
         waveMaskCtx = null;
-        // The source is an 8-bit grayscale PNG. Canvas compositing uses
-        // alpha, not luminance, so drawing the grayscale image directly with
-        // destination-in leaves land opaque. Build an explicit alpha canvas:
-        // water brightness becomes alpha and land becomes transparent.
+        // The source is an 8-bit grayscale PNG already rasterized in
+        // EPSG:3857-normalized rows. Canvas compositing uses alpha, not
+        // luminance, so build an explicit alpha canvas from the contract.
         waveMaskAlphaCanvas = document.createElement('canvas');
         waveMaskAlphaCanvas.width = waveMaskImage.naturalWidth;
         waveMaskAlphaCanvas.height = waveMaskImage.naturalHeight;
@@ -1752,21 +1751,11 @@
         const source = sourceCtx.getImageData(0, 0, sourceCanvas.width, sourceCanvas.height).data;
         const alphaCtx = waveMaskAlphaCanvas.getContext('2d', { willReadFrequently: true });
         const projected = alphaCtx.createImageData(sourceCanvas.width, sourceCanvas.height);
-        const b = forecastData?.display_bbox || forecastData?.bbox || [-77, 36, -72, 40];
-        const merc = value => Math.log(Math.tan(Math.PI / 4 + value * Math.PI / 360));
-        const north = merc(b[3]), south = merc(b[1]);
-        // Convert the geographic grayscale mask into projected rows once.
-        // This alpha canvas is shared by heat clipping and packet tests.
-        for (let dy = 0; dy < sourceCanvas.height; dy++) {
-          const projectedY = dy / Math.max(1, sourceCanvas.height - 1);
-          const lat = 360 / Math.PI * Math.atan(Math.sinh(north - projectedY * (north - south)));
-          const sourceY = Math.max(0, Math.min(sourceCanvas.height - 1, Math.round(
-            (b[3] - lat) / (b[3] - b[1]) * (sourceCanvas.height - 1))));
-          for (let x = 0; x < sourceCanvas.width; x++) {
-            const di = (dy * sourceCanvas.width + x) * 4;
-            projected.data[di] = 255; projected.data[di + 1] = 255; projected.data[di + 2] = 255;
-            projected.data[di + 3] = source[(sourceY * sourceCanvas.width + x) * 4];
-          }
+        // Water is 255 and land is 0 in the mask contract. Preserve the
+        // projected geometry exactly; do not warp it a second time.
+        for (let i = 0; i < source.length; i += 4) {
+          projected.data[i] = 255; projected.data[i + 1] = 255; projected.data[i + 2] = 255;
+          projected.data[i + 3] = source[i];
         }
         alphaCtx.putImageData(projected, 0, 0);
         waveMaskCanvas = waveMaskAlphaCanvas;

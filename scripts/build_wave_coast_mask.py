@@ -13,20 +13,26 @@ from cartopy.io import shapereader
 from rasterio.features import rasterize
 from rasterio.transform import from_origin
 from shapely.geometry import box, shape
+from shapely.ops import transform as shapely_transform
+from pyproj import Transformer
 
 
 def build(payload, output, width=2000, height=1600):
     bbox = payload.get("display_bbox") or payload["bbox"]
     west, south, east, north = map(float, bbox)
     land_box = box(west, south, east, north)
-    transform = from_origin(west, north, (east-west)/width, (north-south)/height)
+    to_web = Transformer.from_crs("EPSG:4326", "EPSG:3857", always_xy=True).transform
+    projected_box = shapely_transform(to_web, land_box)
+    transform = from_origin(projected_box.bounds[0], projected_box.bounds[3],
+                            (projected_box.bounds[2] - projected_box.bounds[0]) / width,
+                            (projected_box.bounds[3] - projected_box.bounds[1]) / height)
     land_shapes = []
     reader = shapereader.Reader(shapereader.natural_earth(
         resolution="10m", category="physical", name="land"))
     for record in reader.records():
         geom = record.geometry
         if geom is not None and geom.intersects(land_box):
-            land_shapes.append((geom, 0))
+            land_shapes.append((shapely_transform(to_web, geom), 0))
     water = rasterize(land_shapes, out_shape=(height, width), transform=transform,
                       fill=255, dtype="uint8", all_touched=False)
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -40,6 +46,8 @@ def build(payload, output, width=2000, height=1600):
         "width": width,
         "height": height,
         "bbox": [west, south, east, north],
+        "projection": "EPSG:3857",
+        "extent_web_mercator": list(projected_box.bounds),
     }
     products = ["wave_height_ft", "swell_height_ft", "wind_wave_height_ft"]
     payload["wave_source_contract"] = {
