@@ -703,7 +703,7 @@
     // instead of reusing an older cached JSON response.
     // Bump whenever the JSON artifact changes; otherwise a Pages/browser
     // cache can keep serving a pre-calibration tide field after HTML deploy.
-    const FORECAST_DATA_BUILD = 'wave-product-validity-coast-mask-v23-tide-opacity-choppy-wave';
+    const FORECAST_DATA_BUILD = 'wave-product-validity-coast-mask-v24-stage-lod-ocean-city';
     const DEV_FORECAST_URL = `/trip-planner/data/${region}/briefing/forecast.json?v=${FORECAST_DATA_BUILD}`;
     const WAVE_MASK_URL = `/trip-planner/data/${region}/briefing/native_wave_mask.png?v=${FORECAST_DATA_BUILD}`;
     const CORS_PROXY = 'https://corsproxy.io/?';
@@ -1865,8 +1865,23 @@
       ctx.globalCompositeOperation = 'source-over';
     }
     function drawNativeTidePhaseOverlay() {
-      const tiles = forecastData?.native_mesh?.phase_tiles;
+      let tiles = forecastData?.native_mesh?.phase_tiles;
       if (!tiles || !Number.isFinite(tiles.frames) || !tiles.pattern) return false;
+      // Use the nationwide z8 atlas by default.  A selective native patch is
+      // preferred only when the viewport is actually zoomed into its hotspot;
+      // this avoids downloading/rendering high-resolution tiles nationwide.
+      const patches = Array.isArray(tiles.patches) ? tiles.patches : [];
+      const viewZoom = map.getView().getZoom() || 0;
+      if (viewZoom >= 9 && patches.length) {
+        const center = map.getView().getCenter();
+        const lonLat = center ? ol.proj.toLonLat(center, mapProjection) : null;
+        const match = patches.find(p => {
+          const b = p.hotspot_bbox;
+          return Array.isArray(b) && b.length === 4 && lonLat &&
+            lonLat[0] >= b[0] && lonLat[0] <= b[2] && lonLat[1] >= b[1] && lonLat[1] <= b[3];
+        });
+        if (match) tiles = match;
+      }
       // Do not display a stale native phase image after the native HTP horizon;
       // the legacy grid remains the honest fallback for later forecast frames.
       if (frameIdx >= tiles.frames) return false;
