@@ -2766,7 +2766,7 @@
         particleLast = ts;
         // resize if viewport changed
         const rect = mapEl.getBoundingClientRect();
-        const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+        const dpr = Math.max(1, Math.min(1.5, window.devicePixelRatio || 1));
         const W = Math.max(1, Math.round(rect.width * dpr));
         const H = Math.max(1, Math.round(rect.height * dpr));
         if (flowCanvas.width !== W || flowCanvas.height !== H) {
@@ -2929,7 +2929,10 @@
       viewportTransitionTimer = setTimeout(() => {
         viewportTransitionTimer = 0;
         viewportTransitioning = false;
-        scheduleOverlayRedraw();
+        // Redraw directly after the transition. Going through the debounced
+        // scheduler here can be skipped by the final moveend callback, which
+        // would leave the cleared wind-particle canvas permanently blank.
+        drawOverlaysForProduct();
       }, 180);
     }
     map.getView().on('change:resolution', deferViewportRedraw);
