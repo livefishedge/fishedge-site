@@ -564,6 +564,18 @@ def main():
         for old, new in rename.items():
             fr[new] = fr.pop(old)
 
+    # Preserve the independently built tidal rendering contract when the
+    # weather/wave refresh runs.  This job owns the seven-day atmospheric and
+    # wave fields; it must not silently discard the tidal water mask or native
+    # tide metadata that the contour/stage renderer depends on.
+    prior_payload = None
+    for prior_path in (OUT_PATH, DASHBOARD_OUT_PATH):
+        if prior_path.exists():
+            try:
+                prior_payload = json.loads(prior_path.read_text())
+                break
+            except Exception:
+                pass
     payload = {
         "schema_version": "briefing-forecast-v2",
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -602,6 +614,12 @@ def main():
             ),
         },
     }
+    if prior_payload:
+        for key in ('tide_water_cells', 'native_mesh', 'tide_range_contract',
+                    'tide_range_definition', 'tide_harmonic_source',
+                    'regional_tide_source', 'regional_tide_prediction_field'):
+            if key in prior_payload:
+                payload[key] = prior_payload[key]
     encoded = json.dumps(payload, allow_nan=False, separators=(",", ":"))
     for output_path in (OUT_PATH, DASHBOARD_OUT_PATH):
         output_path.parent.mkdir(parents=True, exist_ok=True)

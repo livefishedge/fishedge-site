@@ -2916,6 +2916,11 @@
       scheduleOverlayRedraw();
     });
 
+    // Wire controls before the asynchronous forecast load completes. A
+    // transient data/API failure must not make the hamburger appear dead.
+    setupHamburger();
+    setupUnitToggles();
+
     // ---- bootstrap ----
     (async () => {
       try {
@@ -2983,9 +2988,6 @@
         // after the hamburger markup exists and after forecastData so the
         // station dropdown can fall back to the inline TIDE_STATIONS list
         // when forecast.tides is absent.
-        setupHamburger();
-        setupUnitToggles();
-
         // Sun + moon: pure-math, anchored to the bbox centroid and the
         // currently selected frame date. Cheap enough to render every tick.
         renderSunMoon(currentFrame && (currentFrame.valid_time || currentFrame.time));
