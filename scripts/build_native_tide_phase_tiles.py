@@ -56,13 +56,18 @@ def main():
     finally:
         ds.close()
 
+    # Co-range uses the same native wet-node rule as this source-derived
+    # range: a node is drawable when it has any finite HTP value and positive
+    # native depth. Do not add a stricter all-frames/threshold test here; it
+    # would create a different coastal footprint from co-range.
+
     finite = np.isfinite(z)
     lo = np.full(z.shape[1], np.nan); hi = np.full(z.shape[1], np.nan)
     good = finite.any(axis=0) & (depth > 0)
     lo[good] = np.nanmin(np.where(finite[:, good], z[:, good], np.nan), axis=0)
     hi[good] = np.nanmax(np.where(finite[:, good], z[:, good], np.nan), axis=0)
     half = (hi - lo) / 2
-    valid = good & np.isfinite(half) & (half > 1e-4) & finite.all(axis=0)
+    valid = good
     target_count = max(source_count, int(args.frames or source_count))
     extension_hours = max(0, target_count - source_count)
     synth = None
@@ -139,6 +144,7 @@ def main():
     # the contour product. The full mesh cache includes a narrow outer frame
     # of boundary/land nodes; using it as the image extent subtly shifts the
     # apparent shoreline relative to native co-range contours.
+    forecast_payload = json.loads(args.forecast.read_text())
     valid_nodes = np.unique(tri_indices)
     xmin, xmax = float(mx[valid_nodes].min()), float(mx[valid_nodes].max())
     ymin, ymax = float(my[valid_nodes].min()), float(my[valid_nodes].max())
@@ -146,7 +152,6 @@ def main():
     # forecast already contains its contour paths, use their WGS84 envelope
     # as the shared raster anchor so stage and co-range cannot be published
     # with subtly different clipped extents.
-    forecast_payload = json.loads(args.forecast.read_text())
     contour_points = [point for line in forecast_payload.get('native_mesh', {}).get('native_contours', [])
                       for point in line.get('coordinates', [])]
     if contour_points:
