@@ -2065,6 +2065,12 @@
       wavePacketRaf = requestAnimationFrame(tick);
     }
 
+    function stopWavePacketAnimation() {
+      if (wavePacketRaf) cancelAnimationFrame(wavePacketRaf);
+      wavePacketRaf = 0;
+      wavePacketLastTs = 0;
+    }
+
     function respawnWavePacket(packet) {
       const spanLon = bbox[2] - bbox[0], spanLat = bbox[3] - bbox[1];
       const edgeCandidates = Array.from({ length: 32 }, (_, i) => {
@@ -2902,13 +2908,31 @@
     // one redraw after the gesture settles instead of rebuilding all overlay
     // canvases repeatedly in the same burst.
     let overlayRedrawTimer = 0;
+    let viewportTransitionTimer = 0;
+    let viewportTransitioning = false;
     function scheduleOverlayRedraw() {
       if (overlayRedrawTimer) clearTimeout(overlayRedrawTimer);
       overlayRedrawTimer = setTimeout(() => {
         overlayRedrawTimer = 0;
+        if (viewportTransitioning) return;
         drawOverlaysForProduct();
       }, 80);
     }
+    function deferViewportRedraw() {
+      viewportTransitioning = true;
+      if (viewportTransitionTimer) clearTimeout(viewportTransitionTimer);
+      // Keep the last completed frame visible while the map is zooming. This
+      // prevents repeated full-canvas/grid/contour work from accumulating in
+      // the browser compositor during a pinch or wheel gesture.
+      stopParticleAnimation();
+      stopWavePacketAnimation();
+      viewportTransitionTimer = setTimeout(() => {
+        viewportTransitionTimer = 0;
+        viewportTransitioning = false;
+        scheduleOverlayRedraw();
+      }, 180);
+    }
+    map.getView().on('change:resolution', deferViewportRedraw);
     map.on('moveend', scheduleOverlayRedraw);
     map.on('change:size', () => {
       // re-seed particles to new viewport area, redraw
