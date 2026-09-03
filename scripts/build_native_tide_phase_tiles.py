@@ -142,6 +142,18 @@ def main():
     valid_nodes = np.unique(tri_indices)
     xmin, xmax = float(mx[valid_nodes].min()), float(mx[valid_nodes].max())
     ymin, ymax = float(my[valid_nodes].min()), float(my[valid_nodes].max())
+    # Co-range is the authoritative native shoreline registration. When the
+    # forecast already contains its contour paths, use their WGS84 envelope
+    # as the shared raster anchor so stage and co-range cannot be published
+    # with subtly different clipped extents.
+    forecast_payload = json.loads(args.forecast.read_text())
+    contour_points = [point for line in forecast_payload.get('native_mesh', {}).get('native_contours', [])
+                      for point in line.get('coordinates', [])]
+    if contour_points:
+        contour_x, contour_y = mercator(np.asarray([p[0] for p in contour_points]),
+                                        np.asarray([p[1] for p in contour_points]))
+        xmin, xmax = float(contour_x.min()), float(contour_x.max())
+        ymin, ymax = float(contour_y.min()), float(contour_y.max())
     px = np.rint((mx - xmin) / (xmax - xmin) * (args.width - 1)).astype(np.int32)
     py = np.rint((ymax - my) / (ymax - ymin) * (args.height - 1)).astype(np.int32)
     pixel_triangles = np.stack((px[tri_indices], py[tri_indices]), axis=2)
@@ -205,7 +217,7 @@ def main():
             tile_img.save(tile_out, optimize=True)
         if k % 4 == 3:
             gc.collect()
-    payload = json.loads(args.forecast.read_text())
+    payload = forecast_payload
     payload.setdefault('native_mesh', {})['phase_tiles'] = {
         'pattern': f'native_phase_tiles/z{args.tile_zoom}/{{x}}/{{y}}/frame-{{frame:03d}}.png',
         'frames': count, 'tile_zoom': args.tile_zoom, 'tile_size': args.tile_size,
