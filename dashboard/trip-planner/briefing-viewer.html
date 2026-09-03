@@ -92,6 +92,11 @@
        above every raster/animation canvas and interactive map layer. */
     #bv-map .ol-overlaycontainer,
     #bv-map .ol-overlaycontainer-stopevent{ z-index:1000 !important; }
+    /* Station markers are HTML overlays, deliberately above every canvas and
+       OpenLayers data layer. */
+    .bv-station-marker{ display:flex; flex-direction:column; align-items:center; pointer-events:auto; transform:translateY(-2px); cursor:pointer; }
+    .bv-station-marker-dot{ width:14px; height:14px; border-radius:50%; background:#ffd166; border:2px solid #111820; box-shadow:0 0 0 2px rgba(255,209,102,.38), 0 2px 6px rgba(0,0,0,.75); }
+    .bv-station-marker-label{ margin-top:2px; padding:1px 3px; color:#fff; background:rgba(5,11,16,.82); text-shadow:0 1px 2px #000; font:700 10px/12px sans-serif; white-space:nowrap; }
     #bv-station-popup{ position:relative; z-index:9999; min-width:260px; max-width:min(330px, calc(100vw - 28px)); max-height:min(300px, calc(100dvh - 140px)); overflow:auto; padding:10px; background:rgba(5,11,16,0.98); border:1px solid #4fc3f7; border-radius:7px; box-shadow:0 8px 24px rgba(0,0,0,.55); color:#d6e5f2; }
     #bv-station-popup h3{ margin:0 0 4px; font-size:12px; color:#fff; }
     #bv-station-popup .bv-briefing-source{ font-size:10px; color:#7a8fa8; margin-bottom:4px; }
@@ -768,14 +773,40 @@
         text: new ol.style.Text({ text: feature.get('name'), offsetY: -13, font: '700 10px sans-serif', fill: new ol.style.Fill({ color: '#fff' }), stroke: new ol.style.Stroke({ color: '#111820', width: 3 }) }),
       }),
     });
+    // Keep the vector layer for compatibility with existing hit-test code,
+    // but use topmost HTML overlays for the visible markers. HTML overlays
+    // are in OpenLayers' stop-event container, above the tidal canvases.
+    stationLayer.setVisible(false);
     map.addLayer(stationLayer);
     const stationPopup = document.getElementById('bv-station-popup');
     const stationOverlay = new ol.Overlay({ element: stationPopup, positioning: 'bottom-center', offset: [0, -10], stopEvent: true, autoPan: { animation: { duration: 250 }, margin: 150 } });
     map.addOverlay(stationOverlay);
+    const stationMarkerOverlays = [];
+    function openTideStation(station) {
+      activeTideStation = station;
+      document.getElementById('bv-station-name').textContent = station.name;
+      renderActiveTide();
+      stationPopup.style.display = 'block';
+      const coordinate = ol.proj.fromLonLat([station.lon, station.lat], mapProjection);
+      stationOverlay.setPosition(coordinate);
+    }
     function drawTideStations() {
       stationSource.clear();
+      stationMarkerOverlays.splice(0).forEach(overlay => map.removeOverlay(overlay));
       stationSource.addFeatures(TIDE_STATIONS.map(station => {
         const feature = new ol.Feature({ geometry: new ol.geom.Point(ol.proj.fromLonLat([station.lon, station.lat], mapProjection)), name: station.name, stationId: station.id });
+        const marker = document.createElement('button');
+        marker.type = 'button';
+        marker.className = 'bv-station-marker';
+        marker.title = `${station.name} tidal station`;
+        marker.setAttribute('aria-label', `${station.name} tidal station`);
+        marker.innerHTML = '<span class="bv-station-marker-dot"></span><span class="bv-station-marker-label"></span>';
+        marker.querySelector('.bv-station-marker-label').textContent = station.name;
+        marker.addEventListener('click', event => { event.preventDefault(); event.stopPropagation(); openTideStation(station); });
+        const overlay = new ol.Overlay({ element: marker, positioning: 'bottom-center', offset: [0, -4], stopEvent: true });
+        overlay.setPosition(feature.getGeometry().getCoordinates());
+        map.addOverlay(overlay);
+        stationMarkerOverlays.push(overlay);
         return feature;
       }));
     }
@@ -910,7 +941,12 @@
     }
     const layerVisibility = { wave_height: true, temperature: false, pressure: false, tide_level: true, tide_range: true, swell: true, wind_wave: true, wind: true };
     function syncStationVisibility() {
-      stationLayer.setVisible(!!(layerVisibility.tide_level || layerVisibility.tide_range));
+      const showStations = !!(layerVisibility.tide_level || layerVisibility.tide_range);
+      stationLayer.setVisible(false);
+      stationMarkerOverlays.forEach(overlay => {
+        const element = overlay.getElement();
+        if (element) element.style.display = showStations ? 'flex' : 'none';
+      });
       // Reassert the ordering whenever a layer changes. This prevents a
       // later-added overlay from obscuring station markers while tidal data
       // are visible.
