@@ -963,7 +963,10 @@
         computeActiveRange(); drawColorbar(); drawOverlaysForProduct();
       }));
     }
-    const layerVisibility = { wave_height: true, temperature: false, pressure: false, tide_level: true, tide_range: true, swell: true, wind_wave: true, wind: true };
+    // Keep internal state identical to the checkbox defaults. SWH is
+    // intentionally off at startup so mobile devices do not render an
+    // unnecessary scalar field beneath the wind-wave/swell overlays.
+    const layerVisibility = { wave_height: false, temperature: false, pressure: false, tide_level: true, tide_range: true, swell: true, wind_wave: true, wind: true };
     function syncStationVisibility() {
       const showStations = !!(layerVisibility.tide_level || layerVisibility.tide_range);
       stationLayer.setVisible(false);
