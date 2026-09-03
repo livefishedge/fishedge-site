@@ -1871,7 +1871,49 @@
       // the legacy grid remains the honest fallback for later forecast frames.
       if (frameIdx >= tiles.frames) return false;
       const frame = Math.max(0, frameIdx);
+      const tileMode = Number.isFinite(tiles.tile_zoom) && Array.isArray(tiles.tile_indices);
       const key = String(frame);
+      if (tileMode) {
+        resizeOverlayCanvases();
+        const dpr = streamlineCanvas.width / Math.max(1, mapEl.clientWidth);
+        streamlineCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        const world = 2 * Math.PI * 6378137;
+        const n = 2 ** tiles.tile_zoom;
+        const tileWorld = world / n;
+        let pending = false, loaded = 0;
+        const frameName = String(frame).padStart(3, '0');
+        streamlineCtx.globalAlpha = 0.78;
+        for (const tile of tiles.tile_indices) {
+          const tileKey = `${frame}/${tile.x}/${tile.y}`;
+          let image = nativePhaseImages.get(tileKey);
+          if (image === null) continue;
+          if (!image) {
+            image = new Image();
+            image.decoding = 'async';
+            image.onload = () => { nativePhaseImages.set(tileKey, image); drawOverlaysForProduct(); };
+            image.onerror = () => nativePhaseImages.set(tileKey, null);
+            image.src = new URL(`/trip-planner/data/${region}/briefing/${tiles.pattern
+              .replace('{frame:03d}', frameName).replace('{frame}', frameName)
+              .replace('{x}', tile.x).replace('{y}', tile.y).replace('{z}', tiles.tile_zoom)}`, location.origin).href;
+            nativePhaseImages.set(tileKey, image);
+            pending = true;
+            continue;
+          }
+          if (!image.complete || !image.naturalWidth) { pending = true; continue; }
+          loaded++;
+          const wx0 = tile.x * tileWorld - world / 2;
+          const wx1 = (tile.x + 1) * tileWorld - world / 2;
+          const wy1 = world / 2 - tile.y * tileWorld;
+          const wy0 = world / 2 - (tile.y + 1) * tileWorld;
+          const p0 = map.getPixelFromCoordinate([wx0, wy1]);
+          const p1 = map.getPixelFromCoordinate([wx1, wy0]);
+          if (!p0 || !p1) continue;
+          const w = p1[0] - p0[0], h = p1[1] - p0[1];
+          if (w > 0 && h > 0) streamlineCtx.drawImage(image, p0[0], p0[1], w, h);
+        }
+        streamlineCtx.globalAlpha = 1;
+        return pending || loaded > 0;
+      }
       let image = nativePhaseImages.get(key);
       if (!image) {
         image = new Image();
