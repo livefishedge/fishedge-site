@@ -75,6 +75,14 @@
     #bv-menu-panel .dot-tide{ background:#4fc3f7; }
     #bv-menu-panel .bv-status{ font-size:11px; color:#9fb0c3; padding:6px 8px; border-top:1px solid rgba(255,255,255,0.1); }
     #bv-menu-panel .bv-briefing-source{ font-size:10px; color:#7a8fa8; margin-top:-3px; }
+    #bv-menu-panel .bv-presets{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:5px; }
+    #bv-menu-panel .bv-preset{ border:1px solid #2a3a4d; border-radius:6px; padding:7px 6px; background:#132333; color:#d6e5f2; font:700 11px/1.1 inherit; cursor:pointer; text-align:left; }
+    #bv-menu-panel .bv-preset:hover,#bv-menu-panel .bv-preset.active{ background:#17456a; border-color:#4fc3f7; color:#fff; }
+    #bv-menu-panel .bv-preset small{ display:block; margin-top:3px; color:#8fa6bb; font-size:9px; font-weight:600; }
+    #bv-menu-panel .bv-conditions{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:5px; }
+    #bv-menu-panel .bv-condition{ padding:7px 8px; border:1px solid rgba(255,255,255,.1); border-radius:5px; background:rgba(19,35,51,.65); min-width:0; }
+    #bv-menu-panel .bv-condition b{ display:block; color:#fff; font:700 12px/1.2 monospace; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    #bv-menu-panel .bv-condition span{ display:block; color:#8fa6bb; font-size:9px; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
     /* Briefing details live inside the hamburger menu so the map remains
        unobstructed. */
@@ -180,6 +188,13 @@
     <div id="bv-menu-panel" aria-label="Layer and briefing menu">
     <div class="bv-section">
       <div class="bv-section-title">Map Layers</div>
+      <div class="bv-section-title" style="margin-top:2px">Planning view</div>
+      <div class="bv-presets" id="bv-presets" aria-label="Planning view presets">
+        <button class="bv-preset" type="button" data-preset="trip"><span>Trip Intel</span><small>conditions + tide</small></button>
+        <button class="bv-preset" type="button" data-preset="transit"><span>Run &amp; Pass</span><small>wind + wave state</small></button>
+        <button class="bv-preset" type="button" data-preset="grounds"><span>On Grounds</span><small>tide + swell</small></button>
+        <button class="bv-preset" type="button" data-preset="return"><span>Return / Inlet</span><small>visibility + tide</small></button>
+      </div>
       <div class="bv-layers" id="bv-layers">
         <div class="bv-layer-group">
           <div class="bv-layer-group-title">Atmosphere</div>
@@ -203,6 +218,12 @@
           <label title="Swell height is the remotely generated wave magnitude; arrows show direction"><input type="checkbox" data-layer="swell" checked><span class="bv-dot dot-swell"></span>Swell <button class="bv-unit-toggle" type="button" data-unit-key="swell_height_ft">ft</button></label>
           <label title="Total significant wave height combines the sea-state wave energy, including wind waves and swell"><input type="checkbox" data-layer="wave_height"><span class="bv-dot dot-wave"></span>Significant Wave Height <button class="bv-unit-toggle" type="button" data-unit-key="wave_height_ft">ft</button></label>
         </div>
+      </div>
+    </div>
+    <div class="bv-section" aria-live="polite">
+      <div class="bv-section-title">Current conditions</div>
+      <div class="bv-conditions" id="bv-conditions">
+        <div class="bv-condition"><b>—</b><span>Loading frame</span></div>
       </div>
     </div>
     <div class="bv-status" id="bv-menu-status"></div>
@@ -1059,6 +1080,77 @@
       return null;
     }
 
+    // Captain-focused summary: show a few decision variables at the center
+    // of the current planning domain without adding another map renderer.
+    const WEATHER_CODE_NAMES = {
+      0:'Clear',1:'Mainly clear',2:'Partly cloudy',3:'Overcast',45:'Fog',48:'Freezing fog',
+      51:'Light drizzle',53:'Drizzle',55:'Heavy drizzle',61:'Light rain',63:'Rain',65:'Heavy rain',
+      71:'Light snow',73:'Snow',75:'Heavy snow',80:'Rain showers',81:'Rain showers',82:'Heavy showers',
+      95:'Thunderstorm',96:'Thunderstorm / hail',99:'Thunderstorm / hail'
+    };
+    function summaryValue(value, digits, suffix) {
+      return Number.isFinite(value) ? `${value.toFixed(digits)}${suffix || ''}` : '—';
+    }
+    function centerValue(key) {
+      if (!currentFrame || !currentFrame[key]) return null;
+      return sampleGridAtPoint(currentFrame[key], (bbox[1] + bbox[3]) / 2, (bbox[0] + bbox[2]) / 2);
+    }
+    function renderMarineSummary() {
+      const box = document.getElementById('bv-conditions');
+      if (!box || !currentFrame) return;
+      const wind = centerValue('wind_speed_kn'), gust = centerValue('wind_gust_kn');
+      const hs = centerValue('wave_height_ft'), swell = centerValue('swell_height_ft');
+      const period = centerValue('wave_period_s'), visibility = centerValue('visibility_mi');
+      const precip = centerValue('precipitation_probability_pct'), uv = centerValue('uv_index');
+      const code = centerValue('weather_code');
+      const tide = centerValue('astronomical_tide_ft');
+      const steepness = Number.isFinite(hs) && Number.isFinite(period) && period > 0
+        ? hs / (1.56 * period * period) : null;
+      const waveRisk = Number.isFinite(steepness) && steepness >= 0.07 ? ' · steep' : '';
+      const cards = [
+        [`${summaryValue(wind,1,' kn')} / ${summaryValue(gust,1,' kn')}`, 'Wind / gust'],
+        [`${summaryValue(hs,1,' ft')} · ${summaryValue(period,1,' s')}${waveRisk}`, 'SWH / period'],
+        [summaryValue(swell,1,' ft'), 'Swell'],
+        [Number.isFinite(code) ? (WEATHER_CODE_NAMES[Math.round(code)] || `Code ${Math.round(code)}`) : '—', 'Weather'],
+        [summaryValue(visibility,1,' mi'), 'Visibility'],
+        [`${summaryValue(tide,1,' ft')} · ${summaryValue(precip,0,'%')}`, 'Tide / precip chance'],
+      ];
+      box.innerHTML = cards.map(([value,label]) => `<div class="bv-condition"><b>${value}</b><span>${label}</span></div>`).join('');
+    }
+
+    const PLANNER_PRESETS = {
+      trip:    { layers:['wind','tide_level','tide_range','visibility','cloud_cover'], heat:'astronomical_tide_ft' },
+      transit: { layers:['wind','wind_wave','swell','wave_height'], heat:'wave_height_ft' },
+      grounds: { layers:['wind','swell','tide_level','tide_range'], heat:'swell_height_ft' },
+      return:  { layers:['wind','tide_level','tide_range','visibility','precipitation_probability'], heat:'astronomical_tide_ft' },
+    };
+    function applyPlannerPreset(name) {
+      const preset = PLANNER_PRESETS[name];
+      if (!preset) return;
+      const active = new Set(preset.layers);
+      document.querySelectorAll('#bv-layers input[data-layer]').forEach(input => {
+        const on = active.has(input.dataset.layer);
+        input.checked = on;
+        layerVisibility[input.dataset.layer] = on;
+      });
+      selectedHeatKey = preset.heat;
+      document.querySelectorAll('.bv-preset').forEach(button => button.classList.toggle('active', button.dataset.preset === name));
+      syncStationVisibility();
+      updateLayerAvailability();
+      computeActiveRange();
+      drawColorbar();
+      drawOverlaysForProduct();
+    }
+    function setupPlannerPresets() {
+      document.querySelectorAll('.bv-preset').forEach(button => {
+        button.addEventListener('click', event => {
+          event.preventDefault();
+          event.stopPropagation();
+          applyPlannerPreset(button.dataset.preset);
+        });
+      });
+    }
+
     // Derive each cell's local tidal phase from the actual summed harmonic
     // signal. Phase 0 is that cell's high tide, .25 is falling, .5 is low,
     // and .75 is rising. The extrema are per-cell, never spatially shared.
@@ -1344,6 +1436,7 @@
       const d = new Date(/[zZ]|[+-]\d\d:\d\d$/.test(t) ? t : t + 'Z');
       const lbl = d.toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'America/New_York' });
       document.getElementById('bv-frame-label').textContent = lbl + ' ET';
+      renderMarineSummary();
       computeActiveRange();
       drawColorbar();
       map.render();
@@ -3130,6 +3223,7 @@
     // transient data/API failure must not make the hamburger appear dead.
     setupHamburger();
     setupUnitToggles();
+    setupPlannerPresets();
 
     // ---- bootstrap ----
     (async () => {
