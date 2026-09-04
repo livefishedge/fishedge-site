@@ -357,6 +357,7 @@ def reshape_grid(resp_list, nrows, ncols):
 def interp_to_display(frames, src_lats, src_lons, dst_lats, dst_lons):
     """Bilinear interp each field from src NxN grid to dst MxK grid. NaN-safe."""
     direction_fields = {"wave_direction", "wind_wave_direction", "swell_wave_direction"}
+    categorical_fields = {"weather_code"}
     src_lat_arr = np.array(src_lats)
     src_lon_arr = np.array(src_lons)
     out = []
@@ -385,6 +386,14 @@ def interp_to_display(frames, src_lats, src_lons, dst_lats, dst_lons):
                         mi = int(np.searchsorted(src_lon_arr, dn) - 1)
                         mf = (dn - src_lon_arr[mi]) / (src_lon_arr[mi + 1] - src_lon_arr[mi])
                     v00, v01, v10, v11 = arr[li, mi], arr[li, mi + 1], arr[li + 1, mi], arr[li + 1, mi + 1]
+                    if fld in categorical_fields:
+                        # Weather codes are classes, not a continuous field;
+                        # use the nearest source point instead of inventing
+                        # intermediate codes between neighboring cells.
+                        nearest = min(((v00, (1 - lf) * (1 - mf)), (v01, (1 - lf) * mf),
+                                       (v10, lf * (1 - mf)), (v11, lf * mf)), key=lambda item: -item[1])
+                        row.append(None if np.isnan(nearest[0]) else int(round(nearest[0])))
+                        continue
                     if fld in direction_fields:
                         # Compass angles are circular: interpolate unit-vector
                         # components, never degrees (359° and 1° are adjacent,
@@ -424,7 +433,14 @@ def fetch_atmospheric_wind(lats_grid, lons_grid, forecast_days=7):
     merge them by `time` ISO string.
     """
     url = "https://api.open-meteo.com/v1/forecast"
-    fields = ["wind_speed_10m", "wind_gusts_10m", "wind_direction_10m", "temperature_2m", "pressure_msl"]
+    fields = [
+        "wind_speed_10m", "wind_gusts_10m", "wind_direction_10m",
+        "temperature_2m", "apparent_temperature", "dew_point_2m",
+        "pressure_msl", "relative_humidity_2m", "cloud_cover",
+        "cloud_cover_low", "cloud_cover_mid", "cloud_cover_high",
+        "visibility", "precipitation", "precipitation_probability",
+        "rain", "showers", "snowfall", "uv_index", "weather_code",
+    ]
     flat_lats, flat_lons = [], []
     for lat in lats_grid:
         for lon in lons_grid:
@@ -437,6 +453,7 @@ def fetch_atmospheric_wind(lats_grid, lons_grid, forecast_days=7):
         "hourly": ",".join(fields),
         "wind_speed_unit": "kn",
         "temperature_unit": "fahrenheit",
+        "precipitation_unit": "inch",
         "forecast_days": forecast_days,
         "timezone": "UTC",
     }
@@ -476,8 +493,16 @@ def merge_wind_into_frames(frames, wind_resp, nrows, ncols):
         sp_grid = []
         dg_grid = []
         gust_grid, temp_grid, pressure_grid = [], [], []
+        apparent_grid, dew_grid, humidity_grid = [], [], []
+        cloud_grid, cloud_low_grid, cloud_mid_grid, cloud_high_grid = [], [], [], []
+        visibility_grid, precip_grid, precip_prob_grid = [], [], []
+        rain_grid, showers_grid, snow_grid, uv_grid, weather_code_grid = [], [], [], [], []
         for row in range(nrows):
             sp_row, gust_row, dg_row, temp_row, pressure_row = [], [], [], [], []
+            apparent_row, dew_row, humidity_row = [], [], []
+            cloud_row, cloud_low_row, cloud_mid_row, cloud_high_row = [], [], [], []
+            visibility_row, precip_row, precip_prob_row = [], [], []
+            rain_row, showers_row, snow_row, uv_row, weather_code_row = [], [], [], [], []
             for col in range(ncols):
                 pt = row * ncols + col
                 if h_idx is None:
@@ -485,27 +510,70 @@ def merge_wind_into_frames(frames, wind_resp, nrows, ncols):
                     gust_row.append(None)
                     dg_row.append(None)
                     temp_row.append(None); pressure_row.append(None)
+                    apparent_row.append(None); dew_row.append(None); humidity_row.append(None)
+                    cloud_row.append(None); cloud_low_row.append(None); cloud_mid_row.append(None); cloud_high_row.append(None)
+                    visibility_row.append(None); precip_row.append(None); precip_prob_row.append(None)
+                    rain_row.append(None); showers_row.append(None); snow_row.append(None); uv_row.append(None); weather_code_row.append(None)
                     continue
                 sp = wind_resp[pt]["hourly"]["wind_speed_10m"][h_idx]
                 gust = wind_resp[pt]["hourly"]["wind_gusts_10m"][h_idx]
                 dg = wind_resp[pt]["hourly"]["wind_direction_10m"][h_idx]
                 temp = wind_resp[pt]["hourly"]["temperature_2m"][h_idx]
+                apparent = wind_resp[pt]["hourly"]["apparent_temperature"][h_idx]
+                dew = wind_resp[pt]["hourly"]["dew_point_2m"][h_idx]
                 pressure = wind_resp[pt]["hourly"]["pressure_msl"][h_idx]
+                humidity = wind_resp[pt]["hourly"]["relative_humidity_2m"][h_idx]
+                cloud = wind_resp[pt]["hourly"]["cloud_cover"][h_idx]
+                cloud_low = wind_resp[pt]["hourly"]["cloud_cover_low"][h_idx]
+                cloud_mid = wind_resp[pt]["hourly"]["cloud_cover_mid"][h_idx]
+                cloud_high = wind_resp[pt]["hourly"]["cloud_cover_high"][h_idx]
+                visibility = wind_resp[pt]["hourly"]["visibility"][h_idx]
+                precip = wind_resp[pt]["hourly"]["precipitation"][h_idx]
+                precip_prob = wind_resp[pt]["hourly"]["precipitation_probability"][h_idx]
+                rain = wind_resp[pt]["hourly"]["rain"][h_idx]
+                showers = wind_resp[pt]["hourly"]["showers"][h_idx]
+                snow = wind_resp[pt]["hourly"]["snowfall"][h_idx]
+                uv = wind_resp[pt]["hourly"]["uv_index"][h_idx]
+                weather_code = wind_resp[pt]["hourly"]["weather_code"][h_idx]
                 # rename to forecast.json contract keys (kn + deg)
                 sp_row.append(sp)
                 gust_row.append(gust)
                 dg_row.append(dg)
                 temp_row.append(temp); pressure_row.append(pressure)
+                apparent_row.append(apparent); dew_row.append(dew); humidity_row.append(humidity)
+                cloud_row.append(cloud); cloud_low_row.append(cloud_low); cloud_mid_row.append(cloud_mid); cloud_high_row.append(cloud_high)
+                visibility_row.append(None if visibility is None else visibility / 1609.344)
+                precip_row.append(precip); precip_prob_row.append(precip_prob)
+                rain_row.append(rain); showers_row.append(showers); snow_row.append(snow); uv_row.append(uv); weather_code_row.append(weather_code)
             sp_grid.append(sp_row)
             gust_grid.append(gust_row)
             dg_grid.append(dg_row)
             temp_grid.append(temp_row)
             pressure_grid.append(pressure_row)
+            apparent_grid.append(apparent_row); dew_grid.append(dew_row); humidity_grid.append(humidity_row)
+            cloud_grid.append(cloud_row); cloud_low_grid.append(cloud_low_row); cloud_mid_grid.append(cloud_mid_row); cloud_high_grid.append(cloud_high_row)
+            visibility_grid.append(visibility_row); precip_grid.append(precip_row); precip_prob_grid.append(precip_prob_row)
+            rain_grid.append(rain_row); showers_grid.append(showers_row); snow_grid.append(snow_row); uv_grid.append(uv_row); weather_code_grid.append(weather_code_row)
         new_fr["wind_speed_kn"] = sp_grid
         new_fr["wind_gust_kn"] = gust_grid
         new_fr["wind_direction_deg"] = dg_grid
         new_fr["temperature_f"] = temp_grid
         new_fr["pressure_hpa"] = pressure_grid
+        new_fr["apparent_temperature_f"] = apparent_grid
+        new_fr["dew_point_f"] = dew_grid
+        new_fr["relative_humidity_pct"] = humidity_grid
+        new_fr["cloud_cover_pct"] = cloud_grid
+        new_fr["cloud_cover_low_pct"] = cloud_low_grid
+        new_fr["cloud_cover_mid_pct"] = cloud_mid_grid
+        new_fr["cloud_cover_high_pct"] = cloud_high_grid
+        new_fr["visibility_mi"] = visibility_grid
+        new_fr["precipitation_in"] = precip_grid
+        new_fr["precipitation_probability_pct"] = precip_prob_grid
+        new_fr["rain_in"] = rain_grid
+        new_fr["showers_in"] = showers_grid
+        new_fr["snowfall_in"] = snow_grid
+        new_fr["uv_index"] = uv_grid
+        new_fr["weather_code"] = weather_code_grid
         out.append(new_fr)
     return out
 
@@ -593,6 +661,12 @@ def main():
             "wave_period_s": "s", "swell_period_s": "s", "wind_wave_period_s": "s",
             "wind_speed_kn": "kn", "wind_gust_kn": "kn", "wind_direction_deg": "deg",
             "temperature_f": "°F", "pressure_hpa": "hPa (mean sea level)",
+            "apparent_temperature_f": "°F", "dew_point_f": "°F",
+            "relative_humidity_pct": "%", "cloud_cover_pct": "%",
+            "cloud_cover_low_pct": "%", "cloud_cover_mid_pct": "%", "cloud_cover_high_pct": "%",
+            "visibility_mi": "mi", "precipitation_in": "in", "precipitation_probability_pct": "%",
+            "rain_in": "in", "showers_in": "in", "snowfall_in": "in", "uv_index": "index",
+            "weather_code": "WMO code",
             "tide_height_ft": "ft (MLLW)",
         },
         "frames": frames,

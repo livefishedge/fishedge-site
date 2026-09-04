@@ -184,6 +184,14 @@
         <div class="bv-layer-group">
           <div class="bv-layer-group-title">Atmosphere</div>
           <label><input type="checkbox" data-layer="temperature"><span class="bv-dot dot-temp"></span>Air Temp <button class="bv-unit-toggle" type="button" data-unit-key="temperature_f">°F</button></label>
+          <label><input type="checkbox" data-layer="apparent_temperature"><span class="bv-dot dot-temp"></span>Feels Like <button class="bv-unit-toggle" type="button" data-unit-key="apparent_temperature_f">°F</button></label>
+          <label><input type="checkbox" data-layer="dew_point"><span class="bv-dot dot-temp"></span>Dew Point <button class="bv-unit-toggle" type="button" data-unit-key="dew_point_f">°F</button></label>
+          <label><input type="checkbox" data-layer="humidity"><span class="bv-dot dot-wind"></span>Humidity</label>
+          <label><input type="checkbox" data-layer="cloud_cover"><span class="bv-dot dot-press"></span>Cloud Cover</label>
+          <label><input type="checkbox" data-layer="visibility"><span class="bv-dot dot-press"></span>Visibility</label>
+          <label><input type="checkbox" data-layer="precipitation"><span class="bv-dot dot-tide"></span>Precipitation</label>
+          <label><input type="checkbox" data-layer="precipitation_probability"><span class="bv-dot dot-tide"></span>Precip. Chance</label>
+          <label><input type="checkbox" data-layer="uv_index"><span class="bv-dot dot-temp"></span>UV Index</label>
           <label><input type="checkbox" data-layer="pressure"><span class="bv-dot dot-press"></span>Pressure <button class="bv-unit-toggle" type="button" data-unit-key="pressure_hpa">hPa</button></label>
           <label><input type="checkbox" data-layer="wind" checked><span class="bv-dot dot-wind"></span>Wind <button class="bv-unit-toggle" type="button" data-unit-key="wind_speed_kn">kn</button></label>
         </div>
@@ -293,6 +301,14 @@
     //    so the colorbar isn't clipped when the data sits outside the default range.
     const PRODUCTS = {
       temperature_f: { name: 'Air temperature', unit: '°F', scale: 'SST', viz: 'heat', dataKey: 'temperature_f', dynamicRange: true },
+      apparent_temperature_f: { name: 'Feels-like temperature', unit: '°F', scale: 'SST', viz: 'heat', dataKey: 'apparent_temperature_f', dynamicRange: true },
+      dew_point_f: { name: 'Dew point', unit: '°F', scale: 'SST', viz: 'heat', dataKey: 'dew_point_f', dynamicRange: true },
+      relative_humidity_pct: { name: 'Relative humidity', unit: '%', scale: 'UV', viz: 'heat', dataKey: 'relative_humidity_pct', dynamicRange: false, fixedRange: [0, 100] },
+      cloud_cover_pct: { name: 'Cloud cover', unit: '%', scale: 'UV', viz: 'heat', dataKey: 'cloud_cover_pct', dynamicRange: false, fixedRange: [0, 100] },
+      visibility_mi: { name: 'Visibility', unit: 'mi', scale: 'SST', viz: 'heat', dataKey: 'visibility_mi', dynamicRange: false, fixedRange: [0, 125] },
+      precipitation_in: { name: 'Precipitation', unit: 'in', scale: 'UV', viz: 'heat', dataKey: 'precipitation_in', dynamicRange: false, fixedRange: [0, 4] },
+      precipitation_probability_pct: { name: 'Precipitation chance', unit: '%', scale: 'UV', viz: 'heat', dataKey: 'precipitation_probability_pct', dynamicRange: false, fixedRange: [0, 100] },
+      uv_index: { name: 'UV index', unit: 'index', scale: 'UV', viz: 'heat', dataKey: 'uv_index', dynamicRange: false, fixedRange: [0, 12] },
       wave_height_ft:{ name: 'Significant wave height', unit: 'ft', scale: 'UV', viz: 'arrows', dataKey: 'wave_height_ft', dirKey: 'wave_direction_deg', dynamicRange: false, fixedRange: [0, 5] },
       swell_height_ft:{name: 'Swell height',unit: 'ft', scale: 'UV', viz: 'arrows', dataKey: 'swell_height_ft', dirKey: 'swell_direction_deg', dynamicRange: false, fixedRange: [0, 5] },
       // Composite heat uses significant wave height; partition directions are
@@ -953,20 +969,21 @@
     let currentFrame = null;
     let activeRange = null; // {vmin, vmax} computed per-frame when dynamicRange=true
     let localTideExtrema = null;
-    const unitModes = { temperature_f: 'imperial', wave_height_ft: 'imperial', swell_height_ft: 'imperial', wind_wave_height_ft: 'imperial', wind_speed_kn: 'imperial', pressure_hpa: 'metric', tide_range_ft: 'imperial' };
-    const UNIT_LABELS = { temperature_f: ['°F', '°C'], wave_height_ft: ['ft', 'm'], swell_height_ft: ['ft', 'm'], wind_wave_height_ft: ['ft', 'm'], wind_speed_kn: ['kn', 'm/s'], pressure_hpa: ['hPa', 'inHg'], tide_range_ft: ['ft', 'm'] };
+    const unitModes = { temperature_f: 'imperial', apparent_temperature_f: 'imperial', dew_point_f: 'imperial', wave_height_ft: 'imperial', swell_height_ft: 'imperial', wind_wave_height_ft: 'imperial', wind_speed_kn: 'imperial', pressure_hpa: 'metric', tide_range_ft: 'imperial' };
+    const UNIT_LABELS = { temperature_f: ['°F', '°C'], apparent_temperature_f: ['°F', '°C'], dew_point_f: ['°F', '°C'], wave_height_ft: ['ft', 'm'], swell_height_ft: ['ft', 'm'], wind_wave_height_ft: ['ft', 'm'], wind_speed_kn: ['kn', 'm/s'], pressure_hpa: ['hPa', 'inHg'], tide_range_ft: ['ft', 'm'] };
     function convertDisplayValue(key, value) {
       if (!Number.isFinite(value)) return value;
       if (key === 'pressure_hpa' && unitModes[key] === 'imperial') return value * 0.0295299831;
       if (key === 'tide_range_ft' && unitModes[key] === 'metric') return value * 0.3048;
       if (unitModes[key] !== 'metric') return value;
       if (key === 'temperature_f') return (value - 32) * 5 / 9;
+      if (key === 'apparent_temperature_f' || key === 'dew_point_f') return (value - 32) * 5 / 9;
       if (key === 'wave_height_ft' || key === 'swell_height_ft' || key === 'wind_wave_height_ft') return value * 0.3048;
       if (key === 'wind_speed_kn') return value * 0.514444;
       return value;
     }
     function displayUnit(key, fallback) {
-      if (unitModes[key] === 'metric' && key === 'temperature_f') return '°C';
+      if (unitModes[key] === 'metric' && ['temperature_f', 'apparent_temperature_f', 'dew_point_f'].includes(key)) return '°C';
       if (unitModes[key] === 'metric' && ['wave_height_ft', 'swell_height_ft', 'wind_wave_height_ft'].includes(key)) return 'm';
       if (unitModes[key] === 'metric' && key === 'wind_speed_kn') return 'm/s';
       if (unitModes[key] === 'imperial' && key === 'pressure_hpa') return 'inHg';
@@ -985,7 +1002,7 @@
     // Keep internal state identical to the checkbox defaults. SWH is
     // intentionally off at startup so mobile devices do not render an
     // unnecessary scalar field beneath the wind-wave/swell overlays.
-    const layerVisibility = { wave_height: false, temperature: false, pressure: false, tide_level: true, tide_range: true, swell: true, wind_wave: true, wind: true };
+    const layerVisibility = { wave_height: false, temperature: false, apparent_temperature: false, dew_point: false, humidity: false, cloud_cover: false, visibility: false, precipitation: false, precipitation_probability: false, uv_index: false, pressure: false, tide_level: true, tide_range: true, swell: true, wind_wave: true, wind: true };
     function syncStationVisibility() {
       const showStations = !!(layerVisibility.tide_level || layerVisibility.tide_range);
       stationLayer.setVisible(false);
@@ -1006,7 +1023,7 @@
       // The composite raster is the scalar heat field. Directional variables
       // are drawn on transparent canvases, so they must never keep the raster
       // alive after the scalar checkboxes are cleared.
-      return !!(layerVisibility.wave_height || layerVisibility.swell || layerVisibility.wind_wave || layerVisibility.temperature || layerVisibility.pressure || layerVisibility.tide_level);
+      return !!(layerVisibility.wave_height || layerVisibility.swell || layerVisibility.wind_wave || layerVisibility.temperature || layerVisibility.apparent_temperature || layerVisibility.dew_point || layerVisibility.humidity || layerVisibility.cloud_cover || layerVisibility.visibility || layerVisibility.precipitation || layerVisibility.precipitation_probability || layerVisibility.uv_index || layerVisibility.pressure || layerVisibility.tide_level);
     }
 
     // Priority: significant wave height > exactly one partition > temperature > tide > pressure.
@@ -1029,6 +1046,14 @@
         if (layerVisibility.wind_wave) return 'wind_wave_height_ft';
       }
       if (layerVisibility.temperature) return 'temperature_f';
+      if (layerVisibility.apparent_temperature) return 'apparent_temperature_f';
+      if (layerVisibility.dew_point) return 'dew_point_f';
+      if (layerVisibility.humidity) return 'relative_humidity_pct';
+      if (layerVisibility.cloud_cover) return 'cloud_cover_pct';
+      if (layerVisibility.visibility) return 'visibility_mi';
+      if (layerVisibility.precipitation) return 'precipitation_in';
+      if (layerVisibility.precipitation_probability) return 'precipitation_probability_pct';
+      if (layerVisibility.uv_index) return 'uv_index';
       if (layerVisibility.tide_level) return 'astronomical_tide_ft';
       if (layerVisibility.pressure) return 'pressure_hpa';
       return null;
@@ -1329,6 +1354,14 @@
       const available = {
         wave_height: !!(currentFrame && currentFrame.wave_height_ft),
         temperature: !!(currentFrame && currentFrame.temperature_f),
+        apparent_temperature: !!(currentFrame && currentFrame.apparent_temperature_f),
+        dew_point: !!(currentFrame && currentFrame.dew_point_f),
+        humidity: !!(currentFrame && currentFrame.relative_humidity_pct),
+        cloud_cover: !!(currentFrame && currentFrame.cloud_cover_pct),
+        visibility: !!(currentFrame && currentFrame.visibility_mi),
+        precipitation: !!(currentFrame && currentFrame.precipitation_in),
+        precipitation_probability: !!(currentFrame && currentFrame.precipitation_probability_pct),
+        uv_index: !!(currentFrame && currentFrame.uv_index),
         pressure: !!(currentFrame && currentFrame.pressure_hpa),
         tide_level: !!(currentFrame && currentFrame.astronomical_tide_ft),
         tide_range: !!(currentFrame && currentFrame.tide_range_ft),
@@ -1710,7 +1743,7 @@
       // only the selected scalar may paint the magnitude field. Otherwise
       // simultaneous Wave (wind), Swell, and Significant Wave Height layers
       // blend three unrelated color scales over the same pixels.
-      if (['wave_height_ft', 'temperature_f', 'pressure_hpa', 'astronomical_tide_ft'].includes(heatKey)) drawWaveHeatOverlay();
+      if (['wave_height_ft', 'temperature_f', 'apparent_temperature_f', 'dew_point_f', 'relative_humidity_pct', 'cloud_cover_pct', 'visibility_mi', 'precipitation_in', 'precipitation_probability_pct', 'uv_index', 'pressure_hpa', 'astronomical_tide_ft'].includes(heatKey)) drawWaveHeatOverlay();
       if (partitionCount === 1 && heatKey === 'wind_wave_height_ft' && layerVisibility.wind_wave) drawPartitionMagnitudeHeat('wind_wave');
       if (partitionCount === 1 && heatKey === 'swell_height_ft' && layerVisibility.swell) drawPartitionMagnitudeHeat('swell');
       if (layerVisibility.swell || layerVisibility.wind_wave) drawWavePackets();
@@ -2186,7 +2219,7 @@
         if (['wave_height_ft', 'swell_height_ft', 'wind_wave_height_ft'].includes(heatKey) ||
             layerVisibility.swell || layerVisibility.wind_wave) ensureWaveMaskImage();
         const partitionCount = Number(!!layerVisibility.wind_wave) + Number(!!layerVisibility.swell);
-        if (['wave_height_ft', 'temperature_f', 'pressure_hpa', 'astronomical_tide_ft'].includes(heatKey)) drawWaveHeatOverlay();
+        if (['wave_height_ft', 'temperature_f', 'apparent_temperature_f', 'dew_point_f', 'relative_humidity_pct', 'cloud_cover_pct', 'visibility_mi', 'precipitation_in', 'precipitation_probability_pct', 'uv_index', 'pressure_hpa', 'astronomical_tide_ft'].includes(heatKey)) drawWaveHeatOverlay();
         if (partitionCount === 1 && heatKey === 'wind_wave_height_ft' && layerVisibility.wind_wave) drawPartitionMagnitudeHeat('wind_wave');
         if (partitionCount === 1 && heatKey === 'swell_height_ft' && layerVisibility.swell) drawPartitionMagnitudeHeat('swell');
         if (layerVisibility.swell || layerVisibility.wind_wave) drawWavePackets();
@@ -2995,7 +3028,7 @@
       input.addEventListener('change', () => {
         layerVisibility[input.dataset.layer] = input.checked;
         syncStationVisibility();
-        const selectedKey = { wave_height: 'wave_height_ft', temperature: 'temperature_f', pressure: 'pressure_hpa', tide_level: 'astronomical_tide_ft', wind_wave: 'wind_wave_height_ft', swell: 'swell_height_ft' }[input.dataset.layer];
+        const selectedKey = { wave_height: 'wave_height_ft', temperature: 'temperature_f', apparent_temperature: 'apparent_temperature_f', dew_point: 'dew_point_f', humidity: 'relative_humidity_pct', cloud_cover: 'cloud_cover_pct', visibility: 'visibility_mi', precipitation: 'precipitation_in', precipitation_probability: 'precipitation_probability_pct', uv_index: 'uv_index', pressure: 'pressure_hpa', tide_level: 'astronomical_tide_ft', wind_wave: 'wind_wave_height_ft', swell: 'swell_height_ft' }[input.dataset.layer];
         if (input.checked && selectedKey) selectedHeatKey = selectedKey;
         if (input.dataset.layer === 'temperature' && input.checked) {
           layerVisibility.wave_height = false;
