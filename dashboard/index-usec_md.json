@@ -1,6 +1,6 @@
 {
   "region": "usec_md",
-  "last_updated": "2026-09-04T16:25:36.034299Z",
+  "last_updated": "2026-09-04T16:55:00.367785Z",
   "vars": [
     "chl",
     "sst",
@@ -1751,16 +1751,6 @@
     "chl_front": [
       {
         "var": "chl_front",
-        "id": "chlfront_usec_md_2026233.1648_VJ1",
-        "label": "2026-08-21 16:48 UTC | VJ1",
-        "time_iso": "2026-08-21T16:48:00Z",
-        "json_path": "https://data.fishedge.live/usec_md/chl_front/chlfront_usec_md_2026233.1648_VJ1.json",
-        "grid_file": "frame_bbox",
-        "product_level": null,
-        "stitched": false
-      },
-      {
-        "var": "chl_front",
         "id": "chlfront_usec_md_2026233.1733_VJ2",
         "label": "2026-08-21 17:33 UTC | VJ2",
         "time_iso": "2026-08-21T17:33:00Z",
@@ -3427,11 +3417,11 @@
     "online_retention_days": 14
   },
   "_dashboard_rewrite": {
-    "rewritten_at": "2026-09-04T16:38:01.953308+00:00",
+    "rewritten_at": "2026-09-04T17:08:02.136407+00:00",
     "r2_base": "https://data.fishedge.live",
     "retention_days": 14,
     "cutoff_doy": 233,
-    "frames_kept": 335,
+    "frames_kept": 334,
     "frames_dropped_outside_retention": 0
   }
 }
