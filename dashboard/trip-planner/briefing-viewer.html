@@ -79,6 +79,11 @@
     .bv-top-modes .bv-preset{ flex:0 0 auto; border:1px solid #2a3a4d; border-radius:5px; padding:5px 7px; background:#132333; color:#d6e5f2; font:700 10px/1.1 inherit; cursor:pointer; white-space:nowrap; }
     .bv-top-modes .bv-preset:hover,.bv-top-modes .bv-preset.active{ background:#17456a; border-color:#4fc3f7; color:#fff; }
     .bv-top-modes .bv-preset small{ display:none; }
+    .bv-active-layer-strip{ position:fixed; top:44px; left:0; right:0; z-index:21; display:flex; align-items:center; gap:5px; min-height:28px; padding:3px 12px; overflow-x:auto; background:rgba(5,11,16,.9); border-bottom:1px solid rgba(255,255,255,.12); scrollbar-width:none; }
+    .bv-active-layer-strip::-webkit-scrollbar{ display:none; }
+    .bv-active-layer-strip label{ display:flex; align-items:center; gap:4px; flex:0 0 auto; padding:3px 6px; border:1px solid rgba(79,195,247,.35); border-radius:4px; background:rgba(19,35,51,.82); color:#d6e5f2; font-size:10px; font-weight:800; white-space:nowrap; cursor:pointer; }
+    .bv-active-layer-strip input{ width:12px; height:12px; margin:0; accent-color:#4fc3f7; }
+    .bv-active-layer-strip .bv-active-empty{ color:#7a8fa8; font-size:10px; font-style:italic; }
     #bv-menu-panel .bv-preset{ border:1px solid #2a3a4d; border-radius:6px; padding:7px 6px; background:#132333; color:#d6e5f2; font:700 11px/1.1 inherit; cursor:pointer; text-align:left; }
     #bv-menu-panel .bv-preset:hover,#bv-menu-panel .bv-preset.active{ background:#17456a; border-color:#4fc3f7; color:#fff; }
     #bv-menu-panel .bv-preset small{ display:block; margin-top:3px; color:#8fa6bb; font-size:9px; font-weight:600; }
@@ -156,7 +161,7 @@
     #bv-cbar { width: 100%; height: 32px; }
     .bv-ranges-ticks { display: flex; justify-content: space-between; font-size: 10px; color: #9fb0c3; font-family: monospace; margin-top: 2px; }
 
-    .bv-map { position: absolute; top: 48px; left: 0; right: 0; bottom: 110px; touch-action: none; }
+    .bv-map { position: absolute; top: 74px; left: 0; right: 0; bottom: 110px; touch-action: none; }
     .bv-flow-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 4; mix-blend-mode: screen; }
     .bv-streamlines-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3; }
     .bv-tide-overlay-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 6; mix-blend-mode: normal; }
@@ -175,8 +180,9 @@
       .bv-top-modes { flex:1 1 0; min-width:0; overflow-x:auto; scrollbar-width:none; }
       .bv-top-modes::-webkit-scrollbar { display:none; }
       .bv-top-modes .bv-preset { flex:0 0 auto; padding:5px 6px; font-size:9px; }
+      .bv-active-layer-strip{ top:42px; padding-left:8px; padding-right:8px; }
       .bv-products button { font-size: 11px; padding: 3px 6px; }
-      .bv-map { bottom: 96px; }
+      .bv-map { top:72px; bottom:96px; }
       .bv-framebar { gap: 5px; padding-left: 8px; padding-right: 8px; }
       #bv-slider { min-width: 60px; }
       #bv-speed { width: 56px; }
@@ -188,16 +194,17 @@
   <div class="bv-toolbar">
     <span class="bv-view-mode-label">View Mode:</span>
     <div class="bv-top-modes" id="bv-top-modes" aria-label="Planning view">
-      <button class="bv-preset active" type="button" data-preset="safety" title="Safety: go/no-go view for wave steepness, gusts, and storm conditions." aria-label="Safety: go or no-go conditions">Safety</button>
-      <button class="bv-preset" type="button" data-preset="comfort" title="Comfort: evaluate wave height, period, wind chop, and crossed seas." aria-label="Comfort: ride and seakeeping">Comfort</button>
-      <button class="bv-preset" type="button" data-preset="catchability" title="Fishing: inspect the currently available wave, swell, and wind patterns. SST, chlorophyll, currents, and altimetry require additional data sources." aria-label="Fishing: pelagic productivity">Fishing</button>
-      <button class="bv-preset" type="button" data-preset="fuel" title="Fuel: compare wind-wave exposure and swell while planning an efficient transit." aria-label="Fuel: transit efficiency">Fuel</button>
-      <button class="bv-preset" type="button" data-preset="visibility" title="Visibility: assess visibility, cloud, wind texture, and daylight context." aria-label="Visibility: spotting conditions">Visibility</button>
-      <button class="bv-preset" type="button" data-preset="inlet" title="Inlet: assess tide, water level, wind, and wave conditions at the return choke point." aria-label="Inlet: hydrodynamics and clearance">Inlet</button>
+      <button class="bv-preset active" type="button" data-preset="safety" title="Safety: go/no-go view for waves, steepness, gusts, pressure, precipitation, and visibility." aria-label="Safety: go or no-go conditions">Safety</button>
+      <button class="bv-preset" type="button" data-preset="comfort" title="Comfort: combine sea state with apparent temperature, humidity, cloud, and wind exposure." aria-label="Comfort: ride and crew conditions">Comfort</button>
+      <button class="bv-preset" type="button" data-preset="catchability" title="Fishing: focus on sea state and tidal timing. SST, chlorophyll, currents, and altimetry require additional data sources." aria-label="Fishing: pelagic productivity">Fishing</button>
+      <button class="bv-preset" type="button" data-preset="fuel" title="Fuel: compare wind, waves, swell, and total sea-state exposure during transit." aria-label="Fuel: transit efficiency">Fuel</button>
+      <button class="bv-preset" type="button" data-preset="visibility" title="Visibility: assess visibility, humidity, cloud, precipitation, wind texture, and daylight context." aria-label="Visibility: spotting conditions">Visibility</button>
+      <button class="bv-preset" type="button" data-preset="inlet" title="Inlet: assess tide, water level context, wind, waves, visibility, and precipitation at the choke point." aria-label="Inlet: hydrodynamics and clearance">Inlet</button>
     </div>
     <div class="bv-time" id="bv-time">7-Day Outlook · loading forecast…</div>
     <button id="bv-hamburger-btn" aria-label="Open layer menu">☰</button>
   </div>
+  <div id="bv-active-layer-strip" class="bv-active-layer-strip" aria-label="Active map layers"></div>
     <div id="bv-menu-panel" aria-label="Layer and briefing menu">
     <div class="bv-section">
       <div class="bv-layers" id="bv-layers">
@@ -1043,6 +1050,42 @@
       stationLayer.setZIndex(1000);
       map.render();
     }
+    const LAYER_LABELS = {
+      temperature:'Air Temp', apparent_temperature:'Feels Like', dew_point:'Dew Point', humidity:'Humidity',
+      cloud_cover:'Cloud Cover', visibility:'Visibility', precipitation:'Precipitation',
+      precipitation_probability:'Precip. Chance', uv_index:'UV Index', pressure:'Pressure', wind:'Wind',
+      tide_level:'Tidal Stage', tide_range:'Tidal Range', wind_wave:'Wave', swell:'Swell', wave_height:'Sig. Wave Height'
+    };
+    function renderActiveLayerStrip() {
+      const strip = document.getElementById('bv-active-layer-strip');
+      if (!strip) return;
+      strip.replaceChildren();
+      Object.entries(layerVisibility).filter(([,on]) => on).forEach(([key]) => {
+        const label = document.createElement('label');
+        const input = document.createElement('input');
+        input.type = 'checkbox'; input.checked = true; input.dataset.layer = key;
+        label.append(input, document.createTextNode(LAYER_LABELS[key] || key));
+        strip.appendChild(label);
+      });
+      if (!strip.children.length) {
+        const empty = document.createElement('span');
+        empty.className = 'bv-active-empty'; empty.textContent = 'No map layers enabled';
+        strip.appendChild(empty);
+      }
+    }
+    function setupActiveLayerStrip() {
+      const strip = document.getElementById('bv-active-layer-strip');
+      if (!strip) return;
+      strip.addEventListener('change', event => {
+        const input = event.target.closest('input[data-layer]');
+        if (!input) return;
+        const menuInput = document.querySelector(`#bv-layers input[data-layer="${input.dataset.layer}"]`);
+        if (menuInput) {
+          menuInput.checked = input.checked;
+          menuInput.dispatchEvent(new Event('change', { bubbles:true }));
+        }
+      });
+    }
     let selectedHeatKey = 'wave_height_ft';
     const particles = [];
 
@@ -1146,6 +1189,7 @@
       });
       selectedHeatKey = preset.heat;
       document.querySelectorAll('.bv-preset').forEach(button => button.classList.toggle('active', button.dataset.preset === name));
+      renderActiveLayerStrip();
       syncStationVisibility();
       updateLayerAvailability();
       computeActiveRange();
@@ -3131,6 +3175,7 @@
       document.querySelectorAll('#bv-layers input[data-layer]').forEach(input => {
       input.addEventListener('change', () => {
         layerVisibility[input.dataset.layer] = input.checked;
+        renderActiveLayerStrip();
         syncStationVisibility();
         const selectedKey = { wave_height: 'wave_height_ft', temperature: 'temperature_f', apparent_temperature: 'apparent_temperature_f', dew_point: 'dew_point_f', humidity: 'relative_humidity_pct', cloud_cover: 'cloud_cover_pct', visibility: 'visibility_mi', precipitation: 'precipitation_in', precipitation_probability: 'precipitation_probability_pct', uv_index: 'uv_index', pressure: 'pressure_hpa', tide_level: 'astronomical_tide_ft', wind_wave: 'wind_wave_height_ft', swell: 'swell_height_ft' }[input.dataset.layer];
         if (input.checked && selectedKey) selectedHeatKey = selectedKey;
@@ -3235,6 +3280,8 @@
     setupHamburger();
     setupUnitToggles();
     setupPlannerPresets();
+    setupActiveLayerStrip();
+    renderActiveLayerStrip();
 
     // ---- bootstrap ----
     (async () => {
