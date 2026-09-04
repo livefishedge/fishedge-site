@@ -395,13 +395,15 @@
       const phase = a / SYNODIC_DAYS;
       const illum = (1 - Math.cos(2 * Math.PI * phase)) / 2; // 0..1
       let name;
-      if (phase < 0.03125 || phase >= 0.96875) name = 'New Moon';
-      else if (phase < 0.21875) name = 'Waxing Crescent';
-      else if (phase < 0.28125) name = 'First Quarter';
-      else if (phase < 0.46875) name = 'Waxing Gibbous';
-      else if (phase < 0.53125) name = 'Full Moon';
-      else if (phase < 0.71875) name = 'Waning Gibbous';
-      else if (phase < 0.78125) name = 'Third Quarter';
+      // Quarter names are reserved for a narrow window around the actual
+      // quarter, so a 55%-lit waning moon is not mislabeled "Third Quarter".
+      if (phase < 0.02 || phase >= 0.98) name = 'New Moon';
+      else if (phase < 0.24) name = 'Waxing Crescent';
+      else if (phase < 0.26) name = 'First Quarter';
+      else if (phase < 0.48) name = 'Waxing Gibbous';
+      else if (phase < 0.52) name = 'Full Moon';
+      else if (phase < 0.74) name = 'Waning Gibbous';
+      else if (phase < 0.76) name = 'Third Quarter';
       else name = 'Waning Crescent';
       return { age: a, phase, illum, name };
     }
