@@ -74,8 +74,9 @@
     #bv-menu-panel .dot-tide{ background:#4fc3f7; }
     #bv-menu-panel .bv-status{ font-size:11px; color:#9fb0c3; padding:6px 8px; border-top:1px solid rgba(255,255,255,0.1); }
     #bv-menu-panel .bv-briefing-source{ font-size:10px; color:#7a8fa8; margin-top:-3px; }
-    .bv-top-modes{ display:flex; align-items:center; gap:4px; min-width:0; flex:1; }
-    .bv-top-modes .bv-preset{ border:1px solid #2a3a4d; border-radius:5px; padding:5px 7px; background:#132333; color:#d6e5f2; font:700 10px/1.1 inherit; cursor:pointer; white-space:nowrap; }
+    .bv-top-modes{ display:flex; align-items:center; gap:4px; min-width:0; flex:1; overflow-x:auto; scrollbar-width:none; }
+    .bv-top-modes::-webkit-scrollbar{ display:none; }
+    .bv-top-modes .bv-preset{ flex:0 0 auto; border:1px solid #2a3a4d; border-radius:5px; padding:5px 7px; background:#132333; color:#d6e5f2; font:700 10px/1.1 inherit; cursor:pointer; white-space:nowrap; }
     .bv-top-modes .bv-preset:hover,.bv-top-modes .bv-preset.active{ background:#17456a; border-color:#4fc3f7; color:#fff; }
     .bv-top-modes .bv-preset small{ display:none; }
     #bv-menu-panel .bv-preset{ border:1px solid #2a3a4d; border-radius:6px; padding:7px 6px; background:#132333; color:#d6e5f2; font:700 11px/1.1 inherit; cursor:pointer; text-align:left; }
@@ -187,10 +188,12 @@
   <div class="bv-toolbar">
     <span class="bv-view-mode-label">View Mode:</span>
     <div class="bv-top-modes" id="bv-top-modes" aria-label="Planning view">
-      <button class="bv-preset active" type="button" data-preset="trip" title="Pre-trip: review overall route conditions, visibility, cloud, and tide." aria-label="Pre-trip: overall route conditions">Pre-trip</button>
-      <button class="bv-preset" type="button" data-preset="transit" title="Outbound: assess wind, significant waves, wind waves, and swell." aria-label="Outbound: wind and wave conditions">Outbound</button>
-      <button class="bv-preset" type="button" data-preset="grounds" title="Fishing: focus on swell and tidal timing while fishing." aria-label="Fishing: swell and tidal timing">Fishing</button>
-      <button class="bv-preset" type="button" data-preset="return" title="Inbound: check wind, visibility, precipitation chance, and tide." aria-label="Inbound: return conditions">Inbound</button>
+      <button class="bv-preset active" type="button" data-preset="safety" title="Safety: go/no-go view for wave steepness, gusts, and storm conditions." aria-label="Safety: go or no-go conditions">Safety</button>
+      <button class="bv-preset" type="button" data-preset="comfort" title="Comfort: evaluate wave height, period, wind chop, and crossed seas." aria-label="Comfort: ride and seakeeping">Comfort</button>
+      <button class="bv-preset" type="button" data-preset="catchability" title="Fishing: inspect the currently available wave, swell, and wind patterns. SST, chlorophyll, currents, and altimetry require additional data sources." aria-label="Fishing: pelagic productivity">Fishing</button>
+      <button class="bv-preset" type="button" data-preset="fuel" title="Fuel: compare wind-wave exposure and swell while planning an efficient transit." aria-label="Fuel: transit efficiency">Fuel</button>
+      <button class="bv-preset" type="button" data-preset="visibility" title="Visibility: assess visibility, cloud, wind texture, and daylight context." aria-label="Visibility: spotting conditions">Visibility</button>
+      <button class="bv-preset" type="button" data-preset="inlet" title="Inlet: assess tide, water level, wind, and wave conditions at the return choke point." aria-label="Inlet: hydrodynamics and clearance">Inlet</button>
     </div>
     <div class="bv-time" id="bv-time">7-Day Outlook · loading forecast…</div>
     <button id="bv-hamburger-btn" aria-label="Open layer menu">☰</button>
@@ -1122,10 +1125,12 @@
     }
 
     const PLANNER_PRESETS = {
-      trip:    { layers:['wind','tide_level','tide_range','visibility','cloud_cover'], heat:'astronomical_tide_ft' },
-      transit: { layers:['wind','wind_wave','swell','wave_height'], heat:'wave_height_ft' },
-      grounds: { layers:['wind','swell','tide_level','tide_range'], heat:'swell_height_ft' },
-      return:  { layers:['wind','tide_level','tide_range','visibility','precipitation_probability'], heat:'astronomical_tide_ft' },
+      safety:      { layers:['wind','wind_wave','swell','wave_height'], heat:'wave_height_ft' },
+      comfort:     { layers:['wind','wind_wave','swell','wave_height'], heat:'wave_height_ft' },
+      catchability:{ layers:['wind','wind_wave','swell','wave_height'], heat:'wave_height_ft' },
+      fuel:        { layers:['wind','wind_wave'], heat:'wind_wave_height_ft' },
+      visibility:  { layers:['wind','visibility','cloud_cover','tide_level'], heat:'visibility_mi' },
+      inlet:       { layers:['wind','wave_height','tide_level','tide_range'], heat:'astronomical_tide_ft' },
     };
     function applyPlannerPreset(name) {
       const preset = PLANNER_PRESETS[name];
