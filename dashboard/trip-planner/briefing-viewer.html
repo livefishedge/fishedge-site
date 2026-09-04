@@ -395,14 +395,14 @@
       const phase = a / SYNODIC_DAYS;
       const illum = (1 - Math.cos(2 * Math.PI * phase)) / 2; // 0..1
       let name;
-      if (phase < 0.03 || phase > 0.97) name = 'New';
-      else if (phase < 0.22) name = 'Waxing crescent';
-      else if (phase < 0.28) name = 'First quarter';
-      else if (phase < 0.47) name = 'Waxing gibbous';
-      else if (phase < 0.53) name = 'Full';
-      else if (phase < 0.72) name = 'Waning gibbous';
-      else if (phase < 0.78) name = 'Last quarter';
-      else name = 'Waning crescent';
+      if (phase < 0.03125 || phase >= 0.96875) name = 'New Moon';
+      else if (phase < 0.21875) name = 'Waxing Crescent';
+      else if (phase < 0.28125) name = 'First Quarter';
+      else if (phase < 0.46875) name = 'Waxing Gibbous';
+      else if (phase < 0.53125) name = 'Full Moon';
+      else if (phase < 0.71875) name = 'Waning Gibbous';
+      else if (phase < 0.78125) name = 'Third Quarter';
+      else name = 'Waning Crescent';
       return { age: a, phase, illum, name };
     }
 
@@ -454,11 +454,6 @@
       const litClipId = `bvMoonLitClip${Math.round(phase * 100000)}`;
       svg.innerHTML = `
         <defs>
-          <radialGradient id="bvMoonSurface" cx="38%" cy="32%" r="72%">
-            <stop offset="0%" stop-color="#fff8d6"/>
-            <stop offset="58%" stop-color="#e9dfb8"/>
-            <stop offset="100%" stop-color="#8d8274"/>
-          </radialGradient>
           <radialGradient id="bvMoonShadow" cx="35%" cy="30%" r="78%">
             <stop offset="0%" stop-color="#354050"/>
             <stop offset="100%" stop-color="#101722"/>
@@ -467,16 +462,7 @@
         </defs>
         <circle cx="${cx}" cy="${cy}" r="${R}" fill="url(#bvMoonShadow)" stroke="#4b5868" stroke-width="1.2"/>
         <g clip-path="url(#${litClipId})">
-          <circle cx="${cx}" cy="${cy}" r="${R}" fill="url(#bvMoonSurface)"/>
-          <g fill="#9f9478" opacity=".42">
-            <circle cx="${cx-15}" cy="${cy-12}" r="5"/><circle cx="${cx+12}" cy="${cy-15}" r="3.5"/>
-            <circle cx="${cx+17}" cy="${cy+9}" r="6"/><circle cx="${cx-8}" cy="${cy+16}" r="3"/>
-            <circle cx="${cx+2}" cy="${cy+3}" r="2.4"/><circle cx="${cx-22}" cy="${cy+5}" r="2.2"/>
-          </g>
-          <g fill="none" stroke="#786f5d" stroke-width="1" opacity=".38">
-            <circle cx="${cx-15}" cy="${cy-12}" r="7"/><circle cx="${cx+17}" cy="${cy+9}" r="8"/>
-            <circle cx="${cx+2}" cy="${cy+3}" r="3.5"/>
-          </g>
+          <image href="/trip-planner/data/${region}/briefing/moon-texture-v1.png" x="${cx-R}" y="${cy-R}" width="${2*R}" height="${2*R}" preserveAspectRatio="xMidYMid slice"/>
         </g>
         <text x="${W - 16}" y="20" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11" fill="#d6e5f2" font-weight="700">${m.name.toUpperCase()}</text>
         <text x="${W - 16}" y="36" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10" fill="#9fb0c3">${(illum*100).toFixed(0)}% lit</text>
