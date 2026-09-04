@@ -334,13 +334,18 @@
     //  - dynamicRange=true recomputes [vmin, vmax] from the actual frame data
     //    so the colorbar isn't clipped when the data sits outside the default range.
     const PRODUCTS = {
-      temperature_f: { name: 'Air temperature', unit: '°F', scale: 'SST', viz: 'heat', dataKey: 'temperature_f', dynamicRange: true },
-      apparent_temperature_f: { name: 'Feels-like temperature', unit: '°F', scale: 'SST', viz: 'heat', dataKey: 'apparent_temperature_f', dynamicRange: true },
-      dew_point_f: { name: 'Dew point', unit: '°F', scale: 'SST', viz: 'heat', dataKey: 'dew_point_f', dynamicRange: true },
+      // Stable ranges keep colors comparable while the forecast animates.
+      // Temperature bounds cover practical Mid-Atlantic marine operations;
+      // extremes saturate at the legend edge rather than rescaling the map.
+      temperature_f: { name: 'Air temperature', unit: '°F', scale: 'SST', viz: 'heat', dataKey: 'temperature_f', dynamicRange: false, fixedRange: [40, 110] },
+      apparent_temperature_f: { name: 'Feels-like temperature', unit: '°F', scale: 'SST', viz: 'heat', dataKey: 'apparent_temperature_f', dynamicRange: false, fixedRange: [40, 115] },
+      dew_point_f: { name: 'Dew point', unit: '°F', scale: 'SST', viz: 'heat', dataKey: 'dew_point_f', dynamicRange: false, fixedRange: [30, 85] },
       relative_humidity_pct: { name: 'Relative humidity', unit: '%', scale: 'UV', viz: 'heat', dataKey: 'relative_humidity_pct', dynamicRange: false, fixedRange: [0, 100] },
       cloud_cover_pct: { name: 'Cloud cover', unit: '%', scale: 'UV', viz: 'heat', dataKey: 'cloud_cover_pct', dynamicRange: false, fixedRange: [0, 100] },
-      visibility_mi: { name: 'Visibility', unit: 'mi', scale: 'SST', viz: 'heat', dataKey: 'visibility_mi', dynamicRange: false, fixedRange: [0, 125] },
-      precipitation_in: { name: 'Precipitation', unit: 'in', scale: 'UV', viz: 'heat', dataKey: 'precipitation_in', dynamicRange: false, fixedRange: [0, 4] },
+      // Visibility is capped at 20 nmi because values above that are all
+      // operationally "clear"; the low-end fog gradient remains legible.
+      visibility_mi: { name: 'Marine visibility', unit: 'mi', scale: 'SST', viz: 'heat', dataKey: 'visibility_mi', dynamicRange: false, fixedRange: [0, 20] },
+      precipitation_in: { name: 'Precipitation', unit: 'in', scale: 'UV', viz: 'heat', dataKey: 'precipitation_in', dynamicRange: false, fixedRange: [0, 2] },
       precipitation_probability_pct: { name: 'Precipitation chance', unit: '%', scale: 'UV', viz: 'heat', dataKey: 'precipitation_probability_pct', dynamicRange: false, fixedRange: [0, 100] },
       uv_index: { name: 'UV index', unit: 'index', scale: 'UV', viz: 'heat', dataKey: 'uv_index', dynamicRange: false, fixedRange: [0, 12] },
       wave_height_ft:{ name: 'Significant wave height', unit: 'ft', scale: 'UV', viz: 'arrows', dataKey: 'wave_height_ft', dirKey: 'wave_direction_deg', dynamicRange: false, fixedRange: [0, 5] },
@@ -350,7 +355,7 @@
       wave_composite:{name: 'Significant wave height', unit: 'ft', scale: 'UV', viz: 'composite', dataKey: 'wave_height_ft', dynamicRange: false, fixedRange: [0, 5] },
       wind_wave_height_ft:{name: 'Wave (wind)', unit: 'ft', scale: 'UV', viz: 'heat', dataKey: 'wind_wave_height_ft', dynamicRange: false, fixedRange: [0, 5] },
       wind_speed_kn: { name: 'Wind flow',   unit: 'kn',  scale: 'CHL', viz: 'streamlines', dynamicRange: false },
-      pressure_hpa:  { name: 'Pressure',    unit: 'hPa', scale: 'SLA', viz: 'contours',    dynamicRange: true  },
+      pressure_hpa:  { name: 'Pressure',    unit: 'hPa', scale: 'SLA', viz: 'contours',    dynamicRange: false, fixedRange: [980, 1040]  },
       astronomical_tide_ft: { name: 'Tidal Stage', unit: 'high → falling → low → rising', scale: 'TIDE', viz: 'heat', dataKey: 'astronomical_tide_ft', dynamicRange: false },
     };
 
@@ -1406,8 +1411,13 @@
       const grid = grids[0];
       if (!def.dynamicRange || !grid || !grid.length) {
         if (def.fixedRange) {
-          const factor = unitModes[scalarKey] === 'metric' ? 0.3048 : 1;
-          activeRange = { vmin: def.fixedRange[0] * factor, vmax: def.fixedRange[1] * factor };
+          // Fixed limits are stored in the forecast's native units. Convert
+          // both endpoints through the same display-unit path as the raster
+          // values; a blanket 0.3048 factor would corrupt °F, hPa, mi, and in.
+          activeRange = {
+            vmin: convertDisplayValue(scalarKey, def.fixedRange[0]),
+            vmax: convertDisplayValue(scalarKey, def.fixedRange[1]),
+          };
           return;
         }
         const fixedMax = scalarKey === 'wind_speed_kn' && unitModes.wind_speed_kn === 'metric'
