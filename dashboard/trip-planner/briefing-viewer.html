@@ -16,8 +16,7 @@
       border-bottom: 1px solid #1b2836; backdrop-filter: blur(6px);
       flex-wrap: wrap;
     }
-    .bv-back { color: #4fc3f7; text-decoration: none; font-size: 13px; padding: 4px 10px; border: 1px solid #2a3a4d; border-radius: 4px; }
-    .bv-back:hover { background: #1b2836; }
+    .bv-view-mode-label { color: #9fb0c3; font-size: 11px; font-weight: 800; letter-spacing: .04em; white-space: nowrap; }
     .bv-title { margin: 0; font-size: 15px; font-weight: 600; color: #e3f2fd; }
     .bv-time { font-size: 12px; color: #9fb0c3; margin-left: 4px; font-family: monospace; }
 
@@ -86,6 +85,8 @@
     #bv-menu-panel .bv-condition{ padding:7px 8px; border:1px solid rgba(255,255,255,.1); border-radius:5px; background:rgba(19,35,51,.65); min-width:0; }
     #bv-menu-panel .bv-condition b{ display:block; color:#fff; font:700 12px/1.2 monospace; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     #bv-menu-panel .bv-condition span{ display:block; color:#8fa6bb; font-size:9px; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    #bv-menu-panel .bv-home{ display:block; margin-top:auto; padding:8px 10px; border-top:1px solid rgba(255,255,255,.12); color:#4fc3f7; text-decoration:none; font-size:12px; font-weight:800; text-align:center; }
+    #bv-menu-panel .bv-home:hover{ background:rgba(77,125,255,.12); color:#fff; }
 
     /* Briefing details live inside the hamburger menu so the map remains
        unobstructed. */
@@ -167,7 +168,7 @@
 
     @media (max-width: 640px) {
       .bv-toolbar { padding: 6px 8px; gap: 6px; }
-      .bv-back { font-size: 11px; padding: 3px 6px; }
+      .bv-view-mode-label { font-size: 9px; }
       .bv-title { font-size: 13px; }
       .bv-time { display: none; }
       .bv-top-modes { flex:1 1 0; min-width:0; overflow-x:auto; scrollbar-width:none; }
@@ -184,12 +185,12 @@
 </head>
 <body>
   <div class="bv-toolbar">
-    <a class="bv-back" href="javascript:history.back()">← Back</a>
+    <span class="bv-view-mode-label">View Mode:</span>
     <div class="bv-top-modes" id="bv-top-modes" aria-label="Planning view">
-      <button class="bv-preset" type="button" data-preset="trip">Trip Intel</button>
-      <button class="bv-preset" type="button" data-preset="transit">Run &amp; Pass</button>
-      <button class="bv-preset" type="button" data-preset="grounds">On Grounds</button>
-      <button class="bv-preset" type="button" data-preset="return">Return / Inlet</button>
+      <button class="bv-preset active" type="button" data-preset="trip" title="Trip Intel: review overall route conditions, visibility, cloud, and tide." aria-label="Trip Intel: overall route conditions">Trip Intel</button>
+      <button class="bv-preset" type="button" data-preset="transit" title="Run &amp; Pass: assess wind, significant waves, wind waves, and swell." aria-label="Run and Pass: wind and wave conditions">Run &amp; Pass</button>
+      <button class="bv-preset" type="button" data-preset="grounds" title="On Grounds: focus on swell and tidal timing while fishing." aria-label="On Grounds: swell and tidal timing">On Grounds</button>
+      <button class="bv-preset" type="button" data-preset="return" title="Return / Inlet: check wind, visibility, precipitation chance, and tide." aria-label="Return or Inlet: return conditions">Return / Inlet</button>
     </div>
     <div class="bv-time" id="bv-time">7-Day Outlook · loading forecast…</div>
     <button id="bv-hamburger-btn" aria-label="Open layer menu">☰</button>
@@ -243,6 +244,7 @@
       <div class="bv-row"><span>Sunset</span><b id="bv-sun-set">—</b></div>
     </div>
     </div>
+    <a class="bv-home" href="/dashboard/">Home</a>
   </div>
 
   <div id="bv-map" class="bv-map"></div>
