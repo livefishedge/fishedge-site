@@ -1800,6 +1800,26 @@
     }
 
     const nativePhaseImages = new Map();
+    let nativePhaseRedrawQueued = false;
+    function cacheNativePhaseImage(key, image) {
+      nativePhaseImages.set(key, image);
+      // Keep memory bounded during long playback. A forecast has hundreds of
+      // tiles/frames; retaining every decoded bitmap eventually pressures the
+      // mobile renderer even though the network cache is still effective.
+      while (nativePhaseImages.size > 64) {
+        const oldest = nativePhaseImages.keys().next().value;
+        if (oldest === key) break;
+        nativePhaseImages.delete(oldest);
+      }
+    }
+    function queueNativePhaseRedraw() {
+      if (nativePhaseRedrawQueued) return;
+      nativePhaseRedrawQueued = true;
+      requestAnimationFrame(() => {
+        nativePhaseRedrawQueued = false;
+        drawOverlaysForProduct();
+      });
+    }
     let waveMaskImage = null;
     function ensureWaveMaskImage() {
       if (waveMaskImage !== null) return;
@@ -1896,8 +1916,8 @@
         const dpr = streamlineCanvas.width / Math.max(1, mapEl.clientWidth);
         streamlineCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
         const world = 2 * Math.PI * 6378137;
-        const n = 2 ** tiles.tile_zoom;
-        const tileWorld = world / n;
+        const viewExtent = map.getView().calculateExtent([mapEl.clientWidth, mapEl.clientHeight]);
+        const viewWorld = [viewExtent[0], viewExtent[1], viewExtent[2], viewExtent[3]];
         let pending = false, loaded = 0;
         const frameName = String(frame).padStart(3, '0');
         streamlineCtx.globalAlpha = 0.78;
@@ -1908,19 +1928,27 @@
         for (const atlas of atlases) {
           const atlasN = 2 ** atlas.tile_zoom;
           const atlasWorld = world / atlasN;
+          const minX = Math.floor((viewWorld[0] + world / 2) / atlasWorld) - 1;
+          const maxX = Math.floor((viewWorld[2] + world / 2) / atlasWorld) + 1;
+          const minY = Math.floor((world / 2 - viewWorld[3]) / atlasWorld) - 1;
+          const maxY = Math.floor((world / 2 - viewWorld[1]) / atlasWorld) + 1;
+          // Request only tiles intersecting the current viewport. The manifest
+          // remains the complete coverage contract, but initial load and each
+          // time step no longer fetch all 25 base tiles plus the patch.
           for (const tile of atlas.tile_indices) {
+          if (tile.x < minX || tile.x > maxX || tile.y < minY || tile.y > maxY) continue;
           const tileKey = `${frame}/${atlas.tile_zoom}/${tile.x}/${tile.y}`;
           let image = nativePhaseImages.get(tileKey);
           if (image === null) continue;
           if (!image) {
             image = new Image();
             image.decoding = 'async';
-            image.onload = () => { nativePhaseImages.set(tileKey, image); drawOverlaysForProduct(); };
+            image.onload = () => { cacheNativePhaseImage(tileKey, image); queueNativePhaseRedraw(); };
             image.onerror = () => nativePhaseImages.set(tileKey, null);
             image.src = new URL(`/trip-planner/data/${region}/briefing/${atlas.pattern
               .replace('{frame:03d}', frameName).replace('{frame}', frameName)
               .replace('{x}', tile.x).replace('{y}', tile.y).replace('{z}', atlas.tile_zoom)}`, location.origin).href;
-            nativePhaseImages.set(tileKey, image);
+            cacheNativePhaseImage(tileKey, image);
             pending = true;
             continue;
           }
@@ -1944,7 +1972,7 @@
       if (!image) {
         image = new Image();
         image.decoding = 'async';
-        image.onload = () => { nativePhaseImages.set(key, image); drawOverlaysForProduct(); };
+      image.onload = () => { cacheNativePhaseImage(key, image); queueNativePhaseRedraw(); };
         image.onerror = () => nativePhaseImages.set(key, null);
         const frameName = String(frame).padStart(3, '0');
         // The manifest uses Python-style formatting (`{frame:03d}`), while
@@ -1953,7 +1981,7 @@
           .replace('{frame:03d}', frameName)
           .replace('{frame}', frameName);
         image.src = new URL(`/trip-planner/data/${region}/briefing/${asset}`, location.origin).href;
-        nativePhaseImages.set(key, image);
+        cacheNativePhaseImage(key, image);
         return true;
       }
       if (!image.complete || !image.naturalWidth) return true;
