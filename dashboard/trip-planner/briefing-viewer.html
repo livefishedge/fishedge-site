@@ -271,7 +271,9 @@
     let forecastData = null; // { bbox, frame_interval_hours, frames, lons, lats, tides }
     let frameIdx = 0;
     let playTimer = null;
-    const BASE_PLAY_MS = 800;
+    // Standard playback is intentionally slower than the original viewer:
+    // 1x now equals the former 0.25x pace (3.2 seconds per forecast frame).
+    const BASE_PLAY_MS = 3200;
     let playSpeed = 1;
     let playIntervalMs = BASE_PLAY_MS;
     let fieldBbox = bbox;
