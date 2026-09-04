@@ -1125,12 +1125,15 @@
     }
 
     const PLANNER_PRESETS = {
-      safety:      { layers:['wind','wind_wave','swell','wave_height'], heat:'wave_height_ft' },
-      comfort:     { layers:['wind','wind_wave','swell','wave_height'], heat:'wave_height_ft' },
-      catchability:{ layers:['wind','wind_wave','swell','wave_height'], heat:'wave_height_ft' },
-      fuel:        { layers:['wind','wind_wave'], heat:'wind_wave_height_ft' },
-      visibility:  { layers:['wind','visibility','cloud_cover','tide_level'], heat:'visibility_mi' },
-      inlet:       { layers:['wind','wave_height','tide_level','tide_range'], heat:'astronomical_tide_ft' },
+      // Keep each preset focused. A layer is included only when this build
+      // has the required data; unavailable SST/chlorophyll/current/radar/
+      // bathymetry products are intentionally not represented as proxies.
+      safety:       { layers:['wind','wind_wave','swell','wave_height'], heat:'wave_height_ft' },
+      comfort:      { layers:['wind','wind_wave','swell','wave_height'], heat:'wave_height_ft' },
+      catchability: { layers:['wind','wind_wave','swell','tide_level','tide_range'], heat:'astronomical_tide_ft' },
+      fuel:         { layers:['wind','wind_wave','swell','wave_height'], heat:'wave_height_ft' },
+      visibility:   { layers:['wind','visibility','cloud_cover','precipitation_probability'], heat:'visibility_mi' },
+      inlet:        { layers:['wind','wave_height','visibility','tide_level','tide_range'], heat:'astronomical_tide_ft' },
     };
     function applyPlannerPreset(name) {
       const preset = PLANNER_PRESETS[name];
