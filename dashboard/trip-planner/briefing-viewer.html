@@ -771,6 +771,13 @@
     const map = new ol.Map({
       target: 'bv-map',
       layers: [baseLayer, placesLayer],
+      // The overlay products are authored for a north-up viewport. Disable
+      // both touch rotation and Alt/Shift-drag rotation so a gesture cannot
+      // put the raster/vector overlays into an unsupported transform state.
+      interactions: ol.interaction.defaults.defaults({
+        altShiftDragRotate: false,
+        pinchRotate: false,
+      }),
       view: new ol.View({
         projection: mapProjection,
         center: ol.proj.fromLonLat([(bbox[0]+bbox[2])/2, (bbox[1]+bbox[3])/2], mapProjection),
