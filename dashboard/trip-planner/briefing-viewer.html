@@ -703,7 +703,7 @@
     // instead of reusing an older cached JSON response.
     // Bump whenever the JSON artifact changes; otherwise a Pages/browser
     // cache can keep serving a pre-calibration tide field after HTML deploy.
-    const FORECAST_DATA_BUILD = 'wave-product-validity-coast-mask-v25-stage-lod-ocean-city-buffer';
+    const FORECAST_DATA_BUILD = 'wave-product-validity-coast-mask-v26-stage-lod-base-overlay';
     const DEV_FORECAST_URL = `/trip-planner/data/${region}/briefing/forecast.json?v=${FORECAST_DATA_BUILD}`;
     const WAVE_MASK_URL = `/trip-planner/data/${region}/briefing/native_wave_mask.png?v=${FORECAST_DATA_BUILD}`;
     const CORS_PROXY = 'https://corsproxy.io/?';
@@ -1870,15 +1870,18 @@
       // Use the nationwide z8 atlas by default.  A selective native patch is
       // preferred only when the viewport is actually zoomed into its hotspot;
       // this avoids downloading/rendering high-resolution tiles nationwide.
+      const baseTiles = tiles;
       const patches = Array.isArray(tiles.patches) ? tiles.patches : [];
       const viewZoom = map.getView().getZoom() || 0;
       if (viewZoom >= 9 && patches.length) {
-        const center = map.getView().getCenter();
-        const lonLat = center ? ol.proj.toLonLat(center, mapProjection) : null;
+        const viewExtent = map.getView().calculateExtent([mapEl.clientWidth, mapEl.clientHeight]);
+        const viewSW = ol.proj.toLonLat([viewExtent[0], viewExtent[1]], mapProjection);
+        const viewNE = ol.proj.toLonLat([viewExtent[2], viewExtent[3]], mapProjection);
         const match = patches.find(p => {
           const b = p.hotspot_bbox;
-          return Array.isArray(b) && b.length === 4 && lonLat &&
-            lonLat[0] >= b[0] && lonLat[0] <= b[2] && lonLat[1] >= b[1] && lonLat[1] <= b[3];
+          return Array.isArray(b) && b.length === 4 &&
+            viewNE[0] >= b[0] && viewSW[0] <= b[2] &&
+            viewNE[1] >= b[1] && viewSW[1] <= b[3];
         });
         if (match) tiles = match;
       }
@@ -1898,8 +1901,15 @@
         let pending = false, loaded = 0;
         const frameName = String(frame).padStart(3, '0');
         streamlineCtx.globalAlpha = 0.78;
-        for (const tile of tiles.tile_indices) {
-          const tileKey = `${frame}/${tile.x}/${tile.y}`;
+        // Keep the nationwide atlas underneath the selective patch. This
+        // prevents coverage holes when a zoomed viewport extends beyond the
+        // hotspot; the higher-resolution patch simply paints over its area.
+        const atlases = tiles === baseTiles ? [tiles] : [baseTiles, tiles];
+        for (const atlas of atlases) {
+          const atlasN = 2 ** atlas.tile_zoom;
+          const atlasWorld = world / atlasN;
+          for (const tile of atlas.tile_indices) {
+          const tileKey = `${frame}/${atlas.tile_zoom}/${tile.x}/${tile.y}`;
           let image = nativePhaseImages.get(tileKey);
           if (image === null) continue;
           if (!image) {
@@ -1907,24 +1917,25 @@
             image.decoding = 'async';
             image.onload = () => { nativePhaseImages.set(tileKey, image); drawOverlaysForProduct(); };
             image.onerror = () => nativePhaseImages.set(tileKey, null);
-            image.src = new URL(`/trip-planner/data/${region}/briefing/${tiles.pattern
+            image.src = new URL(`/trip-planner/data/${region}/briefing/${atlas.pattern
               .replace('{frame:03d}', frameName).replace('{frame}', frameName)
-              .replace('{x}', tile.x).replace('{y}', tile.y).replace('{z}', tiles.tile_zoom)}`, location.origin).href;
+              .replace('{x}', tile.x).replace('{y}', tile.y).replace('{z}', atlas.tile_zoom)}`, location.origin).href;
             nativePhaseImages.set(tileKey, image);
             pending = true;
             continue;
           }
           if (!image.complete || !image.naturalWidth) { pending = true; continue; }
           loaded++;
-          const wx0 = tile.x * tileWorld - world / 2;
-          const wx1 = (tile.x + 1) * tileWorld - world / 2;
-          const wy1 = world / 2 - tile.y * tileWorld;
-          const wy0 = world / 2 - (tile.y + 1) * tileWorld;
+          const wx0 = tile.x * atlasWorld - world / 2;
+          const wx1 = (tile.x + 1) * atlasWorld - world / 2;
+          const wy1 = world / 2 - tile.y * atlasWorld;
+          const wy0 = world / 2 - (tile.y + 1) * atlasWorld;
           const p0 = map.getPixelFromCoordinate([wx0, wy1]);
           const p1 = map.getPixelFromCoordinate([wx1, wy0]);
           if (!p0 || !p1) continue;
           const w = p1[0] - p0[0], h = p1[1] - p0[1];
           if (w > 0 && h > 0) streamlineCtx.drawImage(image, p0[0], p0[1], w, h);
+          }
         }
         streamlineCtx.globalAlpha = 1;
         return pending || loaded > 0;
