@@ -128,6 +128,7 @@
     .bv-framebar button:hover { background: #2a3a4d; }
     .bv-framebar button.playing { background: #4fc3f7; color: #050b10; border-color: #4fc3f7; }
     #bv-slider { flex: 1; min-width: 100px; accent-color: #4fc3f7; height: 6px; }
+    #bv-speed { width: 64px; height: 30px; padding: 0 4px; background: #1b2836; color: #b3e5fc; border: 1px solid #2a3a4d; border-radius: 4px; font: 700 11px monospace; }
     .bv-frame-label { font-size: 12px; color: #e3f2fd; font-family: monospace; min-width: 140px; text-align: right; }
 
     .bv-ranges {
@@ -160,6 +161,9 @@
       .bv-time { display: none; }
       .bv-products button { font-size: 11px; padding: 3px 6px; }
       .bv-map { bottom: 96px; }
+      .bv-framebar { gap: 5px; padding-left: 8px; padding-right: 8px; }
+      #bv-slider { min-width: 60px; }
+      #bv-speed { width: 56px; }
       .bv-frame-label { min-width: auto; font-size: 10px; }
     }
   </style>
@@ -226,6 +230,12 @@
     <button id="bv-play" aria-label="Play">▶</button>
     <input id="bv-slider" type="range" min="0" max="0" step="1" value="0" aria-label="Frame">
     <button id="bv-next" aria-label="Next frame">›</button>
+    <select id="bv-speed" aria-label="Animation speed" title="Animation speed">
+      <option value="0.5">0.5×</option>
+      <option value="1" selected>1×</option>
+      <option value="2">2×</option>
+      <option value="4">4×</option>
+    </select>
     <span class="bv-frame-label" id="bv-frame-label">—</span>
   </div>
 
@@ -261,6 +271,9 @@
     let forecastData = null; // { bbox, frame_interval_hours, frames, lons, lats, tides }
     let frameIdx = 0;
     let playTimer = null;
+    const BASE_PLAY_MS = 800;
+    let playSpeed = 1;
+    let playIntervalMs = BASE_PLAY_MS;
     let fieldBbox = bbox;
     const rasterProjection = 'EPSG:4326';
     const mapProjection = 'EPSG:3857';
@@ -3013,20 +3026,33 @@
       pause();
     });
     const playBtn = document.getElementById('bv-play');
-    function pause() {
-      if (playTimer) { clearInterval(playTimer); playTimer = null; }
-      playBtn.textContent = '▶'; playBtn.classList.remove('playing');
-    }
-    function play() {
-      pause();
-      playBtn.textContent = '⏸'; playBtn.classList.add('playing');
+    const speedSelect = document.getElementById('bv-speed');
+    function startPlaybackTimer() {
+      if (playTimer) clearInterval(playTimer);
       playTimer = setInterval(() => {
         if (!forecastData) return;
         const next = (frameIdx + 1) % forecastData.frames.length;
         setFrame(next);
-      }, 800);
+      }, playIntervalMs);
+    }
+    function pause() {
+      if (playTimer) { clearInterval(playTimer); playTimer = null; }
+      playBtn.textContent = '▶'; playBtn.classList.remove('playing');
+    }
+    function setPlaybackSpeed(multiplier) {
+      const value = Number(multiplier);
+      if (!Number.isFinite(value) || value <= 0) return;
+      playSpeed = value;
+      playIntervalMs = Math.max(60, Math.round(BASE_PLAY_MS / playSpeed));
+      if (playTimer) startPlaybackTimer();
+    }
+    function play() {
+      pause();
+      playBtn.textContent = '⏸'; playBtn.classList.add('playing');
+      startPlaybackTimer();
     }
     playBtn.addEventListener('click', () => { playTimer ? pause() : play(); });
+    speedSelect?.addEventListener('change', event => setPlaybackSpeed(event.target.value));
 
     // Zoom gestures can emit several view events in quick succession. Queue
     // one redraw after the gesture settles instead of rebuilding all overlay
