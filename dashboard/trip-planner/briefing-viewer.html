@@ -1037,6 +1037,7 @@
     // intentionally off at startup so mobile devices do not render an
     // unnecessary scalar field beneath the wind-wave/swell overlays.
     const layerVisibility = { wave_height: false, temperature: false, apparent_temperature: false, dew_point: false, humidity: false, cloud_cover: false, visibility: false, precipitation: false, precipitation_probability: false, uv_index: false, pressure: false, tide_level: true, tide_range: true, swell: true, wind_wave: true, wind: true };
+    let activePlannerPreset = 'safety';
     function syncStationVisibility() {
       const showStations = !!(layerVisibility.tide_level || layerVisibility.tide_range);
       stationLayer.setVisible(false);
@@ -1060,10 +1061,11 @@
       const strip = document.getElementById('bv-active-layer-strip');
       if (!strip) return;
       strip.replaceChildren();
-      Object.entries(layerVisibility).filter(([,on]) => on).forEach(([key]) => {
+      const presetLayers = PLANNER_PRESETS[activePlannerPreset]?.layers || Object.keys(layerVisibility);
+      presetLayers.forEach(key => {
         const label = document.createElement('label');
         const input = document.createElement('input');
-        input.type = 'checkbox'; input.checked = true; input.dataset.layer = key;
+        input.type = 'checkbox'; input.checked = !!layerVisibility[key]; input.dataset.layer = key;
         label.append(input, document.createTextNode(LAYER_LABELS[key] || key));
         strip.appendChild(label);
       });
@@ -1171,16 +1173,17 @@
       // Keep each preset focused. A layer is included only when this build
       // has the required data; unavailable SST/chlorophyll/current/radar/
       // bathymetry products are intentionally not represented as proxies.
-      safety:       { layers:['wind','wind_wave','swell','wave_height'], heat:'wave_height_ft' },
-      comfort:      { layers:['wind','wind_wave','swell','wave_height'], heat:'wave_height_ft' },
+      safety:       { layers:['wind','wind_wave','swell','wave_height','pressure','precipitation_probability','visibility'], heat:'wave_height_ft' },
+      comfort:      { layers:['wind','wind_wave','swell','wave_height','temperature','apparent_temperature','humidity','cloud_cover'], heat:'wave_height_ft' },
       catchability: { layers:['wind','wind_wave','swell','tide_level','tide_range'], heat:'astronomical_tide_ft' },
-      fuel:         { layers:['wind','wind_wave','swell','wave_height'], heat:'wave_height_ft' },
-      visibility:   { layers:['wind','visibility','cloud_cover','precipitation_probability'], heat:'visibility_mi' },
-      inlet:        { layers:['wind','wave_height','visibility','tide_level','tide_range'], heat:'astronomical_tide_ft' },
+      fuel:         { layers:['wind','wind_wave','swell','wave_height','pressure'], heat:'wave_height_ft' },
+      visibility:   { layers:['wind','visibility','humidity','cloud_cover','precipitation','precipitation_probability','uv_index'], heat:'visibility_mi' },
+      inlet:        { layers:['wind','wave_height','visibility','precipitation_probability','tide_level','tide_range'], heat:'astronomical_tide_ft' },
     };
     function applyPlannerPreset(name) {
       const preset = PLANNER_PRESETS[name];
       if (!preset) return;
+      activePlannerPreset = name;
       const active = new Set(preset.layers);
       document.querySelectorAll('#bv-layers input[data-layer]').forEach(input => {
         const on = active.has(input.dataset.layer);
@@ -3190,6 +3193,7 @@
         drawColorbar();
         // Every layer toggle can affect the independent tide overlay, even
         // when the selected base product is not the wave composite.
+        renderActiveLayerStrip();
         drawOverlaysForProduct();
       });
     });
