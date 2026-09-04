@@ -75,7 +75,10 @@
     #bv-menu-panel .dot-tide{ background:#4fc3f7; }
     #bv-menu-panel .bv-status{ font-size:11px; color:#9fb0c3; padding:6px 8px; border-top:1px solid rgba(255,255,255,0.1); }
     #bv-menu-panel .bv-briefing-source{ font-size:10px; color:#7a8fa8; margin-top:-3px; }
-    #bv-menu-panel .bv-presets{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:5px; }
+    .bv-top-modes{ display:flex; align-items:center; gap:4px; min-width:0; flex:1; }
+    .bv-top-modes .bv-preset{ border:1px solid #2a3a4d; border-radius:5px; padding:5px 7px; background:#132333; color:#d6e5f2; font:700 10px/1.1 inherit; cursor:pointer; white-space:nowrap; }
+    .bv-top-modes .bv-preset:hover,.bv-top-modes .bv-preset.active{ background:#17456a; border-color:#4fc3f7; color:#fff; }
+    .bv-top-modes .bv-preset small{ display:none; }
     #bv-menu-panel .bv-preset{ border:1px solid #2a3a4d; border-radius:6px; padding:7px 6px; background:#132333; color:#d6e5f2; font:700 11px/1.1 inherit; cursor:pointer; text-align:left; }
     #bv-menu-panel .bv-preset:hover,#bv-menu-panel .bv-preset.active{ background:#17456a; border-color:#4fc3f7; color:#fff; }
     #bv-menu-panel .bv-preset small{ display:block; margin-top:3px; color:#8fa6bb; font-size:9px; font-weight:600; }
@@ -167,6 +170,9 @@
       .bv-back { font-size: 11px; padding: 3px 6px; }
       .bv-title { font-size: 13px; }
       .bv-time { display: none; }
+      .bv-top-modes { flex:1 1 0; min-width:0; overflow-x:auto; scrollbar-width:none; }
+      .bv-top-modes::-webkit-scrollbar { display:none; }
+      .bv-top-modes .bv-preset { flex:0 0 auto; padding:5px 6px; font-size:9px; }
       .bv-products button { font-size: 11px; padding: 3px 6px; }
       .bv-map { bottom: 96px; }
       .bv-framebar { gap: 5px; padding-left: 8px; padding-right: 8px; }
@@ -179,22 +185,17 @@
 <body>
   <div class="bv-toolbar">
     <a class="bv-back" href="javascript:history.back()">← Back</a>
-    <div>
-      <h1 class="bv-title">Marine Forecast</h1>
-      <div class="bv-time" id="bv-time">7-Day Outlook · loading forecast…</div>
+    <div class="bv-top-modes" id="bv-top-modes" aria-label="Planning view">
+      <button class="bv-preset" type="button" data-preset="trip">Trip Intel</button>
+      <button class="bv-preset" type="button" data-preset="transit">Run &amp; Pass</button>
+      <button class="bv-preset" type="button" data-preset="grounds">On Grounds</button>
+      <button class="bv-preset" type="button" data-preset="return">Return / Inlet</button>
     </div>
+    <div class="bv-time" id="bv-time">7-Day Outlook · loading forecast…</div>
     <button id="bv-hamburger-btn" aria-label="Open layer menu">☰</button>
   </div>
     <div id="bv-menu-panel" aria-label="Layer and briefing menu">
     <div class="bv-section">
-      <div class="bv-section-title">Map Layers</div>
-      <div class="bv-section-title" style="margin-top:2px">Planning view</div>
-      <div class="bv-presets" id="bv-presets" aria-label="Planning view presets">
-        <button class="bv-preset" type="button" data-preset="trip"><span>Trip Intel</span><small>conditions + tide</small></button>
-        <button class="bv-preset" type="button" data-preset="transit"><span>Run &amp; Pass</span><small>wind + wave state</small></button>
-        <button class="bv-preset" type="button" data-preset="grounds"><span>On Grounds</span><small>tide + swell</small></button>
-        <button class="bv-preset" type="button" data-preset="return"><span>Return / Inlet</span><small>visibility + tide</small></button>
-      </div>
       <div class="bv-layers" id="bv-layers">
         <div class="bv-layer-group">
           <div class="bv-layer-group-title">Atmosphere</div>
