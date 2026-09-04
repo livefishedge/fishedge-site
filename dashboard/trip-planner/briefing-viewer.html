@@ -434,41 +434,50 @@
       if (!svg) return;
       const W = 200, H = 110, cx = 70, cy = 55, R = 38;
       const phase = m.phase; // 0..1
-      // The illuminated limb travels across the disk; we draw two semicircles
-      // (dark + lit) and an ellipse terminator that bulges left or right.
-      const isWaxing = phase < 0.5;
-      // terminator x-radius: 0 at new/full, R at quarters
-      const tx = R * Math.abs(1 - 2 * phase); // sign by phase position
-      const dir = isWaxing ? 1 : -1;
-      // Dark disk: full circle as background
       const illum = m.illum;
-      const lit = (isWaxing ? phase * 2 : (1 - phase) * 2); // 0..1 across half cycle
-      // Lit half: full half-circle from terminator outward
-      const litPath = (() => {
-        // lit area = (lit half-circle on the lit side) + (ellipse half on lit side)
-        const side = isWaxing ? 1 : -1; // lit is right when waxing, left when waning
-        const rx = R * Math.abs(Math.cos(Math.PI * lit));
-        // arc from top to bottom along the outer limb on the lit side
-        const sweepOuter = isWaxing ? 0 : 1;
-        // inner arc along the ellipse terminator
-        const sweepInner = isWaxing ? 1 : 0;
-        return [
-          `M ${cx} ${cy - R}`,
-          `A ${R} ${R} 0 0 ${sweepOuter} ${cx} ${cy + R}`,
-          `A ${rx} ${R} 0 0 ${sweepInner} ${cx} ${cy - R}`,
-          'Z',
-        ].join(' ');
-      })();
+      // The visible moon is a sphere projected onto a disk.  The illuminated
+      // side is right while waxing and left while waning.  The terminator's
+      // projected x-radius is |cos(2π phase)|·R: at new/full it coincides
+      // with the outer limb, and at quarter moon it collapses to a line.
+      const isWaxing = phase < 0.5;
+      const terminatorRx = R * Math.abs(Math.cos(2 * Math.PI * phase));
+      const outerSweep = isWaxing ? 1 : 0;
+      // The terminator arc changes side at each quarter; this prevents the
+      // common bug where a new moon is rendered as a half moon.
+      const innerSweep = isWaxing ? (phase < 0.25 ? 1 : 0) : (phase < 0.75 ? 1 : 0);
+      const litPath = [
+        `M ${cx} ${cy - R}`,
+        `A ${R} ${R} 0 0 ${outerSweep} ${cx} ${cy + R}`,
+        `A ${terminatorRx} ${R} 0 0 ${innerSweep} ${cx} ${cy - R}`,
+        'Z',
+      ].join(' ');
+      const litClipId = `bvMoonLitClip${Math.round(phase * 100000)}`;
       svg.innerHTML = `
         <defs>
-          <radialGradient id="bvMoonLit" cx="50%" cy="40%" r="60%">
+          <radialGradient id="bvMoonSurface" cx="38%" cy="32%" r="72%">
             <stop offset="0%" stop-color="#fff8d6"/>
-            <stop offset="60%" stop-color="#e8e0b8"/>
-            <stop offset="100%" stop-color="#9c9080"/>
+            <stop offset="58%" stop-color="#e9dfb8"/>
+            <stop offset="100%" stop-color="#8d8274"/>
           </radialGradient>
+          <radialGradient id="bvMoonShadow" cx="35%" cy="30%" r="78%">
+            <stop offset="0%" stop-color="#354050"/>
+            <stop offset="100%" stop-color="#101722"/>
+          </radialGradient>
+          <clipPath id="${litClipId}"><path d="${litPath}"/></clipPath>
         </defs>
-        <circle cx="${cx}" cy="${cy}" r="${R}" fill="#1a2230" stroke="#3a4a60" stroke-width="1"/>
-        <path d="${litPath}" fill="url(#bvMoonLit)"/>
+        <circle cx="${cx}" cy="${cy}" r="${R}" fill="url(#bvMoonShadow)" stroke="#4b5868" stroke-width="1.2"/>
+        <g clip-path="url(#${litClipId})">
+          <circle cx="${cx}" cy="${cy}" r="${R}" fill="url(#bvMoonSurface)"/>
+          <g fill="#9f9478" opacity=".42">
+            <circle cx="${cx-15}" cy="${cy-12}" r="5"/><circle cx="${cx+12}" cy="${cy-15}" r="3.5"/>
+            <circle cx="${cx+17}" cy="${cy+9}" r="6"/><circle cx="${cx-8}" cy="${cy+16}" r="3"/>
+            <circle cx="${cx+2}" cy="${cy+3}" r="2.4"/><circle cx="${cx-22}" cy="${cy+5}" r="2.2"/>
+          </g>
+          <g fill="none" stroke="#786f5d" stroke-width="1" opacity=".38">
+            <circle cx="${cx-15}" cy="${cy-12}" r="7"/><circle cx="${cx+17}" cy="${cy+9}" r="8"/>
+            <circle cx="${cx+2}" cy="${cy+3}" r="3.5"/>
+          </g>
+        </g>
         <text x="${W - 16}" y="20" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11" fill="#d6e5f2" font-weight="700">${m.name.toUpperCase()}</text>
         <text x="${W - 16}" y="36" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10" fill="#9fb0c3">${(illum*100).toFixed(0)}% lit</text>
         <text x="${W - 16}" y="52" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="9" fill="#7a8fa8">age ${m.age.toFixed(1)}d</text>
