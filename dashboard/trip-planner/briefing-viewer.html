@@ -446,7 +446,7 @@
       const outerSweep = isWaxing ? 1 : 0;
       // The terminator arc changes side at each quarter; this prevents the
       // common bug where a new moon is rendered as a half moon.
-      const innerSweep = isWaxing ? (phase < 0.25 ? 1 : 0) : (phase < 0.75 ? 1 : 0);
+      const innerSweep = isWaxing ? (phase < 0.25 ? 0 : 1) : (phase < 0.75 ? 0 : 1);
       const litPath = [
         `M ${cx} ${cy - R}`,
         `A ${R} ${R} 0 0 ${outerSweep} ${cx} ${cy + R}`,
