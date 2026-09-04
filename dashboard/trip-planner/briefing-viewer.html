@@ -1958,11 +1958,21 @@
           const wx1 = (tile.x + 1) * atlasWorld - world / 2;
           const wy1 = world / 2 - tile.y * atlasWorld;
           const wy0 = world / 2 - (tile.y + 1) * atlasWorld;
-          const p0 = map.getPixelFromCoordinate([wx0, wy1]);
-          const p1 = map.getPixelFromCoordinate([wx1, wy0]);
-          if (!p0 || !p1) continue;
-          const w = p1[0] - p0[0], h = p1[1] - p0[1];
-          if (w > 0 && h > 0) streamlineCtx.drawImage(image, p0[0], p0[1], w, h);
+          // A rotated OpenLayers view maps a tile to a parallelogram, not an
+          // axis-aligned rectangle. Drawing only p0/p1 made the overlay shear
+          // or jump when the user rotated the map. Use the three tile corners
+          // to apply the exact affine screen transform.
+          const pTL = map.getPixelFromCoordinate([wx0, wy1]);
+          const pTR = map.getPixelFromCoordinate([wx1, wy1]);
+          const pBL = map.getPixelFromCoordinate([wx0, wy0]);
+          if (!pTL || !pTR || !pBL) continue;
+          const iw = image.naturalWidth || 512, ih = image.naturalHeight || 512;
+          const a = (pTR[0] - pTL[0]) / iw, b = (pTR[1] - pTL[1]) / iw;
+          const c = (pBL[0] - pTL[0]) / ih, d = (pBL[1] - pTL[1]) / ih;
+          streamlineCtx.save();
+          streamlineCtx.setTransform(dpr * a, dpr * b, dpr * c, dpr * d, dpr * pTL[0], dpr * pTL[1]);
+          streamlineCtx.drawImage(image, 0, 0, iw, ih);
+          streamlineCtx.restore();
           }
         }
         streamlineCtx.globalAlpha = 1;
@@ -2115,6 +2125,13 @@
       const tick = ts => {
         wavePacketRaf = 0;
         if (currentProduct !== 'wave_composite' || !currentFrame || !forecastData) return;
+        // Packet rendering integrates many map-coordinate lookups and canvas
+        // strokes. Keep it at a steady ~25 fps instead of competing with the
+        // browser's 60 fps compositor on mobile.
+        if (wavePacketLastTs && ts - wavePacketLastTs < 40) {
+          wavePacketRaf = requestAnimationFrame(tick);
+          return;
+        }
         const dt = wavePacketLastTs ? Math.min(50, ts - wavePacketLastTs) : 16;
         wavePacketLastTs = ts;
         ensureWavePackets();
@@ -3036,6 +3053,7 @@
       }, 180);
     }
     map.getView().on('change:resolution', deferViewportRedraw);
+    map.getView().on('change:rotation', deferViewportRedraw);
     map.on('moveend', scheduleOverlayRedraw);
     map.on('change:size', () => {
       // re-seed particles to new viewport area, redraw
