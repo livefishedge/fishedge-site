@@ -198,7 +198,7 @@
       <button class="bv-preset" type="button" data-preset="comfort" title="Comfort: combine sea state with apparent temperature, humidity, cloud, and wind exposure." aria-label="Comfort: ride and crew conditions">Comfort</button>
       <button class="bv-preset" type="button" data-preset="catchability" title="Fishing: focus on sea state and tidal timing. SST, chlorophyll, currents, and altimetry require additional data sources." aria-label="Fishing: pelagic productivity">Fishing</button>
       <button class="bv-preset" type="button" data-preset="fuel" title="Fuel: compare wind, waves, swell, and total sea-state exposure during transit." aria-label="Fuel: transit efficiency">Fuel</button>
-      <button class="bv-preset" type="button" data-preset="visibility" title="Visibility: assess visibility, humidity, cloud, precipitation, wind texture, and daylight context." aria-label="Visibility: spotting conditions">Visibility</button>
+      <button class="bv-preset" type="button" data-preset="visibility" title="Spotting: assess marine visibility, humidity, cloud, precipitation, wind texture, and daylight context." aria-label="Spotting: visibility conditions">Spotting</button>
       <button class="bv-preset" type="button" data-preset="inlet" title="Inlet: assess tide, water level context, wind, waves, visibility, and precipitation at the choke point." aria-label="Inlet: hydrodynamics and clearance">Inlet</button>
     </div>
     <div class="bv-time" id="bv-time">7-Day Outlook · loading forecast…</div>
@@ -215,8 +215,8 @@
           <label><input type="checkbox" data-layer="dew_point"><span class="bv-dot dot-temp"></span>Dew Point <button class="bv-unit-toggle" type="button" data-unit-key="dew_point_f">°F</button></label>
           <label><input type="checkbox" data-layer="humidity"><span class="bv-dot dot-wind"></span>Humidity</label>
           <label><input type="checkbox" data-layer="cloud_cover"><span class="bv-dot dot-press"></span>Cloud Cover</label>
-          <label><input type="checkbox" data-layer="visibility"><span class="bv-dot dot-press"></span>Visibility</label>
-          <label><input type="checkbox" data-layer="precipitation"><span class="bv-dot dot-tide"></span>Precipitation</label>
+          <label><input type="checkbox" data-layer="visibility"><span class="bv-dot dot-press"></span>Marine Visibility <button class="bv-unit-toggle" type="button" data-unit-key="visibility_mi">mi</button></label>
+          <label><input type="checkbox" data-layer="precipitation"><span class="bv-dot dot-tide"></span>Precipitation <button class="bv-unit-toggle" type="button" data-unit-key="precipitation_in">in</button></label>
           <label><input type="checkbox" data-layer="precipitation_probability"><span class="bv-dot dot-tide"></span>Precip. Chance</label>
           <label><input type="checkbox" data-layer="uv_index"><span class="bv-dot dot-temp"></span>UV Index</label>
           <label><input type="checkbox" data-layer="pressure"><span class="bv-dot dot-press"></span>Pressure <button class="bv-unit-toggle" type="button" data-unit-key="pressure_hpa">hPa</button></label>
@@ -283,7 +283,7 @@
 
   <div class="bv-ranges">
     <div class="bv-ranges-title">
-      <b id="bv-cbar-name">Temperature</b>
+      <span>Color map:</span> <b id="bv-cbar-name">Temperature</b>
       <span id="bv-cbar-unit">°F</span>
     </div>
     <canvas id="bv-cbar" width="1000" height="32"></canvas>
@@ -1003,12 +1003,14 @@
     let currentFrame = null;
     let activeRange = null; // {vmin, vmax} computed per-frame when dynamicRange=true
     let localTideExtrema = null;
-    const unitModes = { temperature_f: 'imperial', apparent_temperature_f: 'imperial', dew_point_f: 'imperial', wave_height_ft: 'imperial', swell_height_ft: 'imperial', wind_wave_height_ft: 'imperial', wind_speed_kn: 'imperial', pressure_hpa: 'metric', tide_range_ft: 'imperial' };
-    const UNIT_LABELS = { temperature_f: ['°F', '°C'], apparent_temperature_f: ['°F', '°C'], dew_point_f: ['°F', '°C'], wave_height_ft: ['ft', 'm'], swell_height_ft: ['ft', 'm'], wind_wave_height_ft: ['ft', 'm'], wind_speed_kn: ['kn', 'm/s'], pressure_hpa: ['hPa', 'inHg'], tide_range_ft: ['ft', 'm'] };
+    const unitModes = { temperature_f: 'imperial', apparent_temperature_f: 'imperial', dew_point_f: 'imperial', wave_height_ft: 'imperial', swell_height_ft: 'imperial', wind_wave_height_ft: 'imperial', wind_speed_kn: 'imperial', pressure_hpa: 'metric', tide_range_ft: 'imperial', visibility_mi: 'imperial', precipitation_in: 'imperial' };
+    const UNIT_LABELS = { temperature_f: ['°F', '°C'], apparent_temperature_f: ['°F', '°C'], dew_point_f: ['°F', '°C'], wave_height_ft: ['ft', 'm'], swell_height_ft: ['ft', 'm'], wind_wave_height_ft: ['ft', 'm'], wind_speed_kn: ['kn', 'm/s'], pressure_hpa: ['hPa', 'inHg'], tide_range_ft: ['ft', 'm'], visibility_mi: ['mi', 'km'], precipitation_in: ['in', 'mm'] };
     function convertDisplayValue(key, value) {
       if (!Number.isFinite(value)) return value;
       if (key === 'pressure_hpa' && unitModes[key] === 'imperial') return value * 0.0295299831;
       if (key === 'tide_range_ft' && unitModes[key] === 'metric') return value * 0.3048;
+      if (key === 'visibility_mi' && unitModes[key] === 'metric') return value * 1.609344;
+      if (key === 'precipitation_in' && unitModes[key] === 'metric') return value * 25.4;
       if (unitModes[key] !== 'metric') return value;
       if (key === 'temperature_f') return (value - 32) * 5 / 9;
       if (key === 'apparent_temperature_f' || key === 'dew_point_f') return (value - 32) * 5 / 9;
@@ -1022,6 +1024,8 @@
       if (unitModes[key] === 'metric' && key === 'wind_speed_kn') return 'm/s';
       if (unitModes[key] === 'imperial' && key === 'pressure_hpa') return 'inHg';
       if (unitModes[key] === 'metric' && key === 'tide_range_ft') return 'm';
+      if (unitModes[key] === 'metric' && key === 'visibility_mi') return 'km';
+      if (unitModes[key] === 'metric' && key === 'precipitation_in') return 'mm';
       return fallback;
     }
     function setupUnitToggles() {
@@ -1053,7 +1057,7 @@
     }
     const LAYER_LABELS = {
       temperature:'Air Temp', apparent_temperature:'Feels Like', dew_point:'Dew Point', humidity:'Humidity',
-      cloud_cover:'Cloud Cover', visibility:'Visibility', precipitation:'Precipitation',
+      cloud_cover:'Cloud Cover', visibility:'Marine Visibility', precipitation:'Precipitation',
       precipitation_probability:'Precip. Chance', uv_index:'UV Index', pressure:'Pressure', wind:'Wind',
       tide_level:'Tidal Stage', tide_range:'Tidal Range', wind_wave:'Wave', swell:'Swell', wave_height:'Sig. Wave Height'
     };
@@ -1173,12 +1177,12 @@
       // Keep each preset focused. A layer is included only when this build
       // has the required data; unavailable SST/chlorophyll/current/radar/
       // bathymetry products are intentionally not represented as proxies.
-      safety:       { layers:['wind','wind_wave','swell','wave_height','pressure','precipitation_probability','visibility'], heat:'wave_height_ft' },
-      comfort:      { layers:['wind','wind_wave','swell','wave_height','temperature','apparent_temperature','humidity','cloud_cover'], heat:'wave_height_ft' },
+      safety:       { layers:['wind','wind_wave','swell','wave_height','pressure','precipitation_probability','visibility','cloud_cover'], heat:'wave_height_ft' },
+      comfort:      { layers:['wind','wind_wave','swell','wave_height','temperature','apparent_temperature','dew_point','humidity','cloud_cover','precipitation_probability'], heat:'wave_height_ft' },
       catchability: { layers:['wind','wind_wave','swell','tide_level','tide_range'], heat:'astronomical_tide_ft' },
-      fuel:         { layers:['wind','wind_wave','swell','wave_height','pressure'], heat:'wave_height_ft' },
-      visibility:   { layers:['wind','visibility','humidity','cloud_cover','precipitation','precipitation_probability','uv_index'], heat:'visibility_mi' },
-      inlet:        { layers:['wind','wave_height','visibility','precipitation_probability','tide_level','tide_range'], heat:'astronomical_tide_ft' },
+      fuel:         { layers:['wind','wind_wave','swell','wave_height'], heat:'wave_height_ft' },
+      visibility:   { layers:['wind','visibility','humidity','cloud_cover','precipitation','precipitation_probability'], heat:'visibility_mi' },
+      inlet:        { layers:['wind','wave_height','visibility','precipitation_probability','pressure','tide_level','tide_range'], heat:'astronomical_tide_ft' },
     };
     function applyPlannerPreset(name) {
       const preset = PLANNER_PRESETS[name];
