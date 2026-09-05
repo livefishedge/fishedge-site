@@ -225,14 +225,13 @@
           <label><input type="checkbox" data-layer="precipitation_probability"><span class="bv-dot dot-tide"></span>Precip. Chance</label>
           <label><input type="checkbox" data-layer="uv_index"><span class="bv-dot dot-temp"></span>UV Index</label>
           <label><input type="checkbox" data-layer="pressure"><span class="bv-dot dot-press"></span>Pressure <button class="bv-unit-toggle" type="button" data-unit-key="pressure_hpa">hPa</button></label>
-          <label title="Animated red bursts where peak gust exceeds sustained wind"><input type="checkbox" data-layer="wind_gust" checked><span class="bv-dot dot-wind"></span>Gust <span class="bv-unit-static">(kn)</span></label>
           <label><input type="checkbox" data-layer="cloud_low"><span class="bv-dot dot-press"></span>Low Cloud</label>
           <label><input type="checkbox" data-layer="cloud_mid"><span class="bv-dot dot-press"></span>Mid Cloud</label>
           <label><input type="checkbox" data-layer="cloud_high"><span class="bv-dot dot-press"></span>High Cloud</label>
           <label><input type="checkbox" data-layer="rain"><span class="bv-dot dot-tide"></span>Rain <button class="bv-unit-toggle" type="button" data-unit-key="rain_in">in</button></label>
           <label><input type="checkbox" data-layer="showers"><span class="bv-dot dot-tide"></span>Showers <button class="bv-unit-toggle" type="button" data-unit-key="showers_in">in</button></label>
           <label><input type="checkbox" data-layer="snowfall"><span class="bv-dot dot-tide"></span>Snowfall <button class="bv-unit-toggle" type="button" data-unit-key="snowfall_in">in</button></label>
-          <label><input type="checkbox" data-layer="wind" checked><span class="bv-dot dot-wind"></span>Wind <button class="bv-unit-toggle" type="button" data-unit-key="wind_speed_kn">kn</button></label>
+          <label title="Sustained wind particles plus red gust bursts"><input type="checkbox" data-layer="wind" checked><span class="bv-dot dot-wind"></span>Wind + Gust <button class="bv-unit-toggle" type="button" data-unit-key="wind_speed_kn">kn</button></label>
         </div>
         <div class="bv-layer-group">
           <div class="bv-layer-group-title">Ocean &amp; Tides</div>
@@ -1114,7 +1113,7 @@
       temperature:'Air Temp', apparent_temperature:'Feels Like', dew_point:'Dew Point', humidity:'Humidity',
       cloud_cover:'Cloud Cover', cloud_low:'Low Cloud', cloud_mid:'Mid Cloud', cloud_high:'High Cloud',
       visibility:'Visibility', precipitation:'Precipitation', rain:'Rain', showers:'Showers', snowfall:'Snowfall',
-      precipitation_probability:'Precip. Chance', uv_index:'UV Index', pressure:'Pressure', wind:'Wind', wind_gust:'Gust',
+      precipitation_probability:'Precip. Chance', uv_index:'UV Index', pressure:'Pressure', wind:'Wind + Gust', wind_gust:'Gust',
       tide_level:'Tidal Stage', tide_range:'Tidal Range', wind_wave:'Wave', swell:'Swell', wave_height:'Sig. Wave Height',
       wave_period:'Peak Wave Period', swell_period:'Swell Period', wind_wave_period:'Wind-Wave Period', current:'Forecast Current',
       sst:'Sea-Surface Temp', wave_steepness:'Wave Steepness', ride_harshness:'Ride Harshness', surface_texture:'Surface Texture'
@@ -1259,12 +1258,12 @@
       // surface shown below the mode row; `defaults` is the smaller set of
       // primary controls enabled on selection. Unsupported products are not
       // represented by unrelated proxy fields.
-      safety:       { layers:['wind','wind_gust','wave_height','wave_period','wave_steepness','pressure','precipitation_probability','visibility','cloud_cover'], defaults:['wind','wind_gust','wave_height','wave_steepness','visibility'], heat:'wave_height_ft' },
+      safety:       { layers:['wind','wave_height','wave_period','wave_steepness','pressure','precipitation_probability','visibility','cloud_cover'], defaults:['wind','wave_height','wave_steepness','visibility'], heat:'wave_height_ft' },
       comfort:      { layers:['wind','wind_wave','swell','wave_height','wave_period','temperature','apparent_temperature','dew_point','humidity','cloud_cover','surface_texture','ride_harshness'], defaults:['wind','wave_height','wave_period','temperature','apparent_temperature','humidity','ride_harshness'], heat:'ride_harshness_index' },
       catchability: { layers:['wind','wind_wave','swell','wave_period','sst','current','tide_level','tide_range'], defaults:['wind','wave_period','sst','current','tide_level','tide_range'], heat:'sea_surface_temperature_f' },
       fuel:         { layers:['wind','wind_wave','swell','wave_height','wave_period','current'], defaults:['wind','wave_height','wave_period','current'], heat:'current_speed_kn' },
       visibility:   { layers:['wind','visibility','humidity','cloud_low','cloud_mid','cloud_high','precipitation','rain','showers','surface_texture'], defaults:['wind','visibility','cloud_low','cloud_mid','cloud_high','surface_texture'], heat:'visibility_mi' },
-      inlet:        { layers:['wind','wind_gust','current','wave_height','wave_period','visibility','precipitation_probability','pressure','tide_level','tide_range','wave_steepness'], defaults:['wind','wind_gust','current','wave_height','wave_period','visibility','tide_level','tide_range'], heat:'astronomical_tide_ft' },
+      inlet:        { layers:['wind','current','wave_height','wave_period','visibility','precipitation_probability','pressure','tide_level','tide_range','wave_steepness'], defaults:['wind','current','wave_height','wave_period','visibility','tide_level','tide_range'], heat:'astronomical_tide_ft' },
     };
     function applyPlannerPreset(name) {
       const preset = PLANNER_PRESETS[name];
@@ -1276,6 +1275,9 @@
         input.checked = on;
         layerVisibility[input.dataset.layer] = on;
       });
+      // Wind and gust are one captain-facing control. Keep the internal gust
+      // animation state coupled to the visible Wind + Gust checkbox.
+      layerVisibility.wind_gust = !!layerVisibility.wind;
       selectedHeatKey = preset.heat;
       document.querySelectorAll('.bv-preset').forEach(button => button.classList.toggle('active', button.dataset.preset === name));
       renderActiveLayerStrip();
@@ -2480,10 +2482,11 @@
           const cosLat = Math.max(0.35, Math.cos(packet.lat * Math.PI / 180));
           packet.lon += (vec.u / vec.speed) * step / cosLat;
           packet.lat += (vec.v / vec.speed) * step;
-          // Continuously inject a new packet at the upstream boundary. The
-          // age limit staggers births even when a weak/turning field keeps a
-          // packet inside the display for a long time.
-          if (packet.age > 12000 || packet.lon < bbox[0] || packet.lon > bbox[2] ||
+          // Release crests on the local wave period rather than a fixed
+          // timer. Longer-period swell produces wider-spaced releases;
+          // shorter-period wind wave produces tighter animated lines.
+          const releaseMs = Math.max(7000, Math.min(22000, (vec.period || 8) * 1500));
+          if (packet.age > releaseMs || packet.lon < bbox[0] || packet.lon > bbox[2] ||
               packet.lat < bbox[1] || packet.lat > bbox[3]) respawnWavePacket(packet);
         }
         // The wind particle animator owns flowCtx and its trail decay.  The
@@ -3381,6 +3384,7 @@
       document.querySelectorAll('#bv-layers input[data-layer]').forEach(input => {
       input.addEventListener('change', () => {
         layerVisibility[input.dataset.layer] = input.checked;
+        if (input.dataset.layer === 'wind') layerVisibility.wind_gust = input.checked;
         renderActiveLayerStrip();
         syncStationVisibility();
         const selectedKey = { wave_height: 'wave_height_ft', temperature: 'temperature_f', apparent_temperature: 'apparent_temperature_f', dew_point: 'dew_point_f', humidity: 'relative_humidity_pct', cloud_cover: 'cloud_cover_pct', cloud_low: 'cloud_cover_low_pct', cloud_mid: 'cloud_cover_mid_pct', cloud_high: 'cloud_cover_high_pct', visibility: 'visibility_mi', precipitation: 'precipitation_in', rain: 'rain_in', showers: 'showers_in', snowfall: 'snowfall_in', precipitation_probability: 'precipitation_probability_pct', uv_index: 'uv_index', pressure: 'pressure_hpa', tide_level: 'astronomical_tide_ft', wind_wave: 'wind_wave_height_ft', swell: 'swell_height_ft', wave_period: 'wave_period_s', swell_period: 'swell_period_s', wind_wave_period: 'wind_wave_period_s', current: 'current_speed_kn', sst: 'sea_surface_temperature_f', wave_steepness: 'wave_steepness', ride_harshness: 'ride_harshness_index', surface_texture: 'surface_texture_index' }[input.dataset.layer];
