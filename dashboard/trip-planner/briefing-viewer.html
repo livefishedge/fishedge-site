@@ -225,7 +225,7 @@
           <label><input type="checkbox" data-layer="precipitation_probability"><span class="bv-dot dot-tide"></span>Precip. Chance</label>
           <label><input type="checkbox" data-layer="uv_index"><span class="bv-dot dot-temp"></span>UV Index</label>
           <label><input type="checkbox" data-layer="pressure"><span class="bv-dot dot-press"></span>Pressure <button class="bv-unit-toggle" type="button" data-unit-key="pressure_hpa">hPa</button></label>
-          <label><input type="checkbox" data-layer="wind_gust" checked><span class="bv-dot dot-wind"></span>Gust <button class="bv-unit-toggle" type="button" data-unit-key="wind_gust_kn">kn</button></label>
+          <label title="Animated red bursts where peak gust exceeds sustained wind"><input type="checkbox" data-layer="wind_gust" checked><span class="bv-dot dot-wind"></span>Gust <span class="bv-unit-static">(kn)</span></label>
           <label><input type="checkbox" data-layer="cloud_low"><span class="bv-dot dot-press"></span>Low Cloud</label>
           <label><input type="checkbox" data-layer="cloud_mid"><span class="bv-dot dot-press"></span>Mid Cloud</label>
           <label><input type="checkbox" data-layer="cloud_high"><span class="bv-dot dot-press"></span>High Cloud</label>
@@ -369,7 +369,7 @@
       snowfall_in: { name: 'Snowfall', unit: 'in', scale: 'UV', viz: 'heat', dataKey: 'snowfall_in', dynamicRange: false, fixedRange: [0, 2] },
       precipitation_probability_pct: { name: 'Precipitation chance', unit: '%', scale: 'UV', viz: 'heat', dataKey: 'precipitation_probability_pct', dynamicRange: false, fixedRange: [0, 100] },
       uv_index: { name: 'UV index', unit: 'index', scale: 'UV', viz: 'heat', dataKey: 'uv_index', dynamicRange: false, fixedRange: [0, 12] },
-      wind_gust_kn: { name: 'Peak wind gust', unit: 'kn', scale: 'CHL', viz: 'heat', dataKey: 'wind_gust_kn', dynamicRange: false, fixedRange: [0, 60] },
+      wind_gust_kn: { name: 'Peak wind gust', unit: 'kn', scale: 'CHL', viz: 'particles', dataKey: 'wind_gust_kn', dynamicRange: false, fixedRange: [0, 60] },
       cloud_cover_low_pct: { name: 'Low cloud cover', unit: '%', scale: 'UV', viz: 'heat', dataKey: 'cloud_cover_low_pct', dynamicRange: false, fixedRange: [0, 100] },
       cloud_cover_mid_pct: { name: 'Mid cloud cover', unit: '%', scale: 'UV', viz: 'heat', dataKey: 'cloud_cover_mid_pct', dynamicRange: false, fixedRange: [0, 100] },
       cloud_cover_high_pct: { name: 'High cloud cover', unit: '%', scale: 'UV', viz: 'heat', dataKey: 'cloud_cover_high_pct', dynamicRange: false, fixedRange: [0, 100] },
@@ -1158,7 +1158,7 @@
       // The composite raster is the scalar heat field. Directional variables
       // are drawn on transparent canvases, so they must never keep the raster
       // alive after the scalar checkboxes are cleared.
-      return !!(layerVisibility.wave_height || layerVisibility.swell || layerVisibility.wind_wave || layerVisibility.temperature || layerVisibility.apparent_temperature || layerVisibility.dew_point || layerVisibility.humidity || layerVisibility.cloud_cover || layerVisibility.cloud_low || layerVisibility.cloud_mid || layerVisibility.cloud_high || layerVisibility.visibility || layerVisibility.precipitation || layerVisibility.rain || layerVisibility.showers || layerVisibility.snowfall || layerVisibility.precipitation_probability || layerVisibility.uv_index || layerVisibility.pressure || layerVisibility.wind_gust || layerVisibility.wave_period || layerVisibility.swell_period || layerVisibility.wind_wave_period || layerVisibility.sst || layerVisibility.wave_steepness || layerVisibility.ride_harshness || layerVisibility.surface_texture || layerVisibility.tide_level);
+      return !!(layerVisibility.wave_height || layerVisibility.swell || layerVisibility.wind_wave || layerVisibility.temperature || layerVisibility.apparent_temperature || layerVisibility.dew_point || layerVisibility.humidity || layerVisibility.cloud_cover || layerVisibility.cloud_low || layerVisibility.cloud_mid || layerVisibility.cloud_high || layerVisibility.visibility || layerVisibility.precipitation || layerVisibility.rain || layerVisibility.showers || layerVisibility.snowfall || layerVisibility.precipitation_probability || layerVisibility.uv_index || layerVisibility.pressure || layerVisibility.wave_period || layerVisibility.swell_period || layerVisibility.wind_wave_period || layerVisibility.sst || layerVisibility.wave_steepness || layerVisibility.ride_harshness || layerVisibility.surface_texture || layerVisibility.tide_level);
     }
 
     // Priority: significant wave height > exactly one partition > temperature > tide > pressure.
@@ -1175,7 +1175,7 @@
         temperature_f: 'temperature', apparent_temperature_f: 'apparent_temperature', dew_point_f: 'dew_point', relative_humidity_pct: 'humidity',
         cloud_cover_pct: 'cloud_cover', cloud_cover_low_pct: 'cloud_low', cloud_cover_mid_pct: 'cloud_mid', cloud_cover_high_pct: 'cloud_high',
         visibility_mi: 'visibility', precipitation_in: 'precipitation', rain_in: 'rain', showers_in: 'showers', snowfall_in: 'snowfall',
-        precipitation_probability_pct: 'precipitation_probability', uv_index: 'uv_index', pressure_hpa: 'pressure', wind_gust_kn: 'wind_gust',
+        precipitation_probability_pct: 'precipitation_probability', uv_index: 'uv_index', pressure_hpa: 'pressure',
         wave_period_s: 'wave_period', swell_period_s: 'swell_period', wind_wave_period_s: 'wind_wave_period', sea_surface_temperature_f: 'sst',
         wave_steepness: 'wave_steepness', ride_harshness_index: 'ride_harshness', surface_texture_index: 'surface_texture'
       };
@@ -1201,7 +1201,6 @@
       if (layerVisibility.snowfall) return 'snowfall_in';
       if (layerVisibility.precipitation_probability) return 'precipitation_probability_pct';
       if (layerVisibility.uv_index) return 'uv_index';
-      if (layerVisibility.wind_gust) return 'wind_gust_kn';
       if (layerVisibility.cloud_low) return 'cloud_cover_low_pct';
       if (layerVisibility.cloud_mid) return 'cloud_cover_mid_pct';
       if (layerVisibility.cloud_high) return 'cloud_cover_high_pct';
@@ -1720,6 +1719,7 @@
       }
       else if (def.viz === 'contours') drawIsobars();
       else if (def.viz === 'composite') drawWaveComposite();
+      else if (def.viz === 'particles') startParticleAnimation();
       else stopParticleAnimation();
       // Current arrows/streamlines are independent of the selected scalar
       // field, so Fuel and Inlet can show them over wave/tide backgrounds.
@@ -3383,7 +3383,7 @@
         layerVisibility[input.dataset.layer] = input.checked;
         renderActiveLayerStrip();
         syncStationVisibility();
-        const selectedKey = { wave_height: 'wave_height_ft', temperature: 'temperature_f', apparent_temperature: 'apparent_temperature_f', dew_point: 'dew_point_f', humidity: 'relative_humidity_pct', cloud_cover: 'cloud_cover_pct', cloud_low: 'cloud_cover_low_pct', cloud_mid: 'cloud_cover_mid_pct', cloud_high: 'cloud_cover_high_pct', visibility: 'visibility_mi', precipitation: 'precipitation_in', rain: 'rain_in', showers: 'showers_in', snowfall: 'snowfall_in', precipitation_probability: 'precipitation_probability_pct', uv_index: 'uv_index', pressure: 'pressure_hpa', wind_gust: 'wind_gust_kn', tide_level: 'astronomical_tide_ft', wind_wave: 'wind_wave_height_ft', swell: 'swell_height_ft', wave_period: 'wave_period_s', swell_period: 'swell_period_s', wind_wave_period: 'wind_wave_period_s', current: 'current_speed_kn', sst: 'sea_surface_temperature_f', wave_steepness: 'wave_steepness', ride_harshness: 'ride_harshness_index', surface_texture: 'surface_texture_index' }[input.dataset.layer];
+        const selectedKey = { wave_height: 'wave_height_ft', temperature: 'temperature_f', apparent_temperature: 'apparent_temperature_f', dew_point: 'dew_point_f', humidity: 'relative_humidity_pct', cloud_cover: 'cloud_cover_pct', cloud_low: 'cloud_cover_low_pct', cloud_mid: 'cloud_cover_mid_pct', cloud_high: 'cloud_cover_high_pct', visibility: 'visibility_mi', precipitation: 'precipitation_in', rain: 'rain_in', showers: 'showers_in', snowfall: 'snowfall_in', precipitation_probability: 'precipitation_probability_pct', uv_index: 'uv_index', pressure: 'pressure_hpa', tide_level: 'astronomical_tide_ft', wind_wave: 'wind_wave_height_ft', swell: 'swell_height_ft', wave_period: 'wave_period_s', swell_period: 'swell_period_s', wind_wave_period: 'wind_wave_period_s', current: 'current_speed_kn', sst: 'sea_surface_temperature_f', wave_steepness: 'wave_steepness', ride_harshness: 'ride_harshness_index', surface_texture: 'surface_texture_index' }[input.dataset.layer];
         if (input.checked && selectedKey) selectedHeatKey = selectedKey;
         if (input.dataset.layer === 'temperature' && input.checked) {
           layerVisibility.wave_height = false;
