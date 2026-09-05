@@ -220,12 +220,12 @@
           <label><input type="checkbox" data-layer="dew_point"><span class="bv-dot dot-temp"></span>Dew Point <button class="bv-unit-toggle" type="button" data-unit-key="dew_point_f">°F</button></label>
           <label><input type="checkbox" data-layer="humidity"><span class="bv-dot dot-wind"></span>Humidity</label>
           <label><input type="checkbox" data-layer="cloud_cover"><span class="bv-dot dot-press"></span>Cloud Cover</label>
-          <label><input type="checkbox" data-layer="visibility" checked><span class="bv-dot dot-press"></span>Marine Visibility <button class="bv-unit-toggle" type="button" data-unit-key="visibility_mi">mi</button></label>
+          <label><input type="checkbox" data-layer="visibility" checked><span class="bv-dot dot-press"></span>Visibility <button class="bv-unit-toggle" type="button" data-unit-key="visibility_mi">mi</button></label>
           <label><input type="checkbox" data-layer="precipitation"><span class="bv-dot dot-tide"></span>Precipitation <button class="bv-unit-toggle" type="button" data-unit-key="precipitation_in">in</button></label>
           <label><input type="checkbox" data-layer="precipitation_probability"><span class="bv-dot dot-tide"></span>Precip. Chance</label>
           <label><input type="checkbox" data-layer="uv_index"><span class="bv-dot dot-temp"></span>UV Index</label>
           <label><input type="checkbox" data-layer="pressure"><span class="bv-dot dot-press"></span>Pressure <button class="bv-unit-toggle" type="button" data-unit-key="pressure_hpa">hPa</button></label>
-          <label><input type="checkbox" data-layer="wind_gust" checked><span class="bv-dot dot-wind"></span>Peak Gust <button class="bv-unit-toggle" type="button" data-unit-key="wind_gust_kn">kn</button></label>
+          <label><input type="checkbox" data-layer="wind_gust" checked><span class="bv-dot dot-wind"></span>Gust <button class="bv-unit-toggle" type="button" data-unit-key="wind_gust_kn">kn</button></label>
           <label><input type="checkbox" data-layer="cloud_low"><span class="bv-dot dot-press"></span>Low Cloud</label>
           <label><input type="checkbox" data-layer="cloud_mid"><span class="bv-dot dot-press"></span>Mid Cloud</label>
           <label><input type="checkbox" data-layer="cloud_high"><span class="bv-dot dot-press"></span>High Cloud</label>
@@ -241,9 +241,7 @@
           <label title="Wind-wave height is the locally wind-generated wave magnitude; arrows show direction"><input type="checkbox" data-layer="wind_wave"><span class="bv-dot dot-composite"></span>Wave (wind) <button class="bv-unit-toggle" type="button" data-unit-key="wind_wave_height_ft">ft</button></label>
           <label title="Swell height is the remotely generated wave magnitude; arrows show direction"><input type="checkbox" data-layer="swell"><span class="bv-dot dot-swell"></span>Swell <button class="bv-unit-toggle" type="button" data-unit-key="swell_height_ft">ft</button></label>
           <label title="Total significant wave height combines the sea-state wave energy, including wind waves and swell"><input type="checkbox" data-layer="wave_height" checked><span class="bv-dot dot-wave"></span>Significant Wave Height <button class="bv-unit-toggle" type="button" data-unit-key="wave_height_ft">ft</button></label>
-          <label title="Peak wave period"><input type="checkbox" data-layer="wave_period" checked><span class="bv-dot dot-wave"></span>Wave Period <button class="bv-unit-toggle" type="button" data-unit-key="wave_period_s">s</button></label>
-          <label title="Swell period"><input type="checkbox" data-layer="swell_period"><span class="bv-dot dot-swell"></span>Swell Period <button class="bv-unit-toggle" type="button" data-unit-key="swell_period_s">s</button></label>
-          <label title="Locally generated wind-wave period"><input type="checkbox" data-layer="wind_wave_period"><span class="bv-dot dot-composite"></span>Wind-Wave Period <button class="bv-unit-toggle" type="button" data-unit-key="wind_wave_period_s">s</button></label>
+          <label title="Peak wave period"><input type="checkbox" data-layer="wave_period" checked><span class="bv-dot dot-wave"></span>Peak Wave Period <button class="bv-unit-toggle" type="button" data-unit-key="wave_period_s">s</button></label>
           <label title="Forecast surface current speed and direction"><input type="checkbox" data-layer="current"><span class="bv-dot dot-wind"></span>Forecast Current <button class="bv-unit-toggle" type="button" data-unit-key="current_speed_kn">kn</button></label>
           <label title="Sea-surface temperature from the marine forecast"><input type="checkbox" data-layer="sst"><span class="bv-dot dot-temp"></span>Sea-Surface Temp <button class="bv-unit-toggle" type="button" data-unit-key="sea_surface_temperature_f">°F</button></label>
           <label title="Hs divided by 1.56 times peak period squared"><input type="checkbox" data-layer="wave_steepness" checked><span class="bv-dot dot-wave"></span>Wave Steepness</label>
@@ -1115,10 +1113,10 @@
     const LAYER_LABELS = {
       temperature:'Air Temp', apparent_temperature:'Feels Like', dew_point:'Dew Point', humidity:'Humidity',
       cloud_cover:'Cloud Cover', cloud_low:'Low Cloud', cloud_mid:'Mid Cloud', cloud_high:'High Cloud',
-      visibility:'Marine Visibility', precipitation:'Precipitation', rain:'Rain', showers:'Showers', snowfall:'Snowfall',
-      precipitation_probability:'Precip. Chance', uv_index:'UV Index', pressure:'Pressure', wind:'Wind', wind_gust:'Peak Gust',
+      visibility:'Visibility', precipitation:'Precipitation', rain:'Rain', showers:'Showers', snowfall:'Snowfall',
+      precipitation_probability:'Precip. Chance', uv_index:'UV Index', pressure:'Pressure', wind:'Wind', wind_gust:'Gust',
       tide_level:'Tidal Stage', tide_range:'Tidal Range', wind_wave:'Wave', swell:'Swell', wave_height:'Sig. Wave Height',
-      wave_period:'Wave Period', swell_period:'Swell Period', wind_wave_period:'Wind-Wave Period', current:'Forecast Current',
+      wave_period:'Peak Wave Period', swell_period:'Swell Period', wind_wave_period:'Wind-Wave Period', current:'Forecast Current',
       sst:'Sea-Surface Temp', wave_steepness:'Wave Steepness', ride_harshness:'Ride Harshness', surface_texture:'Surface Texture'
     };
     function renderActiveLayerStrip() {
@@ -1262,7 +1260,7 @@
       // primary controls enabled on selection. Unsupported products are not
       // represented by unrelated proxy fields.
       safety:       { layers:['wind','wind_gust','wave_height','wave_period','wave_steepness','pressure','precipitation_probability','visibility','cloud_cover'], defaults:['wind','wind_gust','wave_height','wave_period','wave_steepness','visibility'], heat:'wave_height_ft' },
-      comfort:      { layers:['wind','wind_wave','swell','wave_height','wave_period','swell_period','wind_wave_period','temperature','apparent_temperature','dew_point','humidity','cloud_cover','surface_texture','ride_harshness'], defaults:['wind','wave_height','wave_period','temperature','apparent_temperature','humidity','ride_harshness'], heat:'ride_harshness_index' },
+      comfort:      { layers:['wind','wind_wave','swell','wave_height','wave_period','temperature','apparent_temperature','dew_point','humidity','cloud_cover','surface_texture','ride_harshness'], defaults:['wind','wave_height','wave_period','temperature','apparent_temperature','humidity','ride_harshness'], heat:'ride_harshness_index' },
       catchability: { layers:['wind','wind_wave','swell','wave_period','sst','current','tide_level','tide_range'], defaults:['wind','wave_period','sst','current','tide_level','tide_range'], heat:'sea_surface_temperature_f' },
       fuel:         { layers:['wind','wind_wave','swell','wave_height','wave_period','current'], defaults:['wind','wave_height','wave_period','current'], heat:'current_speed_kn' },
       visibility:   { layers:['wind','visibility','humidity','cloud_low','cloud_mid','cloud_high','precipitation','rain','showers','surface_texture'], defaults:['wind','visibility','cloud_low','cloud_mid','cloud_high','surface_texture'], heat:'visibility_mi' },
@@ -1661,7 +1659,12 @@
       flowCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
       flowCtx.fillStyle = 'rgba(235, 35, 45, 0.88)';
       const lons = forecastData.lons, lats = forecastData.lats, grid = currentFrame.wave_steepness;
+      const waterCells = forecastData.tide_water_cells;
       for (let yi = 0; yi < lats.length; yi += 1) for (let xi = 0; xi < lons.length; xi += 1) {
+        // Steepness is a marine diagnostic. Fail closed against the same
+        // water-cell mask used by tidal contours so warning dots never land
+        // on shoreline or inland pixels.
+        if (waterCells && waterCells[yi]?.[xi] !== true) continue;
         if (!(Number(grid[yi]?.[xi]) >= 0.07)) continue;
         const px = map.getPixelFromCoordinate(ol.proj.fromLonLat([lons[xi], lats[yi]], mapProjection));
         if (!px) continue;
