@@ -214,21 +214,21 @@
           <label><input type="checkbox" data-layer="apparent_temperature"><span class="bv-dot dot-temp"></span>Feels Like <button class="bv-unit-toggle" type="button" data-unit-key="apparent_temperature_f">°F</button></label>
           <label><input type="checkbox" data-layer="dew_point"><span class="bv-dot dot-temp"></span>Dew Point <button class="bv-unit-toggle" type="button" data-unit-key="dew_point_f">°F</button></label>
           <label><input type="checkbox" data-layer="humidity"><span class="bv-dot dot-wind"></span>Humidity</label>
-          <label><input type="checkbox" data-layer="cloud_cover"><span class="bv-dot dot-press"></span>Cloud Cover</label>
-          <label><input type="checkbox" data-layer="visibility"><span class="bv-dot dot-press"></span>Marine Visibility <button class="bv-unit-toggle" type="button" data-unit-key="visibility_mi">mi</button></label>
+          <label><input type="checkbox" data-layer="cloud_cover" checked><span class="bv-dot dot-press"></span>Cloud Cover</label>
+          <label><input type="checkbox" data-layer="visibility" checked><span class="bv-dot dot-press"></span>Marine Visibility <button class="bv-unit-toggle" type="button" data-unit-key="visibility_mi">mi</button></label>
           <label><input type="checkbox" data-layer="precipitation"><span class="bv-dot dot-tide"></span>Precipitation <button class="bv-unit-toggle" type="button" data-unit-key="precipitation_in">in</button></label>
-          <label><input type="checkbox" data-layer="precipitation_probability"><span class="bv-dot dot-tide"></span>Precip. Chance</label>
+          <label><input type="checkbox" data-layer="precipitation_probability" checked><span class="bv-dot dot-tide"></span>Precip. Chance</label>
           <label><input type="checkbox" data-layer="uv_index"><span class="bv-dot dot-temp"></span>UV Index</label>
-          <label><input type="checkbox" data-layer="pressure"><span class="bv-dot dot-press"></span>Pressure <button class="bv-unit-toggle" type="button" data-unit-key="pressure_hpa">hPa</button></label>
+          <label><input type="checkbox" data-layer="pressure" checked><span class="bv-dot dot-press"></span>Pressure <button class="bv-unit-toggle" type="button" data-unit-key="pressure_hpa">hPa</button></label>
           <label><input type="checkbox" data-layer="wind" checked><span class="bv-dot dot-wind"></span>Wind <button class="bv-unit-toggle" type="button" data-unit-key="wind_speed_kn">kn</button></label>
         </div>
         <div class="bv-layer-group">
           <div class="bv-layer-group-title">Ocean &amp; Tides</div>
-          <label title="Tidal stage at each location’s own phase"><input type="checkbox" data-layer="tide_level" checked><span class="bv-dot dot-tide"></span>Tidal Stage</label>
-          <label title="Tidal Range contour overlay"><input type="checkbox" data-layer="tide_range" checked><span class="bv-dot dot-tide"></span>Tidal Range <button class="bv-unit-toggle" type="button" data-unit-key="tide_range_ft">ft</button></label>
+          <label title="Tidal stage at each location’s own phase"><input type="checkbox" data-layer="tide_level"><span class="bv-dot dot-tide"></span>Tidal Stage</label>
+          <label title="Tidal Range contour overlay"><input type="checkbox" data-layer="tide_range"><span class="bv-dot dot-tide"></span>Tidal Range <button class="bv-unit-toggle" type="button" data-unit-key="tide_range_ft">ft</button></label>
           <label title="Wind-wave height is the locally wind-generated wave magnitude; arrows show direction"><input type="checkbox" data-layer="wind_wave" checked><span class="bv-dot dot-composite"></span>Wave (wind) <button class="bv-unit-toggle" type="button" data-unit-key="wind_wave_height_ft">ft</button></label>
           <label title="Swell height is the remotely generated wave magnitude; arrows show direction"><input type="checkbox" data-layer="swell" checked><span class="bv-dot dot-swell"></span>Swell <button class="bv-unit-toggle" type="button" data-unit-key="swell_height_ft">ft</button></label>
-          <label title="Total significant wave height combines the sea-state wave energy, including wind waves and swell"><input type="checkbox" data-layer="wave_height"><span class="bv-dot dot-wave"></span>Significant Wave Height <button class="bv-unit-toggle" type="button" data-unit-key="wave_height_ft">ft</button></label>
+          <label title="Total significant wave height combines the sea-state wave energy, including wind waves and swell"><input type="checkbox" data-layer="wave_height" checked><span class="bv-dot dot-wave"></span>Significant Wave Height <button class="bv-unit-toggle" type="button" data-unit-key="wave_height_ft">ft</button></label>
         </div>
       </div>
     </div>
@@ -1045,7 +1045,7 @@
     // Keep internal state identical to the checkbox defaults. SWH is
     // intentionally off at startup so mobile devices do not render an
     // unnecessary scalar field beneath the wind-wave/swell overlays.
-    const layerVisibility = { wave_height: false, temperature: false, apparent_temperature: false, dew_point: false, humidity: false, cloud_cover: false, visibility: false, precipitation: false, precipitation_probability: false, uv_index: false, pressure: false, tide_level: true, tide_range: true, swell: true, wind_wave: true, wind: true };
+    const layerVisibility = { wave_height: true, temperature: false, apparent_temperature: false, dew_point: false, humidity: false, cloud_cover: true, visibility: true, precipitation: false, precipitation_probability: true, uv_index: false, pressure: true, tide_level: false, tide_range: false, swell: true, wind_wave: true, wind: true };
     let activePlannerPreset = 'safety';
     function syncStationVisibility() {
       const showStations = !!(layerVisibility.tide_level || layerVisibility.tide_range);
