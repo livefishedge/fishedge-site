@@ -298,6 +298,7 @@ def fetch_grid(lats_grid, lons_grid, forecast_days=7):
         "wave_height", "wave_direction", "wave_period",
         "wind_wave_height", "wind_wave_direction", "wind_wave_period",
         "swell_wave_height", "swell_wave_direction", "swell_wave_period",
+        "ocean_current_velocity", "ocean_current_direction", "sea_surface_temperature",
     ]
     flat_lats = []
     flat_lons = []
@@ -356,7 +357,7 @@ def reshape_grid(resp_list, nrows, ncols):
 
 def interp_to_display(frames, src_lats, src_lons, dst_lats, dst_lons):
     """Bilinear interp each field from src NxN grid to dst MxK grid. NaN-safe."""
-    direction_fields = {"wave_direction", "wind_wave_direction", "swell_wave_direction"}
+    direction_fields = {"wave_direction", "wind_wave_direction", "swell_wave_direction", "ocean_current_direction"}
     categorical_fields = {"weather_code"}
     src_lat_arr = np.array(src_lats)
     src_lon_arr = np.array(src_lons)
@@ -473,6 +474,57 @@ def fetch_atmospheric_wind(lats_grid, lons_grid, forecast_days=7):
             last_err = f"exception: {e}"
         time.sleep(2 ** attempt)
     raise RuntimeError(f"open-meteo forecast fetch failed after 3 tries: {last_err}")
+
+
+def add_derived_marine_fields(frames):
+    """Normalize marine extras and derive operational diagnostic fields.
+
+    The source supplies current velocity in km/h and SST in °C.  The viewer
+    contract uses knots and °F.  Derived fields are deliberately explicit so
+    the UI never silently treats a diagnostic as a measured source variable.
+    """
+    for frame in frames:
+        current_kmh = frame.pop("ocean_current_velocity", None)
+        current_dir = frame.pop("ocean_current_direction", None)
+        sst_c = frame.pop("sea_surface_temperature", None)
+        def map_grid(grid, fn):
+            return [[None if v is None else fn(float(v)) for v in row] for row in grid] if grid else None
+        frame["current_speed_kn"] = map_grid(current_kmh, lambda v: v / 1.852)
+        frame["current_direction_deg"] = current_dir
+        frame["sea_surface_temperature_f"] = map_grid(sst_c, lambda v: v * 9.0 / 5.0 + 32.0)
+        hs = frame.get("wave_height")
+        period = frame.get("wave_period")
+        wind_wave = frame.get("wind_wave_height")
+        def derived_grid(fn):
+            if not hs or not period: return None
+            out = []
+            for yi, row in enumerate(hs):
+                vals = []
+                for xi, h in enumerate(row):
+                    p = period[yi][xi]
+                    ww = wind_wave[yi][xi] if wind_wave else None
+                    vals.append(fn(h, p, ww))
+                out.append(vals)
+            return out
+        # Deep-water steepness diagnostic using the operational coefficient
+        # used by the planner: Hs / (1.56 * Tp²).
+        frame["wave_steepness"] = derived_grid(
+            lambda h, p, ww: None if h is None or p is None or p <= 0 else h / (1.56 * p * p)
+        )
+        # 0 = smooth, 1 = moderate, 2 = harsh, 3 = severe. This is a
+        # transparent operational classification, not a vessel-specific load.
+        frame["ride_harshness_index"] = derived_grid(
+            lambda h, p, ww: None if h is None or p is None else float(min(3.0,
+                (1.0 if h >= 3.0 else 0.0) +
+                (1.0 if h >= 5.0 or (p <= 6.0 and h >= 3.0) else 0.0) +
+                (1.0 if (ww is not None and ww >= 3.0) else 0.0)))
+        )
+        wind = frame.get("wind_speed_kn")
+        frame["surface_texture_index"] = [
+            [None if wind is None or v is None else min(20.0, max(0.0, float(v))) for v in row]
+            for row in wind
+        ] if wind else None
+    return frames
 
 
 def merge_wind_into_frames(frames, wind_resp, nrows, ncols):
@@ -619,6 +671,7 @@ def main():
     print(f"display grid: {len(dst_lats)}x{len(dst_lons)}")
 
     frames = interp_to_display(frames, fetch_lats, fetch_lons, dst_lats, dst_lons)
+    frames = add_derived_marine_fields(frames)
     frames = add_tide_grids(frames, tides, dst_lats, dst_lons)
     add_tide_display_fields(frames)
 
@@ -659,6 +712,9 @@ def main():
             "wave_height_ft": "ft", "swell_height_ft": "ft", "wind_wave_height_ft": "ft",
             "wave_direction_deg": "deg", "swell_direction_deg": "deg", "wind_wave_direction_deg": "deg",
             "wave_period_s": "s", "swell_period_s": "s", "wind_wave_period_s": "s",
+            "current_speed_kn": "kn", "current_direction_deg": "deg",
+            "sea_surface_temperature_f": "°F",
+            "wave_steepness": "dimensionless", "ride_harshness_index": "0=smooth, 3=severe",
             "wind_speed_kn": "kn", "wind_gust_kn": "kn", "wind_direction_deg": "deg",
             "temperature_f": "°F", "pressure_hpa": "hPa (mean sea level)",
             "apparent_temperature_f": "°F", "dew_point_f": "°F",
