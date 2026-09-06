@@ -84,6 +84,10 @@
     .bv-active-layer-strip label{ display:flex; align-items:center; gap:4px; flex:0 0 auto; padding:3px 6px; border:1px solid rgba(79,195,247,.35); border-radius:4px; background:rgba(19,35,51,.82); color:#d6e5f2; font-size:10px; font-weight:800; white-space:nowrap; cursor:pointer; }
     .bv-active-layer-strip input{ width:12px; height:12px; margin:0; accent-color:#4fc3f7; }
     .bv-active-layer-strip .bv-active-empty{ color:#7a8fa8; font-size:10px; font-style:italic; }
+    .bv-layer-details{ flex:0 0 auto; color:#d6e5f2; font-size:10px; }
+    .bv-layer-details summary{ cursor:pointer; padding:4px 7px; border:1px solid rgba(79,195,247,.35); border-radius:4px; background:rgba(19,35,51,.82); font-weight:800; white-space:nowrap; }
+    .bv-layer-details[open]{ display:flex; align-items:center; gap:5px; }
+    .bv-layer-details[open] summary{ border-color:#4fc3f7; }
     .bv-mode-context{ position:fixed; top:73px; left:0; right:0; z-index:20; display:none; align-items:center; gap:8px; min-height:24px; padding:3px 12px; overflow-x:auto; background:rgba(5,11,16,.82); border-bottom:1px solid rgba(255,255,255,.08); color:#d6e5f2; font:700 10px monospace; white-space:nowrap; }
     .bv-mode-context.visible{ display:flex; }
     .bv-mode-context span{ padding:2px 5px; border:1px solid rgba(255,255,255,.18); border-radius:3px; }
@@ -200,12 +204,10 @@
   <div class="bv-toolbar">
     <span class="bv-view-mode-label">View Mode:</span>
     <div class="bv-top-modes" id="bv-top-modes" aria-label="Planning view">
-      <button class="bv-preset active" type="button" data-preset="safety" title="Safety: go/no-go view for waves, steepness, gusts, pressure, precipitation, and visibility." aria-label="Safety: go or no-go conditions">Safety</button>
-      <button class="bv-preset" type="button" data-preset="comfort" title="Comfort: combine sea state with apparent temperature, humidity, cloud, and wind exposure." aria-label="Comfort: ride and crew conditions">Comfort</button>
-      <button class="bv-preset" type="button" data-preset="catchability" title="Fishing: focus on sea state and tidal timing. SST, chlorophyll, currents, and altimetry require additional data sources." aria-label="Fishing: pelagic productivity">Fishing</button>
-      <button class="bv-preset" type="button" data-preset="fuel" title="Fuel: compare wind, waves, swell, and total sea-state exposure during transit." aria-label="Fuel: transit efficiency">Fuel</button>
-      <button class="bv-preset" type="button" data-preset="visibility" title="Spotting: assess marine visibility, humidity, cloud, precipitation, wind texture, and daylight context." aria-label="Spotting: visibility conditions">Spotting</button>
-      <button class="bv-preset" type="button" data-preset="inlet" title="Inlet: assess tide, water level context, wind, waves, visibility, and precipitation at the choke point." aria-label="Inlet: hydrodynamics and clearance">Inlet</button>
+      <button class="bv-preset active" type="button" data-preset="sea" title="Sea conditions: what will the water feel like?" aria-label="Sea conditions">Sea</button>
+      <button class="bv-preset" type="button" data-preset="weather" title="Weather and visibility: what can I see and what will the crew experience?" aria-label="Weather and visibility">Weather</button>
+      <button class="bv-preset" type="button" data-preset="fishing" title="Fishing conditions: where are the temperature boundaries and drift?" aria-label="Fishing conditions">Fishing</button>
+      <button class="bv-preset" type="button" data-preset="tides" title="Tides and inlets: what is the water level doing near departure and return?" aria-label="Tides and inlets">Tides</button>
     </div>
     <div class="bv-time" id="bv-time">7-Day Outlook · loading forecast…</div>
     <button id="bv-hamburger-btn" aria-label="Open layer menu">☰</button>
@@ -599,7 +601,7 @@
     function renderModeContext() {
       const el = document.getElementById('bv-mode-context');
       if (!el) return;
-      const show = activePlannerPreset === 'visibility' || activePlannerPreset === 'inlet';
+      const show = activePlannerPreset === 'weather' || activePlannerPreset === 'tides';
       el.classList.toggle('visible', show);
       if (!show) { el.replaceChildren(); return; }
       const val = id => document.getElementById(id)?.textContent || '—';
@@ -1132,13 +1134,10 @@
         computeActiveRange(); drawColorbar(); drawOverlaysForProduct();
       }));
     }
-    // Keep internal state identical to the checkbox defaults. SWH is
-    // intentionally off at startup so mobile devices do not render an
-    // unnecessary scalar field beneath the wind-wave/swell overlays.
-    // Safety opens only the primary go/no-go variables. Supporting context
-    // remains visible in the mode strip but is opt-in.
-    const layerVisibility = { wave_height: true, temperature: false, apparent_temperature: false, dew_point: false, humidity: false, cloud_cover: false, cloud_low: false, cloud_mid: false, cloud_high: false, visibility: true, precipitation: false, rain: false, showers: false, snowfall: false, precipitation_probability: false, uv_index: false, pressure: false, wind_gust: true, tide_level: false, tide_range: false, swell: false, wind_wave: false, wind: true, current: false, sst: false, wave_steepness: true, ride_harshness: false, surface_texture: false };
-    let activePlannerPreset = 'safety';
+    // Sea is the calm default: one wave map plus coordinated partition
+    // motion. Other scalar diagnostics stay off until explicitly selected.
+    const layerVisibility = { wave_height: true, temperature: false, apparent_temperature: false, dew_point: false, humidity: false, cloud_cover: false, cloud_low: false, cloud_mid: false, cloud_high: false, visibility: false, precipitation: false, rain: false, showers: false, snowfall: false, precipitation_probability: false, uv_index: false, pressure: false, wind_gust: true, tide_level: false, tide_range: false, swell: true, wind_wave: true, wind: true, current: false, sst: false, wave_steepness: false, ride_harshness: false, surface_texture: false };
+    let activePlannerPreset = 'sea';
     function syncStationVisibility() {
       const showStations = !!(layerVisibility.tide_level || layerVisibility.tide_range);
       stationLayer.setVisible(false);
@@ -1167,14 +1166,31 @@
       strip.replaceChildren();
       const key = document.getElementById('bv-wave-key');
       if (key) key.hidden = !(layerVisibility.swell || layerVisibility.wind_wave);
-      const presetLayers = PLANNER_PRESETS[activePlannerPreset]?.layers || Object.keys(layerVisibility);
-      presetLayers.forEach(key => {
+      const preset = PLANNER_PRESETS[activePlannerPreset];
+      const addLayer = key => {
         const label = document.createElement('label');
         const input = document.createElement('input');
         input.type = 'checkbox'; input.checked = !!layerVisibility[key]; input.dataset.layer = key;
         label.append(input, document.createTextNode(LAYER_LABELS[key] || key));
         strip.appendChild(label);
-      });
+      };
+      (preset?.primary || Object.keys(layerVisibility)).forEach(addLayer);
+      const secondary = (preset?.layers || []).filter(key => !(preset.primary || []).includes(key));
+      if (secondary.length) {
+        const details = document.createElement('details');
+        details.className = 'bv-layer-details';
+        const summary = document.createElement('summary');
+        summary.textContent = 'Details';
+        details.appendChild(summary);
+        secondary.forEach(key => {
+          const label = document.createElement('label');
+          const input = document.createElement('input');
+          input.type = 'checkbox'; input.checked = !!layerVisibility[key]; input.dataset.layer = key;
+          label.append(input, document.createTextNode(LAYER_LABELS[key] || key));
+          details.appendChild(label);
+        });
+        strip.appendChild(details);
+      }
       if (!strip.children.length) {
         const empty = document.createElement('span');
         empty.className = 'bv-active-empty'; empty.textContent = 'No map layers enabled';
@@ -1296,19 +1312,14 @@
     }
 
     const PLANNER_PRESETS = {
-      // Keep each preset focused. `layers` is the complete relevant control
-      // surface shown below the mode row; `defaults` is the smaller set of
-      // primary controls enabled on selection. Unsupported products are not
-      // represented by unrelated proxy fields.
-      // Canonical ownership: each layer appears in exactly one mode strip.
-      // The hamburger menu remains an all-layers inspector, but modes are
-      // intentionally non-overlapping so a captain knows where to look.
-      safety:       { layers:['wind','wave_height','wave_steepness','pressure','precipitation_probability'], defaults:['wind','wave_height','wave_steepness'], heat:'wave_height_ft' },
-      comfort:      { layers:['temperature','apparent_temperature','humidity','swell','ride_harshness','surface_texture'], defaults:['temperature','apparent_temperature','humidity','ride_harshness'], heat:'ride_harshness_index' },
-      catchability: { layers:['sst','current','dew_point'], defaults:['sst','current'], heat:'sea_surface_temperature_f' },
-      fuel:         { layers:['wind_wave'], defaults:['wind_wave'], heat:'wind_wave_height_ft' },
-      visibility:   { layers:['visibility','cloud_cover','cloud_low','cloud_mid','cloud_high','precipitation','rain','showers','snowfall','uv_index'], defaults:['visibility','cloud_low','cloud_mid','cloud_high'], heat:'visibility_mi' },
-      inlet:        { layers:['tide_level','tide_range'], defaults:['tide_level','tide_range'], heat:'astronomical_tide_ft' },
+      // Four captain questions. `primary` is visible immediately; `layers`
+      // is the complete owned set and is available under Details. A mode has
+      // one primary scalar map; secondary layers never silently compete with
+      // it until the captain explicitly selects one.
+      sea:     { primary:['wind','wave_height','swell','wind_wave'], layers:['wind','wave_height','swell','wind_wave','wave_steepness','ride_harshness','surface_texture'], defaults:['wind','wave_height','swell','wind_wave'], heat:'wave_height_ft' },
+      weather: { primary:['visibility'], layers:['visibility','temperature','apparent_temperature','humidity','dew_point','cloud_cover','cloud_low','cloud_mid','cloud_high','precipitation','precipitation_probability','rain','showers','snowfall','uv_index','pressure'], defaults:['visibility'], heat:'visibility_mi' },
+      fishing: { primary:['sst','current'], layers:['sst','current'], defaults:['sst','current'], heat:'sea_surface_temperature_f' },
+      tides:   { primary:['tide_level','tide_range'], layers:['tide_level','tide_range'], defaults:['tide_level','tide_range'], heat:'astronomical_tide_ft' },
     };
     function applyPlannerPreset(name) {
       const preset = PLANNER_PRESETS[name];
