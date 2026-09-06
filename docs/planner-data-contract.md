@@ -1,7 +1,7 @@
 # Planner data and sampling contract — proposed revision
 
-2026-09-06. Design requirements, **not yet implemented**. Execution order and
-known defects: [direction and execution plan](planner-direction-and-execution-plan.md).
+2026-09-06. Design requirements, partially implemented in feature commit
+`4c909d4a`. Remaining gaps are listed in the [direction and execution plan](planner-direction-and-execution-plan.md).
 
 ## Field identity
 

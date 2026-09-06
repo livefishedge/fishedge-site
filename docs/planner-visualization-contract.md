@@ -1,6 +1,9 @@
 # Planner visualization contract — intuitive sea conditions
 
-2026-09-06. **Proposed requirements; not a claim that the current viewer meets them.**
+2026-09-06. Proposed requirements. Commit `4c909d4a` implements the first
+data-grounded cell sampling, clipping, texture and inspection subset; this file
+is not a claim that all perceptual, native-resolution or captain-validation gates
+are complete.
 Read with the [data contract](planner-data-contract.md) and
 [execution plan](planner-direction-and-execution-plan.md).
 

@@ -1,9 +1,10 @@
 # Planner direction, corrected baseline, and execution plan
 
-Reviewed: 2026-09-06. Baseline: feature branch `feat/briefing-raster-v2`, commit
-`d413e4b5`. **Documentation revision only. Implementation steps below are not
-executed and await Mike's instruction. No push, deployment, or production merge
-is authorized by this document.**
+Reviewed: 2026-09-06. Baseline before execution: feature branch
+`feat/briefing-raster-v2`, commit `d413e4b5`. P0 data/semantics work and the
+first P1 renderer pass were subsequently executed in commit `4c909d4a` and
+pushed to the feature preview only. Remaining gates below are still planned;
+there has been no production merge or deployment.
 
 ## 1. Product goal and recommended direction
 
@@ -35,15 +36,16 @@ tests; then connect it to trip timing and routes.
 
 ## 2. What the disk actually establishes
 
-This is a code/artifact/document review, not a new live deployment or captain
-validation. Previous browser smoke results are historical evidence only.
+This is a code/artifact/document review plus the local/dev verification recorded
+below; it is not captain validation or a production release. Previous browser
+smoke results remain historical evidence unless explicitly listed as current.
 
 | Area | Evidence/status | What is not established |
 |---|---|---|
 | Planner UI | Six presets, layer strip/menu, forecast slider, units/colorbar, tide station UI, sun/moon context exist in `dashboard/trip-planner/briefing-viewer.html` | Full inlet-to-return operational workflow and captain usability acceptance |
 | Forecast | Local `dashboard/trip-planner/data/usec_md/briefing/forecast.json`: 168 hourly frames, 21×17 delivery grid, generated `2026-09-05T00:23:33Z` | Freshness at use time; reliable scheduled publication; native model resolution |
 | Marine/weather | Weather, wave partitions, forecast current/SST and diagnostic fields exist | Observational truth or authoritative inlet-current coverage |
-| Waves | Shared deep-water phase formulas, grid-node seeds, subpixel static mark, click readout | Viewport-aware coverage, exact local footprint confinement, state consistency |
+| Waves | Shared deep-water phase formulas, delivery-cell-center seeds, source-cell polygon clipping, subpixel/missing-period texture, click readout | Full viewport-aware density policy, captain validation, coastal physics |
 | Tests | `tests/wave-phase.cjs` checks syntax, deep-water ratios, uniform-grid direction/height/calm/missing period | Full-field agreement, pixel masking, all frames, mobile usability or perceptual fidelity |
 | Tides | Fetchers, harmonic candidates, native rendering and acquisition records exist | One independently validated promoted model across every tide surface |
 | Broader ocean products | Other dashboard work exists elsewhere | Integration of chlorophyll, altimetry, bathymetry or inlet-current products into this planner |
@@ -227,6 +229,11 @@ verification. New contradictions must be resolved explicitly, not blended.
 
 ## 5. Review completion rule
 
-This revision changes Markdown only. No code fixes, new forecast generation,
-tests of changed runtime behavior, scheduler edits, browser deployment checks,
-external writes or captain outreach were performed as part of this plan revision.
+This revision is now an execution record as well as a sequencing guide. Executed
+in `4c909d4a`: producer rerun, UTC frame normalization, tide-merge parser fix,
+feet-to-metre steepness correction, cell-center sampling, source-cell clipping,
+partial-validity sampling, unit-aware readout, readout refresh on time changes,
+local regression/browser checks, feature-branch push, and exact dev-preview
+verification. Not executed: captain comprehension study, native-resolution
+comparison, scheduler reliability proof beyond this manual refresh, production
+merge, or any broader unimplemented ocean-product integration.
