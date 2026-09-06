@@ -2431,15 +2431,33 @@
         );
         if (tooClose) continue;
         occupied[packet.kind].push(c);
-        streamlineCtx.globalAlpha = 0.48 + 0.42 * Math.min(1, vec.speed / s.max);
+        const baseAlpha = 0.48 + 0.42 * Math.min(1, vec.speed / s.max);
+        // One animated packet is a short wave train, not a lone crest.
+        // Draw three parallel crests along the propagation direction. Their
+        // spacing expands with period, making long swell visibly different
+        // from tightly packed short-period wind waves.
+        const travelLon = packet.lon + (vec.u / vec.speed) * 0.025 / cosLat;
+        const travelLat = packet.lat + (vec.v / vec.speed) * 0.025;
+        const travelPoint = map.getPixelFromCoordinate(ol.proj.fromLonLat([
+          travelLon, travelLat
+        ], mapProjection));
+        const dx = travelPoint ? travelPoint[0] - c[0] : 0;
+        const dy = travelPoint ? travelPoint[1] - c[1] : 0;
+        const travelPx = Math.hypot(dx, dy) || 1;
+        const ux = dx / travelPx, uy = dy / travelPx;
+        const crestGap = (packet.kind === 'swell' ? 10 : 7) * periodScale;
+        const crestOffsets = [-crestGap, 0, crestGap];
         streamlineCtx.strokeStyle = s.stroke;
         streamlineCtx.lineWidth = s.width;
         streamlineCtx.setLineDash(s.dash);
         streamlineCtx.lineCap = 'round';
-        streamlineCtx.beginPath();
-        streamlineCtx.moveTo(p0[0], p0[1]);
-        streamlineCtx.lineTo(p1[0], p1[1]);
-        streamlineCtx.stroke();
+        crestOffsets.forEach((offset, crestIndex) => {
+          streamlineCtx.globalAlpha = baseAlpha * (crestIndex === 1 ? 1 : 0.78);
+          streamlineCtx.beginPath();
+          streamlineCtx.moveTo(p0[0] + ux * offset, p0[1] + uy * offset);
+          streamlineCtx.lineTo(p1[0] + ux * offset, p1[1] + uy * offset);
+          streamlineCtx.stroke();
+        });
       }
       streamlineCtx.setLineDash([]);
       streamlineCtx.globalAlpha = 1;
