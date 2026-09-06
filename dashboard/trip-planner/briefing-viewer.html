@@ -927,6 +927,7 @@
     map.addLayer(stationLayer);
     const stationPopup = document.getElementById('bv-station-popup');
     const waveReadout = document.getElementById('bv-wave-readout');
+    let lastWaveReadoutCoordinate = null;
     const stationOverlay = new ol.Overlay({ element: stationPopup, positioning: 'bottom-center', offset: [0, -10], stopEvent: true, autoPan: { animation: { duration: 250 }, margin: 150 } });
     map.addOverlay(stationOverlay);
     function compass(deg) {
@@ -935,7 +936,13 @@
     }
     function renderWaveReadout(coordinate) {
       if (!forecastData || !currentFrame || !waveReadout) return;
+      lastWaveReadoutCoordinate = coordinate;
       const [lon, lat] = ol.proj.toLonLat(coordinate, mapProjection);
+      if (waveMaskImage && waveMaskImage.complete && !isCoastWaterPoint(lon, lat)) {
+        waveReadout.innerHTML = `<b>Wave source sample</b> · ${lon.toFixed(2)}°, ${lat.toFixed(2)}°<br>land or outside marine coverage`;
+        waveReadout.style.display = 'block';
+        return;
+      }
       const rows = [];
       for (const kind of ['swell', 'wind_wave']) {
         const label = kind === 'swell' ? 'Swell' : 'Wind waves';
@@ -944,7 +951,10 @@
         if (!(v.height > 0)) { rows.push(`<div><b>${label}</b> · calm (0 ft)</div>`); continue; }
         const dir = v.speed > 1e-6 ? (Math.atan2(v.u, v.v) * 180 / Math.PI + 360) % 360 : null;
         const unresolved = !wavePhaseMetrics(v.period);
-        rows.push(`<div><b>${label}</b> · ${v.height.toFixed(2)} ft · ${Number.isFinite(v.period) ? v.period.toFixed(1) + ' s' : 'period missing'} · travel ${Number.isFinite(dir) ? `${compass(dir)} (${Math.round(dir)}°)` : '—'}${unresolved ? ' · texture' : ''}</div>`);
+        const heightKey = kind === 'swell' ? 'swell_height_ft' : 'wind_wave_height_ft';
+        const height = convertDisplayValue(heightKey, v.height);
+        const unit = displayUnit(heightKey, 'ft');
+        rows.push(`<div><b>${label}</b> · ${height.toFixed(2)} ${unit} · ${Number.isFinite(v.period) ? v.period.toFixed(1) + ' s' : 'period missing'} · travel ${Number.isFinite(dir) ? `${compass(dir)} (${Math.round(dir)}°)` : '—'}${unresolved ? ' · texture' : ''}</div>`);
       }
       waveReadout.innerHTML = `<b>Wave source sample</b> · ${lon.toFixed(2)}°, ${lat.toFixed(2)}°<br>${rows.join('')}`;
       waveReadout.style.display = 'block';
@@ -1313,6 +1323,7 @@
       computeActiveRange();
       drawColorbar();
       drawOverlaysForProduct();
+      if (lastWaveReadoutCoordinate) renderWaveReadout(lastWaveReadoutCoordinate);
     }
     function setupPlannerPresets() {
       document.querySelectorAll('.bv-preset').forEach(button => {
@@ -1983,11 +1994,11 @@
     // Wave packets use the native-mesh wave footprint; tide contours retain
     // their stricter complete-horizon tide mask.
     function sourceCellValid(kind, yi, xi) {
-      const key = kind === 'swell' ? 'swell_height_ft' : kind === 'wind_wave' ? 'wind_wave_height_ft' : 'wave_height_ft';
-      const grid = currentFrame?.[key];
-      if (!grid) return false;
-      return [grid[yi]?.[xi], grid[yi]?.[xi + 1], grid[yi + 1]?.[xi], grid[yi + 1]?.[xi + 1]]
-        .every(v => Number.isFinite(v));
+      const lons = forecastData?.lons, lats = forecastData?.lats;
+      if (!lons || !lats || xi >= lons.length - 1 || yi >= lats.length - 1) return false;
+      const lon = (lons[xi] + lons[xi + 1]) / 2;
+      const lat = (lats[yi] + lats[yi + 1]) / 2;
+      return !!bilinearPartitionVec(currentFrame, kind, lon, lat);
     }
 
     let waveMaskCanvas = null;
@@ -2425,23 +2436,27 @@
       // between source cells. The grid is deliberately not supersampled.
       const lons = forecastData?.lons || [], lats = forecastData?.lats || [];
       for (const kind of ['swell', 'wind_wave']) {
-        for (let yi = 0; yi < lats.length; yi++) for (let xi = 0; xi < lons.length; xi++) {
-          if (lons[xi] < bbox[0] || lons[xi] > bbox[2] || lats[yi] < bbox[1] || lats[yi] > bbox[3]) continue;
-          wavePackets.push({ kind, xi, yi, lon: lons[xi], lat: lats[yi],
+        for (let yi = 0; yi < lats.length - 1; yi++) for (let xi = 0; xi < lons.length - 1; xi++) {
+          const lon = (lons[xi] + lons[xi + 1]) / 2;
+          const lat = (lats[yi] + lats[yi + 1]) / 2;
+          if (lon < bbox[0] || lon > bbox[2] || lat < bbox[1] || lat > bbox[3]) continue;
+          wavePackets.push({ kind, xi, yi, lon, lat,
             phase: ((xi * 0.618 + yi * 0.382) % 1) });
         }
       }
     }
 
-    function sourceCellPixelSize(packet) {
+    function sourceCellPixelBounds(packet) {
       const lons = forecastData?.lons || [], lats = forecastData?.lats || [];
       const xi = Math.max(0, Math.min(lons.length - 2, packet.xi ?? 0));
       const yi = Math.max(0, Math.min(lats.length - 2, packet.yi ?? 0));
-      const p = map.getPixelFromCoordinate(ol.proj.fromLonLat([lons[xi], lats[yi]], mapProjection));
-      const px = map.getPixelFromCoordinate(ol.proj.fromLonLat([lons[xi + 1], lats[yi]], mapProjection));
-      const py = map.getPixelFromCoordinate(ol.proj.fromLonLat([lons[xi], lats[yi + 1]], mapProjection));
-      if (!p || !px || !py) return 40;
-      return Math.max(8, Math.min(Math.hypot(px[0] - p[0], px[1] - p[1]), Math.hypot(py[0] - p[0], py[1] - p[1])));
+      const corners = [[lons[xi], lats[yi]], [lons[xi + 1], lats[yi]],
+        [lons[xi + 1], lats[yi + 1]], [lons[xi], lats[yi + 1]]]
+        .map(ll => map.getPixelFromCoordinate(ol.proj.fromLonLat(ll, mapProjection)));
+      if (corners.some(p => !p)) return null;
+      const width = Math.hypot(corners[1][0] - corners[0][0], corners[1][1] - corners[0][1]);
+      const height = Math.hypot(corners[3][0] - corners[0][0], corners[3][1] - corners[0][1]);
+      return { corners, cellPx: Math.max(8, Math.min(width, height)) };
     }
 
     function drawWavePackets() {
@@ -2452,7 +2467,7 @@
         // Height gates visibility, not phase velocity. Missing periods do not
         // silently acquire an invented eight-second animation.
         const metrics = wavePhaseMetrics(vec?.period);
-        if (!vec || vec.height < 0.05 || vec.speed < 1e-6 || !metrics) continue;
+        if (!vec || vec.height < 0.05 || vec.speed < 1e-6) continue;
         const c = map.getPixelFromCoordinate(ol.proj.fromLonLat([packet.lon, packet.lat], mapProjection));
         const cosLat = Math.max(0.35, Math.cos(packet.lat * Math.PI / 180));
         const ahead = map.getPixelFromCoordinate(ol.proj.fromLonLat([
@@ -2467,7 +2482,9 @@
         // each train inside a fraction of its source cell so it cannot claim
         // neighboring cells' height/period/direction.
         const isSwell = packet.kind === 'swell';
-        const cellPx = sourceCellPixelSize(packet);
+        const cellBounds = sourceCellPixelBounds(packet);
+        if (!cellBounds) continue;
+        const cellPx = cellBounds.cellPx;
         const half = Math.max(5, Math.min(isSwell ? 22 : 12, cellPx * 0.32));
         const extent = Math.max(8, cellPx * 0.42);
         streamlineCtx.strokeStyle = isSwell ? '#101820' : '#ff69b4';
@@ -2480,12 +2497,19 @@
         // Subpixel wavelength cannot be resolved as individual crests. Keep
         // the valid source cell visible as a short-chop texture instead of
         // silently dropping it; the legend names this representation.
-        if (gap < 3) {
+        streamlineCtx.save();
+        streamlineCtx.beginPath();
+        streamlineCtx.moveTo(cellBounds.corners[0][0], cellBounds.corners[0][1]);
+        for (const corner of cellBounds.corners.slice(1)) streamlineCtx.lineTo(corner[0], corner[1]);
+        streamlineCtx.closePath();
+        streamlineCtx.clip();
+        if (!metrics || gap < 3) {
           streamlineCtx.globalAlpha = 0.35 + 0.45 * Math.min(1, vec.height / 5);
           streamlineCtx.beginPath();
           streamlineCtx.moveTo(c[0] - uy * half, c[1] + ux * half);
           streamlineCtx.lineTo(c[0] + uy * half, c[1] - ux * half);
           streamlineCtx.stroke();
+          streamlineCtx.restore();
           continue;
         }
         const start = packet.phase * gap;
@@ -2498,6 +2522,7 @@
           streamlineCtx.lineTo(c[0] + ux*offset + uy*half, c[1] + uy*offset - ux*half);
           streamlineCtx.stroke();
         }
+        streamlineCtx.restore();
       }
       streamlineCtx.setLineDash([]);
       streamlineCtx.globalAlpha = 1;
@@ -2634,10 +2659,17 @@
       };
       const c00 = corner(y0, x0), c10 = corner(y0, x0 + 1);
       const c01 = corner(y0 + 1, x0), c11 = corner(y0 + 1, x0 + 1);
-      if (!c00 || !c10 || !c01 || !c11) return null;
-      const blend = key => c00[key] * (1-tx)*(1-ty) + c10[key] * tx*(1-ty) + c01[key] * (1-tx)*ty + c11[key] * tx*ty;
+      const corners = [[c00, (1-tx)*(1-ty)], [c10, tx*(1-ty)], [c01, (1-tx)*ty], [c11, tx*ty]]
+        .filter(([corner, weight]) => corner && weight > 0);
+      if (!corners.length) return null;
+      const total = corners.reduce((sum, [, weight]) => sum + weight, 0);
+      const blend = key => corners.reduce((sum, [corner, weight]) => sum + corner[key] * weight, 0) / total;
       const uu = blend('u'), vv = blend('v');
-      const period = [c00, c10, c01, c11].every(c => Number.isFinite(c.period) && c.period > 0) ? blend('period') : null;
+      const periodCorners = corners.filter(([corner]) => Number.isFinite(corner.period) && corner.period > 0);
+      const period = periodCorners.length
+        ? periodCorners.reduce((sum, [corner, weight]) => sum + corner.period * weight, 0) /
+          periodCorners.reduce((sum, [, weight]) => sum + weight, 0)
+        : null;
       return { u: uu, v: vv, speed: Math.sqrt(uu * uu + vv * vv), height: blend('height'), period };
     }
 

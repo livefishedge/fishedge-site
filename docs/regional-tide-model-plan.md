@@ -1,5 +1,13 @@
 # USEC-MD regional tide model plan
 
+> **2026-09-06 review:** Candidate research/design, not a declaration that an
+> independently validated tide model has been promoted. GOT/VDatum acquisition
+> does not prove usable coastal constituents or held-out performance. Inventory
+> the actually served tide products before choosing a migration target. This
+> workstream follows the [planner data contract](planner-data-contract.md) and
+> [current priorities](planner-direction-and-execution-plan.md); do not make a
+> tide-model rebuild a prerequisite for correcting existing wave visualization.
+
 FishEdge needs an independent tide-only field that remains accurate at CO-OPS
 gauges and physically continuous offshore. CO-OPS predictions are validation
 data, not the regional model.

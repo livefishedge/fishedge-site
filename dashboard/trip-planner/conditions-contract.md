@@ -1,5 +1,14 @@
 # `captain-conditions-v1` — Normalized Conditions Contract (Dev MVP)
 
+> **2026-09-06 scope clarification:** This is the historical point/segment v1
+> contract, not the gridded briefing viewer's v2 payload. Preserve provenance and
+> missing-value rules, but bridge these schemas explicitly. Proposed grid/time/
+> sampling requirements: [planner data contract](../../docs/planner-data-contract.md).
+> UI semantics: [visualization contract](../../docs/planner-visualization-contract.md).
+> The legacy decision-rule envelope below is prototype history, not approval for
+> an automatic safety verdict. Current sequencing and limits are in the
+> [direction plan](../../docs/planner-direction-and-execution-plan.md).
+
 > Status: **Dev contract v1, not production**. Lives only on branch `feat/trip-planner-dev-mvp`.  
 > Purpose: every value the briefing UI displays, regardless of source, must pass through this schema.
 

@@ -32,8 +32,10 @@ for (const kind of ['swell','wind_wave']) {
  frame[`${kind}_height_ft`]=grid(0);
  v=context.bilinearPartitionVec(frame,kind,.5,.5);
  assert.equal(v.height,0); assert.equal(v.speed,0,'calm has no moving crests');
- frame[`${kind}_height_ft`]=grid(2);
- frame[`${kind}_period_s`][0][0]=null;
- assert.equal(context.bilinearPartitionVec(frame,kind,.5,.5).period,null);
+frame[`${kind}_height_ft`]=grid(2);
+frame[`${kind}_period_s`][0][0]=null;
+ assert.equal(context.bilinearPartitionVec(frame,kind,.5,.5).period,12,'valid period contributors remain usable');
+ frame[`${kind}_period_s`]=[[null,null],[null,null]];
+ assert.equal(context.bilinearPartitionVec(frame,kind,.5,.5).period,null,'all missing periods remain missing');
 }
 console.log('PASS: inline syntax; 6s/12s ratios; wavelength=speed×interval; invalid periods; partition direction, height, calm and missing data.');

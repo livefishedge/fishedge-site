@@ -1,5 +1,13 @@
 # FishEdge gridded tidal forecast pipeline
 
+> **2026-09-06 status note:** This documents the historical OFS total-water-level
+> ingestion path. It is not a verified current scheduler runbook or the source
+> contract for every astronomical tide layer. Before running these commands,
+> inventory active producers and separate astronomical tide, observed water level,
+> OFS total level and current velocity using the [planner data contract](../docs/planner-data-contract.md).
+> Follow the [current execution order](../docs/planner-direction-and-execution-plan.md);
+> do not overwrite independent tide artifacts or label `zeta` as tide-only.
+
 ## Source and semantics
 
 The regional layer comes from NOAA NOS Operational Forecast Systems in the

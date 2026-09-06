@@ -220,7 +220,8 @@ def add_tide_grids(frames, tides, lats, lons, preserve_ofs=True, land_mask=None)
         source = set(frame.get("tide_model_source") or [])
         if preserve_ofs and source.intersection({"dbofs", "cbofs"}):
             continue
-        frame_ms = int(datetime.strptime(frame["time"], "%Y-%m-%dT%H:%M").replace(tzinfo=timezone.utc).timestamp() * 1000)
+        frame_time = str(frame["time"]).replace("Z", "")
+        frame_ms = int(datetime.strptime(frame_time, "%Y-%m-%dT%H:%M").replace(tzinfo=timezone.utc).timestamp() * 1000)
         values = []
         for st, curve in points:
             nearest = min(curve, key=lambda p: abs(p["t"] - frame_ms))
@@ -340,7 +341,9 @@ def reshape_grid(resp_list, nrows, ncols):
     field_names = [k for k in resp_list[0]["hourly"].keys() if k != "time"]
     out_frames = []
     for h_idx, t_iso in enumerate(times):
-        frame = {"time": t_iso}
+        # Open-Meteo returns UTC timestamps without an offset. Preserve the
+        # source instant explicitly so browser timezone cannot reinterpret it.
+        frame = {"time": t_iso if str(t_iso).endswith(('Z', '+00:00')) else f"{t_iso}Z"}
         for fld in field_names:
             grid = []
             for row in range(nrows):
@@ -506,10 +509,11 @@ def add_derived_marine_fields(frames):
                     vals.append(fn(h, p, ww))
                 out.append(vals)
             return out
-        # Deep-water steepness diagnostic using the operational coefficient
-        # used by the planner: Hs / (1.56 * Tp²).
+        # Deep-water steepness diagnostic using Hs_m / (1.56 * T²).
+        # The marine request uses imperial height, so convert feet to metres
+        # before applying the wavelength coefficient.
         frame["wave_steepness"] = derived_grid(
-            lambda h, p, ww: None if h is None or p is None or p <= 0 else h / (1.56 * p * p)
+            lambda h, p, ww: None if h is None or p is None or p <= 0 else (h * 0.3048) / (1.56 * p * p)
         )
         # 0 = smooth, 1 = moderate, 2 = harsh, 3 = severe. This is a
         # transparent operational classification, not a vessel-specific load.
