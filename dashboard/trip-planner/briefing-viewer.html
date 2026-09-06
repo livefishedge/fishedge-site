@@ -129,6 +129,8 @@
     #bv-station-popup .bv-briefing-source{ font-size:10px; color:#7a8fa8; margin-bottom:4px; }
     #bv-station-popup .bv-row{ display:flex; justify-content:space-between; gap:8px; font-size:10px; padding-top:3px; }
     #bv-station-popup .bv-row b{ color:#fff; }
+    #bv-wave-readout{ position:fixed; right:12px; bottom:104px; z-index:21; display:none; min-width:220px; max-width:min(300px,calc(100vw - 24px)); padding:8px 10px; background:rgba(5,11,16,.96); border:1px solid #8bd7ff; border-radius:6px; color:#d6e5f2; box-shadow:0 8px 24px rgba(0,0,0,.45); font:11px/1.45 monospace; }
+    #bv-wave-readout b{ color:#fff; }
     .dot-temp { background: #ff8c00; }
     .dot-wave { background: #00c8ff; }
     .dot-swell { background: #8bd7ff; }
@@ -211,9 +213,9 @@
   <div id="bv-active-layer-strip" class="bv-active-layer-strip" aria-label="Active map layers"></div>
   <details id="bv-wave-key" hidden style="position:fixed;bottom:100px;left:12px;z-index:19;max-width:min(330px,85vw);padding:7px 10px;border-radius:5px;background:rgba(255,255,255,.94);color:#101820;font:12px/1.5 sans-serif">
     <summary>Wave motion · schematic · 2× time</summary>
-    <div><b>━ Swell</b> · <b style="color:#ad1762">┄ Wind waves</b><br>
+    <div><b>━ Swell</b> · <b style="color:#ad1762">┄ Wind waves</b> · <b>│ Short chop texture</b><br>
     Crests move toward wave travel. Longer period → faster motion, wider spacing, fewer crests passing.<br>
-    Line weight shows height; line length identifies the wave type, not wavelength.
+    Line weight shows height; line length identifies the wave type, not wavelength. Very short waves use a texture when individual crests are below screen resolution.
     Distances are exaggerated, not map scale. Deep-water approximation; no shoaling, refraction, or current interaction. Missing period: no moving crests.</div>
   </details>
   <div id="bv-mode-context" class="bv-mode-context" aria-live="polite"></div>
@@ -281,6 +283,7 @@
   </div>
 
   <div id="bv-map" class="bv-map"></div>
+  <div id="bv-wave-readout" role="status" aria-live="polite"></div>
   <div id="bv-station-popup" style="display:none">
     <h3 id="bv-station-name">Tide station</h3>
     <div class="bv-briefing-source">Astronomical tide prediction</div>
@@ -923,8 +926,29 @@
     stationLayer.setVisible(false);
     map.addLayer(stationLayer);
     const stationPopup = document.getElementById('bv-station-popup');
+    const waveReadout = document.getElementById('bv-wave-readout');
     const stationOverlay = new ol.Overlay({ element: stationPopup, positioning: 'bottom-center', offset: [0, -10], stopEvent: true, autoPan: { animation: { duration: 250 }, margin: 150 } });
     map.addOverlay(stationOverlay);
+    function compass(deg) {
+      if (!Number.isFinite(deg)) return '—';
+      return ['N','NE','E','SE','S','SW','W','NW'][Math.round(deg / 45) % 8];
+    }
+    function renderWaveReadout(coordinate) {
+      if (!forecastData || !currentFrame || !waveReadout) return;
+      const [lon, lat] = ol.proj.toLonLat(coordinate, mapProjection);
+      const rows = [];
+      for (const kind of ['swell', 'wind_wave']) {
+        const label = kind === 'swell' ? 'Swell' : 'Wind waves';
+        const v = bilinearPartitionVec(currentFrame, kind, lon, lat);
+        if (!v) { rows.push(`<div><b>${label}</b> · missing source data</div>`); continue; }
+        if (!(v.height > 0)) { rows.push(`<div><b>${label}</b> · calm (0 ft)</div>`); continue; }
+        const dir = v.speed > 1e-6 ? (Math.atan2(v.u, v.v) * 180 / Math.PI + 360) % 360 : null;
+        const unresolved = !wavePhaseMetrics(v.period);
+        rows.push(`<div><b>${label}</b> · ${v.height.toFixed(2)} ft · ${Number.isFinite(v.period) ? v.period.toFixed(1) + ' s' : 'period missing'} · travel ${Number.isFinite(dir) ? `${compass(dir)} (${Math.round(dir)}°)` : '—'}${unresolved ? ' · texture' : ''}</div>`);
+      }
+      waveReadout.innerHTML = `<b>Wave source sample</b> · ${lon.toFixed(2)}°, ${lat.toFixed(2)}°<br>${rows.join('')}`;
+      waveReadout.style.display = 'block';
+    }
     const stationMarkerOverlays = [];
     function openTideStation(station) {
       activeTideStation = station;
@@ -960,7 +984,7 @@
         layerFilter: layer => layer === stationLayer,
         hitTolerance: 12,
       });
-      if (!feature) { stationPopup.style.display = 'none'; stationOverlay.setPosition(undefined); return; }
+      if (!feature) { stationPopup.style.display = 'none'; stationOverlay.setPosition(undefined); renderWaveReadout(event.coordinate); return; }
       activeTideStation = TIDE_STATIONS.find(station => station.id === feature.get('stationId')) || TIDE_STATIONS[0];
       document.getElementById('bv-station-name').textContent = activeTideStation.name;
       renderActiveTide();
@@ -2396,21 +2420,32 @@
     function ensureWavePackets() {
       if (wavePackets) return;
       wavePackets = [];
-      // Fixed, staggered sampling windows show the forecast field everywhere;
-      // their positions are not claims about wave sources or moving energy.
+      // Sample the actual forecast grid centers. This keeps the animation's
+      // spatial contract identical to the heat map and avoids implying detail
+      // between source cells. The grid is deliberately not supersampled.
+      const lons = forecastData?.lons || [], lats = forecastData?.lats || [];
       for (const kind of ['swell', 'wind_wave']) {
-        for (let y = 0; y < 8; y++) for (let x = 0; x < 9; x++) {
-          wavePackets.push({ kind,
-            lon: bbox[0] + (x + (kind === 'swell' ? 0.25 : 0.75)) / 9 * (bbox[2] - bbox[0]),
-            lat: bbox[1] + (y + 0.5) / 8 * (bbox[3] - bbox[1]),
-            phase: ((x * 0.618 + y * 0.382) % 1) });
+        for (let yi = 0; yi < lats.length; yi++) for (let xi = 0; xi < lons.length; xi++) {
+          if (lons[xi] < bbox[0] || lons[xi] > bbox[2] || lats[yi] < bbox[1] || lats[yi] > bbox[3]) continue;
+          wavePackets.push({ kind, xi, yi, lon: lons[xi], lat: lats[yi],
+            phase: ((xi * 0.618 + yi * 0.382) % 1) });
         }
       }
     }
 
+    function sourceCellPixelSize(packet) {
+      const lons = forecastData?.lons || [], lats = forecastData?.lats || [];
+      const xi = Math.max(0, Math.min(lons.length - 2, packet.xi ?? 0));
+      const yi = Math.max(0, Math.min(lats.length - 2, packet.yi ?? 0));
+      const p = map.getPixelFromCoordinate(ol.proj.fromLonLat([lons[xi], lats[yi]], mapProjection));
+      const px = map.getPixelFromCoordinate(ol.proj.fromLonLat([lons[xi + 1], lats[yi]], mapProjection));
+      const py = map.getPixelFromCoordinate(ol.proj.fromLonLat([lons[xi], lats[yi + 1]], mapProjection));
+      if (!p || !px || !py) return 40;
+      return Math.max(8, Math.min(Math.hypot(px[0] - p[0], px[1] - p[1]), Math.hypot(py[0] - p[0], py[1] - p[1])));
+    }
+
     function drawWavePackets() {
       ensureWavePackets();
-      const occupied = { swell: [], wind_wave: [] };
       for (const packet of wavePackets) {
         if (!layerVisibility[packet.kind] || !isOceanPoint(packet.lon, packet.lat, packet.kind)) continue;
         const vec = bilinearPartitionVec(currentFrame, packet.kind, packet.lon, packet.lat);
@@ -2428,11 +2463,13 @@
         const length = Math.hypot(ahead[0] - c[0], ahead[1] - c[1]);
         if (length < 1e-6) continue;
         const ux = (ahead[0] - c[0]) / length, uy = (ahead[1] - c[1]) / length;
-        // Tangential crest length is a partition style, not wavelength.
-        const isSwell = packet.kind === 'swell', half = isSwell ? 22 : 12;
-        const extent = 58;
-        if (occupied[packet.kind].some(q => Math.hypot(c[0]-q[0], c[1]-q[1]) < 112)) continue;
-        occupied[packet.kind].push(c);
+        // Tangential crest length is a partition style, not wavelength. Keep
+        // each train inside a fraction of its source cell so it cannot claim
+        // neighboring cells' height/period/direction.
+        const isSwell = packet.kind === 'swell';
+        const cellPx = sourceCellPixelSize(packet);
+        const half = Math.max(5, Math.min(isSwell ? 22 : 12, cellPx * 0.32));
+        const extent = Math.max(8, cellPx * 0.42);
         streamlineCtx.strokeStyle = isSwell ? '#101820' : '#ff69b4';
         streamlineCtx.lineWidth = 1.2 + 0.7 * Math.min(1, vec.height / 5);
         streamlineCtx.setLineDash(isSwell ? [] : [4, 3]);
@@ -2440,8 +2477,17 @@
         // Crest phase traverses the window continuously. Repetition at one
         // point is exactly T / timeScale; no packet lifetime masquerades as T.
         const gap = metrics.gapPx;
-        // Subpixel crests cannot be resolved honestly at this display scale.
-        if (gap < 3) continue;
+        // Subpixel wavelength cannot be resolved as individual crests. Keep
+        // the valid source cell visible as a short-chop texture instead of
+        // silently dropping it; the legend names this representation.
+        if (gap < 3) {
+          streamlineCtx.globalAlpha = 0.35 + 0.45 * Math.min(1, vec.height / 5);
+          streamlineCtx.beginPath();
+          streamlineCtx.moveTo(c[0] - uy * half, c[1] + ux * half);
+          streamlineCtx.lineTo(c[0] + uy * half, c[1] - ux * half);
+          streamlineCtx.stroke();
+          continue;
+        }
         const start = packet.phase * gap;
         for (let offset = start + Math.ceil((-extent - start) / gap) * gap;
              offset <= extent; offset += gap) {
