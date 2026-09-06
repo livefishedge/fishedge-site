@@ -1,6 +1,7 @@
 # Planner visualization contract — intuitive sea conditions
 
-2026-09-06. Proposed requirements. Commit `4c909d4a` implements the first
+2026-09-06. Current requirements. Commit `76bdcb0a` implements the four-view
+information architecture and low-fatigue layer hierarchy. Commit `4c909d4a` implements the first
 data-grounded cell sampling, clipping, texture and inspection subset; this file
 is not a claim that all perceptual, native-resolution or captain-validation gates
 are complete.
@@ -63,8 +64,15 @@ regional zoom. A clean 2D schematic with consistent physics is the first target.
 
 - One clearly named active scalar fill and its matching colorbar; no unexplained
   blend of unrelated magnitudes. Supporting contours/vectors remain subordinate.
-- Six modes choose a small set of primary cues; supporting layers stay available
-  without all starting checked. Diagnose clutter with waves alone before wind/current.
+- Four views answer four distinct captain questions: Sea Conditions, Weather &
+  Visibility, Fishing Conditions, and Tides & Inlets. Each layer has one home.
+  Safety, comfort and fuel are briefing questions, not competing layer bins.
+  Each view exposes a small primary set; supporting layers stay behind Details
+  and never all start checked.
+- Only one scalar field owns the color map at a time. Its name and unit are
+  visible in the colorbar; selecting a secondary scalar is an explicit action.
+- Progressive disclosure is mandatory: immediate impression first, tap/readout
+  values second, provenance and technical diagnostics under Details.
 - Provide color-independent partition styles and reduced-motion/static equivalents.
   Keep mobile controls/readout usable without covering the operating area.
 - Inspection shows what the user is seeing at the selected time, including units,
