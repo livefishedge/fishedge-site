@@ -286,11 +286,12 @@
   <div id="bv-wave-readout" role="status" aria-live="polite"></div>
   <div id="bv-station-popup" style="display:none">
     <h3 id="bv-station-name">Tide station</h3>
-    <div class="bv-briefing-source">Astronomical tide prediction</div>
+    <div class="bv-briefing-source">NOAA CO-OPS prediction · field observations</div>
     <svg id="bv-tide-svg" viewBox="0 0 280 112" role="img" aria-label="24-hour tide prediction curve"></svg>
     <div class="bv-row"><span>Next event</span><b id="bv-tide-next">—</b></div>
     <div class="bv-row"><span>Predicted range</span><b id="bv-tide-range">—</b></div>
-    <div class="bv-row"><span>Measured</span><b id="bv-tide-measured">—</b></div>
+    <div class="bv-row"><span>Latest field</span><b id="bv-tide-latest">—</b></div>
+    <div class="bv-row"><span>Measured range</span><b id="bv-tide-measured">—</b></div>
   </div>
 
   <div class="bv-framebar">
@@ -688,6 +689,11 @@
         : (predictedValues.length ? Math.max(...predictedValues) - Math.min(...predictedValues) : 0);
       set('bv-tide-range', `${predictedRange.toFixed(1)} ft`);
       const measuredValues = (observed || []).map(p => p.v).filter(Number.isFinite);
+      const latest = (observed || []).filter(p => Number.isFinite(p?.t) && Number.isFinite(p?.v))
+        .sort((a, b) => a.t - b.t).at(-1);
+      set('bv-tide-latest', latest
+        ? `${latest.v.toFixed(2)} ft · ${new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' }).format(new Date(latest.t))} ET`
+        : 'unavailable');
       set('bv-tide-measured', measuredValues.length
         ? `${Math.min(...measuredValues).toFixed(1)}–${Math.max(...measuredValues).toFixed(1)} ft`
         : 'unavailable');
@@ -1294,12 +1300,15 @@
       // surface shown below the mode row; `defaults` is the smaller set of
       // primary controls enabled on selection. Unsupported products are not
       // represented by unrelated proxy fields.
-      safety:       { layers:['wind','wave_height','wave_steepness','pressure','precipitation_probability','visibility','cloud_cover'], defaults:['wind','wave_height','wave_steepness','visibility'], heat:'wave_height_ft' },
-      comfort:      { layers:['wind','wind_wave','swell','wave_height','temperature','apparent_temperature','dew_point','humidity','cloud_cover','surface_texture','ride_harshness'], defaults:['wind','wave_height','temperature','apparent_temperature','humidity','ride_harshness'], heat:'ride_harshness_index' },
-      catchability: { layers:['wind','wind_wave','swell','sst','current','tide_level','tide_range'], defaults:['wind','sst','current','tide_level','tide_range'], heat:'sea_surface_temperature_f' },
-      fuel:         { layers:['wind','wind_wave','swell','wave_height','current'], defaults:['wind','wave_height','current'], heat:'current_speed_kn' },
-      visibility:   { layers:['wind','visibility','humidity','cloud_low','cloud_mid','cloud_high','precipitation','rain','showers','surface_texture'], defaults:['wind','visibility','cloud_low','cloud_mid','cloud_high','surface_texture'], heat:'visibility_mi' },
-      inlet:        { layers:['wind','current','wave_height','visibility','precipitation_probability','pressure','tide_level','tide_range','wave_steepness'], defaults:['wind','current','wave_height','visibility','tide_level','tide_range'], heat:'astronomical_tide_ft' },
+      // Canonical ownership: each layer appears in exactly one mode strip.
+      // The hamburger menu remains an all-layers inspector, but modes are
+      // intentionally non-overlapping so a captain knows where to look.
+      safety:       { layers:['wind','wave_height','wave_steepness','pressure','precipitation_probability'], defaults:['wind','wave_height','wave_steepness'], heat:'wave_height_ft' },
+      comfort:      { layers:['temperature','apparent_temperature','humidity','swell','ride_harshness','surface_texture'], defaults:['temperature','apparent_temperature','humidity','ride_harshness'], heat:'ride_harshness_index' },
+      catchability: { layers:['sst','current','dew_point'], defaults:['sst','current'], heat:'sea_surface_temperature_f' },
+      fuel:         { layers:['wind_wave'], defaults:['wind_wave'], heat:'wind_wave_height_ft' },
+      visibility:   { layers:['visibility','cloud_cover','cloud_low','cloud_mid','cloud_high','precipitation','rain','showers','snowfall','uv_index'], defaults:['visibility','cloud_low','cloud_mid','cloud_high'], heat:'visibility_mi' },
+      inlet:        { layers:['tide_level','tide_range'], defaults:['tide_level','tide_range'], heat:'astronomical_tide_ft' },
     };
     function applyPlannerPreset(name) {
       const preset = PLANNER_PRESETS[name];
@@ -3523,7 +3532,7 @@
           : await fetchJson(FORECAST_URL);
         forecastData = normalizeForecastPayload(forecastData);
         const tideSourceEl = document.querySelector('#bv-station-popup .bv-briefing-source');
-        if (tideSourceEl) tideSourceEl.textContent = 'Astronomical tide prediction';
+        if (tideSourceEl) tideSourceEl.textContent = 'NOAA CO-OPS prediction · field observations';
         // Dev carries a NOAA GFS diagnostic payload while the shared feed is
         // migrated off Open-Meteo. Fall back to local if the prod CDN still
         // serves the legacy schema.
