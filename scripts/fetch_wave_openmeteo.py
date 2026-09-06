@@ -540,12 +540,21 @@ def merge_wind_into_frames(frames, wind_resp, nrows, ncols):
     """
     if not wind_resp:
         return frames
+    # The marine endpoint currently emits UTC timestamps with a trailing `Z`,
+    # while the forecast endpoint emits the same instants without an offset
+    # (for `timezone=UTC`).  Match instants, not their spelling; otherwise the
+    # whole atmospheric grid silently becomes null on every frame.
+    def canonical_time(value):
+        text = str(value).strip()
+        if text.endswith("Z"):
+            text = text[:-1]
+        return text
     times = wind_resp[0]["hourly"]["time"]
-    time_idx = {t: i for i, t in enumerate(times)}
+    time_idx = {canonical_time(t): i for i, t in enumerate(times)}
     out = []
     for fr in frames:
         new_fr = dict(fr)
-        h_idx = time_idx.get(fr["time"])
+        h_idx = time_idx.get(canonical_time(fr["time"]))
         sp_grid = []
         dg_grid = []
         gust_grid, temp_grid, pressure_grid = [], [], []
