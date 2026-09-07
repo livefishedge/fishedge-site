@@ -2094,8 +2094,11 @@
       // The center must be wet; the high-resolution mask clips the emitted
       // crest itself below, preserving narrow Chesapeake channels without
       // allowing a line to paint across a bar or island.
-      return packet.water === true && (packet.kind !== 'swell' ||
-        (packet.openWater === true && packet.coverage >= 0.999));
+      // Coverage is a diagnostic footprint, not a source-validity threshold:
+      // rejecting an entire ~0.25° cell creates false offshore gaps.  Swell
+      // still requires the cell's water component to be connected to open
+      // boundary water, while the packet anchor and crest path must be wet.
+      return packet.water === true && (packet.kind !== 'swell' || packet.openWater === true);
     }
 
     let waveMaskCanvas = null;
@@ -2246,8 +2249,12 @@
       const openCells = forecastData?.wave_open_water_cells;
       const coverage = forecastData?.wave_water_coverage;
       // Older artifacts without the support grid are not geometry-qualified.
-      const supported = !!cell && Array.isArray(openCells) && openCells[cell[1]]?.[cell[0]] === true &&
-        Array.isArray(coverage) && Number(coverage[cell[1]]?.[cell[0]]) >= 0.999;
+      // Do not apply a whole-cell 99.9% cutoff here.  It discards valid water
+      // tens of kilometres offshore whenever a delivery cell contains a tiny
+      // shoreline fragment.  Local water and barrier handling are enforced by
+      // the anchor/path mask below; this flag only answers whether the source
+      // component is connected to open boundary water.
+      const supported = !!cell && Array.isArray(openCells) && openCells[cell[1]]?.[cell[0]] === true;
       swellSupportCache.set(cacheKey, supported);
       return supported;
     }
@@ -2638,12 +2645,26 @@
         streamlineCtx.lineTo(end[0], end[1]); streamlineCtx.stroke();
         runStart = null;
       };
+      // Test a narrow swept corridor, not only the mathematical centre line.
+      // The crest is redrawn every frame; sampling its footprint catches a
+      // thin bar that the line happens to straddle and prevents a single
+      // stroke from visually reconnecting on the far side of land.
+      const nx = pixelLength > 0 ? -(y2 - y1) / pixelLength : 0;
+      const ny = pixelLength > 0 ? (x2 - x1) / pixelLength : 0;
+      const corridor = 2.5;
+      const corridorWater = point => {
+        const offsets = [0, -corridor, corridor];
+        return offsets.every(offset => {
+          const probe = [point[0] + nx * offset, point[1] + ny * offset];
+          const coordinate = map.getCoordinateFromPixel(probe);
+          const ll = coordinate && ol.proj.toLonLat(coordinate, mapProjection);
+          return !!(ll && isCoastWaterPoint(ll[0], ll[1]));
+        });
+      };
       for (let i = 0; i <= samples; i++) {
         const t = i / samples;
         const point = [x1 + (x2 - x1) * t, y1 + (y2 - y1) * t];
-        const coordinate = map.getCoordinateFromPixel(point);
-        const ll = coordinate && ol.proj.toLonLat(coordinate, mapProjection);
-        const water = ll && isCoastWaterPoint(ll[0], ll[1]);
+        const water = corridorWater(point);
         if (water) { if (!runStart) runStart = point; previous = point; }
         else { flush(previous); previous = null; }
       }
