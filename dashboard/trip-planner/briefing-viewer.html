@@ -79,14 +79,25 @@
     .bv-top-modes .bv-preset{ flex:0 0 auto; border:1px solid #2a3a4d; border-radius:5px; padding:5px 7px; background:#132333; color:#d6e5f2; font:700 10px/1.1 inherit; cursor:pointer; white-space:nowrap; }
     .bv-top-modes .bv-preset:hover,.bv-top-modes .bv-preset.active{ background:#17456a; border-color:#4fc3f7; color:#fff; }
     .bv-top-modes .bv-preset small{ display:none; }
-    .bv-active-layer-strip{ position:fixed; top:44px; left:0; right:0; z-index:21; display:flex; align-items:center; gap:5px; min-height:28px; padding:3px 12px; overflow-x:auto; background:rgba(5,11,16,.9); border-bottom:1px solid rgba(255,255,255,.12); scrollbar-width:none; }
+    .bv-active-layer-strip{ position:fixed; top:44px; left:0; right:0; z-index:2100; display:flex; align-items:center; gap:5px; min-height:28px; padding:3px 12px; overflow-x:auto; background:rgba(5,11,16,.9); border-bottom:1px solid rgba(255,255,255,.12); scrollbar-width:none; }
     .bv-active-layer-strip::-webkit-scrollbar{ display:none; }
     .bv-active-layer-strip label{ display:flex; align-items:center; gap:4px; flex:0 0 auto; padding:3px 6px; border:1px solid rgba(79,195,247,.35); border-radius:4px; background:rgba(19,35,51,.82); color:#d6e5f2; font-size:10px; font-weight:800; white-space:nowrap; cursor:pointer; }
     .bv-active-layer-strip input{ width:12px; height:12px; margin:0; accent-color:#4fc3f7; }
     .bv-active-layer-strip .bv-active-empty{ color:#7a8fa8; font-size:10px; font-style:italic; }
     .bv-layer-details{ flex:0 0 auto; color:#d6e5f2; font-size:10px; }
     .bv-layer-details summary{ cursor:pointer; padding:4px 7px; border:1px solid rgba(79,195,247,.35); border-radius:4px; background:rgba(19,35,51,.82); font-weight:800; white-space:nowrap; }
-    .bv-layer-details[open]{ display:flex; align-items:center; gap:5px; }
+    .bv-layer-details[open]{ display:block; }
+    .bv-details-panel{box-sizing:border-box;position:fixed;top:112px;right:12px;width:min(360px,calc(100vw - 24px));max-height:calc(100dvh - 240px);overflow:auto;padding:12px;background:#0b1825;border:1px solid #4fc3f7;border-radius:8px;box-shadow:0 5px 20px #0008;white-space:normal}
+    .bv-details-panel fieldset{display:flex;flex-wrap:wrap;gap:7px;border:1px solid #345;padding:8px;margin:0 0 10px}
+    .bv-details-panel legend{font-size:12px;color:#ccddec}
+    .bv-details-panel p{font-size:12px;line-height:1.5}
+    .bv-active-layer-strip button{background:#132333;color:#d6e5f2;border:1px solid #456;border-radius:4px;min-height:32px;cursor:pointer}
+    .bv-active-layer-strip button[aria-pressed=true]{border-color:#4fc3f7;background:#184763}
+    .bv-active-layer-strip button:disabled{opacity:.45;cursor:default}
+    .bv-active-layer-strip{min-height:36px}
+    .bv-map{top:88px}
+    @media(max-width:640px){.bv-active-layer-strip{top:58px!important}.bv-time{display:block!important;position:fixed;top:40px;left:8px;font-size:10px;background:#050b10}.bv-map{top:102px!important}.bv-details-panel{top:106px}.bv-map-field select{max-width:135px}}
+
     .bv-layer-details[open] summary{ border-color:#4fc3f7; }
     .bv-details-group{ color:#7a8fa8; font-size:9px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; margin-left:3px; }
     .bv-map-field{ display:flex; align-items:center; gap:4px; flex:0 0 auto; color:#9fb0c3; font-size:10px; font-weight:800; white-space:nowrap; }
@@ -174,7 +185,7 @@
     #bv-cbar { width: 100%; height: 32px; }
     .bv-ranges-ticks { display: flex; justify-content: space-between; font-size: 10px; color: #9fb0c3; font-family: monospace; margin-top: 2px; }
 
-    .bv-map { position: absolute; top: 74px; left: 0; right: 0; bottom: 110px; touch-action: none; }
+    .bv-map { position: absolute; top: 88px; left: 0; right: 0; bottom: 110px; touch-action: none; }
     .bv-flow-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 4; mix-blend-mode: screen; }
     .bv-streamlines-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3; }
     .bv-tide-overlay-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 6; mix-blend-mode: normal; }
@@ -291,8 +302,8 @@
   <div id="bv-wave-readout" role="status" aria-live="polite"></div>
   <div id="bv-station-popup" style="display:none">
     <h3 id="bv-station-name">Tide station</h3>
-    <div class="bv-briefing-source">NOAA CO-OPS prediction · field observations</div>
-    <svg id="bv-tide-svg" viewBox="0 0 280 112" role="img" aria-label="24-hour tide prediction curve"></svg>
+    <div class="bv-briefing-source">NOAA CO-OPS · predictions / measurements · ft MLLW</div>
+    <svg id="bv-tide-svg" viewBox="0 0 280 112" role="img" aria-label="Station tide predictions and measured water levels"></svg>
     <div class="bv-row"><span>Next event</span><b id="bv-tide-next">—</b></div>
     <div class="bv-row"><span>Predicted range</span><b id="bv-tide-range">—</b></div>
     <div class="bv-row"><span>Latest field</span><b id="bv-tide-latest">—</b></div>
@@ -635,7 +646,8 @@
       if (!svg) return;
       const W = 280, H = 112, padL = 38, padR = 6, padT = 12, padB = 18;
       const innerW = W - padL - padR, innerH = H - padT - padB;
-      if (!curve || !curve.length) {
+      if ((!curve || !curve.length) && !(observed || []).length) {
+        for(const id of ['bv-tide-range','bv-tide-latest','bv-tide-measured','bv-tide-next']) document.getElementById(id).textContent='unavailable';
         svg.innerHTML = `<text x="${W/2}" y="${H/2}" text-anchor="middle" fill="#7a8fa8" font-size="10" font-family="ui-monospace,Menlo,Consolas,monospace">tide unavailable</text>`;
         return;
       }
@@ -647,7 +659,7 @@
       // visible at the forecast boundary without translating its timestamps.
       const t0 = now - 36 * 3600000;
       const tN = now + 36 * 3600000;
-      const allValues = [...curve, ...(observed || [])].map(p => p.v).filter(Number.isFinite);
+      const allValues = [...(curve || []), ...(observed || [])].map(p => p.v).filter(Number.isFinite);
       const predictedValues = (curve || []).map(p => p.v).filter(Number.isFinite);
       // The curve shows +/-24 hours, but the reported/co-range is the full
       // forecast-horizon span. Center that span on the model curve so the
@@ -655,11 +667,6 @@
       // visible 48-hour slice misses one of the full-horizon extrema.
       let vmin = allValues.length ? Math.min(...allValues) : (range?.vmin ?? 0);
       let vmax = allValues.length ? Math.max(...allValues) : (range?.vmax ?? 1);
-      if (Number.isFinite(range?.vmax) && range.vmax > range.vmin && predictedValues.length) {
-        const center = (Math.min(...predictedValues) + Math.max(...predictedValues)) / 2;
-        vmin = center - (range.vmax - range.vmin) / 2;
-        vmax = center + (range.vmax - range.vmin) / 2;
-      }
       const span = Math.max(0.1, vmax - vmin);
       const x = t => padL + ((t - t0) / (tN - t0)) * innerW;
       const y = v => padT + innerH - ((v - vmin) / span) * innerH;
@@ -697,28 +704,12 @@
       const latest = (observed || []).filter(p => Number.isFinite(p?.t) && Number.isFinite(p?.v))
         .sort((a, b) => a.t - b.t).at(-1);
       set('bv-tide-latest', latest
-        ? `${latest.v.toFixed(2)} ft · ${new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' }).format(new Date(latest.t))} ET`
+        ? `${latest.v.toFixed(2)} ft · ${new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' }).format(new Date(latest.t))} ET · ${Math.max(0,(Date.now()-latest.t)/3600000).toFixed(1)}h old${Date.now()-latest.t>3600000 ? ' · STALE' : ''}`
         : 'unavailable');
       set('bv-tide-measured', measuredValues.length
         ? `${Math.min(...measuredValues).toFixed(1)}–${Math.max(...measuredValues).toFixed(1)} ft`
         : 'unavailable');
-      // Convert the Python label's UTC HH:MM to Eastern Time and append "ET".
-      // Python label format: "high 2.5 ft @ 14:00" (UTC, no zone suffix after fix).
-      let tideNextLabel = nextEvent ? nextEvent.label : '—';
-      if (nextEvent && nextEvent.label) {
-        const m = nextEvent.label.match(/(\d{2}:\d{2})$/);
-        if (m) {
-          try {
-            const [hh, mm] = m[1].split(':').map(Number);
-            const utcDate = new Date(Date.UTC(2000, 0, 1, hh, mm, 0));
-            tideNextLabel = nextEvent.label.replace(/\d{2}:\d{2}$/, '') +
-              new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' }).format(utcDate) +
-              ' ET';
-          } catch (_) { tideNextLabel = nextEvent.label + ' ET'; }
-        } else {
-          tideNextLabel = nextEvent.label + ' ET';
-        }
-      }
+      const tideNextLabel = nextEvent ? nextEvent.label : 'No upcoming event in forecast';
       set('bv-tide-next', tideNextLabel);
     }
 
@@ -735,7 +726,7 @@
       });
     }
 
-    function sampleGridAtPoint(grid, lat, lon) {
+    function sampleGridAtPoint(grid, lat, lon, strict = false) {
       const lons = forecastData?.lons, lats = forecastData?.lats;
       if (!grid || !lons || !lats || lons.length < 2 || lats.length < 2) return null;
       if (lon < lons[0] || lon > lons[lons.length - 1] || lat < lats[0] || lat > lats[lats.length - 1]) return null;
@@ -748,6 +739,7 @@
       if ([a, b, c, d].every(Number.isFinite)) {
         return a * (1 - tx) * (1 - ty) + b * tx * (1 - ty) + c * (1 - tx) * ty + d * tx * ty;
       }
+      if (strict) return null;
       // Station markers commonly fall on shoreline/land cells. Use a small
       // inverse-distance fallback so the nearby ocean model remains visible
       // instead of incorrectly reporting "tide unavailable".
@@ -780,6 +772,7 @@
 
     function nextModelTideEvent(curve) {
       for (let i = 1; i < curve.length - 1; i++) {
+        if(curve[i].t <= Date.now()) continue;
         const before = curve[i - 1].v, value = curve[i].v, after = curve[i + 1].v;
         const high = value >= before && value >= after;
         const low = value <= before && value <= after;
@@ -799,12 +792,9 @@
       }
       // Popup prediction and co-range use the same stored series. CO-OPS
       // observations remain a separate validation line.
-      const curve = modelTideCurve(activeTideStation);
+      const curve = (tides.curves?.[activeTideStation.id] || []).filter(p => Number.isFinite(p.t) && Number.isFinite(p.v));
       const observed = (tides.observed || {})[activeTideStation.id] || [];
-      const firstFrame = forecastData.frames[0];
-      const range_ft = nativeRangeAtPoint(activeTideStation.lon, activeTideStation.lat) ??
-        sampleGridAtPoint(firstFrame?.tide_range_ft, activeTideStation.lat, activeTideStation.lon);
-      const range = Number.isFinite(range_ft) ? { vmin: 0, vmax: range_ft } : null;
+      const range = tides.range?.[activeTideStation.id] || null;
       renderTideChart(curve, range, nextModelTideEvent(curve), observed);
     }
 
@@ -830,7 +820,7 @@
     // instead of reusing an older cached JSON response.
     // Bump whenever the JSON artifact changes; otherwise a Pages/browser
     // cache can keep serving a pre-calibration tide field after HTML deploy.
-    const FORECAST_DATA_BUILD = 'wave-product-validity-coast-mask-v26-stage-lod-base-overlay';
+    const FORECAST_DATA_BUILD = 'planner-controls-audit-v27';
     const DEV_FORECAST_URL = `/trip-planner/data/${region}/briefing/forecast.json?v=${FORECAST_DATA_BUILD}`;
     const WAVE_MASK_URL = `/trip-planner/data/${region}/briefing/native_wave_mask.png?v=${FORECAST_DATA_BUILD}`;
     const CORS_PROXY = 'https://corsproxy.io/?';
@@ -949,25 +939,28 @@
       if (!forecastData || !currentFrame || !waveReadout) return;
       lastWaveReadoutCoordinate = coordinate;
       const [lon, lat] = ol.proj.toLonLat(coordinate, mapProjection);
-      if (waveMaskImage && waveMaskImage.complete && !isCoastWaterPoint(lon, lat)) {
-        waveReadout.innerHTML = `<b>Wave source sample</b> · ${lon.toFixed(2)}°, ${lat.toFixed(2)}°<br>land or outside marine coverage`;
-        waveReadout.style.display = 'block';
-        return;
-      }
       const rows = [];
-      for (const kind of ['swell', 'wind_wave']) {
+      const key = activeHeatKey();
+      if (key) {
+        const value = sampleGridAtPoint(currentFrame[key], lat, lon, true);
+        rows.push(`<div><b>${PRODUCTS[key]?.name || key}</b> · ${Number.isFinite(value) ? convertDisplayValue(key, value).toFixed(2) + ' ' + displayUnit(key, PRODUCTS[key]?.unit || '') : 'missing source data'}</div>`);
+      }
+      const onLand = waveMaskImage && waveMaskImage.complete && !isCoastWaterPoint(lon, lat);
+      if (onLand) rows.push('<div>Outside marine coverage</div>');
+      for (const kind of (onLand ? [] : ['swell', 'wind_wave'])) {
         const label = kind === 'swell' ? 'Swell' : 'Wind waves';
         const v = bilinearPartitionVec(currentFrame, kind, lon, lat);
         if (!v) { rows.push(`<div><b>${label}</b> · missing source data</div>`); continue; }
         if (!(v.height > 0)) { rows.push(`<div><b>${label}</b> · calm (0 ft)</div>`); continue; }
         const dir = v.speed > 1e-6 ? (Math.atan2(v.u, v.v) * 180 / Math.PI + 360) % 360 : null;
-        const unresolved = !wavePhaseMetrics(v.period);
+        const metrics = wavePhaseMetrics(v.period);
+        const unresolved = !metrics || metrics.gapPx < 3;
         const heightKey = kind === 'swell' ? 'swell_height_ft' : 'wind_wave_height_ft';
         const height = convertDisplayValue(heightKey, v.height);
         const unit = displayUnit(heightKey, 'ft');
         rows.push(`<div><b>${label}</b> · ${height.toFixed(2)} ${unit} · ${Number.isFinite(v.period) ? v.period.toFixed(1) + ' s' : 'period missing'} · travel ${Number.isFinite(dir) ? `${compass(dir)} (${Math.round(dir)}°)` : '—'}${unresolved ? ' · texture' : ''}</div>`);
       }
-      waveReadout.innerHTML = `<b>Wave source sample</b> · ${lon.toFixed(2)}°, ${lat.toFixed(2)}°<br>${rows.join('')}`;
+      waveReadout.innerHTML = `<b>Forecast sample</b> · ${lon.toFixed(2)}°, ${lat.toFixed(2)}°<br>${new Date(currentFrame.time).toLocaleString()} · forecast<br>${rows.join('')}`;
       waveReadout.style.display = 'block';
     }
     const stationMarkerOverlays = [];
@@ -1135,6 +1128,7 @@
         unitModes[key] = unitModes[key] === 'imperial' ? 'metric' : 'imperial';
         button.textContent = UNIT_LABELS[key]?.[unitModes[key] === 'metric' ? 1 : 0] || button.textContent;
         computeActiveRange(); drawColorbar(); drawOverlaysForProduct();
+        if (lastWaveReadoutCoordinate) renderWaveReadout(lastWaveReadoutCoordinate);
       }));
     }
     // Sea is the calm default: one wave map plus coordinated partition
@@ -1142,7 +1136,7 @@
     const layerVisibility = { wave_height: true, temperature: false, apparent_temperature: false, dew_point: false, humidity: false, cloud_cover: false, cloud_low: false, cloud_mid: false, cloud_high: false, visibility: false, precipitation: false, rain: false, showers: false, snowfall: false, precipitation_probability: false, uv_index: false, pressure: false, wind_gust: true, tide_level: false, tide_range: false, swell: true, wind_wave: true, wind: true, current: false, sst: false, wave_steepness: false, ride_harshness: false, surface_texture: false };
     let activePlannerPreset = 'sea';
     function syncStationVisibility() {
-      const showStations = !!(layerVisibility.tide_level || layerVisibility.tide_range);
+      const showStations = activePlannerPreset === 'tides' || !!(layerVisibility.tide_level || layerVisibility.tide_range);
       stationLayer.setVisible(false);
       stationMarkerOverlays.forEach(overlay => {
         const element = overlay.getElement();
@@ -1152,6 +1146,7 @@
       // later-added overlay from obscuring station markers while tidal data
       // are visible.
       stationLayer.setZIndex(1000);
+      if (!showStations) { stationPopup.style.display='none'; stationOverlay.setPosition(undefined); }
       map.render();
     }
     const LAYER_LABELS = {
@@ -1163,81 +1158,102 @@
       current:'Forecast Current',
       sst:'Sea-Surface Temp', wave_steepness:'Wave Steepness', ride_harshness:'Ride Harshness', surface_texture:'Surface Texture'
     };
+    const SCALAR_LAYERS = {
+      wave_height:'wave_height_ft', temperature:'temperature_f', apparent_temperature:'apparent_temperature_f',
+      dew_point:'dew_point_f', humidity:'relative_humidity_pct', cloud_cover:'cloud_cover_pct',
+      cloud_low:'cloud_cover_low_pct', cloud_mid:'cloud_cover_mid_pct', cloud_high:'cloud_cover_high_pct',
+      visibility:'visibility_mi', precipitation:'precipitation_in', precipitation_probability:'precipitation_probability_pct',
+      rain:'rain_in', showers:'showers_in', snowfall:'snowfall_in', uv_index:'uv_index', sst:'sea_surface_temperature_f',
+      wave_steepness:'wave_steepness', ride_harshness:'ride_harshness_index', surface_texture:'surface_texture_index', tide_level:'astronomical_tide_ft'
+    };
+    const viewSettings = {};
+    let detailsOpen = false;
+    function gridAvailable(key) {
+      return Array.isArray(currentFrame?.[key]) && currentFrame[key].some(row => Array.isArray(row) && row.some(Number.isFinite));
+    }
+    function refreshPlanner() {
+      for (const [layer, field] of Object.entries(SCALAR_LAYERS)) layerVisibility[layer] = selectedHeatKey === field;
+      layerVisibility.wind_gust = !!layerVisibility.wind;
+      updateLayerAvailability();
+      document.querySelectorAll('#bv-layers input[data-layer]').forEach(input => { input.checked = !!layerVisibility[input.dataset.layer]; });
+      computeActiveRange(); drawColorbar(); drawOverlaysForProduct(); renderActiveLayerStrip();
+      if (lastWaveReadoutCoordinate) renderWaveReadout(lastWaveReadoutCoordinate);
+    }
     function renderActiveLayerStrip() {
       const strip = document.getElementById('bv-active-layer-strip');
       if (!strip) return;
       strip.replaceChildren();
-      const key = document.getElementById('bv-wave-key');
-      if (key) key.hidden = !(layerVisibility.swell || layerVisibility.wind_wave);
+      document.getElementById('bv-wave-key').hidden = !(layerVisibility.swell || layerVisibility.wind_wave);
       const preset = PLANNER_PRESETS[activePlannerPreset];
-      const mapField = document.createElement('label');
-      mapField.className = 'bv-map-field';
-      const mapLabel = document.createElement('span');
-      mapLabel.textContent = 'Map:';
-      const mapSelect = document.createElement('select');
-      mapSelect.dataset.mapField = 'true';
-      (preset?.mapFields || []).forEach(([value, label]) => {
-        const option = document.createElement('option');
-        option.value = value; option.textContent = label; option.selected = value === selectedHeatKey;
-        mapSelect.appendChild(option);
-      });
-      mapField.append(mapLabel, mapSelect);
-      if (mapSelect.options.length) strip.appendChild(mapField);
-      const addLayer = key => {
-        const label = document.createElement('label');
-        const input = document.createElement('input');
-        input.type = 'checkbox'; input.checked = !!layerVisibility[key]; input.dataset.layer = key;
-        label.append(input, document.createTextNode(LAYER_LABELS[key] || key));
-        strip.appendChild(label);
-      };
-      (preset?.primary || Object.keys(layerVisibility)).forEach(addLayer);
-      const secondary = (preset?.layers || []).filter(key => !(preset.primary || []).includes(key));
-      if (secondary.length) {
-        const details = document.createElement('details');
-        details.className = 'bv-layer-details';
-        const summary = document.createElement('summary');
-        summary.textContent = 'Details';
-        details.appendChild(summary);
-        const groups = preset?.detailGroups || {Details: secondary};
-        for (const [groupName, groupKeys] of Object.entries(groups)) {
-          const heading = document.createElement('span');
-          heading.className = 'bv-details-group'; heading.textContent = groupName;
-          details.appendChild(heading);
-          groupKeys.forEach(key => {
-            const label = document.createElement('label');
-            const input = document.createElement('input');
-            input.type = 'checkbox'; input.checked = !!layerVisibility[key]; input.dataset.layer = key;
-            label.append(input, document.createTextNode(LAYER_LABELS[key] || key));
-            details.appendChild(label);
-          });
-        }
-        strip.appendChild(details);
+      const label = document.createElement('label'); label.className = 'bv-map-field'; label.append('Color map: ');
+      const select = document.createElement('select'); select.dataset.mapField = 'true';
+      const fields = new Set([...preset.mapFields.map(pair => pair[0]), ...preset.layers.map(k => SCALAR_LAYERS[k]).filter(Boolean), selectedHeatKey].filter(Boolean));
+      select.add(new Option('None', ''));
+      for (const field of fields) {
+        if (!PRODUCTS[field]) continue;
+        const option = new Option(PRODUCTS[field].name + (currentFrame && !gridAvailable(field) ? ' — no data at this time' : ''), field); option.disabled = !!currentFrame && !gridAvailable(field); select.add(option);
       }
-      if (!strip.children.length) {
-        const empty = document.createElement('span');
-        empty.className = 'bv-active-empty'; empty.textContent = 'No map layers enabled';
-        strip.appendChild(empty);
+      select.value = selectedHeatKey || ''; label.append(select); strip.append(label);
+      function control(key, parent) {
+        if (SCALAR_LAYERS[key]) return;
+        const label = document.createElement('label'), input = document.createElement('input');
+        input.type = 'checkbox'; input.dataset.layer = key; input.checked = !!layerVisibility[key];
+        const menu = document.querySelector('#bv-layers input[data-layer="' + key + '"]');
+        input.disabled = menu?.disabled || false; label.title = menu?.closest('label')?.title || '';
+        label.append(input, LAYER_LABELS[key] || key); parent.append(label);
+      }
+      if (activePlannerPreset === 'sea') {
+        const label = document.createElement('label'), input = document.createElement('input');
+        input.type = 'checkbox'; input.dataset.waveMotion = 'true'; input.checked = layerVisibility.swell && layerVisibility.wind_wave;
+        input.indeterminate = !!layerVisibility.swell !== !!layerVisibility.wind_wave;
+        label.append(input, 'Wave motion'); strip.append(label);
+      }
+      preset.primary.filter(k => activePlannerPreset !== 'sea' || !['swell','wind_wave'].includes(k)).forEach(k => control(k, strip));
+      const details = document.createElement('details'); details.className = 'bv-layer-details'; details.open = detailsOpen;
+      const summary = document.createElement('summary'); summary.textContent = 'Details'; details.append(summary);
+      const panel = document.createElement('div'); panel.className = 'bv-details-panel';
+      const groups = {...preset.detailGroups};
+      if (activePlannerPreset === 'sea') groups['Wave components'] = ['swell','wind_wave'];
+      for (const [name, keys] of Object.entries(groups)) {
+        const group = document.createElement('fieldset'), legend = document.createElement('legend'); legend.textContent = name; group.append(legend);
+        for (const key of keys) {
+          if (SCALAR_LAYERS[key]) {
+            const button = document.createElement('button'); button.type = 'button'; button.dataset.scalar = SCALAR_LAYERS[key];
+            button.textContent = LAYER_LABELS[key]; button.setAttribute('aria-pressed', String(selectedHeatKey === SCALAR_LAYERS[key]));
+            button.disabled = !!currentFrame && !gridAvailable(SCALAR_LAYERS[key]); group.append(button);
+          } else control(key, group);
+        }
+        panel.append(group);
+      }
+      if (['tides','fishing'].includes(activePlannerPreset)) {
+        const button = document.createElement('button'); button.type='button'; button.dataset.station='true'; button.textContent='Open station chart'; panel.append(button);
+      }
+      const note = document.createElement('p'); note.textContent = 'Map choices replace the fill. Current is a regional surface forecast, not inlet-resolving flow.';
+      panel.append(note); details.append(panel); strip.append(details);
+      details.addEventListener('toggle', () => { if(details.isConnected) detailsOpen=details.open; });
+      if (activePlannerPreset === 'tides') {
+        const button=document.createElement('button');button.type='button';button.dataset.station='true';button.textContent='Station chart';strip.append(button);
+      }
+      const reset=document.createElement('button');reset.type='button';reset.dataset.resetView='true';reset.textContent='Reset view';strip.append(reset);
+      for (const key of preset.layers.filter(k => !SCALAR_LAYERS[k] && layerVisibility[k] && !preset.primary.includes(k))) {
+        const chip=document.createElement('button');chip.type='button';chip.dataset.removeLayer=key;chip.textContent=(LAYER_LABELS[key]||key)+' ×';strip.append(chip);
       }
     }
     function setupActiveLayerStrip() {
-      const strip = document.getElementById('bv-active-layer-strip');
-      if (!strip) return;
+      const strip=document.getElementById('bv-active-layer-strip');
       strip.addEventListener('change', event => {
-        const mapSelect = event.target.closest('select[data-map-field]');
-        if (mapSelect) {
-          selectedHeatKey = mapSelect.value;
-          computeActiveRange();
-          drawColorbar();
-          drawOverlaysForProduct();
-          return;
-        }
-        const input = event.target.closest('input[data-layer]');
-        if (!input) return;
-        const menuInput = document.querySelector(`#bv-layers input[data-layer="${input.dataset.layer}"]`);
-        if (menuInput) {
-          menuInput.checked = input.checked;
-          menuInput.dispatchEvent(new Event('change', { bubbles:true }));
-        }
+        if(event.target.matches('select[data-map-field]')) selectedHeatKey=event.target.value || null;
+        else if(event.target.matches('[data-wave-motion]')) layerVisibility.swell=layerVisibility.wind_wave=event.target.checked;
+        else if(event.target.matches('input[data-layer]')) layerVisibility[event.target.dataset.layer]=event.target.checked;
+        else return;
+        refreshPlanner();
+      });
+      strip.addEventListener('click', event => {
+        const button=event.target.closest('button');if(!button)return;
+        if(button.dataset.scalar) { selectedHeatKey=button.dataset.scalar;refreshPlanner(); }
+        else if(button.dataset.removeLayer) { layerVisibility[button.dataset.removeLayer]=false;refreshPlanner(); }
+        else if(button.hasAttribute('data-reset-view')) applyPlannerPreset(activePlannerPreset, true);
+        else if(button.hasAttribute('data-station')) openTideStation(activeTideStation);
       });
     }
     let selectedHeatKey = 'wave_height_ft';
@@ -1255,55 +1271,7 @@
     // When both partitions (swell + wind-wave) are checked, significant wave takes over
     // as the heat map; partitions still render as directional arrow overlays on top.
     // When exactly one partition is checked, that partition's heat map fills the display.
-    function activeHeatKey() {
-      // Explicit layer selection wins over the default wave priority. This is
-      // essential for Tidal Stage: the checkbox is an independent scalar
-      // layer, and must activate the native phase renderer even while the
-      // wave controls remain checked.
-      const selectedLayerForHeat = {
-        astronomical_tide_ft: 'tide_level', wave_height_ft: 'wave_height', swell_height_ft: 'swell', wind_wave_height_ft: 'wind_wave',
-        temperature_f: 'temperature', apparent_temperature_f: 'apparent_temperature', dew_point_f: 'dew_point', relative_humidity_pct: 'humidity',
-        cloud_cover_pct: 'cloud_cover', cloud_cover_low_pct: 'cloud_low', cloud_cover_mid_pct: 'cloud_mid', cloud_cover_high_pct: 'cloud_high',
-        visibility_mi: 'visibility', precipitation_in: 'precipitation', rain_in: 'rain', showers_in: 'showers', snowfall_in: 'snowfall',
-        precipitation_probability_pct: 'precipitation_probability', uv_index: 'uv_index', pressure_hpa: 'pressure',
-        sea_surface_temperature_f: 'sst',
-        wave_steepness: 'wave_steepness', ride_harshness_index: 'ride_harshness', surface_texture_index: 'surface_texture'
-      };
-      // The Map selector is explicit. Its field may be a Details layer, so it
-      // must not depend on that layer's overlay checkbox being enabled.
-      if (selectedHeatKey && selectedHeatKey !== 'current_speed_kn' && PRODUCTS[selectedHeatKey] && currentFrame?.[selectedHeatKey]) return selectedHeatKey;
-      if (layerVisibility.wave_height) return 'wave_height_ft';
-      const partitionCount = Number(!!layerVisibility.wind_wave) + Number(!!layerVisibility.swell);
-      // A single remaining partition is the scalar heat field. With both
-      // partitions selected, show their motion/direction overlays only;
-      // never blend two independent magnitude color maps.
-      if (partitionCount === 1) {
-        if (layerVisibility.swell) return 'swell_height_ft';
-        if (layerVisibility.wind_wave) return 'wind_wave_height_ft';
-      }
-      if (layerVisibility.temperature) return 'temperature_f';
-      if (layerVisibility.apparent_temperature) return 'apparent_temperature_f';
-      if (layerVisibility.dew_point) return 'dew_point_f';
-      if (layerVisibility.humidity) return 'relative_humidity_pct';
-      if (layerVisibility.cloud_cover) return 'cloud_cover_pct';
-      if (layerVisibility.visibility) return 'visibility_mi';
-      if (layerVisibility.precipitation) return 'precipitation_in';
-      if (layerVisibility.rain) return 'rain_in';
-      if (layerVisibility.showers) return 'showers_in';
-      if (layerVisibility.snowfall) return 'snowfall_in';
-      if (layerVisibility.precipitation_probability) return 'precipitation_probability_pct';
-      if (layerVisibility.uv_index) return 'uv_index';
-      if (layerVisibility.cloud_low) return 'cloud_cover_low_pct';
-      if (layerVisibility.cloud_mid) return 'cloud_cover_mid_pct';
-      if (layerVisibility.cloud_high) return 'cloud_cover_high_pct';
-      if (layerVisibility.wave_steepness) return 'wave_steepness';
-      if (layerVisibility.ride_harshness) return 'ride_harshness_index';
-      if (layerVisibility.surface_texture) return 'surface_texture_index';
-      if (layerVisibility.sst) return 'sea_surface_temperature_f';
-      if (layerVisibility.tide_level) return 'astronomical_tide_ft';
-      if (layerVisibility.pressure) return 'pressure_hpa';
-      return null;
-    }
+    function activeHeatKey() { return selectedHeatKey && PRODUCTS[selectedHeatKey] ? selectedHeatKey : null; }
 
     // Captain-focused summary: show a few decision variables at the center
     // of the current planning domain without adding another map renderer.
@@ -1330,7 +1298,7 @@
       const code = centerValue('weather_code');
       const tide = centerValue('astronomical_tide_ft');
       const steepness = Number.isFinite(hs) && Number.isFinite(period) && period > 0
-        ? hs / (1.56 * period * period) : null;
+        ? hs * 0.3048 / (1.56 * period * period) : null;
       const waveRisk = Number.isFinite(steepness) && steepness >= 0.07 ? ' · steep' : '';
       const cards = [
         [`${summaryValue(wind,1,' kn')} / ${summaryValue(gust,1,' kn')}`, 'Wind / gust'],
@@ -1358,7 +1326,7 @@
         detailGroups:{'Crew exposure':['temperature','apparent_temperature','humidity','uv_index'],'Fog & clouds':['dew_point','cloud_cover','cloud_low','cloud_mid','cloud_high'],'Weather detail':['pressure','precipitation','rain','showers','snowfall'],'Sea context':['wave_height']},
         layers:['visibility','precipitation_probability','wind','temperature','apparent_temperature','humidity','uv_index','dew_point','cloud_cover','cloud_low','cloud_mid','cloud_high','pressure','precipitation','rain','showers','snowfall','wave_height'],
         mapFields:[['visibility_mi','Visibility'],['precipitation_probability_pct','Precipitation chance'],['temperature_f','Air temperature'],['apparent_temperature_f','Feels-like temperature'],['relative_humidity_pct','Humidity'],['cloud_cover_pct','Cloud cover'],['pressure_hpa','Pressure']],
-        defaults:['visibility','precipitation_probability'], heat:'visibility_mi'
+        defaults:['visibility'], heat:'visibility_mi'
       },
       fishing: {
         primary:['sst','current'],
@@ -1372,14 +1340,16 @@
         detailGroups:{'Transit context':['wind','current','wave_height','swell','wind_wave','wave_steepness','visibility','precipitation','pressure']},
         layers:['tide_level','tide_range','wind','current','wave_height','swell','wind_wave','wave_steepness','visibility','precipitation','pressure'],
         mapFields:[['astronomical_tide_ft','Tidal stage']],
-        defaults:['tide_level','tide_range'], heat:'astronomical_tide_ft'
+        defaults:[], heat:null
       },
     };
-    function applyPlannerPreset(name) {
+    function applyPlannerPreset(name, reset = false) {
       const preset = PLANNER_PRESETS[name];
       if (!preset) return;
-      activePlannerPreset = name;
-      const active = new Set(preset.defaults || preset.layers);
+      if (!reset) viewSettings[activePlannerPreset] = {layers:{...layerVisibility}, heat:selectedHeatKey};
+      activePlannerPreset = name; detailsOpen = false;
+      const saved = reset ? null : viewSettings[name];
+      const active = new Set(saved ? Object.keys(saved.layers).filter(k => saved.layers[k]) : preset.defaults);
       document.querySelectorAll('#bv-layers input[data-layer]').forEach(input => {
         const on = active.has(input.dataset.layer);
         input.checked = on;
@@ -1388,7 +1358,7 @@
       // Wind and gust are one captain-facing control. Keep the internal gust
       // animation state coupled to the visible Wind + Gust checkbox.
       layerVisibility.wind_gust = !!layerVisibility.wind;
-      selectedHeatKey = preset.heat;
+      selectedHeatKey = saved ? saved.heat : preset.heat;
       document.querySelectorAll('.bv-preset').forEach(button => button.classList.toggle('active', button.dataset.preset === name));
       renderActiveLayerStrip();
       renderModeContext();
@@ -1397,6 +1367,8 @@
       computeActiveRange();
       drawColorbar();
       drawOverlaysForProduct();
+      refreshPlanner();
+      if (name === 'tides') openTideStation(activeTideStation);
       if (lastWaveReadoutCoordinate) renderWaveReadout(lastWaveReadoutCoordinate);
     }
     function setupPlannerPresets() {
@@ -1704,12 +1676,15 @@
       drawColorbar();
       map.render();
       drawOverlaysForProduct();
+      renderActiveLayerStrip();
+      if (lastWaveReadoutCoordinate) renderWaveReadout(lastWaveReadoutCoordinate);
+      if (stationPopup.style.display === 'block') renderActiveTide();
     }
 
     function updateLayerAvailability() {
       // Zero is a valid forecast value (calm current, clear sky, or no rain),
       // so availability must test for a grid, not a truthy sample value.
-      const hasGrid = key => Array.isArray(currentFrame?.[key]) && currentFrame[key].length > 0;
+      const hasGrid = gridAvailable;
       const available = {
         wave_height: hasGrid('wave_height_ft'), temperature: hasGrid('temperature_f'),
         apparent_temperature: hasGrid('apparent_temperature_f'), dew_point: hasGrid('dew_point_f'),
@@ -1966,7 +1941,7 @@
       // Iterating 2M triangles x 43 levels on the main thread freezes the
       // viewer; the paths were generated from the same native triangles and
       // ranges, so this is a rendering optimization, not a data fallback.
-      if (Array.isArray(mesh.native_contours) && mesh.native_contours.length) {
+      if (Array.isArray(mesh?.native_contours) && mesh.native_contours.length) {
         ctx.strokeStyle = 'rgba(230,245,255,0.95)';
         ctx.lineWidth = 1.5;
         ctx.setLineDash([5, 4]);
@@ -2096,7 +2071,7 @@
       const north = merc(b[3]), south = merc(b[1]);
       const y = Math.max(0, Math.min(waveMaskCanvas.height - 1, Math.round(
         (north - merc(lat)) / (north - south) * (waveMaskCanvas.height - 1))));
-      return waveMaskCtx.getImageData(x, y, 1, 1).data[0] >= 128;
+      return waveMaskCtx.getImageData(x, y, 1, 1).data[3] >= 128;
     }
 
     function isOceanPoint(lon, lat, kind = 'wave') {
@@ -2130,11 +2105,7 @@
       // only the selected scalar may paint the magnitude field. Otherwise
       // simultaneous Wave (wind), Swell, and Significant Wave Height layers
       // blend three unrelated color scales over the same pixels.
-      if (PRODUCTS[heatKey]?.viz === 'heat') drawWaveHeatOverlay();
-      if (partitionCount === 1 && heatKey === 'wind_wave_height_ft' && layerVisibility.wind_wave) drawPartitionMagnitudeHeat('wind_wave');
-      if (partitionCount === 1 && heatKey === 'swell_height_ft' && layerVisibility.swell) drawPartitionMagnitudeHeat('swell');
-      if (layerVisibility.swell || layerVisibility.wind_wave) drawWavePackets();
-      if (['wave_height_ft', 'swell_height_ft', 'wind_wave_height_ft', 'wave_period_s', 'sea_surface_temperature_f', 'wave_steepness', 'ride_harshness_index', 'surface_texture_index'].includes(heatKey) || layerVisibility.swell || layerVisibility.wind_wave) clipCanvasToWaveMask();
+      drawScalarAndWaves(heatKey);
       if (layerVisibility.pressure) drawIsobars(true);
       if (layerVisibility.wind || layerVisibility.wind_gust) {
         if (layerVisibility.wind) drawStreamlines(true);
@@ -2143,6 +2114,25 @@
         stopParticleAnimation();
       }
       startWavePacketAnimation();
+    }
+
+    const scalarBackdrop = document.createElement('canvas');
+    function drawScalarAndWaves(heatKey) {
+      const marine = ['wave_height_ft','swell_height_ft','wind_wave_height_ft','sea_surface_temperature_f','wave_steepness','ride_harshness_index','surface_texture_index'].includes(heatKey);
+      if (heatKey) drawWaveHeatOverlay();
+      const waves = layerVisibility.swell || layerVisibility.wind_wave;
+      if (waves && heatKey && !marine) {
+        scalarBackdrop.width = streamlineCanvas.width; scalarBackdrop.height = streamlineCanvas.height;
+        scalarBackdrop.getContext('2d').drawImage(streamlineCanvas, 0, 0);
+        streamlineCtx.clearRect(0, 0, streamlineCanvas.width, streamlineCanvas.height);
+      }
+      if (waves) drawWavePackets();
+      if (marine || waves) clipCanvasToWaveMask();
+      if (waves && heatKey && !marine) {
+        streamlineCtx.save(); streamlineCtx.setTransform(1,0,0,1,0,0);
+        streamlineCtx.globalCompositeOperation = 'destination-over';
+        streamlineCtx.drawImage(scalarBackdrop, 0, 0); streamlineCtx.restore();
+      }
     }
 
     function drawWaveHeatOverlay() {
@@ -2636,12 +2626,7 @@
         if (['wave_height_ft', 'swell_height_ft', 'wind_wave_height_ft'].includes(heatKey) ||
             layerVisibility.swell || layerVisibility.wind_wave) ensureWaveMaskImage();
         const partitionCount = Number(!!layerVisibility.wind_wave) + Number(!!layerVisibility.swell);
-        if (PRODUCTS[heatKey]?.viz === 'heat') drawWaveHeatOverlay();
-        if (partitionCount === 1 && heatKey === 'wind_wave_height_ft' && layerVisibility.wind_wave) drawPartitionMagnitudeHeat('wind_wave');
-        if (partitionCount === 1 && heatKey === 'swell_height_ft' && layerVisibility.swell) drawPartitionMagnitudeHeat('swell');
-        if (layerVisibility.swell || layerVisibility.wind_wave) drawWavePackets();
-        if (['wave_height_ft', 'swell_height_ft', 'wind_wave_height_ft'].includes(heatKey) ||
-            layerVisibility.swell || layerVisibility.wind_wave) clipCanvasToWaveMask();
+        drawScalarAndWaves(heatKey);
         if (layerVisibility.pressure) drawIsobars(true);
         if (layerVisibility.wind) drawStreamlines(true);
         if (layerVisibility.current) drawStreamlines(true, 'current');
@@ -3468,27 +3453,12 @@
     document.querySelectorAll('.bv-products button').forEach(btn => {
       btn.addEventListener('click', () => setProduct(btn.dataset.prod));
     });
-      document.querySelectorAll('#bv-layers input[data-layer]').forEach(input => {
+    document.querySelectorAll('#bv-layers input[data-layer]').forEach(input => {
       input.addEventListener('change', () => {
-        layerVisibility[input.dataset.layer] = input.checked;
-        if (input.dataset.layer === 'wind') layerVisibility.wind_gust = input.checked;
-        renderActiveLayerStrip();
-        syncStationVisibility();
-        const selectedKey = { wave_height: 'wave_height_ft', temperature: 'temperature_f', apparent_temperature: 'apparent_temperature_f', dew_point: 'dew_point_f', humidity: 'relative_humidity_pct', cloud_cover: 'cloud_cover_pct', cloud_low: 'cloud_cover_low_pct', cloud_mid: 'cloud_cover_mid_pct', cloud_high: 'cloud_cover_high_pct', visibility: 'visibility_mi', precipitation: 'precipitation_in', rain: 'rain_in', showers: 'showers_in', snowfall: 'snowfall_in', precipitation_probability: 'precipitation_probability_pct', uv_index: 'uv_index', pressure: 'pressure_hpa', tide_level: 'astronomical_tide_ft', wind_wave: 'wind_wave_height_ft', swell: 'swell_height_ft', current: 'current_speed_kn', sst: 'sea_surface_temperature_f', wave_steepness: 'wave_steepness', ride_harshness: 'ride_harshness_index', surface_texture: 'surface_texture_index' }[input.dataset.layer];
-        if (input.checked && selectedKey) selectedHeatKey = selectedKey;
-        if (input.dataset.layer === 'temperature' && input.checked) {
-          layerVisibility.wave_height = false;
-          document.querySelector('#bv-layers input[data-layer="wave_height"]').checked = false;
-        } else if (input.dataset.layer === 'wave_height' && input.checked) {
-          layerVisibility.temperature = false;
-          document.querySelector('#bv-layers input[data-layer="temperature"]').checked = false;
-        }
-        computeActiveRange();
-        drawColorbar();
-        // Every layer toggle can affect the independent tide overlay, even
-        // when the selected base product is not the wave composite.
-        renderActiveLayerStrip();
-        drawOverlaysForProduct();
+        const key=input.dataset.layer;
+        if(SCALAR_LAYERS[key]) selectedHeatKey=input.checked ? SCALAR_LAYERS[key] : (selectedHeatKey===SCALAR_LAYERS[key] ? null : selectedHeatKey);
+        else layerVisibility[key]=input.checked;
+        refreshPlanner();
       });
     });
 
@@ -3597,7 +3567,7 @@
           : await fetchJson(FORECAST_URL);
         forecastData = normalizeForecastPayload(forecastData);
         const tideSourceEl = document.querySelector('#bv-station-popup .bv-briefing-source');
-        if (tideSourceEl) tideSourceEl.textContent = 'NOAA CO-OPS prediction · field observations';
+        if (tideSourceEl) tideSourceEl.textContent = 'NOAA CO-OPS · predictions / measurements · ft MLLW';
         // Dev carries a NOAA GFS diagnostic payload while the shared feed is
         // migrated off Open-Meteo. Fall back to local if the prod CDN still
         // serves the legacy schema.
@@ -3636,6 +3606,7 @@
         slider.value = String(startIdx);
         frameIdx = startIdx;
         currentFrame = frames[startIdx];
+        applyPlannerPreset('sea', true);
         updateLayerAvailability();
         drawColorbar();
         setFrame(startIdx);
