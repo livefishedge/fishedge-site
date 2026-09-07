@@ -2076,11 +2076,11 @@
 
     // Wave packets use the native-mesh wave footprint; tide contours retain
     // their stricter complete-horizon tide mask.
-    function sourceCellValid(kind, yi, xi) {
+    function sourceCellValid(kind, yi, xi, sampleLon = null, sampleLat = null) {
       const lons = forecastData?.lons, lats = forecastData?.lats;
       if (!lons || !lats || xi >= lons.length - 1 || yi >= lats.length - 1) return false;
-      const lon = (lons[xi] + lons[xi + 1]) / 2;
-      const lat = (lats[yi] + lats[yi + 1]) / 2;
+      const lon = Number.isFinite(sampleLon) ? sampleLon : (lons[xi] + lons[xi + 1]) / 2;
+      const lat = Number.isFinite(sampleLat) ? sampleLat : (lats[yi] + lats[yi + 1]) / 2;
       return !!bilinearPartitionVec(currentFrame, kind, lon, lat);
     }
 
@@ -2090,7 +2090,7 @@
       // The center must be wet; the high-resolution mask clips the emitted
       // crest itself below, preserving narrow Chesapeake channels without
       // allowing a line to paint across a bar or island.
-      return isCoastWaterPoint((lons[xi] + lons[xi + 1]) / 2, (lats[yi] + lats[yi + 1]) / 2);
+      return isCoastWaterPoint(packet.lon, packet.lat);
     }
 
     let waveMaskCanvas = null;
@@ -2123,7 +2123,7 @@
       if (!lons || !lats || lons.length < 2 || lats.length < 2) return false;
       const xi = Math.max(0, Math.min(lons.length - 2, Math.floor((lon - lons[0]) / (lons[1] - lons[0]))));
       const yi = Math.max(0, Math.min(lats.length - 2, Math.floor((lat - lats[0]) / (lats[1] - lats[0]))));
-      return sourceCellValid(kind, yi, xi);
+      return sourceCellValid(kind, yi, xi, lon, lat);
     }
 
     // ---- wave composite: heat fill + swell streamlines + wind-wave streamlines + wind arrows ----
@@ -2322,6 +2322,10 @@
         alphaCtx.putImageData(projected, 0, 0);
         waveMaskCanvas = waveMaskAlphaCanvas;
         waveMaskCtx = alphaCtx;
+        // Rebuild packet anchors now that the projected mask is available.
+        // Center-water cells use one packet; only land-centered coastal cells
+        // get quarter anchors for valid water coverage.
+        wavePackets = null;
         drawOverlaysForProduct();
         // ImageCanvas caches rendered canvases by extent/resolution. A plain
         // map.render() can reuse the old unmasked raster, so invalidate the
@@ -2538,17 +2542,23 @@
     function ensureWavePackets() {
       if (wavePackets) return;
       wavePackets = [];
-      // Sample the actual forecast grid centers. This keeps the animation's
-      // spatial contract identical to the heat map and avoids implying detail
-      // between source cells. The grid is deliberately not supersampled.
+      // Sample four anchors per source cell. This retains valid water on a
+      // coastal cell whose center is land; values still come only from the
+      // parent forecast cell, so this is coverage rather than interpolation.
       const lons = forecastData?.lons || [], lats = forecastData?.lats || [];
       for (const kind of ['swell', 'wind_wave']) {
         for (let yi = 0; yi < lats.length - 1; yi++) for (let xi = 0; xi < lons.length - 1; xi++) {
-          const lon = (lons[xi] + lons[xi + 1]) / 2;
-          const lat = (lats[yi] + lats[yi + 1]) / 2;
-          if (lon < bbox[0] || lon > bbox[2] || lat < bbox[1] || lat > bbox[3]) continue;
-          wavePackets.push({ kind, xi, yi, lon, lat,
-            phase: ((xi * 0.618 + yi * 0.382) % 1) });
+          const centerLon = (lons[xi] + lons[xi + 1]) / 2;
+          const centerLat = (lats[yi] + lats[yi + 1]) / 2;
+          const centerIsWater = waveMaskImage?.complete && isCoastWaterPoint(centerLon, centerLat);
+          const anchors = centerIsWater ? [[0.5, 0.5]] : [[0.25, 0.25], [0.75, 0.25], [0.25, 0.75], [0.75, 0.75]];
+          for (const [fx, fy] of anchors) {
+            const lon = lons[xi] + (lons[xi + 1] - lons[xi]) * fx;
+            const lat = lats[yi] + (lats[yi + 1] - lats[yi]) * fy;
+            if (lon < bbox[0] || lon > bbox[2] || lat < bbox[1] || lat > bbox[3]) continue;
+            wavePackets.push({ kind, xi, yi, lon, lat,
+              phase: ((xi * 0.618 + yi * 0.382 + fx * 0.17 + fy * 0.29) % 1) });
+          }
         }
       }
     }
@@ -2564,6 +2574,29 @@
       const width = Math.hypot(corners[1][0] - corners[0][0], corners[1][1] - corners[0][1]);
       const height = Math.hypot(corners[3][0] - corners[0][0], corners[3][1] - corners[0][1]);
       return { corners, cellPx: Math.max(8, Math.min(width, height)) };
+    }
+
+    // Clip each crest's travel segment against the coastline, not just the
+    // final canvas. A destination-in mask can hide land pixels, but it still
+    // lets one continuous crest appear on both sides of a narrow barrier.
+    function strokeWaterMaskedCrest(x1, y1, x2, y2, samples = 12) {
+      let runStart = null, previous = null;
+      const flush = end => {
+        if (!runStart || !end) return;
+        streamlineCtx.beginPath(); streamlineCtx.moveTo(runStart[0], runStart[1]);
+        streamlineCtx.lineTo(end[0], end[1]); streamlineCtx.stroke();
+        runStart = null;
+      };
+      for (let i = 0; i <= samples; i++) {
+        const t = i / samples;
+        const point = [x1 + (x2 - x1) * t, y1 + (y2 - y1) * t];
+        const coordinate = map.getCoordinateFromPixel(point);
+        const ll = coordinate && ol.proj.toLonLat(coordinate, mapProjection);
+        const water = ll && isCoastWaterPoint(ll[0], ll[1]);
+        if (water) { if (!runStart) runStart = point; previous = point; }
+        else { flush(previous); previous = null; }
+      }
+      flush(previous);
     }
 
     function drawWavePackets() {
@@ -2600,7 +2633,7 @@
         streamlineCtx.lineCap = 'round';
         // Crest phase traverses the window continuously. Repetition at one
         // point is exactly T / timeScale; no packet lifetime masquerades as T.
-        const gap = metrics.gapPx;
+        const gap = metrics?.gapPx;
         // Subpixel wavelength cannot be resolved as individual crests. Keep
         // the valid source cell visible as a short-chop texture instead of
         // silently dropping it; the legend names this representation.
@@ -2610,12 +2643,28 @@
         for (const corner of cellBounds.corners.slice(1)) streamlineCtx.lineTo(corner[0], corner[1]);
         streamlineCtx.closePath();
         streamlineCtx.clip();
-        if (!metrics || gap < 3) {
+        if (!metrics) {
           streamlineCtx.globalAlpha = 0.35 + 0.45 * Math.min(1, vec.height / 5);
-          streamlineCtx.beginPath();
-          streamlineCtx.moveTo(c[0] - uy * half, c[1] + ux * half);
-          streamlineCtx.lineTo(c[0] + uy * half, c[1] - ux * half);
-          streamlineCtx.stroke();
+          streamlineCtx.setLineDash([2, 3]);
+          strokeWaterMaskedCrest(c[0] - uy * half, c[1] + ux * half, c[0] + uy * half, c[1] - ux * half, 8);
+          streamlineCtx.setLineDash(isSwell ? [] : [4, 3]);
+          streamlineCtx.restore();
+          continue;
+        }
+        if (gap < 3) {
+          // Individual crests are below screen resolution, but valid chop must
+          // still evolve. Move a directional hatch texture by phase instead
+          // of freezing one representative line.
+          const textureGap = Math.max(3, Math.min(8, half * 0.8));
+          const textureStart = packet.phase * textureGap;
+          for (let offset = textureStart + Math.ceil((-extent - textureStart) / textureGap) * textureGap;
+               offset <= extent; offset += textureGap) {
+            const fade = Math.pow(Math.cos(Math.PI * offset / (2 * extent)), 2);
+            streamlineCtx.globalAlpha = (0.32 + 0.42 * Math.min(1, vec.height / 5)) * fade;
+            strokeWaterMaskedCrest(
+              c[0] + ux * offset - uy * half, c[1] + uy * offset + ux * half,
+              c[0] + ux * offset + uy * half, c[1] + uy * offset - ux * half, 8);
+          }
           streamlineCtx.restore();
           continue;
         }
@@ -2624,10 +2673,9 @@
              offset <= extent; offset += gap) {
           const fade = Math.pow(Math.cos(Math.PI * offset / (2 * extent)), 2);
           streamlineCtx.globalAlpha = (0.45 + 0.4 * Math.min(1, vec.height / 5)) * fade;
-          streamlineCtx.beginPath();
-          streamlineCtx.moveTo(c[0] + ux*offset - uy*half, c[1] + uy*offset + ux*half);
-          streamlineCtx.lineTo(c[0] + ux*offset + uy*half, c[1] + uy*offset - ux*half);
-          streamlineCtx.stroke();
+          strokeWaterMaskedCrest(
+            c[0] + ux*offset - uy*half, c[1] + uy*offset + ux*half,
+            c[0] + ux*offset + uy*half, c[1] + uy*offset - ux*half, 12);
         }
         streamlineCtx.restore();
       }

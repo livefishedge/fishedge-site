@@ -17,6 +17,16 @@ Earlier legend/console checks did not establish visible scalar rendering or comp
 - Wave packets require a finite source-vector cell and a wet coastline-mask center; the high-resolution mask clips the crest itself. The coarse tide wet-cell grid is not used as a wave boundary because it suppresses valid narrow Chesapeake channels.
 - Map clicks now leave a persistent location marker and show signed coordinates, ET forecast timestamp, separate significant/swell/chop rows, and a shrinkable readout.
 
+## Chesapeake correction — September 7, 2026
+
+- Replaced the fixed line used for subpixel chop with a phase-advancing directional hatch texture. A valid short-period cell now visibly evolves without claiming individually resolved crests.
+- Made the unresolved-period branch null-safe. A missing period is not assigned a fabricated phase speed; it is rendered as a separate low-confidence texture state.
+- Added per-crest coastline sampling and segment splitting. A destination-in canvas mask remains a final safety clip, but a crest is no longer drawn as one uninterrupted line across a narrow barrier.
+- Regenerated `native_wave_mask.png` from wet native mesh triangles using normalized EPSG:3857 rows, matching the viewer's sampling projection. Added `wave_water_mask_contract` metadata to both forecast artifacts.
+- Removed the coarse tidal wet-cell grid as a wave boundary; it was suppressing valid narrow-channel coverage. Wave eligibility uses finite partition data plus the projected native coastline mask.
+
+The targeted browser suite now checks rendered wave motion, rather than only aggregate canvas movement. It still cannot certify every Chesapeake shoreline or a captain's visual interpretation; those require representative location/zoom review.
+
 ## Evidence
 
 - `node tests/wave-phase.cjs`: inline syntax, phase ratios, units/partition samples, calm and missing cases.

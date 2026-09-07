@@ -52,8 +52,13 @@ triangles = triangles[np.all(wet[triangles], axis=1)]
 if not len(triangles): raise SystemExit('no wet triangles after signed-depth filter')
 scale = 100; width, height = (len(lons)-1)*scale, (len(lats)-1)*scale
 canvas = np.zeros((height, width), np.uint8)
+# The viewer samples rows in normalized Web Mercator (EPSG:3857), not linear
+# latitude. Build the raster in the same coordinate system so Chesapeake
+# shorelines and barrier islands do not shift with latitude.
+merc = lambda values: np.log(np.tan(np.pi / 4.0 + np.asarray(values) * np.pi / 360.0))
+merc_south, merc_north = merc(lats[0]), merc(lats[-1])
 px = (nodes[:, 0] - lons[0]) / (lons[-1] - lons[0]) * width
-py = (lats[-1] - nodes[:, 1]) / (lats[-1] - lats[0]) * height
+py = (merc_north - merc(nodes[:, 1])) / (merc_north - merc_south) * height
 for chunk in np.array_split(triangles, max(1, len(triangles)//20000)):
     poly = np.rint(np.stack((px[chunk], py[chunk]), axis=2)).astype(np.int32)
     cv2.fillPoly(canvas, poly, 1)
@@ -62,7 +67,7 @@ mask = (coverage >= 0.75).tolist()
 mask_path.parent.mkdir(parents=True, exist_ok=True)
 Image.fromarray(canvas * 255, mode='L').save(mask_path, optimize=True)
 payload['wave_water_cells'] = mask
-payload['wave_water_mask_contract'] = {'kind': 'native_mesh_cell_footprint', 'source': 'native mesh triangles whose three STOFS depth values are finite and positive', 'purpose': 'wave, swell, wind-wave and significant-wave-height overlays', 'cell_rule': 'cell is drawable when native wet coverage is at least 75 percent', 'tidal_mask_separate': True}
+payload['wave_water_mask_contract'] = {'kind': 'native_mesh_cell_footprint', 'source': 'native mesh triangles whose three STOFS depth values are finite and positive', 'purpose': 'wave, swell, wind-wave and significant-wave-height overlays', 'cell_rule': 'cell is drawable when native wet coverage is at least 75 percent', 'projection': 'normalized EPSG:3857 rows', 'tidal_mask_separate': True}
 encoded = json.dumps(payload, allow_nan=False, separators=(',', ':'))
 for path in payload_paths: path.write_text(encoded)
 print(json.dumps({'wet_nodes': int(wet.sum()), 'wet_triangles': int(len(triangles)), 'wave_cells': int(sum(map(sum, mask))), 'mask': str(mask_path)}))
