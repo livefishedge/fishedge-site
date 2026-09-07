@@ -151,7 +151,7 @@
     #bv-wave-readout.is-collapsed{min-width:0;max-width:190px;padding:5px 8px;font-size:10px;line-height:1.25}
     #bv-wave-readout .bv-readout-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
     #bv-wave-readout .bv-readout-toggle{border:1px solid #55758c;border-radius:3px;background:#132333;color:#d6e5f2;cursor:pointer;font:700 12px monospace;padding:0 4px}
-    #bv-click-marker{width:16px;height:16px;border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 2px #e91e63,0 0 10px #000;transform:translate(-50%,-50%);pointer-events:none;display:none}
+    #bv-click-marker{width:8px;height:8px;border:1px solid #fff;border-radius:50%;box-shadow:0 0 0 1px #e91e63,0 0 6px #000;transform:translate(-50%,-50%);pointer-events:none;display:none}
     #bv-wave-readout b{ color:#fff; }
     .dot-temp { background: #ff8c00; }
     .dot-wave { background: #00c8ff; }
@@ -2079,11 +2079,6 @@
     function sourceCellValid(kind, yi, xi) {
       const lons = forecastData?.lons, lats = forecastData?.lats;
       if (!lons || !lats || xi >= lons.length - 1 || yi >= lats.length - 1) return false;
-      // A wave vector at a cell center is not enough to authorize propagation:
-      // a narrow sandbar can cross that cell. Require the delivery grid's
-      // explicit wet-cell contract before emitting any crest.
-      const wet = forecastData?.tide_water_cells;
-      if (Array.isArray(wet) && wet[yi]?.[xi] !== true) return false;
       const lon = (lons[xi] + lons[xi + 1]) / 2;
       const lat = (lats[yi] + lats[yi + 1]) / 2;
       return !!bilinearPartitionVec(currentFrame, kind, lon, lat);
@@ -2092,7 +2087,6 @@
     function sourceCellWaterValid(packet) {
       const lons = forecastData?.lons || [], lats = forecastData?.lats || [];
       const xi = packet.xi, yi = packet.yi;
-      if (Array.isArray(forecastData?.tide_water_cells) && forecastData.tide_water_cells[yi]?.[xi] !== true) return false;
       // The center must be wet; the high-resolution mask clips the emitted
       // crest itself below, preserving narrow Chesapeake channels without
       // allowing a line to paint across a bar or island.
