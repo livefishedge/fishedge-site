@@ -972,6 +972,10 @@
       if (onLand) rows.push('<div>Outside marine coverage</div>');
       for (const kind of (onLand ? [] : ['swell', 'wind_wave'])) {
         const label = kind === 'swell' ? 'Swell' : 'Waves (Chop)';
+        if (kind === 'swell' && !swellSupportedAt(lon, lat)) {
+          rows.push('<div><b>Swell</b> · not resolved inside Chesapeake Bay</div>');
+          continue;
+        }
         const v = bilinearPartitionVec(currentFrame, kind, lon, lat);
         if (!v) { rows.push(`<div><b>${label}</b> · missing source data</div>`); continue; }
         if (!(v.height > 0)) { rows.push(`<div><b>${label}</b> · calm (0 ft)</div>`); continue; }
@@ -2090,7 +2094,7 @@
       // The center must be wet; the high-resolution mask clips the emitted
       // crest itself below, preserving narrow Chesapeake channels without
       // allowing a line to paint across a bar or island.
-      return isCoastWaterPoint(packet.lon, packet.lat);
+      return packet.water === true;
     }
 
     let waveMaskCanvas = null;
@@ -2118,7 +2122,6 @@
     }
 
     function isOceanPoint(lon, lat, kind = 'wave') {
-      if (!isCoastWaterPoint(lon, lat)) return false;
       const lons = forecastData?.lons, lats = forecastData?.lats;
       if (!lons || !lats || lons.length < 2 || lats.length < 2) return false;
       const xi = Math.max(0, Math.min(lons.length - 2, Math.floor((lon - lons[0]) / (lons[1] - lons[0]))));
@@ -2227,6 +2230,25 @@
       }
     }
 
+    const swellSupportCache = new Map();
+    function pointInLonLatPolygon(lon, lat, polygon) {
+      let inside = false;
+      for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+        const [xi, yi] = polygon[i], [xj, yj] = polygon[j];
+        const hit = ((yi > lat) !== (yj > lat)) && (lon < (xj - xi) * (lat - yi) / (yj - yi) + xi);
+        if (hit) inside = !inside;
+      }
+      return inside;
+    }
+    function swellSupportedAt(lon, lat) {
+      const cacheKey = `${Number(lon).toFixed(5)},${Number(lat).toFixed(5)}`;
+      if (swellSupportCache.has(cacheKey)) return swellSupportCache.get(cacheKey);
+      const geometries = forecastData?.wave_component_contract?.exclusion_geometries || [];
+      const supported = !geometries.some(g => Array.isArray(g.polygon_lon_lat) && pointInLonLatPolygon(lon, lat, g.polygon_lon_lat));
+      swellSupportCache.set(cacheKey, supported);
+      return supported;
+    }
+
     // Interpolate each valid source cell onto a small display mesh, then let
     // clipCanvasToWaveMask() remove land pixels.  Source validity and
     // coastline visibility are intentionally separate: a valid calm-water
@@ -2259,6 +2281,9 @@
               corners[0][0] * (1-u) * (1-v) + corners[1][0] * u * (1-v) + corners[2][0] * u * v + corners[3][0] * (1-u) * v,
               corners[0][1] * (1-u) * (1-v) + corners[1][1] * u * (1-v) + corners[2][1] * u * v + corners[3][1] * (1-u) * v
             ];
+            const cellLon = lons[xi] + (lons[xi + 1] - lons[xi]) * ((u0 + u1) / 2);
+            const cellLat = lats[yi] + (lats[yi + 1] - lats[yi]) * ((v0 + v1) / 2);
+            if (key === 'swell_height_ft' && !swellSupportedAt(cellLon, cellLat)) continue;
             paint([point(u0,v0), point(u1,v0), point(u1,v1), point(u0,v1)],
               (bilinear(u0,v0) + bilinear(u1,v0) + bilinear(u1,v1) + bilinear(u0,v1)) / 4);
           }
@@ -2266,7 +2291,12 @@
           // A shoreline/source gap is represented only by the finite source
           // triangle; do not extrapolate a missing corner across the cell.
           const finiteIds = vals.map(finite).map((ok, i) => ok ? i : -1).filter(i => i >= 0);
-          if (finiteIds.length >= 3) paint(finiteIds.map(i => corners[i]), finiteIds.reduce((sum, i) => sum + vals[i], 0) / finiteIds.length);
+          if (finiteIds.length >= 3) {
+            const cellLon = (lons[xi] + lons[xi + 1]) / 2, cellLat = (lats[yi] + lats[yi + 1]) / 2;
+            if (key !== 'swell_height_ft' || swellSupportedAt(cellLon, cellLat)) {
+              paint(finiteIds.map(i => corners[i]), finiteIds.reduce((sum, i) => sum + vals[i], 0) / finiteIds.length);
+            }
+          }
         }
       }
     }
@@ -2556,7 +2586,11 @@
             const lon = lons[xi] + (lons[xi + 1] - lons[xi]) * fx;
             const lat = lats[yi] + (lats[yi + 1] - lats[yi]) * fy;
             if (lon < bbox[0] || lon > bbox[2] || lat < bbox[1] || lat > bbox[3]) continue;
-            wavePackets.push({ kind, xi, yi, lon, lat,
+            const water = waveMaskImage?.complete && isCoastWaterPoint(lon, lat);
+            const coastal = !centerIsWater || [[lons[xi], lats[yi]], [lons[xi + 1], lats[yi]],
+              [lons[xi + 1], lats[yi + 1]], [lons[xi], lats[yi + 1]]]
+              .some(([x, y]) => !isCoastWaterPoint(x, y));
+            wavePackets.push({ kind, xi, yi, lon, lat, water, coastal,
               phase: ((xi * 0.618 + yi * 0.382 + fx * 0.17 + fy * 0.29) % 1) });
           }
         }
@@ -2580,6 +2614,11 @@
     // final canvas. A destination-in mask can hide land pixels, but it still
     // lets one continuous crest appear on both sides of a narrow barrier.
     function strokeWaterMaskedCrest(x1, y1, x2, y2, samples = 12) {
+      // Sample at approximately one screen pixel so narrow barrier islands
+      // cannot be skipped between two coarse endpoints. Coastal packets are
+      // few; offshore packets use the fast direct stroke path below.
+      const pixelLength = Math.hypot(x2 - x1, y2 - y1);
+      samples = Math.max(samples, Math.ceil(pixelLength));
       let runStart = null, previous = null;
       const flush = end => {
         if (!runStart || !end) return;
@@ -2599,9 +2638,15 @@
       flush(previous);
     }
 
+    function strokeCrest(packet, x1, y1, x2, y2, samples = 8) {
+      if (packet.coastal) return strokeWaterMaskedCrest(x1, y1, x2, y2, samples);
+      streamlineCtx.beginPath(); streamlineCtx.moveTo(x1, y1); streamlineCtx.lineTo(x2, y2); streamlineCtx.stroke();
+    }
+
     function drawWavePackets() {
       ensureWavePackets();
       for (const packet of wavePackets) {
+        if (packet.kind === 'swell' && !swellSupportedAt(packet.lon, packet.lat)) continue;
         if (!layerVisibility[packet.kind] || !sourceCellWaterValid(packet) || !isOceanPoint(packet.lon, packet.lat, packet.kind)) continue;
         const vec = bilinearPartitionVec(currentFrame, packet.kind, packet.lon, packet.lat);
         // Height gates visibility, not phase velocity. Missing periods do not
@@ -2646,7 +2691,7 @@
         if (!metrics) {
           streamlineCtx.globalAlpha = 0.35 + 0.45 * Math.min(1, vec.height / 5);
           streamlineCtx.setLineDash([2, 3]);
-          strokeWaterMaskedCrest(c[0] - uy * half, c[1] + ux * half, c[0] + uy * half, c[1] - ux * half, 8);
+          strokeCrest(packet, c[0] - uy * half, c[1] + ux * half, c[0] + uy * half, c[1] - ux * half, 6);
           streamlineCtx.setLineDash(isSwell ? [] : [4, 3]);
           streamlineCtx.restore();
           continue;
@@ -2661,9 +2706,9 @@
                offset <= extent; offset += textureGap) {
             const fade = Math.pow(Math.cos(Math.PI * offset / (2 * extent)), 2);
             streamlineCtx.globalAlpha = (0.32 + 0.42 * Math.min(1, vec.height / 5)) * fade;
-            strokeWaterMaskedCrest(
+            strokeCrest(packet,
               c[0] + ux * offset - uy * half, c[1] + uy * offset + ux * half,
-              c[0] + ux * offset + uy * half, c[1] + uy * offset - ux * half, 8);
+              c[0] + ux * offset + uy * half, c[1] + uy * offset - ux * half, 6);
           }
           streamlineCtx.restore();
           continue;
@@ -2673,9 +2718,9 @@
              offset <= extent; offset += gap) {
           const fade = Math.pow(Math.cos(Math.PI * offset / (2 * extent)), 2);
           streamlineCtx.globalAlpha = (0.45 + 0.4 * Math.min(1, vec.height / 5)) * fade;
-          strokeWaterMaskedCrest(
+          strokeCrest(packet,
             c[0] + ux*offset - uy*half, c[1] + uy*offset + ux*half,
-            c[0] + ux*offset + uy*half, c[1] + uy*offset - ux*half, 12);
+            c[0] + ux*offset + uy*half, c[1] + uy*offset - ux*half, 6);
         }
         streamlineCtx.restore();
       }
@@ -2701,6 +2746,7 @@
         ensureWavePackets();
         for (const packet of wavePackets) {
           if (!layerVisibility[packet.kind]) continue;
+          if (packet.kind === 'swell' && !swellSupportedAt(packet.lon, packet.lat)) continue;
           const vec = bilinearPartitionVec(currentFrame, packet.kind, packet.lon, packet.lat);
           const metrics = wavePhaseMetrics(vec?.period);
           if (metrics) packet.phase = (packet.phase + dt / 1000 / metrics.intervalS) % 1;

@@ -5,6 +5,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 from PIL import Image
+import cartopy.io.shapereader as shpreader
 from fetch_stofs_global_harmonics import RemoteClassicNetCDF, S3
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -50,7 +51,10 @@ finally:
 wet = np.isfinite(depth) & (depth > 0.0)
 triangles = triangles[np.all(wet[triangles], axis=1)]
 if not len(triangles): raise SystemExit('no wet triangles after signed-depth filter')
-scale = 100; width, height = (len(lons)-1)*scale, (len(lats)-1)*scale
+# Keep the coastline raster substantially finer than the forecast grid. A
+# 400x subdivision is ~100–150 m over this regional bbox, enough to retain
+# narrow barrier islands without pretending the forecast has that resolution.
+scale = 400; width, height = (len(lons)-1)*scale, (len(lats)-1)*scale
 canvas = np.zeros((height, width), np.uint8)
 # The viewer samples rows in normalized Web Mercator (EPSG:3857), not linear
 # latitude. Build the raster in the same coordinate system so Chesapeake
@@ -62,6 +66,32 @@ py = (merc_north - merc(nodes[:, 1])) / (merc_north - merc_south) * height
 for chunk in np.array_split(triangles, max(1, len(triangles)//20000)):
     poly = np.rint(np.stack((px[chunk], py[chunk]), axis=2)).astype(np.int32)
     cv2.fillPoly(canvas, poly, 1)
+
+# The native mesh is the authoritative wet-data footprint, but its coastal
+# triangles are not guaranteed to resolve narrow barrier islands and sand bars.
+# Burn the 10 m Natural Earth land polygons into the same projected raster so
+# a crest cannot visually bridge a thin land feature simply because the model
+# mesh skipped it. This is a display boundary only; it does not invent wave
+# values or imply shallow-water refraction/breaking physics.
+land_canvas = np.zeros_like(canvas)
+land_path = shpreader.natural_earth(resolution='10m', category='physical', name='land')
+for geom in shpreader.Reader(land_path).geometries():
+    geoms = list(getattr(geom, 'geoms', (geom,)))
+    for part in geoms:
+        rings = [part.exterior, *part.interiors]
+        for ring_index, ring in enumerate(rings):
+            coords = np.asarray(ring.coords, dtype=float)
+            if len(coords) < 3:
+                continue
+            valid = np.isfinite(coords[:, 0]) & np.isfinite(coords[:, 1])
+            coords = coords[valid]
+            if len(coords) < 3:
+                continue
+            px_ring = (coords[:, 0] - lons[0]) / (lons[-1] - lons[0]) * width
+            py_ring = (merc_north - merc(coords[:, 1])) / (merc_north - merc_south) * height
+            poly = np.rint(np.stack((px_ring, py_ring), axis=1)).astype(np.int32)
+            cv2.fillPoly(land_canvas, [poly], 1 if ring_index == 0 else 0)
+canvas[land_canvas > 0] = 0
 coverage = canvas.reshape(len(lats)-1, scale, len(lons)-1, scale).mean(axis=(1, 3))
 mask = (coverage >= 0.75).tolist()
 mask_path.parent.mkdir(parents=True, exist_ok=True)

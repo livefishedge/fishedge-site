@@ -25,6 +25,14 @@ Earlier legend/console checks did not establish visible scalar rendering or comp
 - Regenerated `native_wave_mask.png` from wet native mesh triangles using normalized EPSG:3857 rows, matching the viewer's sampling projection. Added `wave_water_mask_contract` metadata to both forecast artifacts.
 - Removed the coarse tidal wet-cell grid as a wave boundary; it was suppressing valid narrow-channel coverage. Wave eligibility uses finite partition data plus the projected native coastline mask.
 
+## Performance and swell-source correction — September 7, 2026
+
+- Moved expensive coastline sampling out of the normal offshore crest path. Non-coastal packets use direct canvas strokes; only packets near a mask edge use pixel-scale barrier sampling. This keeps the animation bounded instead of doing geographic mask lookups for every crest on every frame.
+- Increased the native mask raster to 400 subdivisions per forecast cell and burned Natural Earth 10 m land polygons into it. The mask remains a display boundary, not a claim of shallow-water refraction or breaking physics.
+- Added a source-backed component contract to both forecast artifacts. The swell partition is NOAA WaveWatch III via Open-Meteo Marine; that regional/coarse source does not resolve Chesapeake entrance shielding, bars, or shallow transformation. Swell is therefore excluded and labeled unsupported inside the named Chesapeake Bay polygon; wind-wave data remain available.
+- Cached the exclusion-geometry lookup and avoid advancing/rendering excluded bay swell packets. This prevents the source-quality correction from adding frame-time lag.
+- The planner deliberately does not reinterpret a coarse offshore swell value as a Chesapeake-local wave. A future bay wave product requires a bathymetry-aware nearshore model or observations.
+
 The targeted browser suite now checks rendered wave motion, rather than only aggregate canvas movement. It still cannot certify every Chesapeake shoreline or a captain's visual interpretation; those require representative location/zoom review.
 
 ## Evidence
