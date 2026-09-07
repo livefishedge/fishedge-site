@@ -25,4 +25,6 @@ assert(html.includes('regional context only; not locally resolved here'), 'rende
 assert(!html.includes('packet.coverage >= 0.999'), 'renderer must not reject whole cells with the artificial 99.9% cutoff');
 assert(html.includes('const corridorWater = point'), 'crest motion must test a swept water corridor');
 assert(html.includes("packet.kind === 'swell' || packet.coastal"), 'every swell crest must use the land boundary path');
+assert(html.includes('function swellExposureAt(lon, lat, vec)'), 'swell must have directional upstream exposure gating');
+assert(html.includes('swell shadow'), 'renderer must document unresolved swell shadows');
 console.log('PASS: native source coordinates, generic open-water support contract, and unresolved swell state');

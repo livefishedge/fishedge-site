@@ -2235,6 +2235,7 @@
     }
 
     const swellSupportCache = new Map();
+    const swellExposureCache = new Map();
     function sourceCellIndexAt(lon, lat) {
       const lons = forecastData?.lons || [], lats = forecastData?.lats || [];
       if (lons.length < 2 || lats.length < 2) return null;
@@ -2257,6 +2258,49 @@
       const supported = !!cell && Array.isArray(openCells) && openCells[cell[1]]?.[cell[0]] === true;
       swellSupportCache.set(cacheKey, supported);
       return supported;
+    }
+    function cachedMaskWaterAt(lon, lat) {
+      if (!waveMaskData || !waveMaskAlphaCanvas) return isCoastWaterPoint(lon, lat);
+      const b = forecastData?.display_bbox || forecastData?.bbox || [-77, 36, -72, 40];
+      if (lon < b[0] || lon > b[2] || lat < b[1] || lat > b[3]) return false;
+      const merc = value => Math.log(Math.tan(Math.PI / 4 + value * Math.PI / 360));
+      const x = Math.round((lon - b[0]) / (b[2] - b[0]) * (waveMaskAlphaCanvas.width - 1));
+      const north = merc(b[3]), south = merc(b[1]);
+      const y = Math.round((north - merc(lat)) / (north - south) * (waveMaskAlphaCanvas.height - 1));
+      if (x < 0 || y < 0 || x >= waveMaskAlphaCanvas.width || y >= waveMaskAlphaCanvas.height) return false;
+      return waveMaskData[(y * waveMaskAlphaCanvas.width + x) * 4 + 3] >= 128;
+    }
+    // A water connection is not enough to claim that incoming swell reaches a
+    // location. Trace the source-side (up-wave) corridor through the actual
+    // shoreline mask. If it intersects land, the location is an unresolved
+    // swell shadow and must not spawn a new crest there.
+    function swellExposureAt(lon, lat, vec) {
+      if (!vec || !Number.isFinite(vec.speed) || vec.speed <= 1e-6) return false;
+      const direction = Math.atan2(vec.u, vec.v);
+      const key = `${frameIdx}:${Number(lon).toFixed(3)},${Number(lat).toFixed(3)},${direction.toFixed(2)}`;
+      if (swellExposureCache.has(key)) return swellExposureCache.get(key);
+      if (!cachedMaskWaterAt(lon, lat)) {
+        swellExposureCache.set(key, false);
+        return false;
+      }
+      const ux = vec.u / vec.speed, uy = vec.v / vec.speed;
+      const maxKm = 80;
+      let exposed = true;
+      // Sample the up-wave corridor at 2 km intervals. This is deliberately a
+      // conservative display-support rule, not a claim to model refraction or
+      // diffraction through an inlet.
+      for (let distanceKm = 2; distanceKm <= maxKm; distanceKm += 2) {
+        const latProbe = lat - uy * distanceKm / 111.32;
+        const cosLat = Math.max(0.25, Math.cos(latProbe * Math.PI / 180));
+        const lonProbe = lon - ux * distanceKm / (111.32 * cosLat);
+        if (!cachedMaskWaterAt(lonProbe, latProbe)) {
+          exposed = false;
+          break;
+        }
+      }
+      swellExposureCache.set(key, exposed);
+      if (swellExposureCache.size > 12000) swellExposureCache.clear();
+      return exposed;
     }
     function swellQuadSupported(lon0, lat0, lon1, lat1) {
       const lonMid = (lon0 + lon1) / 2, latMid = (lat0 + lat1) / 2;
@@ -2300,7 +2344,10 @@
             const cellLon1 = lons[xi] + (lons[xi + 1] - lons[xi]) * u1;
             const cellLat0 = lats[yi] + (lats[yi + 1] - lats[yi]) * v0;
             const cellLat1 = lats[yi] + (lats[yi + 1] - lats[yi]) * v1;
-            if (key === 'swell_height_ft' && !swellQuadSupported(cellLon0, cellLat0, cellLon1, cellLat1)) continue;
+            if (key === 'swell_height_ft') {
+              const exposureVec = bilinearPartitionVec(currentFrame, 'swell', (cellLon0 + cellLon1) / 2, (cellLat0 + cellLat1) / 2);
+              if (!swellQuadSupported(cellLon0, cellLat0, cellLon1, cellLat1) || !swellExposureAt((cellLon0 + cellLon1) / 2, (cellLat0 + cellLat1) / 2, exposureVec)) continue;
+            }
             paint([point(u0,v0), point(u1,v0), point(u1,v1), point(u0,v1)],
               (bilinear(u0,v0) + bilinear(u1,v0) + bilinear(u1,v1) + bilinear(u0,v1)) / 4);
           }
@@ -2310,7 +2357,8 @@
           const finiteIds = vals.map(finite).map((ok, i) => ok ? i : -1).filter(i => i >= 0);
           if (finiteIds.length >= 3) {
             const cellLon = (lons[xi] + lons[xi + 1]) / 2, cellLat = (lats[yi] + lats[yi + 1]) / 2;
-            if (key !== 'swell_height_ft' || swellSupportedAt(cellLon, cellLat)) {
+            if (key !== 'swell_height_ft' || (swellSupportedAt(cellLon, cellLat) &&
+                swellExposureAt(cellLon, cellLat, bilinearPartitionVec(currentFrame, 'swell', cellLon, cellLat)))) {
               paint(finiteIds.map(i => corners[i]), finiteIds.reduce((sum, i) => sum + vals[i], 0) / finiteIds.length);
             }
           }
@@ -2694,7 +2742,10 @@
     function drawWavePackets() {
       ensureWavePackets();
       for (const packet of wavePackets) {
-        if (packet.kind === 'swell' && !swellSupportedAt(packet.lon, packet.lat)) continue;
+        if (packet.kind === 'swell') {
+          const exposureVec = bilinearPartitionVec(currentFrame, 'swell', packet.lon, packet.lat);
+          if (!swellSupportedAt(packet.lon, packet.lat) || !swellExposureAt(packet.lon, packet.lat, exposureVec)) continue;
+        }
         if (!layerVisibility[packet.kind] || !sourceCellWaterValid(packet) || !isOceanPoint(packet.lon, packet.lat, packet.kind)) continue;
         const vec = bilinearPartitionVec(currentFrame, packet.kind, packet.lon, packet.lat);
         // Height gates visibility, not phase velocity. Missing periods do not
@@ -2794,7 +2845,10 @@
         ensureWavePackets();
         for (const packet of wavePackets) {
           if (!layerVisibility[packet.kind]) continue;
-          if (packet.kind === 'swell' && !swellSupportedAt(packet.lon, packet.lat)) continue;
+          if (packet.kind === 'swell') {
+            const exposureVec = bilinearPartitionVec(currentFrame, 'swell', packet.lon, packet.lat);
+            if (!swellSupportedAt(packet.lon, packet.lat) || !swellExposureAt(packet.lon, packet.lat, exposureVec)) continue;
+          }
           const vec = bilinearPartitionVec(currentFrame, packet.kind, packet.lon, packet.lat);
           const metrics = wavePhaseMetrics(vec?.period);
           if (metrics) packet.phase = (packet.phase + dt / 1000 / metrics.intervalS) % 1;
