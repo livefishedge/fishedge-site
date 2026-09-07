@@ -2093,13 +2093,10 @@
       const lons = forecastData?.lons || [], lats = forecastData?.lats || [];
       const xi = packet.xi, yi = packet.yi;
       if (Array.isArray(forecastData?.tide_water_cells) && forecastData.tide_water_cells[yi]?.[xi] !== true) return false;
-      // The raster mask is higher resolution than the forecast grid. Sampling
-      // corners and center prevents a crest from crossing a thin island/bar
-      // even when the coarse cell itself contains a finite wave vector.
-      const samples = [[lons[xi], lats[yi]], [lons[xi + 1], lats[yi]],
-        [lons[xi + 1], lats[yi + 1]], [lons[xi], lats[yi + 1]],
-        [(lons[xi] + lons[xi + 1]) / 2, (lats[yi] + lats[yi + 1]) / 2]];
-      return samples.every(([lon, lat]) => isCoastWaterPoint(lon, lat));
+      // The center must be wet; the high-resolution mask clips the emitted
+      // crest itself below, preserving narrow Chesapeake channels without
+      // allowing a line to paint across a bar or island.
+      return isCoastWaterPoint((lons[xi] + lons[xi + 1]) / 2, (lats[yi] + lats[yi + 1]) / 2);
     }
 
     let waveMaskCanvas = null;

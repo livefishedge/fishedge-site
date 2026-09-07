@@ -32,6 +32,10 @@ const url = process.env.PLANNER_URL || 'http://127.0.0.1:8766/trip-planner/brief
     await page.locator('[data-reset-view]').click();
     assert.equal(await select().inputValue(),'visibility_mi');
     await page.locator('[data-preset=sea]').click();
+    await page.locator('[data-wave-motion]').check();
+    const waveFrame = async()=>page.evaluate(()=>{const c=document.querySelector('.bv-streamlines-canvas'),d=c.getContext('2d').getImageData(0,0,c.width,c.height).data;let s=0;for(let i=0;i<d.length;i+=4){const p=i/4;s=(s+(p%997)*d[i+3]+d[i]*3+d[i+1]*5+d[i+2]*7)%1000000007}return s});
+    await page.waitForTimeout(900); const waveBefore=await waveFrame(); await page.waitForTimeout(650); const waveAfter=await waveFrame();
+    assert(waveBefore>0 && waveAfter>0 && waveBefore!==waveAfter,'wave motion changes rendered crests');
     await page.mouse.click(600,400);
     assert(await page.locator('#bv-wave-readout').isVisible(),'map click opens readout');
     assert(/°[WE], .*°[NS]/.test(await page.locator('#bv-wave-readout [data-readout-title]').innerText()),'readout uses signed coordinates');
@@ -55,6 +59,6 @@ const url = process.env.PLANNER_URL || 'http://127.0.0.1:8766/trip-planner/brief
     assert(await page.locator('#bv-time').isVisible(),'mobile freshness visible');
     await page.screenshot({path:'/tmp/planner-audit-mobile.png'});
     assert.deepEqual(errors,[]);
-    console.log('PASS: scalar pixels, None, Details persistence, view memory/reset, 8 station charts, mobile bounds/freshness, no page errors');
+    console.log('PASS: scalar pixels, wave motion, None, Details persistence, view memory/reset, map readout/marker, 8 station charts, mobile bounds/freshness, no page errors');
   } finally { await browser.close(); }
 })().catch(e=>{console.error(e);process.exitCode=1});
