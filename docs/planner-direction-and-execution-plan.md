@@ -17,9 +17,11 @@ like, and how might it change during the trip?**
 
 - Support inlet → transit → fishing grounds → return, from day selection through
   dock verification and eventually underway reassessment.
-- Organize the viewer around four non-overlapping questions: Sea Conditions,
-  Weather & Visibility, Fishing Conditions, and Tides & Inlets. Safety,
-  comfort and fuel remain briefing questions, not competing layer bins.
+- Organize the viewer around four questions: Sea Conditions, Weather &
+  Visibility, Fishing Conditions, and Tides & Inlets. Allow relevant context to
+  overlap between views, but expose only a small primary set directly and put
+  secondary layers in grouped Details. Safety, comfort and fuel remain briefing
+  questions, not competing layer bins.
 - Make swell versus chop, wave travel, crossing seas, gusts, drift, and changing
   conditions understandable before the user reads a detailed legend.
 - The feeling must follow the data. Label observations, forecasts, astronomical
@@ -181,8 +183,9 @@ verification. New contradictions must be resolved explicitly, not blended.
 - Tune sea-state-only view first, then add wind and current one at a time. Reduce
   overlay competition; active scalar and its legend must always be obvious.
 - Implement the visual grammar, over-range indication and reduced-motion version
-  in the visualization contract. Keep four primary views, one visible scalar map,
-  and supporting data behind Details. Never rely on checked-but-hidden layers.
+  in the visualization contract. Keep four primary views, one explicit Map-field
+  selector, and supporting data behind grouped Details. Never rely on
+  checked-but-hidden scalar maps.
 - Compare low/high swell, short steep chop, crossing seas, gust changes and poor
   visibility at fixed location/time. Do not add 3D/hull simulation at this stage.
 - **Exit:** independent screen + motion evidence; no color-only discrimination;

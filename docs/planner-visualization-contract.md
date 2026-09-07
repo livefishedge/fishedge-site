@@ -65,8 +65,10 @@ regional zoom. A clean 2D schematic with consistent physics is the first target.
 - One clearly named active scalar fill and its matching colorbar; no unexplained
   blend of unrelated magnitudes. Supporting contours/vectors remain subordinate.
 - Four views answer four distinct captain questions: Sea Conditions, Weather &
-  Visibility, Fishing Conditions, and Tides & Inlets. Each layer has one home.
-  Safety, comfort and fuel are briefing questions, not competing layer bins.
+  Visibility, Fishing Conditions, and Tides & Inlets. A layer may appear in
+  multiple views when it is genuinely relevant, but each view has a small
+  primary set and a grouped Details set. Safety, comfort and fuel are briefing
+  questions, not competing layer bins.
   Each view exposes a small primary set; supporting layers stay behind Details
   and never all start checked.
 - Only one scalar field owns the color map at a time. Its name and unit are

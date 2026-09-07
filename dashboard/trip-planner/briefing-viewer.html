@@ -88,6 +88,9 @@
     .bv-layer-details summary{ cursor:pointer; padding:4px 7px; border:1px solid rgba(79,195,247,.35); border-radius:4px; background:rgba(19,35,51,.82); font-weight:800; white-space:nowrap; }
     .bv-layer-details[open]{ display:flex; align-items:center; gap:5px; }
     .bv-layer-details[open] summary{ border-color:#4fc3f7; }
+    .bv-details-group{ color:#7a8fa8; font-size:9px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; margin-left:3px; }
+    .bv-map-field{ display:flex; align-items:center; gap:4px; flex:0 0 auto; color:#9fb0c3; font-size:10px; font-weight:800; white-space:nowrap; }
+    .bv-map-field select{ max-width:155px; padding:3px 5px; border:1px solid rgba(79,195,247,.45); border-radius:4px; background:#132333; color:#d6e5f2; font:700 10px sans-serif; }
     .bv-mode-context{ position:fixed; top:73px; left:0; right:0; z-index:20; display:none; align-items:center; gap:8px; min-height:24px; padding:3px 12px; overflow-x:auto; background:rgba(5,11,16,.82); border-bottom:1px solid rgba(255,255,255,.08); color:#d6e5f2; font:700 10px monospace; white-space:nowrap; }
     .bv-mode-context.visible{ display:flex; }
     .bv-mode-context span{ padding:2px 5px; border:1px solid rgba(255,255,255,.18); border-radius:3px; }
@@ -1167,6 +1170,19 @@
       const key = document.getElementById('bv-wave-key');
       if (key) key.hidden = !(layerVisibility.swell || layerVisibility.wind_wave);
       const preset = PLANNER_PRESETS[activePlannerPreset];
+      const mapField = document.createElement('label');
+      mapField.className = 'bv-map-field';
+      const mapLabel = document.createElement('span');
+      mapLabel.textContent = 'Map:';
+      const mapSelect = document.createElement('select');
+      mapSelect.dataset.mapField = 'true';
+      (preset?.mapFields || []).forEach(([value, label]) => {
+        const option = document.createElement('option');
+        option.value = value; option.textContent = label; option.selected = value === selectedHeatKey;
+        mapSelect.appendChild(option);
+      });
+      mapField.append(mapLabel, mapSelect);
+      if (mapSelect.options.length) strip.appendChild(mapField);
       const addLayer = key => {
         const label = document.createElement('label');
         const input = document.createElement('input');
@@ -1182,13 +1198,19 @@
         const summary = document.createElement('summary');
         summary.textContent = 'Details';
         details.appendChild(summary);
-        secondary.forEach(key => {
-          const label = document.createElement('label');
-          const input = document.createElement('input');
-          input.type = 'checkbox'; input.checked = !!layerVisibility[key]; input.dataset.layer = key;
-          label.append(input, document.createTextNode(LAYER_LABELS[key] || key));
-          details.appendChild(label);
-        });
+        const groups = preset?.detailGroups || {Details: secondary};
+        for (const [groupName, groupKeys] of Object.entries(groups)) {
+          const heading = document.createElement('span');
+          heading.className = 'bv-details-group'; heading.textContent = groupName;
+          details.appendChild(heading);
+          groupKeys.forEach(key => {
+            const label = document.createElement('label');
+            const input = document.createElement('input');
+            input.type = 'checkbox'; input.checked = !!layerVisibility[key]; input.dataset.layer = key;
+            label.append(input, document.createTextNode(LAYER_LABELS[key] || key));
+            details.appendChild(label);
+          });
+        }
         strip.appendChild(details);
       }
       if (!strip.children.length) {
@@ -1201,6 +1223,14 @@
       const strip = document.getElementById('bv-active-layer-strip');
       if (!strip) return;
       strip.addEventListener('change', event => {
+        const mapSelect = event.target.closest('select[data-map-field]');
+        if (mapSelect) {
+          selectedHeatKey = mapSelect.value;
+          computeActiveRange();
+          drawColorbar();
+          drawOverlaysForProduct();
+          return;
+        }
         const input = event.target.closest('input[data-layer]');
         if (!input) return;
         const menuInput = document.querySelector(`#bv-layers input[data-layer="${input.dataset.layer}"]`);
@@ -1239,7 +1269,9 @@
         sea_surface_temperature_f: 'sst',
         wave_steepness: 'wave_steepness', ride_harshness_index: 'ride_harshness', surface_texture_index: 'surface_texture'
       };
-      if (selectedHeatKey && selectedHeatKey !== 'current_speed_kn' && layerVisibility[selectedLayerForHeat[selectedHeatKey]]) return selectedHeatKey;
+      // The Map selector is explicit. Its field may be a Details layer, so it
+      // must not depend on that layer's overlay checkbox being enabled.
+      if (selectedHeatKey && selectedHeatKey !== 'current_speed_kn' && PRODUCTS[selectedHeatKey] && currentFrame?.[selectedHeatKey]) return selectedHeatKey;
       if (layerVisibility.wave_height) return 'wave_height_ft';
       const partitionCount = Number(!!layerVisibility.wind_wave) + Number(!!layerVisibility.swell);
       // A single remaining partition is the scalar heat field. With both
@@ -1312,14 +1344,36 @@
     }
 
     const PLANNER_PRESETS = {
-      // Four captain questions. `primary` is visible immediately; `layers`
-      // is the complete owned set and is available under Details. A mode has
-      // one primary scalar map; secondary layers never silently compete with
-      // it until the captain explicitly selects one.
-      sea:     { primary:['wind','wave_height','swell','wind_wave'], layers:['wind','wave_height','swell','wind_wave','wave_steepness','ride_harshness','surface_texture'], defaults:['wind','wave_height','swell','wind_wave'], heat:'wave_height_ft' },
-      weather: { primary:['visibility'], layers:['visibility','temperature','apparent_temperature','humidity','dew_point','cloud_cover','cloud_low','cloud_mid','cloud_high','precipitation','precipitation_probability','rain','showers','snowfall','uv_index','pressure'], defaults:['visibility'], heat:'visibility_mi' },
-      fishing: { primary:['sst','current'], layers:['sst','current'], defaults:['sst','current'], heat:'sea_surface_temperature_f' },
-      tides:   { primary:['tide_level','tide_range'], layers:['tide_level','tide_range'], defaults:['tide_level','tide_range'], heat:'astronomical_tide_ft' },
+      // Primary controls answer the view's question. Overlapping context is
+      // deliberate, but it stays behind Details until requested.
+      sea: {
+        primary:['wave_height','swell','wind_wave','wind'],
+        detailGroups:{'Sea-state diagnostics':['wave_steepness','ride_harshness','surface_texture'],'Context':['current','visibility','precipitation','pressure']},
+        layers:['wave_height','swell','wind_wave','wind','wave_steepness','ride_harshness','surface_texture','current','visibility','precipitation','pressure'],
+        mapFields:[['wave_height_ft','Significant wave height'],['swell_height_ft','Swell height'],['wind_wave_height_ft','Wind-wave height']],
+        defaults:['wave_height','swell','wind_wave'], heat:'wave_height_ft'
+      },
+      weather: {
+        primary:['visibility','precipitation_probability','wind'],
+        detailGroups:{'Crew exposure':['temperature','apparent_temperature','humidity','uv_index'],'Fog & clouds':['dew_point','cloud_cover','cloud_low','cloud_mid','cloud_high'],'Weather detail':['pressure','precipitation','rain','showers','snowfall'],'Sea context':['wave_height']},
+        layers:['visibility','precipitation_probability','wind','temperature','apparent_temperature','humidity','uv_index','dew_point','cloud_cover','cloud_low','cloud_mid','cloud_high','pressure','precipitation','rain','showers','snowfall','wave_height'],
+        mapFields:[['visibility_mi','Visibility'],['precipitation_probability_pct','Precipitation chance'],['temperature_f','Air temperature'],['apparent_temperature_f','Feels-like temperature'],['relative_humidity_pct','Humidity'],['cloud_cover_pct','Cloud cover'],['pressure_hpa','Pressure']],
+        defaults:['visibility','precipitation_probability'], heat:'visibility_mi'
+      },
+      fishing: {
+        primary:['sst','current'],
+        detailGroups:{'Trip context':['wind','surface_texture','visibility','cloud_cover','tide_level','tide_range'],'Sea state':['wave_height','swell','wind_wave']},
+        layers:['sst','current','wind','surface_texture','visibility','cloud_cover','tide_level','tide_range','wave_height','swell','wind_wave'],
+        mapFields:[['sea_surface_temperature_f','Sea-surface temperature'],['wave_height_ft','Significant wave height']],
+        defaults:['sst','current'], heat:'sea_surface_temperature_f'
+      },
+      tides: {
+        primary:['tide_level','tide_range'],
+        detailGroups:{'Transit context':['wind','current','wave_height','swell','wind_wave','wave_steepness','visibility','precipitation','pressure']},
+        layers:['tide_level','tide_range','wind','current','wave_height','swell','wind_wave','wave_steepness','visibility','precipitation','pressure'],
+        mapFields:[['astronomical_tide_ft','Tidal stage']],
+        defaults:['tide_level','tide_range'], heat:'astronomical_tide_ft'
+      },
     };
     function applyPlannerPreset(name) {
       const preset = PLANNER_PRESETS[name];
