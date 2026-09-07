@@ -2094,7 +2094,8 @@
       // The center must be wet; the high-resolution mask clips the emitted
       // crest itself below, preserving narrow Chesapeake channels without
       // allowing a line to paint across a bar or island.
-      return packet.water === true && (packet.kind !== 'swell' || packet.openWater === true);
+      return packet.water === true && (packet.kind !== 'swell' ||
+        (packet.openWater === true && packet.coverage >= 0.999));
     }
 
     let waveMaskCanvas = null;
@@ -2243,8 +2244,10 @@
       if (swellSupportCache.has(cacheKey)) return swellSupportCache.get(cacheKey);
       const cell = sourceCellIndexAt(lon, lat);
       const openCells = forecastData?.wave_open_water_cells;
+      const coverage = forecastData?.wave_water_coverage;
       // Older artifacts without the support grid are not geometry-qualified.
-      const supported = !!cell && Array.isArray(openCells) && openCells[cell[1]]?.[cell[0]] === true;
+      const supported = !!cell && Array.isArray(openCells) && openCells[cell[1]]?.[cell[0]] === true &&
+        Array.isArray(coverage) && Number(coverage[cell[1]]?.[cell[0]]) >= 0.999;
       swellSupportCache.set(cacheKey, supported);
       return supported;
     }
@@ -2595,10 +2598,11 @@
             if (lon < bbox[0] || lon > bbox[2] || lat < bbox[1] || lat > bbox[3]) continue;
             const water = waveMaskImage?.complete && isCoastWaterPoint(lon, lat);
             const openWater = forecastData?.wave_open_water_cells?.[yi]?.[xi] === true;
+            const coverage = Number(forecastData?.wave_water_coverage?.[yi]?.[xi]);
             const coastal = !centerIsWater || [[lons[xi], lats[yi]], [lons[xi + 1], lats[yi]],
               [lons[xi + 1], lats[yi + 1]], [lons[xi], lats[yi + 1]]]
-              .some(([x, y]) => !isCoastWaterPoint(x, y));
-            wavePackets.push({ kind, xi, yi, lon, lat, water, openWater, coastal,
+              .some(([x, y]) => !isCoastWaterPoint(x, y)) || coverage < 0.999;
+            wavePackets.push({ kind, xi, yi, lon, lat, water, openWater, coverage, coastal,
               phase: ((xi * 0.618 + yi * 0.382 + fx * 0.17 + fy * 0.29) % 1) });
           }
         }
