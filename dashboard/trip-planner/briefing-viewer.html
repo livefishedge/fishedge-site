@@ -2340,6 +2340,7 @@
       });
     }
     let waveMaskImage = null;
+    let waveMaskData = null;
     function ensureWaveMaskImage() {
       if (waveMaskImage !== null) return;
       waveMaskImage = new Image();
@@ -2369,6 +2370,7 @@
         alphaCtx.putImageData(projected, 0, 0);
         waveMaskCanvas = waveMaskAlphaCanvas;
         waveMaskCtx = alphaCtx;
+        waveMaskData = projected.data;
         // Rebuild packet anchors now that the projected mask is available.
         // Center-water cells use one packet; only land-centered coastal cells
         // get quarter anchors for valid water coverage.
@@ -2652,14 +2654,21 @@
       const nx = pixelLength > 0 ? -(y2 - y1) / pixelLength : 0;
       const ny = pixelLength > 0 ? (x2 - x1) / pixelLength : 0;
       const corridor = 2.5;
+      const bbox = forecastData?.display_bbox || forecastData?.bbox || [-77, 36, -72, 40];
+      const maskTL = map.getPixelFromCoordinate(ol.proj.fromLonLat([bbox[0], bbox[3]], mapProjection));
+      const maskBR = map.getPixelFromCoordinate(ol.proj.fromLonLat([bbox[2], bbox[1]], mapProjection));
+      const maskW = maskBR && maskTL ? maskBR[0] - maskTL[0] : 0;
+      const maskH = maskBR && maskTL ? maskBR[1] - maskTL[1] : 0;
+      const screenWater = point => {
+        if (!waveMaskData || !maskTL || !(maskW > 0) || !(maskH > 0)) return false;
+        const mx = Math.round((point[0] - maskTL[0]) / maskW * (waveMaskAlphaCanvas.width - 1));
+        const my = Math.round((point[1] - maskTL[1]) / maskH * (waveMaskAlphaCanvas.height - 1));
+        if (mx < 0 || my < 0 || mx >= waveMaskAlphaCanvas.width || my >= waveMaskAlphaCanvas.height) return false;
+        return waveMaskData[(my * waveMaskAlphaCanvas.width + mx) * 4 + 3] >= 128;
+      };
       const corridorWater = point => {
         const offsets = [0, -corridor, corridor];
-        return offsets.every(offset => {
-          const probe = [point[0] + nx * offset, point[1] + ny * offset];
-          const coordinate = map.getCoordinateFromPixel(probe);
-          const ll = coordinate && ol.proj.toLonLat(coordinate, mapProjection);
-          return !!(ll && isCoastWaterPoint(ll[0], ll[1]));
-        });
+        return offsets.every(offset => screenWater([point[0] + nx * offset, point[1] + ny * offset]));
       };
       for (let i = 0; i <= samples; i++) {
         const t = i / samples;
@@ -2672,7 +2681,13 @@
     }
 
     function strokeCrest(packet, x1, y1, x2, y2, samples = 8) {
-      if (packet.coastal) return strokeWaterMaskedCrest(x1, y1, x2, y2, samples);
+      // Every swell train must terminate at the actual land/water boundary.
+      // A cell-level "offshore" classification is not enough: a narrow
+      // headland or sandbar can cross an otherwise wet source cell. Wind chop
+      // may use the fast path only when its packet is wholly offshore.
+      if (packet.kind === 'swell' || packet.coastal) {
+        return strokeWaterMaskedCrest(x1, y1, x2, y2, samples);
+      }
       streamlineCtx.beginPath(); streamlineCtx.moveTo(x1, y1); streamlineCtx.lineTo(x2, y2); streamlineCtx.stroke();
     }
 
