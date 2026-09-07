@@ -14,6 +14,8 @@ Earlier legend/console checks did not establish visible scalar rendering or comp
 - Readouts refresh with forecast-time and unit changes; selected scalar values use strict local sampling without the station shoreline fallback. Missing/subpixel period states match the wave metric threshold.
 - Coast-mask point queries use alpha; optional marine motion no longer masks atmospheric scalar fills. Missing native mesh metadata is guarded. The summary steepness calculation uses metres.
 - Mobile freshness remains visible.
+- Wave packets now require an explicit wet delivery cell plus wet coastline-mask samples at all cell corners and center. This fails closed across Chesapeake sandbars/islands instead of propagating through a thin land cell.
+- Map clicks now leave a persistent location marker and show signed coordinates, ET forecast timestamp, separate significant/swell/chop rows, and a shrinkable readout.
 
 ## Evidence
 

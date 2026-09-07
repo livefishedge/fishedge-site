@@ -31,6 +31,14 @@ const url = process.env.PLANNER_URL || 'http://127.0.0.1:8766/trip-planner/brief
     assert.equal(await select().inputValue(),'dew_point_f','view remembers field');
     await page.locator('[data-reset-view]').click();
     assert.equal(await select().inputValue(),'visibility_mi');
+    await page.locator('[data-preset=sea]').click();
+    await page.mouse.click(600,400);
+    assert(await page.locator('#bv-wave-readout').isVisible(),'map click opens readout');
+    assert(/°[WE], .*°[NS]/.test(await page.locator('#bv-wave-readout [data-readout-title]').innerText()),'readout uses signed coordinates');
+    assert(/forecast/.test(await page.locator('#bv-wave-readout [data-readout-body]').innerText()),'readout shows forecast time');
+    assert.equal(await page.locator('#bv-click-marker').evaluate(e=>getComputedStyle(e).display),'block','clicked location marker visible');
+    await page.locator('.bv-readout-toggle').click();
+    assert(await page.locator('#bv-wave-readout').evaluate(e=>e.classList.contains('is-collapsed')),'readout can collapse');
     await page.locator('[data-preset=tides]').click();
     assert.equal(await select().inputValue(),'','Tides opens station-first');
     assert(await page.locator('#bv-station-popup').isVisible());

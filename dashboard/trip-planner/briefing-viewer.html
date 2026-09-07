@@ -148,6 +148,10 @@
     #bv-station-popup .bv-row{ display:flex; justify-content:space-between; gap:8px; font-size:10px; padding-top:3px; }
     #bv-station-popup .bv-row b{ color:#fff; }
     #bv-wave-readout{ position:fixed; right:12px; bottom:104px; z-index:21; display:none; min-width:220px; max-width:min(300px,calc(100vw - 24px)); padding:8px 10px; background:rgba(5,11,16,.96); border:1px solid #8bd7ff; border-radius:6px; color:#d6e5f2; box-shadow:0 8px 24px rgba(0,0,0,.45); font:11px/1.45 monospace; }
+    #bv-wave-readout.is-collapsed{min-width:0;max-width:190px;padding:5px 8px;font-size:10px;line-height:1.25}
+    #bv-wave-readout .bv-readout-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+    #bv-wave-readout .bv-readout-toggle{border:1px solid #55758c;border-radius:3px;background:#132333;color:#d6e5f2;cursor:pointer;font:700 12px monospace;padding:0 4px}
+    #bv-click-marker{width:16px;height:16px;border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 2px #e91e63,0 0 10px #000;transform:translate(-50%,-50%);pointer-events:none;display:none}
     #bv-wave-readout b{ color:#fff; }
     .dot-temp { background: #ff8c00; }
     .dot-wave { background: #00c8ff; }
@@ -299,7 +303,8 @@
   </div>
 
   <div id="bv-map" class="bv-map"></div>
-  <div id="bv-wave-readout" role="status" aria-live="polite"></div>
+  <div id="bv-wave-readout" role="status" aria-live="polite"><div class="bv-readout-head"><span data-readout-title>Forecast sample</span><button class="bv-readout-toggle" type="button" aria-expanded="true" aria-label="Shrink readout">−</button></div><div data-readout-body></div></div>
+  <div id="bv-click-marker" aria-hidden="true"></div>
   <div id="bv-station-popup" style="display:none">
     <h3 id="bv-station-name">Tide station</h3>
     <div class="bv-briefing-source">NOAA CO-OPS · predictions / measurements · ft MLLW</div>
@@ -928,7 +933,20 @@
     map.addLayer(stationLayer);
     const stationPopup = document.getElementById('bv-station-popup');
     const waveReadout = document.getElementById('bv-wave-readout');
+    const readoutBody = waveReadout?.querySelector('[data-readout-body]');
+    const readoutToggle = waveReadout?.querySelector('.bv-readout-toggle');
+    const clickMarker = document.getElementById('bv-click-marker');
     let lastWaveReadoutCoordinate = null;
+    const clickMarkerOverlay = new ol.Overlay({ element: clickMarker, positioning: 'center-center', stopEvent: false });
+    map.addOverlay(clickMarkerOverlay);
+    readoutToggle?.addEventListener('click', event => {
+      event.preventDefault(); event.stopPropagation();
+      const collapsed = waveReadout.classList.toggle('is-collapsed');
+      readoutToggle.textContent = collapsed ? '+' : '−';
+      readoutToggle.setAttribute('aria-expanded', String(!collapsed));
+      readoutToggle.setAttribute('aria-label', collapsed ? 'Expand readout' : 'Shrink readout');
+      if (readoutBody) readoutBody.hidden = collapsed;
+    });
     const stationOverlay = new ol.Overlay({ element: stationPopup, positioning: 'bottom-center', offset: [0, -10], stopEvent: true, autoPan: { animation: { duration: 250 }, margin: 150 } });
     map.addOverlay(stationOverlay);
     function compass(deg) {
@@ -938,17 +956,22 @@
     function renderWaveReadout(coordinate) {
       if (!forecastData || !currentFrame || !waveReadout) return;
       lastWaveReadoutCoordinate = coordinate;
+      clickMarkerOverlay.setPosition(coordinate);
+      clickMarker.style.display = 'block';
       const [lon, lat] = ol.proj.toLonLat(coordinate, mapProjection);
+      const formatCoordinate = (value, positive, negative) => `${Math.abs(value).toFixed(2)}°${value >= 0 ? positive : negative}`;
+      const frameDate = new Date(currentFrame.time);
+      const timeLabel = frameDate.toLocaleString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit', timeZone: 'America/New_York' });
       const rows = [];
       const key = activeHeatKey();
       if (key) {
         const value = sampleGridAtPoint(currentFrame[key], lat, lon, true);
-        rows.push(`<div><b>${PRODUCTS[key]?.name || key}</b> · ${Number.isFinite(value) ? convertDisplayValue(key, value).toFixed(2) + ' ' + displayUnit(key, PRODUCTS[key]?.unit || '') : 'missing source data'}</div>`);
+        rows.push(`<div><b>Significant wave height</b> · ${Number.isFinite(value) ? convertDisplayValue(key, value).toFixed(2) + ' ' + displayUnit(key, PRODUCTS[key]?.unit || '') : 'missing source data'}</div>`);
       }
       const onLand = waveMaskImage && waveMaskImage.complete && !isCoastWaterPoint(lon, lat);
       if (onLand) rows.push('<div>Outside marine coverage</div>');
       for (const kind of (onLand ? [] : ['swell', 'wind_wave'])) {
-        const label = kind === 'swell' ? 'Swell' : 'Wind waves';
+        const label = kind === 'swell' ? 'Swell' : 'Waves (Chop)';
         const v = bilinearPartitionVec(currentFrame, kind, lon, lat);
         if (!v) { rows.push(`<div><b>${label}</b> · missing source data</div>`); continue; }
         if (!(v.height > 0)) { rows.push(`<div><b>${label}</b> · calm (0 ft)</div>`); continue; }
@@ -960,7 +983,8 @@
         const unit = displayUnit(heightKey, 'ft');
         rows.push(`<div><b>${label}</b> · ${height.toFixed(2)} ${unit} · ${Number.isFinite(v.period) ? v.period.toFixed(1) + ' s' : 'period missing'} · travel ${Number.isFinite(dir) ? `${compass(dir)} (${Math.round(dir)}°)` : '—'}${unresolved ? ' · texture' : ''}</div>`);
       }
-      waveReadout.innerHTML = `<b>Forecast sample</b> · ${lon.toFixed(2)}°, ${lat.toFixed(2)}°<br>${new Date(currentFrame.time).toLocaleString()} · forecast<br>${rows.join('')}`;
+      waveReadout.querySelector('[data-readout-title]').textContent = `${formatCoordinate(lon, 'E', 'W')}, ${formatCoordinate(lat, 'N', 'S')}`;
+      readoutBody.innerHTML = `${timeLabel} · forecast<br>${rows.join('')}`;
       waveReadout.style.display = 'block';
     }
     const stationMarkerOverlays = [];
@@ -994,7 +1018,7 @@
     }
     drawTideStations();
     map.on('singleclick', event => {
-      const feature = map.forEachFeatureAtPixel(event.pixel, value => value, {
+      const feature = activePlannerPreset === 'tides' && map.forEachFeatureAtPixel(event.pixel, value => value, {
         layerFilter: layer => layer === stationLayer,
         hitTolerance: 12,
       });
@@ -1004,6 +1028,13 @@
       renderActiveTide();
       stationPopup.style.display = 'block';
       stationOverlay.setPosition(feature.getGeometry().getCoordinates());
+    });
+    // Keep the readout reliable across OpenLayers versions and overlay layers:
+    // the native viewport click still supplies the exact map coordinate even
+    // when a hidden/inactive station feature participates in hit testing.
+    map.getViewport().addEventListener('click', event => {
+      if (event.target.closest('.ol-zoom, .ol-rotate, .bv-station-marker')) return;
+      if (activePlannerPreset !== 'tides') renderWaveReadout(map.getEventCoordinate(event));
     });
 
     // Dev-only domain diagnostics: show the target box and the larger field
@@ -1348,6 +1379,9 @@
       if (!preset) return;
       if (!reset) viewSettings[activePlannerPreset] = {layers:{...layerVisibility}, heat:selectedHeatKey};
       activePlannerPreset = name; detailsOpen = false;
+      // Station popups are an Inlets interaction; close the stop-event
+      // overlay when returning to a map-oriented view.
+      if (name !== 'tides') { stationPopup.style.display = 'none'; stationOverlay.setPosition(undefined); }
       const saved = reset ? null : viewSettings[name];
       const active = new Set(saved ? Object.keys(saved.layers).filter(k => saved.layers[k]) : preset.defaults);
       document.querySelectorAll('#bv-layers input[data-layer]').forEach(input => {
@@ -2045,9 +2079,27 @@
     function sourceCellValid(kind, yi, xi) {
       const lons = forecastData?.lons, lats = forecastData?.lats;
       if (!lons || !lats || xi >= lons.length - 1 || yi >= lats.length - 1) return false;
+      // A wave vector at a cell center is not enough to authorize propagation:
+      // a narrow sandbar can cross that cell. Require the delivery grid's
+      // explicit wet-cell contract before emitting any crest.
+      const wet = forecastData?.tide_water_cells;
+      if (Array.isArray(wet) && wet[yi]?.[xi] !== true) return false;
       const lon = (lons[xi] + lons[xi + 1]) / 2;
       const lat = (lats[yi] + lats[yi + 1]) / 2;
       return !!bilinearPartitionVec(currentFrame, kind, lon, lat);
+    }
+
+    function sourceCellWaterValid(packet) {
+      const lons = forecastData?.lons || [], lats = forecastData?.lats || [];
+      const xi = packet.xi, yi = packet.yi;
+      if (Array.isArray(forecastData?.tide_water_cells) && forecastData.tide_water_cells[yi]?.[xi] !== true) return false;
+      // The raster mask is higher resolution than the forecast grid. Sampling
+      // corners and center prevents a crest from crossing a thin island/bar
+      // even when the coarse cell itself contains a finite wave vector.
+      const samples = [[lons[xi], lats[yi]], [lons[xi + 1], lats[yi]],
+        [lons[xi + 1], lats[yi + 1]], [lons[xi], lats[yi + 1]],
+        [(lons[xi] + lons[xi + 1]) / 2, (lats[yi] + lats[yi + 1]) / 2]];
+      return samples.every(([lon, lat]) => isCoastWaterPoint(lon, lat));
     }
 
     let waveMaskCanvas = null;
@@ -2526,7 +2578,7 @@
     function drawWavePackets() {
       ensureWavePackets();
       for (const packet of wavePackets) {
-        if (!layerVisibility[packet.kind] || !isOceanPoint(packet.lon, packet.lat, packet.kind)) continue;
+        if (!layerVisibility[packet.kind] || !sourceCellWaterValid(packet) || !isOceanPoint(packet.lon, packet.lat, packet.kind)) continue;
         const vec = bilinearPartitionVec(currentFrame, packet.kind, packet.lon, packet.lat);
         // Height gates visibility, not phase velocity. Missing periods do not
         // silently acquire an invented eight-second animation.
