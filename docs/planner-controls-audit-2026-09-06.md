@@ -29,9 +29,17 @@ Earlier legend/console checks did not establish visible scalar rendering or comp
 
 - Moved expensive coastline sampling out of the normal offshore crest path. Non-coastal packets use direct canvas strokes; only packets near a mask edge use pixel-scale barrier sampling. This keeps the animation bounded instead of doing geographic mask lookups for every crest on every frame.
 - Increased the native mask raster to 400 subdivisions per forecast cell and burned Natural Earth 10 m land polygons into it. The mask remains a display boundary, not a claim of shallow-water refraction or breaking physics.
-- Added a source-backed component contract to both forecast artifacts. The swell partition is NOAA WaveWatch III via Open-Meteo Marine; that regional/coarse source does not resolve Chesapeake entrance shielding, bars, or shallow transformation. Swell is therefore excluded and labeled unsupported inside the named Chesapeake Bay polygon; wind-wave data remain available.
-- Cached the exclusion-geometry lookup and avoid advancing/rendering excluded bay swell packets. This prevents the source-quality correction from adding frame-time lag.
-- The planner deliberately does not reinterpret a coarse offshore swell value as a Chesapeake-local wave. A future bay wave product requires a bathymetry-aware nearshore model or observations.
+- Added a source-backed component contract to both forecast artifacts. The Open-Meteo Marine response does not expose a stable selected-model identity; its regional/coarse source does not resolve local entrance shielding, bars, or shallow transformation.
+- Cached the general open-water support lookup and avoid advancing/rendering unsupported coastal swell packets. This prevents the source-quality correction from adding frame-time lag.
+- The planner deliberately does not reinterpret a coarse offshore swell value as a local enclosed-water wave. A future bay wave product requires a bathymetry-aware nearshore model or observations.
+
+## General coastal validity contract — September 7, 2026
+
+- The producer now preserves the provider-returned marine-cell coordinates and records requested-versus-returned displacement. The API response does not expose a stable selected-model identity; the artifact no longer asserts NOAA WW3 as fact.
+- The regenerated artifact carries `wave_open_water_cells`, derived from wet native-mesh pixels connected to the domain boundary through water. This is a conservative geometry-support gate for regional swell, not a wave-propagation or entrance-transmission model.
+- Swell is animated/filled only in open-water-supported cells. Any other finite swell value is regional context and the readout labels it unresolved locally. The rule applies to all enclosed or barrier-separated water bodies, not a named-bay list.
+- Wind-wave anchors may remain in partial wet cells because local wind can generate chop, but the contract explicitly does not claim a validated fetch/depth model for those values. No finite value is treated as proof of local accuracy.
+- The producer preserves the support metadata during every forecast refresh so the renderer, maps, and readouts share the same validity state.
 
 The targeted browser suite now checks rendered wave motion, rather than only aggregate canvas movement. It still cannot certify every Chesapeake shoreline or a captain's visual interpretation; those require representative location/zoom review.
 

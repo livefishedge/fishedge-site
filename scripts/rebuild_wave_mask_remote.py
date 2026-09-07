@@ -94,10 +94,23 @@ for geom in shpreader.Reader(land_path).geometries():
 canvas[land_canvas > 0] = 0
 coverage = canvas.reshape(len(lats)-1, scale, len(lons)-1, scale).mean(axis=(1, 3))
 mask = (coverage >= 0.75).tolist()
+# Classify wet pixels connected to the raster boundary as open-water support.
+# This is a geometry gate, not a wave-propagation model: it prevents a coarse
+# offshore swell value from being presented as local lagoon water while still
+# allowing wind-wave anchors in partial coastal cells.
+wet_pixels = (canvas > 0).astype(np.uint8)
+components, labels = cv2.connectedComponents(wet_pixels, connectivity=8)
+edge_labels = set(labels[0, :].tolist() + labels[-1, :].tolist() +
+                  labels[:, 0].tolist() + labels[:, -1].tolist()) - {0}
+open_pixels = np.isin(labels, list(edge_labels)).astype(np.uint8)
+open_coverage = open_pixels.reshape(len(lats)-1, scale, len(lons)-1, scale).mean(axis=(1, 3))
+open_mask = (open_coverage >= 0.75).tolist()
 mask_path.parent.mkdir(parents=True, exist_ok=True)
 Image.fromarray(canvas * 255, mode='L').save(mask_path, optimize=True)
 payload['wave_water_cells'] = mask
-payload['wave_water_mask_contract'] = {'kind': 'native_mesh_cell_footprint', 'source': 'native mesh triangles whose three STOFS depth values are finite and positive', 'purpose': 'wave, swell, wind-wave and significant-wave-height overlays', 'cell_rule': 'cell is drawable when native wet coverage is at least 75 percent', 'projection': 'normalized EPSG:3857 rows', 'tidal_mask_separate': True}
+payload['wave_water_coverage'] = np.round(coverage, 4).tolist()
+payload['wave_open_water_cells'] = open_mask
+payload['wave_water_mask_contract'] = {'kind': 'native_mesh_cell_footprint', 'source': 'native mesh triangles whose three STOFS depth values are finite and positive, intersected with detailed land geometry', 'purpose': 'wave, swell, wind-wave and significant-wave-height overlays', 'cell_rule': 'partial wet cells may supply local wind-wave anchors; full open-water support is required for regional swell animation', 'open_water_rule': 'wet pixels connected to the raster boundary through water; this is a conservative geometry support gate, not a shallow-water propagation model', 'projection': 'normalized EPSG:3857 rows', 'tidal_mask_separate': True}
 encoded = json.dumps(payload, allow_nan=False, separators=(',', ':'))
 for path in payload_paths: path.write_text(encoded)
-print(json.dumps({'wet_nodes': int(wet.sum()), 'wet_triangles': int(len(triangles)), 'wave_cells': int(sum(map(sum, mask))), 'mask': str(mask_path)}))
+print(json.dumps({'wet_nodes': int(wet.sum()), 'wet_triangles': int(len(triangles)), 'wave_cells': int(sum(map(sum, mask))), 'open_water_cells': int(sum(map(sum, open_mask))), 'mask': str(mask_path)}))

@@ -4,7 +4,8 @@ Wave data fetcher for FishEdge briefing — swell pipeline.
 
 Source: Open-Meteo Marine API
   https://marine-api.open-meteo.com/v1/marine
-Backing model: NOAA WaveWatch III (consumed via Open-Meteo, served as JSON).
+The API may select among several marine models and does not expose the selected
+model in this response; the producer must preserve that uncertainty.
 
 Background:
   - NOAA NOMADS WW3 GRIB endpoints returned 403 from this environment and no
@@ -358,6 +359,36 @@ def reshape_grid(resp_list, nrows, ncols):
     return out_frames
 
 
+def source_grid_metadata(resp_list, requested_lats, requested_lons):
+    """Preserve the native coordinates returned by the provider.
+
+    Open-Meteo may snap a requested point to a different model cell. The
+    viewer must not silently call the returned value a local observation.
+    """
+    native_lats = []
+    native_lons = []
+    displacements_km = []
+    for row, req_lat in enumerate(requested_lats):
+        lat_row = []
+        lon_row = []
+        for col, req_lon in enumerate(requested_lons):
+            point = resp_list[row * len(requested_lons) + col]
+            lat = float(point.get("latitude", req_lat))
+            lon = float(point.get("longitude", req_lon))
+            lat_row.append(lat); lon_row.append(lon)
+            dlat = (lat - req_lat) * 111.32
+            dlon = (lon - req_lon) * 111.32 * np.cos(np.deg2rad(req_lat))
+            displacements_km.append(float(np.hypot(dlat, dlon)))
+        native_lats.append(lat_row); native_lons.append(lon_row)
+    return {
+        "requested_grid": {"lats": requested_lats, "lons": requested_lons},
+        "returned_latitude": native_lats,
+        "returned_longitude": native_lons,
+        "max_displacement_km": round(max(displacements_km or [0.0]), 3),
+        "mean_displacement_km": round(float(np.mean(displacements_km or [0.0])), 3),
+    }
+
+
 def interp_to_display(frames, src_lats, src_lons, dst_lats, dst_lons):
     """Bilinear interp each field from src NxN grid to dst MxK grid. NaN-safe."""
     direction_fields = {"wave_direction", "wind_wave_direction", "swell_wave_direction", "ocean_current_direction"}
@@ -650,6 +681,7 @@ def main():
     print(f"fetch grid: {nrows}x{ncols} ({npts} pts)")
 
     resp = fetch_grid(fetch_lats, fetch_lons)
+    source_grid = source_grid_metadata(resp, fetch_lats, fetch_lons)
     nhours = len(resp[0]["hourly"]["time"])
     print(f"fetched {nhours} hours from open-meteo marine ({len(resp)} points)")
 
@@ -713,13 +745,20 @@ def main():
     payload = {
         "schema_version": "briefing-forecast-v2",
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "source": "NOAA WaveWatch III via Open-Meteo Marine API",
+        "source": "Open-Meteo Marine API (selected marine model not exposed by response)",
         "source_url": "https://marine-api.open-meteo.com/v1/marine",
         "region": REGION,
         "bbox": FULL_BBOX,
         "display_bbox": DISPLAY_BBOX,
         "lats": dst_lats,
         "lons": dst_lons,
+        "marine_source_grid": source_grid,
+        "marine_source_contract": {
+            "model_identity": "provider-selected; not exposed in API response",
+            "requested_grid_is_not_native": True,
+            "returned_coordinates_preserved": True,
+            "coastal_validity": "finite values are not sufficient evidence of local validity; consult wave_component_contract and water-support metadata",
+        },
         "frame_interval_hours": 1,
         "units": {
             "wave_height_ft": "ft", "swell_height_ft": "ft", "wind_wave_height_ft": "ft",
@@ -742,15 +781,14 @@ def main():
         "tides": tides,
         "quality": {
             "status": "pass",
-            "source_model": "WW3",
+            "source_model": "provider-selected marine model (not exposed)",
             "atmospheric_source": "Open-Meteo Forecast API (temperature_2m, pressure_msl, 10 m wind)",
             "max_age_hours": 12,
             "via": "open-meteo.com/v1/marine (JSON)",
             "grid_order": "latitude-major, longitude-minor",
             "notes": (
-                "NOAA NOMADS WW3 GRIB endpoints returned 403 from this environment and "
-                "no GRIB2 decoder was installed. Open-Meteo serves the same NOAA WW3 "
-                "fields as JSON, which we consume directly. The API requires equal-length "
+                "The Open-Meteo Marine API combines several marine models and does not expose "
+                "the selected model in this response. The API requires equal-length "
                 "lat/lon arrays; we fetch a 17x17 square over the display bbox and "
                 "bilinearly interpolate to the 17x21 display grid. Atmospheric 10-m wind "
                 "is pulled from api.open-meteo.com/v1/forecast on the same grid+timeline."
@@ -760,7 +798,10 @@ def main():
     if prior_payload:
         for key in ('tide_water_cells', 'native_mesh', 'tide_range_contract',
                     'tide_range_definition', 'tide_harmonic_source',
-                    'regional_tide_source', 'regional_tide_prediction_field'):
+                    'regional_tide_source', 'regional_tide_prediction_field',
+                    'wave_water_cells', 'wave_water_coverage',
+                    'wave_open_water_cells', 'wave_water_mask_contract',
+                    'wave_component_contract'):
             if key in prior_payload:
                 payload[key] = prior_payload[key]
     encoded = json.dumps(payload, allow_nan=False, separators=(",", ":"))

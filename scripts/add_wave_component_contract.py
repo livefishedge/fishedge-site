@@ -3,36 +3,31 @@
 import json
 from pathlib import Path
 
-from cartopy.io import shapereader
-
 ROOT = Path(__file__).resolve().parents[1]
 paths = [
     ROOT / 'data/usec_md/briefing/forecast.json',
     ROOT / 'dashboard/trip-planner/data/usec_md/briefing/forecast.json',
 ]
-reader = shapereader.Reader(shapereader.natural_earth(
-    resolution='10m', category='physical', name='geography_marine_polys'))
-bay = next(record.geometry for record in reader.records()
-           if record.attributes.get('name') == 'Chesapeake Bay')
-if bay.geom_type != 'Polygon':
-    raise SystemExit('Chesapeake Bay geometry is not a simple polygon')
-polygon = [[round(float(x), 6), round(float(y), 6)]
-           for x, y in bay.simplify(0.002, preserve_topology=True).exterior.coords]
 contract = {
     'swell': {
-        'status': 'unsupported_inside_exclusion_geometry',
-        'source': 'NOAA WaveWatch III via Open-Meteo Marine API',
-        'reason': 'regional source resolution does not resolve Chesapeake entrance, fetch shielding, bars, or shallow-water transformation',
-        'policy': 'do not display swell as transmitted through the bay; retain source values outside the exclusion geometry',
+        'status': 'regional_context_only_unless_open_water_supported',
+        'source': 'Open-Meteo Marine API; model selection is not exposed in the response',
+        'reason': 'the source grid is regional/coarse and does not resolve local entrance shielding, bars, fetch, or shallow-water transformation',
+        'policy': 'animate/fill swell only where the native water footprint is connected to open boundary water; otherwise label it unresolved',
     },
     'wind_wave': {
-        'status': 'source_backed_with_coast_mask',
-        'source': 'NOAA WaveWatch III via Open-Meteo Marine API',
+        'status': 'regional_source_with_partial_water_anchors',
+        'source': 'Open-Meteo Marine API; model selection is not exposed in the response',
+        'policy': 'partial wet cells may show source-backed wind-wave context, but this is not a validated local fetch model',
     },
-    'exclusion_geometries': [{'id': 'chesapeake_bay', 'source': 'Natural Earth 10m geography_marine_polys', 'polygon_lon_lat': polygon}],
+    'support_geometry': {
+        'source': 'native mesh wet triangles plus detailed land geometry',
+        'open_water_rule': 'wet raster pixels connected to the domain boundary through water',
+        'limitations': 'connectivity does not model refraction, diffraction, shoaling, breaking, or attenuation through an entrance',
+    },
 }
 for path in paths:
     payload = json.loads(path.read_text())
     payload['wave_component_contract'] = contract
     path.write_text(json.dumps(payload, allow_nan=False, separators=(',', ':')))
-print(json.dumps({'vertices': len(polygon), 'paths': [str(p) for p in paths]}))
+print(json.dumps({'paths': [str(p) for p in paths]}))

@@ -973,7 +973,7 @@
       for (const kind of (onLand ? [] : ['swell', 'wind_wave'])) {
         const label = kind === 'swell' ? 'Swell' : 'Waves (Chop)';
         if (kind === 'swell' && !swellSupportedAt(lon, lat)) {
-          rows.push('<div><b>Swell</b> · not resolved inside Chesapeake Bay</div>');
+          rows.push('<div><b>Swell</b> · regional context only; not locally resolved here</div>');
           continue;
         }
         const v = bilinearPartitionVec(currentFrame, kind, lon, lat);
@@ -2094,7 +2094,7 @@
       // The center must be wet; the high-resolution mask clips the emitted
       // crest itself below, preserving narrow Chesapeake channels without
       // allowing a line to paint across a bar or island.
-      return packet.water === true;
+      return packet.water === true && (packet.kind !== 'swell' || packet.openWater === true);
     }
 
     let waveMaskCanvas = null;
@@ -2231,20 +2231,20 @@
     }
 
     const swellSupportCache = new Map();
-    function pointInLonLatPolygon(lon, lat, polygon) {
-      let inside = false;
-      for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-        const [xi, yi] = polygon[i], [xj, yj] = polygon[j];
-        const hit = ((yi > lat) !== (yj > lat)) && (lon < (xj - xi) * (lat - yi) / (yj - yi) + xi);
-        if (hit) inside = !inside;
-      }
-      return inside;
+    function sourceCellIndexAt(lon, lat) {
+      const lons = forecastData?.lons || [], lats = forecastData?.lats || [];
+      if (lons.length < 2 || lats.length < 2) return null;
+      const xi = Math.max(0, Math.min(lons.length - 2, Math.floor((lon - lons[0]) / (lons[1] - lons[0]))));
+      const yi = Math.max(0, Math.min(lats.length - 2, Math.floor((lat - lats[0]) / (lats[1] - lats[0]))));
+      return [xi, yi];
     }
     function swellSupportedAt(lon, lat) {
       const cacheKey = `${Number(lon).toFixed(5)},${Number(lat).toFixed(5)}`;
       if (swellSupportCache.has(cacheKey)) return swellSupportCache.get(cacheKey);
-      const geometries = forecastData?.wave_component_contract?.exclusion_geometries || [];
-      const supported = !geometries.some(g => Array.isArray(g.polygon_lon_lat) && pointInLonLatPolygon(lon, lat, g.polygon_lon_lat));
+      const cell = sourceCellIndexAt(lon, lat);
+      const openCells = forecastData?.wave_open_water_cells;
+      // Older artifacts without the support grid are not geometry-qualified.
+      const supported = !!cell && Array.isArray(openCells) && openCells[cell[1]]?.[cell[0]] === true;
       swellSupportCache.set(cacheKey, supported);
       return supported;
     }
@@ -2594,10 +2594,11 @@
             const lat = lats[yi] + (lats[yi + 1] - lats[yi]) * fy;
             if (lon < bbox[0] || lon > bbox[2] || lat < bbox[1] || lat > bbox[3]) continue;
             const water = waveMaskImage?.complete && isCoastWaterPoint(lon, lat);
+            const openWater = forecastData?.wave_open_water_cells?.[yi]?.[xi] === true;
             const coastal = !centerIsWater || [[lons[xi], lats[yi]], [lons[xi + 1], lats[yi]],
               [lons[xi + 1], lats[yi + 1]], [lons[xi], lats[yi + 1]]]
               .some(([x, y]) => !isCoastWaterPoint(x, y));
-            wavePackets.push({ kind, xi, yi, lon, lat, water, coastal,
+            wavePackets.push({ kind, xi, yi, lon, lat, water, openWater, coastal,
               phase: ((xi * 0.618 + yi * 0.382 + fx * 0.17 + fy * 0.29) % 1) });
           }
         }
