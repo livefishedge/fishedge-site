@@ -2248,6 +2248,11 @@
       swellSupportCache.set(cacheKey, supported);
       return supported;
     }
+    function swellQuadSupported(lon0, lat0, lon1, lat1) {
+      const lonMid = (lon0 + lon1) / 2, latMid = (lat0 + lat1) / 2;
+      return [[lon0, lat0], [lon1, lat0], [lon1, lat1], [lon0, lat1], [lonMid, latMid]]
+        .every(([lon, lat]) => swellSupportedAt(lon, lat));
+    }
 
     // Interpolate each valid source cell onto a small display mesh, then let
     // clipCanvasToWaveMask() remove land pixels.  Source validity and
@@ -2281,9 +2286,11 @@
               corners[0][0] * (1-u) * (1-v) + corners[1][0] * u * (1-v) + corners[2][0] * u * v + corners[3][0] * (1-u) * v,
               corners[0][1] * (1-u) * (1-v) + corners[1][1] * u * (1-v) + corners[2][1] * u * v + corners[3][1] * (1-u) * v
             ];
-            const cellLon = lons[xi] + (lons[xi + 1] - lons[xi]) * ((u0 + u1) / 2);
-            const cellLat = lats[yi] + (lats[yi + 1] - lats[yi]) * ((v0 + v1) / 2);
-            if (key === 'swell_height_ft' && !swellSupportedAt(cellLon, cellLat)) continue;
+            const cellLon0 = lons[xi] + (lons[xi + 1] - lons[xi]) * u0;
+            const cellLon1 = lons[xi] + (lons[xi + 1] - lons[xi]) * u1;
+            const cellLat0 = lats[yi] + (lats[yi + 1] - lats[yi]) * v0;
+            const cellLat1 = lats[yi] + (lats[yi + 1] - lats[yi]) * v1;
+            if (key === 'swell_height_ft' && !swellQuadSupported(cellLon0, cellLat0, cellLon1, cellLat1)) continue;
             paint([point(u0,v0), point(u1,v0), point(u1,v1), point(u0,v1)],
               (bilinear(u0,v0) + bilinear(u1,v0) + bilinear(u1,v1) + bilinear(u0,v1)) / 4);
           }
