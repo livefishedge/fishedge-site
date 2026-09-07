@@ -36,6 +36,13 @@ const url = process.env.PLANNER_URL || 'http://127.0.0.1:8766/trip-planner/brief
     const waveFrame = async()=>page.evaluate(()=>{const c=document.querySelector('.bv-streamlines-canvas'),d=c.getContext('2d').getImageData(0,0,c.width,c.height).data;let s=0;for(let i=0;i<d.length;i+=4){const p=i/4;s=(s+(p%997)*d[i+3]+d[i]*3+d[i+1]*5+d[i+2]*7)%1000000007}return s});
     await page.waitForTimeout(900); const waveBefore=await waveFrame(); await page.waitForTimeout(650); const waveAfter=await waveFrame();
     assert(waveBefore>0 && waveAfter>0 && waveBefore!==waveAfter,'wave motion changes rendered crests');
+    const frameTiming=await page.evaluate(()=>new Promise(resolve=>{
+      const samples=[];let prev=performance.now();let count=0;
+      const tick=now=>{samples.push(now-prev);prev=now;if(++count<30)requestAnimationFrame(tick);else resolve(samples.slice(1));};
+      requestAnimationFrame(tick);
+    }));
+    const sortedTiming=[...frameTiming].sort((a,b)=>a-b);
+    assert(sortedTiming[Math.floor(sortedTiming.length*0.95)]<120,'wave animation frame time remains bounded');
     await page.mouse.click(600,400);
     assert(await page.locator('#bv-wave-readout').isVisible(),'map click opens readout');
     assert(/°[WE], .*°[NS]/.test(await page.locator('#bv-wave-readout [data-readout-title]').innerText()),'readout uses signed coordinates');
