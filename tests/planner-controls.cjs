@@ -50,6 +50,9 @@ const url = process.env.PLANNER_URL || 'http://127.0.0.1:8766/trip-planner/brief
     assert.equal(await page.locator('#bv-click-marker').evaluate(e=>getComputedStyle(e).display),'block','clicked location marker visible');
     await page.locator('.bv-readout-toggle').click();
     assert(await page.locator('#bv-wave-readout').evaluate(e=>e.classList.contains('is-collapsed')),'readout can collapse');
+    assert.equal(await page.locator('.bv-readout-toggle').evaluate(e=>getComputedStyle(e).display),'none','collapsed readout hides plus control');
+    await page.locator('#bv-wave-readout').click();
+    assert(!(await page.locator('#bv-wave-readout').evaluate(e=>e.classList.contains('is-collapsed'))),'collapsed readout expands from card click');
     await page.locator('[data-preset=tides]').click();
     assert.equal(await select().inputValue(),'','Tides opens station-first');
     assert(await page.locator('#bv-station-popup').isVisible());
@@ -63,9 +66,9 @@ const url = process.env.PLANNER_URL || 'http://127.0.0.1:8766/trip-planner/brief
     await page.locator('.bv-layer-details summary').click();
     const box=await page.locator('.bv-details-panel').boundingBox();
     assert(box.x>=0 && box.x+box.width<=390,'Details fits mobile');
-    assert(await page.locator('#bv-time').isVisible(),'mobile freshness visible');
+    assert(!(await page.locator('#bv-time').isVisible()),'legacy 7-day freshness banner is removed');
     await page.screenshot({path:'/tmp/planner-audit-mobile.png'});
     assert.deepEqual(errors,[]);
-    console.log('PASS: scalar pixels, wave motion, None, Details persistence, view memory/reset, map readout/marker, 8 station charts, mobile bounds/freshness, no page errors');
+    console.log('PASS: scalar pixels, wave motion, None, Details persistence, view memory/reset, map readout/marker, 8 station charts, mobile bounds, no page errors');
   } finally { await browser.close(); }
 })().catch(e=>{console.error(e);process.exitCode=1});

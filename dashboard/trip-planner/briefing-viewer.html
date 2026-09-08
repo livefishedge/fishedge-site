@@ -19,6 +19,7 @@
     .bv-view-mode-label { color: #9fb0c3; font-size: 11px; font-weight: 800; letter-spacing: .04em; white-space: nowrap; }
     .bv-title { margin: 0; font-size: 15px; font-weight: 600; color: #e3f2fd; }
     .bv-time { font-size: 12px; color: #9fb0c3; margin-left: 4px; font-family: monospace; }
+    .bv-time[hidden] { display: none !important; }
 
     .bv-products { display: none; }
     .bv-products button {
@@ -149,6 +150,7 @@
     #bv-station-popup .bv-row b{ color:#fff; }
     #bv-wave-readout{ position:fixed; right:12px; bottom:104px; z-index:21; display:none; min-width:220px; max-width:min(300px,calc(100vw - 24px)); padding:8px 10px; background:rgba(5,11,16,.96); border:1px solid #8bd7ff; border-radius:6px; color:#d6e5f2; box-shadow:0 8px 24px rgba(0,0,0,.45); font:11px/1.45 monospace; }
     #bv-wave-readout.is-collapsed{min-width:0;max-width:190px;padding:5px 8px;font-size:10px;line-height:1.25}
+    #bv-wave-readout.is-collapsed .bv-readout-toggle{display:none}
     #bv-wave-readout .bv-readout-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
     #bv-wave-readout .bv-readout-toggle{border:1px solid #55758c;border-radius:3px;background:#132333;color:#d6e5f2;cursor:pointer;font:700 12px monospace;padding:0 4px}
     #bv-click-marker{width:8px;height:8px;border:1px solid #fff;border-radius:50%;box-shadow:0 0 0 1px #e91e63,0 0 6px #000;transform:translate(-50%,-50%);pointer-events:none;display:none}
@@ -227,7 +229,7 @@
       <button class="bv-preset" type="button" data-preset="fishing" title="Fishing conditions: where are the temperature boundaries and drift?" aria-label="Fishing conditions">Fishing</button>
       <button class="bv-preset" type="button" data-preset="tides" title="Tides and inlets: what is the water level doing near departure and return?" aria-label="Tides and inlets">Tides</button>
     </div>
-    <div class="bv-time" id="bv-time">7-Day Outlook · loading forecast…</div>
+    <div class="bv-time" id="bv-time" hidden aria-hidden="true"></div>
     <button id="bv-hamburger-btn" aria-label="Open layer menu">☰</button>
   </div>
   <div id="bv-active-layer-strip" class="bv-active-layer-strip" aria-label="Active map layers"></div>
@@ -388,11 +390,11 @@
       temperature_f: { name: 'Air temperature', unit: '°F', scale: 'SST', viz: 'heat', dataKey: 'temperature_f', dynamicRange: false, fixedRange: [40, 110] },
       apparent_temperature_f: { name: 'Feels Like', unit: '°F', scale: 'SST', viz: 'heat', dataKey: 'apparent_temperature_f', dynamicRange: false, fixedRange: [40, 115] },
       dew_point_f: { name: 'Dew point', unit: '°F', scale: 'SST', viz: 'heat', dataKey: 'dew_point_f', dynamicRange: false, fixedRange: [30, 85] },
-      relative_humidity_pct: { name: 'Relative humidity', unit: '%', scale: 'UV', viz: 'heat', dataKey: 'relative_humidity_pct', dynamicRange: false, fixedRange: [0, 100] },
+      relative_humidity_pct: { name: 'Humidity', unit: '%', scale: 'UV', viz: 'heat', dataKey: 'relative_humidity_pct', dynamicRange: false, fixedRange: [0, 100] },
       cloud_cover_pct: { name: 'Cloud cover', unit: '%', scale: 'UV', viz: 'heat', dataKey: 'cloud_cover_pct', dynamicRange: false, fixedRange: [0, 100] },
       // Visibility is capped at 20 nmi because values above that are all
       // operationally "clear"; the low-end fog gradient remains legible.
-      visibility_mi: { name: 'Marine visibility', unit: 'mi', scale: 'SST', viz: 'heat', dataKey: 'visibility_mi', dynamicRange: false, fixedRange: [0, 20] },
+      visibility_mi: { name: 'Visibility', unit: 'mi', scale: 'SST', viz: 'heat', dataKey: 'visibility_mi', dynamicRange: false, fixedRange: [0, 20] },
       precipitation_in: { name: 'Precipitation', unit: 'in', scale: 'UV', viz: 'heat', dataKey: 'precipitation_in', dynamicRange: false, fixedRange: [0, 2] },
       rain_in: { name: 'Rain', unit: 'in', scale: 'UV', viz: 'heat', dataKey: 'rain_in', dynamicRange: false, fixedRange: [0, 2] },
       showers_in: { name: 'Showers', unit: 'in', scale: 'UV', viz: 'heat', dataKey: 'showers_in', dynamicRange: false, fixedRange: [0, 2] },
@@ -948,6 +950,12 @@
       readoutToggle.setAttribute('aria-expanded', String(!collapsed));
       readoutToggle.setAttribute('aria-label', collapsed ? 'Expand readout' : 'Shrink readout');
       if (readoutBody) readoutBody.hidden = collapsed;
+    });
+    waveReadout?.addEventListener('click', event => {
+      if (!waveReadout.classList.contains('is-collapsed') || event.target.closest('.bv-readout-toggle')) return;
+      waveReadout.classList.remove('is-collapsed');
+      if (readoutBody) readoutBody.hidden = false;
+      if (readoutToggle) readoutToggle.setAttribute('aria-expanded', 'true');
     });
     const stationOverlay = new ol.Overlay({ element: stationPopup, positioning: 'bottom-center', offset: [0, -10], stopEvent: true, autoPan: { animation: { duration: 250 }, margin: 150 } });
     map.addOverlay(stationOverlay);
@@ -3529,14 +3537,32 @@
       if (!forecastData || !mapEl) return;
       const rect = mapEl.getBoundingClientRect();
       const area = Math.max(1, rect.width * rect.height);
-      // Gusts are an intermittent accent, not a second wind field. Keep them
-      // substantially sparser than sustained-wind particles.
-      const target = Math.max(60, Math.min(360, Math.round(area / 3200)));
-      for (let i = 0; i < target; i++) {
+      // Gusts are less frequent than wind particles, but every seeded burst
+      // must land on a valid gust-excess sample rather than a random blank
+      // pixel that immediately respawns.
+      const target = Math.max(70, Math.min(500, Math.round(area / 2200)));
+      let attempts = 0;
+      while (gustParticles.length < target && attempts++ < target * 20) {
         const lon = bbox[0] + Math.random() * (bbox[2] - bbox[0]);
         const lat = bbox[1] + Math.random() * (bbox[3] - bbox[1]);
-        gustParticles.push({ lon, lat, age: Math.random() * 35, maxAge: 20 + Math.random() * 42 });
+        const gust = bilinearVec(currentFrame, lon, lat, 'gust');
+        const wind = bilinearVec(currentFrame, lon, lat, 'wind');
+        if (!gust || !wind || gust.speed - wind.speed < 5) continue;
+        gustParticles.push({ lon, lat, age: Math.random() * 24, maxAge: 18 + Math.random() * 36 });
       }
+    }
+
+    function randomValidGustParticle() {
+      for (let attempt = 0; attempt < 40; attempt++) {
+        const lon = bbox[0] + Math.random() * (bbox[2] - bbox[0]);
+        const lat = bbox[1] + Math.random() * (bbox[3] - bbox[1]);
+        const gust = bilinearVec(currentFrame, lon, lat, 'gust');
+        const wind = bilinearVec(currentFrame, lon, lat, 'wind');
+        if (gust && wind && gust.speed - wind.speed >= 5) {
+          return { lon, lat, age: 0, maxAge: 18 + Math.random() * 36 };
+        }
+      }
+      return null;
     }
 
     function startParticleAnimation() {
@@ -3626,9 +3652,7 @@
             const minParticleSpeed = 3.5;
             if (!vec || vec.speed < minParticleSpeed || p.age >= p.maxAge ||
                 p.lon < bbox[0] || p.lon > bbox[2] || p.lat < bbox[1] || p.lat > bbox[3]) {
-              const lon = bbox[0] + Math.random() * (bbox[2] - bbox[0]);
-              const lat = bbox[1] + Math.random() * (bbox[3] - bbox[1]);
-            gustParticles[i] = { lon, lat, age: 0, maxAge: 20 + Math.random() * 42 };
+              gustParticles[i] = randomValidGustParticle() || { lon: bbox[0], lat: bbox[1], age: 0, maxAge: 1 };
             continue;
             }
             const sustained = bilinearVec(currentFrame, p.lon, p.lat, 'wind');
@@ -3641,11 +3665,10 @@
               continue;
             }
             const cosLat = Math.cos(p.lat * Math.PI / 180);
-            // Wind particles advance at wind speed × 0.0009. Advance gusts at
-            // that same base rate multiplied by gust:wind speed, so their
-            // visual velocity is proportional to the actual forecast ratio.
+            // Keep the gust:wind ratio explicit while retaining the stronger
+            // visual contrast used for gust bursts.
             const gustWindRatio = sustained?.speed > 0 ? vec.speed / sustained.speed : 1;
-            const dt = sustained?.speed > 0 ? sustained.speed * 0.0009 * gustWindRatio : vec.speed * 0.0009;
+            const dt = sustained?.speed > 0 ? sustained.speed * 0.0014 * gustWindRatio : vec.speed * 0.0014;
             const oldLon = p.lon, oldLat = p.lat;
             p.lon += (vec.u / vec.speed) * dt / cosLat;
             p.lat += (vec.v / vec.speed) * dt;

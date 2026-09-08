@@ -8,8 +8,11 @@ for (const label of ['Swell Height', 'Wave Height', 'Surface Steepness', 'Visibi
 }
 assert(html.includes("scale: 'ALERT'"), 'surface steepness must use the alert palette');
 assert(html.includes("scale: 'RIDE'"), 'ride harshness must use the ride-comfort palette');
-assert(html.includes('const target = Math.max(60, Math.min(360, Math.round(area / 3200)))'), 'gust particles must be sparse');
+assert(html.includes('const target = Math.max(70, Math.min(500, Math.round(area / 2200)))'), 'gust particles must be less frequent than wind particles');
 assert(html.includes('vec.speed / sustained.speed'), 'gust speed must scale with gust:wind ratio');
+assert(html.includes('randomValidGustParticle'), 'gusts must seed on valid gust data');
+assert(html.includes('waveReadout?.addEventListener'), 'collapsed readout must expand from any click');
+assert(html.includes('#bv-wave-readout.is-collapsed .bv-readout-toggle{display:none}'), 'collapsed readout must hide the plus control');
 const weatherDetail = html.slice(html.indexOf("weather: {"), html.indexOf("fishing: {"));
 assert(weatherDetail.includes("'cloud_low'") && weatherDetail.includes("'cloud_mid'"), 'low/mid cloud must remain in Weather Details');
 const seaDetail = html.slice(html.indexOf("sea: {"), html.indexOf("weather: {"));
