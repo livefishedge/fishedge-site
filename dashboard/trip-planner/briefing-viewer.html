@@ -149,7 +149,7 @@
     #bv-station-popup .bv-briefing-source{ font-size:10px; color:#7a8fa8; margin-bottom:4px; }
     #bv-station-popup .bv-row{ display:flex; justify-content:space-between; gap:8px; font-size:10px; padding-top:3px; }
     #bv-station-popup .bv-row b{ color:#fff; }
-    #bv-wave-readout{ position:fixed; right:12px; bottom:104px; z-index:21; display:none; min-width:220px; max-width:min(300px,calc(100vw - 24px)); padding:8px 10px; background:rgba(5,11,16,.96); border:1px solid #8bd7ff; border-radius:6px; color:#d6e5f2; box-shadow:0 8px 24px rgba(0,0,0,.45); font:11px/1.45 monospace; }
+    #bv-wave-readout{ position:fixed; right:12px; bottom:8px; z-index:21; display:none; min-width:220px; max-width:min(300px,calc(100vw - 24px)); padding:8px 10px; background:rgba(5,11,16,.96); border:1px solid #8bd7ff; border-radius:6px; color:#d6e5f2; box-shadow:0 8px 24px rgba(0,0,0,.45); font:11px/1.45 monospace; cursor:grab; }
     #bv-wave-readout.is-collapsed{min-width:0;max-width:190px;padding:5px 8px;font-size:10px;line-height:1.25}
     #bv-wave-readout.is-collapsed .bv-readout-toggle{display:none}
     #bv-wave-readout .bv-readout-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
@@ -188,12 +188,12 @@
       padding: 4px 12px 5px;
       pointer-events: none;
     }
-    .bv-ranges-title { font-size: 10px; color: #9fb0c3; font-family: monospace; margin-bottom: 1px; display: flex; justify-content: space-between; gap: 6px; }
+    .bv-ranges-title { display:none; }
     .bv-ranges-title b { color: #e3f2fd; font-weight: 600; }
     #bv-cbar { width: 100%; height: 22px; display:block; }
     .bv-ranges-ticks { display: flex; justify-content: space-between; font-size: 9px; line-height: 1; color: #9fb0c3; font-family: monospace; margin-top: 1px; }
 
-    .bv-map { position: absolute; top: 205px; left: 0; right: 0; bottom: 0; touch-action: none; }
+    .bv-map { position: absolute; top: 195px; left: 0; right: 0; bottom: 0; touch-action: none; }
     .bv-flow-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 4; mix-blend-mode: screen; }
     .bv-streamlines-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3; }
     .bv-tide-overlay-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 6; mix-blend-mode: normal; }
@@ -230,12 +230,17 @@
     .bv-ranges { top:157px; bottom:auto; }
     .bv-map { top:211px !important; bottom:0; }
     .bv-time, .bv-mode-context { display:none !important; }
+    .bv-active-layer-strip { right:40% !important; flex-wrap:wrap; align-content:flex-start; overflow-y:hidden; min-height:84px; box-sizing:border-box; }
+    .bv-layer-break { flex-basis:100%; width:0; height:0; }
+    .bv-ranges { left:60%; right:0; width:40%; top:107px; box-sizing:border-box; border-left:1px solid #1b2836; }
+    #bv-wave-key { bottom:8px !important; cursor:grab; }
     @media(max-width:640px){
       .bv-framebar { top:40px; gap:5px; padding-left:8px; padding-right:8px; }
       .bv-frame-date { top:85px; height:22px; padding-right:8px; font-size:10px; }
       .bv-active-layer-strip { top:107px !important; padding-left:8px; padding-right:8px; }
-      .bv-ranges { top:151px; }
-      .bv-map { top:205px !important; }
+      .bv-active-layer-strip { right:0 !important; min-height:84px; overflow-y:hidden; }
+      .bv-ranges { left:0; right:0; width:auto; top:193px; border-left:0; }
+      .bv-map { top:247px !important; }
       .bv-details-panel { top:145px; }
     }
   </style>
@@ -973,10 +978,46 @@
     });
     waveReadout?.addEventListener('click', event => {
       if (!waveReadout.classList.contains('is-collapsed') || event.target.closest('.bv-readout-toggle')) return;
+      if (waveReadout.dataset.dragMoved === '1') { delete waveReadout.dataset.dragMoved; return; }
       waveReadout.classList.remove('is-collapsed');
       if (readoutBody) readoutBody.hidden = false;
       if (readoutToggle) readoutToggle.setAttribute('aria-expanded', 'true');
     });
+    function makeDraggable(element) {
+      if (!element) return;
+      let startX = 0, startY = 0, originLeft = 0, originTop = 0, moved = false;
+      element.addEventListener('pointerdown', event => {
+        if (event.button !== undefined && event.button !== 0) return;
+        if (event.target.closest?.('.bv-readout-toggle, summary, button, input, select')) return;
+        const rect = element.getBoundingClientRect();
+        startX = event.clientX; startY = event.clientY;
+        originLeft = rect.left; originTop = rect.top; moved = false;
+        element.setPointerCapture?.(event.pointerId);
+        element.style.cursor = 'grabbing';
+      });
+      element.addEventListener('pointermove', event => {
+        if (!element.hasPointerCapture?.(event.pointerId)) return;
+        const dx = event.clientX - startX, dy = event.clientY - startY;
+        if (!moved && Math.hypot(dx, dy) < 4) return;
+        moved = true;
+        const maxLeft = Math.max(0, window.innerWidth - element.offsetWidth);
+        const maxTop = Math.max(0, window.innerHeight - element.offsetHeight);
+        element.style.left = `${Math.max(0, Math.min(maxLeft, originLeft + dx))}px`;
+        element.style.top = `${Math.max(0, Math.min(maxTop, originTop + dy))}px`;
+        element.style.right = 'auto'; element.style.bottom = 'auto';
+      });
+      element.addEventListener('pointerup', event => {
+        if (moved) element.dataset.dragMoved = '1';
+        element.releasePointerCapture?.(event.pointerId);
+        element.style.cursor = 'grab';
+      });
+      element.addEventListener('pointercancel', event => {
+        element.releasePointerCapture?.(event.pointerId);
+        element.style.cursor = 'grab';
+      });
+    }
+    makeDraggable(waveReadout);
+    makeDraggable(document.getElementById('bv-wave-key'));
     const stationOverlay = new ol.Overlay({ element: stationPopup, positioning: 'bottom-center', offset: [0, -10], stopEvent: true, autoPan: { animation: { duration: 250 }, margin: 150 } });
     map.addOverlay(stationOverlay);
     function compass(deg) {
@@ -1281,6 +1322,7 @@
       const activeDef = selectedHeatKey ? PRODUCTS[selectedHeatKey] : null;
       unit.textContent = activeDef ? displayUnit(selectedHeatKey, activeDef.unit || '') : '';
       label.append(unit); strip.append(label);
+      const layerBreak = document.createElement('span'); layerBreak.className = 'bv-layer-break'; strip.append(layerBreak);
       function control(key, parent) {
         if (SCALAR_LAYERS[key]) return;
         const label = document.createElement('label'), input = document.createElement('input');

@@ -58,6 +58,14 @@ const url = process.env.PLANNER_URL || 'http://127.0.0.1:8766/trip-planner/brief
     assert.equal(await page.locator('.bv-readout-toggle').innerText(),'−','readout toggle never changes to plus');
     await page.locator('#bv-wave-readout').click();
     assert(!(await page.locator('#bv-wave-readout').evaluate(e=>e.classList.contains('is-collapsed'))),'collapsed readout expands from card click');
+    const readoutBeforeDrag = await page.locator('#bv-wave-readout').boundingBox();
+    await page.mouse.move(readoutBeforeDrag.x + 40, readoutBeforeDrag.y + 20);
+    await page.mouse.down(); await page.mouse.move(readoutBeforeDrag.x + 70, readoutBeforeDrag.y + 35); await page.mouse.up();
+    const readoutAfterDrag = await page.locator('#bv-wave-readout').boundingBox();
+    assert(readoutAfterDrag.x !== readoutBeforeDrag.x || readoutAfterDrag.y !== readoutBeforeDrag.y,'lat/lon readout is draggable');
+    const desktopRanges = await page.locator('.bv-ranges').boundingBox();
+    const desktopStrip = await page.locator('#bv-active-layer-strip').boundingBox();
+    assert(desktopRanges.x >= desktopStrip.x + desktopStrip.width - 2,'desktop colorbar is to the right of layer controls');
     await page.locator('[data-preset=tides]').click();
     assert.equal(await select().inputValue(),'','Tides opens station-first');
     await page.waitForTimeout(250);
