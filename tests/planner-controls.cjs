@@ -102,6 +102,8 @@ const url = process.env.PLANNER_URL || 'http://127.0.0.1:8766/trip-planner/brief
     assert(dateRow.y + dateRow.height <= activeStrip.y + 1,'forecast date row precedes layer row');
     assert(ranges.x >= selectorRow.x + selectorRow.width * .55 && Math.abs(ranges.y - selectorRow.y) < 4,'colorbar shares the selector row');
     assert(!/Color map:/.test(await page.locator('.bv-ranges-title').innerText()),'colorbar has no duplicate Color map label');
+    assert((await page.locator('#bv-cbar-ticks').innerText()).trim().length > 0,'colorbar tick labels are present');
+    assert(await page.locator('#bv-cbar').evaluate(c=>{const d=c.getContext('2d').getImageData(0,0,c.width,c.height).data;let n=0;for(let i=3;i<d.length;i+=4)if(d[i]>0)n++;return n>100;}),'colorbar renders visible pixels');
     await page.screenshot({path:'/tmp/planner-audit-mobile.png'});
     assert.deepEqual(errors,[]);
     console.log('PASS: scalar pixels, wave motion, None, Details persistence, view memory/reset, map readout/marker, 8 station charts, mobile bounds, no page errors');
