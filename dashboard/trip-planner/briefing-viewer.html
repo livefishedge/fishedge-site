@@ -102,6 +102,7 @@
     .bv-layer-details[open] summary{ border-color:#4fc3f7; }
     .bv-details-group{ color:#7a8fa8; font-size:9px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; margin-left:3px; }
     .bv-map-field{ display:flex; align-items:center; gap:4px; flex:0 0 auto; color:#9fb0c3; font-size:10px; font-weight:800; white-space:nowrap; }
+    .bv-map-unit{ color:#e3f2fd; font:700 10px monospace; min-width:18px; }
     .bv-map-field select{ max-width:155px; padding:3px 5px; border:1px solid rgba(79,195,247,.45); border-radius:4px; background:#132333; color:#d6e5f2; font:700 10px sans-serif; }
     .bv-mode-context{ position:fixed; top:73px; left:0; right:0; z-index:20; display:none; align-items:center; gap:8px; min-height:24px; padding:3px 12px; overflow-x:auto; background:rgba(5,11,16,.82); border-bottom:1px solid rgba(255,255,255,.08); color:#d6e5f2; font:700 10px monospace; white-space:nowrap; }
     .bv-mode-context.visible{ display:flex; }
@@ -163,7 +164,7 @@
     .dot-press { background: #c59bff; }
 
     .bv-framebar {
-      position: fixed; bottom: 56px; left: 0; right: 0; z-index: 15;
+      position: fixed; top: 44px; left: 0; right: 0; z-index: 15;
       display: flex; align-items: center; gap: 10px;
       padding: 6px 14px; background: rgba(5, 11, 16, 0.95);
       border-top: 1px solid #1b2836;
@@ -176,11 +177,12 @@
     .bv-framebar button:hover { background: #2a3a4d; }
     .bv-framebar button.playing { background: #4fc3f7; color: #050b10; border-color: #4fc3f7; }
     #bv-slider { flex: 1; min-width: 100px; accent-color: #4fc3f7; height: 6px; }
-    #bv-speed { width: 64px; height: 30px; padding: 0 4px; background: #1b2836; color: #b3e5fc; border: 1px solid #2a3a4d; border-radius: 4px; font: 700 11px monospace; }
+    #bv-speed { width: 52px; height: 30px; padding: 0 2px; background: #1b2836; color: #b3e5fc; border: 1px solid #2a3a4d; border-radius: 4px; font: 700 11px monospace; }
     .bv-frame-label { font-size: 12px; color: #e3f2fd; font-family: monospace; min-width: 140px; text-align: right; }
+    .bv-frame-date { position:fixed; top:83px; left:0; right:0; z-index:15; height:24px; display:flex; align-items:center; justify-content:flex-end; padding:0 14px; box-sizing:border-box; background:rgba(5,11,16,.95); border-top:1px solid #1b2836; color:#e3f2fd; font:11px monospace; }
 
     .bv-ranges {
-      position: fixed; bottom: 101px; left: 0; right: 0; z-index: 14;
+      position: fixed; top: 151px; left: 0; right: 0; z-index: 14;
       background: rgba(5, 11, 16, 0.95);
       border-top: 1px solid #1b2836;
       padding: 4px 12px 5px;
@@ -191,7 +193,7 @@
     #bv-cbar { width: 100%; height: 22px; display:block; }
     .bv-ranges-ticks { display: flex; justify-content: space-between; font-size: 9px; line-height: 1; color: #9fb0c3; font-family: monospace; margin-top: 1px; }
 
-    .bv-map { position: absolute; top: 88px; left: 0; right: 0; bottom: 108px; touch-action: none; }
+    .bv-map { position: absolute; top: 205px; left: 0; right: 0; bottom: 0; touch-action: none; }
     .bv-flow-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 4; mix-blend-mode: screen; }
     .bv-streamlines-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3; }
     .bv-tide-overlay-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 6; mix-blend-mode: normal; }
@@ -215,8 +217,26 @@
       .bv-map { top:72px; bottom:108px; }
       .bv-framebar { gap: 5px; padding-left: 8px; padding-right: 8px; }
       #bv-slider { min-width: 60px; }
-      #bv-speed { width: 56px; }
+      #bv-speed { width: 48px; }
       .bv-frame-label { min-width: auto; font-size: 10px; }
+    }
+
+    /* Planner controls are a deliberate vertical stack: view modes, playback,
+       forecast time, layer controls, then the colorbar. They must not overlap
+       the map or one another on small screens. */
+    .bv-framebar { top:44px; bottom:auto; }
+    .bv-frame-date { top:89px; }
+    .bv-active-layer-strip { top:113px !important; }
+    .bv-ranges { top:157px; bottom:auto; }
+    .bv-map { top:211px !important; bottom:0; }
+    .bv-time, .bv-mode-context { display:none !important; }
+    @media(max-width:640px){
+      .bv-framebar { top:40px; gap:5px; padding-left:8px; padding-right:8px; }
+      .bv-frame-date { top:85px; height:22px; padding-right:8px; font-size:10px; }
+      .bv-active-layer-strip { top:107px !important; padding-left:8px; padding-right:8px; }
+      .bv-ranges { top:151px; }
+      .bv-map { top:205px !important; }
+      .bv-details-panel { top:145px; }
     }
   </style>
 </head>
@@ -328,12 +348,12 @@
       <option value="2">2×</option>
       <option value="4">4×</option>
     </select>
-    <span class="bv-frame-label" id="bv-frame-label">—</span>
   </div>
+  <div class="bv-frame-date"><span class="bv-frame-label" id="bv-frame-label">—</span></div>
 
   <div class="bv-ranges">
     <div class="bv-ranges-title">
-      <span>Color map:</span> <b id="bv-cbar-name">Temperature</b>
+      <b id="bv-cbar-name">Temperature</b>
       <span id="bv-cbar-unit">°F</span>
     </div>
     <canvas id="bv-cbar" width="1000" height="32"></canvas>
@@ -946,7 +966,7 @@
     readoutToggle?.addEventListener('click', event => {
       event.preventDefault(); event.stopPropagation();
       const collapsed = waveReadout.classList.toggle('is-collapsed');
-      readoutToggle.textContent = collapsed ? '+' : '−';
+      readoutToggle.textContent = '−';
       readoutToggle.setAttribute('aria-expanded', String(!collapsed));
       readoutToggle.setAttribute('aria-label', collapsed ? 'Expand readout' : 'Shrink readout');
       if (readoutBody) readoutBody.hidden = collapsed;
@@ -1255,7 +1275,12 @@
         if (!PRODUCTS[field]) continue;
         const option = new Option(PRODUCTS[field].name + (currentFrame && !gridAvailable(field) ? ' — no data at this time' : ''), field); option.disabled = !!currentFrame && !gridAvailable(field); select.add(option);
       }
-      select.value = selectedHeatKey || ''; label.append(select); strip.append(label);
+      select.value = selectedHeatKey || '';
+      label.append(select);
+      const unit = document.createElement('span'); unit.className = 'bv-map-unit';
+      const activeDef = selectedHeatKey ? PRODUCTS[selectedHeatKey] : null;
+      unit.textContent = activeDef ? displayUnit(selectedHeatKey, activeDef.unit || '') : '';
+      label.append(unit); strip.append(label);
       function control(key, parent) {
         if (SCALAR_LAYERS[key]) return;
         const label = document.createElement('label'), input = document.createElement('input');

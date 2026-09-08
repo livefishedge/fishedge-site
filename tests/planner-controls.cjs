@@ -55,10 +55,12 @@ const url = process.env.PLANNER_URL || 'http://127.0.0.1:8766/trip-planner/brief
     await page.locator('.bv-readout-toggle').click();
     assert(await page.locator('#bv-wave-readout').evaluate(e=>e.classList.contains('is-collapsed')),'readout can collapse');
     assert.equal(await page.locator('.bv-readout-toggle').evaluate(e=>getComputedStyle(e).display),'none','collapsed readout hides plus control');
+    assert.equal(await page.locator('.bv-readout-toggle').innerText(),'−','readout toggle never changes to plus');
     await page.locator('#bv-wave-readout').click();
     assert(!(await page.locator('#bv-wave-readout').evaluate(e=>e.classList.contains('is-collapsed'))),'collapsed readout expands from card click');
     await page.locator('[data-preset=tides]').click();
     assert.equal(await select().inputValue(),'','Tides opens station-first');
+    await page.waitForTimeout(250);
     assert(await page.locator('#bv-station-popup').isVisible());
     for(const marker of await page.locator('.bv-station-marker').all()){
       await marker.evaluate(e=>e.click());
@@ -79,7 +81,12 @@ const url = process.env.PLANNER_URL || 'http://127.0.0.1:8766/trip-planner/brief
     assert(!(await page.locator('#bv-time').isVisible()),'legacy 7-day freshness banner is removed');
     const ranges = await page.locator('.bv-ranges').boundingBox();
     const framebar = await page.locator('.bv-framebar').boundingBox();
-    assert(ranges.y + ranges.height <= framebar.y + 1,'colorbar sits above playback controls');
+    const dateRow = await page.locator('.bv-frame-date').boundingBox();
+    const activeStrip = await page.locator('#bv-active-layer-strip').boundingBox();
+    assert(framebar.y + framebar.height <= dateRow.y + 1,'playback row precedes forecast date row');
+    assert(dateRow.y + dateRow.height <= activeStrip.y + 1,'forecast date row precedes layer row');
+    assert(activeStrip.y + activeStrip.height <= ranges.y + 1,'layer row precedes colorbar');
+    assert(!/Color map:/.test(await page.locator('.bv-ranges-title').innerText()),'colorbar has no duplicate Color map label');
     await page.screenshot({path:'/tmp/planner-audit-mobile.png'});
     assert.deepEqual(errors,[]);
     console.log('PASS: scalar pixels, wave motion, None, Details persistence, view memory/reset, map readout/marker, 8 station charts, mobile bounds, no page errors');
