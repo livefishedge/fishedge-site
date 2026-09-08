@@ -32,6 +32,7 @@ const url = process.env.PLANNER_URL || 'http://127.0.0.1:8766/trip-planner/brief
     await page.locator('[data-reset-view]').click();
     assert.equal(await select().inputValue(),'visibility_mi');
     await page.locator('[data-preset=sea]').click();
+    await select().selectOption('wave_height_ft');
     await page.locator('[data-wave-motion]').check();
     const waveFrame = async()=>page.evaluate(()=>{const c=document.querySelector('.bv-streamlines-canvas'),d=c.getContext('2d').getImageData(0,0,c.width,c.height).data;let s=0;for(let i=0;i<d.length;i+=4){const p=i/4;s=(s+(p%997)*d[i+3]+d[i]*3+d[i+1]*5+d[i+2]*7)%1000000007}return s});
     await page.waitForTimeout(900); const waveBefore=await waveFrame(); await page.waitForTimeout(650); const waveAfter=await waveFrame();
@@ -47,6 +48,9 @@ const url = process.env.PLANNER_URL || 'http://127.0.0.1:8766/trip-planner/brief
     assert(await page.locator('#bv-wave-readout').isVisible(),'map click opens readout');
     assert(/°[WE], .*°[NS]/.test(await page.locator('#bv-wave-readout [data-readout-title]').innerText()),'readout uses signed coordinates');
     assert(/forecast/.test(await page.locator('#bv-wave-readout [data-readout-body]').innerText()),'readout shows forecast time');
+    const readoutText = await page.locator('#bv-wave-readout [data-readout-body]').innerText();
+    assert(/Significant Wave Height/.test(readoutText),'readout keeps the full significant-wave label');
+    assert(/Swell|Wave Height \(Chop\)|Wind/.test(readoutText),'readout includes checked supporting layers');
     assert.equal(await page.locator('#bv-click-marker').evaluate(e=>getComputedStyle(e).display),'block','clicked location marker visible');
     await page.locator('.bv-readout-toggle').click();
     assert(await page.locator('#bv-wave-readout').evaluate(e=>e.classList.contains('is-collapsed')),'readout can collapse');
@@ -61,12 +65,21 @@ const url = process.env.PLANNER_URL || 'http://127.0.0.1:8766/trip-planner/brief
       assert(!/unavailable|^—$/.test(await page.locator('#bv-tide-latest').innerText()));
       assert((await page.locator('#bv-tide-svg polyline').first().getAttribute('points')).length>10);
     }
+    await page.locator('[data-preset=fishing]').click();
+    await page.waitForTimeout(500);
+    assert(await page.locator('input[data-layer=current]').first().isChecked(),'Fishing keeps Forecast Current checked');
+    assert(!(await page.locator('input[data-layer=current]').first().isDisabled()),'Forecast Current has source data');
+    const currentPixels = await page.locator('.bv-streamlines-canvas').evaluate(c=>{const d=c.getContext('2d').getImageData(0,0,c.width,c.height).data;let n=0;for(let i=3;i<d.length;i+=4)if(d[i]>30)n++;return n});
+    assert(currentPixels>100,'Forecast Current renders streamlines');
     await page.setViewportSize({width:390,height:844});
     await page.locator('[data-preset=weather]').click();
     await page.locator('.bv-layer-details summary').click();
     const box=await page.locator('.bv-details-panel').boundingBox();
     assert(box.x>=0 && box.x+box.width<=390,'Details fits mobile');
     assert(!(await page.locator('#bv-time').isVisible()),'legacy 7-day freshness banner is removed');
+    const ranges = await page.locator('.bv-ranges').boundingBox();
+    const framebar = await page.locator('.bv-framebar').boundingBox();
+    assert(ranges.y + ranges.height <= framebar.y + 1,'colorbar sits above playback controls');
     await page.screenshot({path:'/tmp/planner-audit-mobile.png'});
     assert.deepEqual(errors,[]);
     console.log('PASS: scalar pixels, wave motion, None, Details persistence, view memory/reset, map readout/marker, 8 station charts, mobile bounds, no page errors');

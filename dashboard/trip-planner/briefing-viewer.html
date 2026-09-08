@@ -180,18 +180,18 @@
     .bv-frame-label { font-size: 12px; color: #e3f2fd; font-family: monospace; min-width: 140px; text-align: right; }
 
     .bv-ranges {
-      position: fixed; bottom: 0; left: 0; right: 0; z-index: 14;
+      position: fixed; bottom: 101px; left: 0; right: 0; z-index: 14;
       background: rgba(5, 11, 16, 0.95);
       border-top: 1px solid #1b2836;
-      padding: 8px 14px 10px;
+      padding: 4px 12px 5px;
       pointer-events: none;
     }
-    .bv-ranges-title { font-size: 11px; color: #9fb0c3; font-family: monospace; margin-bottom: 4px; display: flex; justify-content: space-between; }
+    .bv-ranges-title { font-size: 10px; color: #9fb0c3; font-family: monospace; margin-bottom: 1px; display: flex; justify-content: space-between; gap: 6px; }
     .bv-ranges-title b { color: #e3f2fd; font-weight: 600; }
-    #bv-cbar { width: 100%; height: 32px; }
-    .bv-ranges-ticks { display: flex; justify-content: space-between; font-size: 10px; color: #9fb0c3; font-family: monospace; margin-top: 2px; }
+    #bv-cbar { width: 100%; height: 22px; display:block; }
+    .bv-ranges-ticks { display: flex; justify-content: space-between; font-size: 9px; line-height: 1; color: #9fb0c3; font-family: monospace; margin-top: 1px; }
 
-    .bv-map { position: absolute; top: 88px; left: 0; right: 0; bottom: 110px; touch-action: none; }
+    .bv-map { position: absolute; top: 88px; left: 0; right: 0; bottom: 108px; touch-action: none; }
     .bv-flow-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 4; mix-blend-mode: screen; }
     .bv-streamlines-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3; }
     .bv-tide-overlay-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 6; mix-blend-mode: normal; }
@@ -212,7 +212,7 @@
       .bv-top-modes .bv-preset { flex:0 0 auto; padding:5px 6px; font-size:9px; }
       .bv-active-layer-strip{ top:42px; padding-left:8px; padding-right:8px; }
       .bv-products button { font-size: 11px; padding: 3px 6px; }
-      .bv-map { top:72px; bottom:96px; }
+      .bv-map { top:72px; bottom:108px; }
       .bv-framebar { gap: 5px; padding-left: 8px; padding-right: 8px; }
       #bv-slider { min-width: 60px; }
       #bv-speed { width: 56px; }
@@ -270,7 +270,7 @@
           <label title="Tidal Range contour overlay"><input type="checkbox" data-layer="tide_range"><span class="bv-dot dot-tide"></span>Tidal Range <button class="bv-unit-toggle" type="button" data-unit-key="tide_range_ft">ft</button></label>
           <label title="Wind-wave height is the locally wind-generated chop; crest speed and spacing use its period"><input type="checkbox" data-layer="wind_wave"><span class="bv-dot dot-composite"></span>Wave Height (Chop) <button class="bv-unit-toggle" type="button" data-unit-key="wind_wave_height_ft">ft</button></label>
           <label title="Swell height is the remotely generated wave component; only exposed water is shown as locally resolved"><input type="checkbox" data-layer="swell"><span class="bv-dot dot-swell"></span>Swell Height <button class="bv-unit-toggle" type="button" data-unit-key="swell_height_ft">ft</button></label>
-          <label title="Total wave height combines wind waves and swell"><input type="checkbox" data-layer="wave_height" checked><span class="bv-dot dot-wave"></span>Wave Height <button class="bv-unit-toggle" type="button" data-unit-key="wave_height_ft">ft</button></label>
+          <label title="Significant wave height combines wind waves and swell"><input type="checkbox" data-layer="wave_height" checked><span class="bv-dot dot-wave"></span>Significant Wave Height <button class="bv-unit-toggle" type="button" data-unit-key="wave_height_ft">ft</button></label>
           <label title="Forecast surface current speed and direction"><input type="checkbox" data-layer="current"><span class="bv-dot dot-wind"></span>Forecast Current <button class="bv-unit-toggle" type="button" data-unit-key="current_speed_kn">kn</button></label>
           <label title="Sea-surface temperature from the marine forecast"><input type="checkbox" data-layer="sst"><span class="bv-dot dot-temp"></span>Sea-Surface Temp <button class="bv-unit-toggle" type="button" data-unit-key="sea_surface_temperature_f">°F</button></label>
           <label title="Wave height relative to wavelength; orange and red indicate increasingly uncomfortable or dangerous steepness"><input type="checkbox" data-layer="wave_steepness" checked><span class="bv-dot dot-wave"></span>Surface Steepness</label>
@@ -405,11 +405,11 @@
       cloud_cover_low_pct: { name: 'Low cloud cover', unit: '%', scale: 'UV', viz: 'heat', dataKey: 'cloud_cover_low_pct', dynamicRange: false, fixedRange: [0, 100] },
       cloud_cover_mid_pct: { name: 'Mid cloud cover', unit: '%', scale: 'UV', viz: 'heat', dataKey: 'cloud_cover_mid_pct', dynamicRange: false, fixedRange: [0, 100] },
       cloud_cover_high_pct: { name: 'High cloud cover', unit: '%', scale: 'UV', viz: 'heat', dataKey: 'cloud_cover_high_pct', dynamicRange: false, fixedRange: [0, 100] },
-      wave_height_ft:{ name: 'Wave Height', unit: 'ft', scale: 'UV', viz: 'arrows', dataKey: 'wave_height_ft', dirKey: 'wave_direction_deg', dynamicRange: false, fixedRange: [0, 5] },
+      wave_height_ft:{ name: 'Significant Wave Height', unit: 'ft', scale: 'UV', viz: 'arrows', dataKey: 'wave_height_ft', dirKey: 'wave_direction_deg', dynamicRange: false, fixedRange: [0, 5] },
       swell_height_ft:{name: 'Swell Height',unit: 'ft', scale: 'UV', viz: 'arrows', dataKey: 'swell_height_ft', dirKey: 'swell_direction_deg', dynamicRange: false, fixedRange: [0, 5] },
       // Composite heat uses significant wave height; partition directions are
       // rendered as the swell and wind-wave overlays below.
-      wave_composite:{name: 'Wave Height', unit: 'ft', scale: 'UV', viz: 'composite', dataKey: 'wave_height_ft', dynamicRange: false, fixedRange: [0, 5] },
+      wave_composite:{name: 'Significant Wave Height', unit: 'ft', scale: 'UV', viz: 'composite', dataKey: 'wave_height_ft', dynamicRange: false, fixedRange: [0, 5] },
       wind_wave_height_ft:{name: 'Wave Height (Chop)', unit: 'ft', scale: 'UV', viz: 'heat', dataKey: 'wind_wave_height_ft', dynamicRange: false, fixedRange: [0, 5] },
       sea_surface_temperature_f: { name: 'Sea-surface temperature', unit: '°F', scale: 'SST', viz: 'heat', dataKey: 'sea_surface_temperature_f', dynamicRange: false, fixedRange: [40, 90] },
       wave_steepness: { name: 'Surface Steepness', unit: 'Sₛ', scale: 'ALERT', viz: 'heat', dataKey: 'wave_steepness', dynamicRange: false, fixedRange: [0, 0.10] },
@@ -973,15 +973,21 @@
       const frameDate = new Date(currentFrame.time);
       const timeLabel = frameDate.toLocaleString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit', timeZone: 'America/New_York' });
       const rows = [];
-      const key = activeHeatKey();
-      if (key) {
-        const value = sampleGridAtPoint(currentFrame[key], lat, lon, true);
-        rows.push(`<div><b>Wave Height</b> · ${Number.isFinite(value) ? convertDisplayValue(key, value).toFixed(2) + ' ' + displayUnit(key, PRODUCTS[key]?.unit || '') : 'missing source data'}</div>`);
-      }
+      const checked = key => !!layerVisibility[key];
       const onLand = waveMaskImage && waveMaskImage.complete && !isCoastWaterPoint(lon, lat);
-      if (onLand) rows.push('<div>Outside marine coverage</div>');
-      for (const kind of (onLand ? [] : ['swell', 'wind_wave'])) {
+      const marineKeys = new Set(['wave_height','sst','wave_steepness','ride_harshness','surface_texture','tide_level']);
+      for (const layer of Object.keys(SCALAR_LAYERS)) {
+        if (!checked(layer)) continue;
+        const dataKey = SCALAR_LAYERS[layer];
+        const value = sampleGridAtPoint(currentFrame[dataKey], lat, lon, true);
+        const label = layer === 'wave_height' ? 'Significant Wave Height' : (LAYER_LABELS[layer] || PRODUCTS[dataKey]?.name || layer);
+        const unavailable = marineKeys.has(layer) && onLand;
+        rows.push(`<div><b>${label}</b> · ${unavailable ? 'outside marine coverage' : (Number.isFinite(value) ? `${convertDisplayValue(dataKey, value).toFixed(2)} ${displayUnit(dataKey, PRODUCTS[dataKey]?.unit || '')}` : 'missing source data')}</div>`);
+      }
+      for (const kind of ['swell', 'wind_wave']) {
+        if (!checked(kind)) continue;
         const label = kind === 'swell' ? 'Swell' : 'Waves (Chop)';
+        if (onLand) { rows.push(`<div><b>${label}</b> · outside marine coverage</div>`); continue; }
         if (kind === 'swell' && !swellSupportedAt(lon, lat)) {
           rows.push('<div><b>Swell</b> · regional context only; not locally resolved here</div>');
           continue;
@@ -997,6 +1003,17 @@
         const unit = displayUnit(heightKey, 'ft');
         rows.push(`<div><b>${label}</b> · ${height.toFixed(2)} ${unit} · ${Number.isFinite(v.period) ? v.period.toFixed(1) + ' s' : 'period missing'} · travel ${Number.isFinite(dir) ? `${compass(dir)} (${Math.round(dir)}°)` : '—'}${unresolved ? ' · texture' : ''}</div>`);
       }
+      for (const vectorLayer of ['wind', 'wind_gust', 'current']) {
+        if (!checked(vectorLayer)) continue;
+        const vectorField = vectorLayer === 'current' ? 'current' : (vectorLayer === 'wind_gust' ? 'gust' : 'wind');
+        const v = bilinearVec(currentFrame, lon, lat, vectorField);
+        const label = vectorLayer === 'current' ? 'Forecast Current' : (vectorLayer === 'wind_gust' ? 'Gust' : 'Wind');
+        const unitKey = vectorLayer === 'current' ? 'current_speed_kn' : (vectorLayer === 'wind_gust' ? 'wind_gust_kn' : 'wind_speed_kn');
+        if (!v) { rows.push(`<div><b>${label}</b> · missing source data</div>`); continue; }
+        const dir = v.speed > 1e-6 ? (Math.atan2(v.u, v.v) * 180 / Math.PI + 360) % 360 : null;
+        rows.push(`<div><b>${label}</b> · ${convertDisplayValue(unitKey, v.speed).toFixed(1)} ${displayUnit(unitKey, 'kn')} · travel ${Number.isFinite(dir) ? `${compass(dir)} (${Math.round(dir)}°)` : '—'}</div>`);
+      }
+      if (!rows.length) rows.push('<div>No checked layer data at this location</div>');
       waveReadout.querySelector('[data-readout-title]').textContent = `${formatCoordinate(lon, 'E', 'W')}, ${formatCoordinate(lat, 'N', 'S')}`;
       readoutBody.innerHTML = `${timeLabel} · forecast<br>${rows.join('')}`;
       waveReadout.style.display = 'block';
@@ -1199,7 +1216,7 @@
       cloud_cover:'Cloud Cover', cloud_low:'Low Cloud', cloud_mid:'Mid Cloud', cloud_high:'High Cloud',
       visibility:'Visibility', precipitation:'Precipitation', rain:'Rain', showers:'Showers', snowfall:'Snowfall',
       precipitation_probability:'Precip. Chance', uv_index:'UV Index', pressure:'Pressure', wind:'Wind + Gust', wind_gust:'Gust',
-      tide_level:'Tidal Stage', tide_range:'Tidal Range', wind_wave:'Wave Height (Chop)', swell:'Swell Height', wave_height:'Wave Height',
+      tide_level:'Tidal Stage', tide_range:'Tidal Range', wind_wave:'Wave Height (Chop)', swell:'Swell Height', wave_height:'Significant Wave Height',
       current:'Forecast Current',
       sst:'Sea-Surface Temp', wave_steepness:'Surface Steepness', ride_harshness:'Ride Harshness', surface_texture:'Surface Texture'
     };
@@ -1347,7 +1364,7 @@
       const waveRisk = Number.isFinite(steepness) && steepness >= 0.07 ? ' · steep' : '';
       const cards = [
         [`${summaryValue(wind,1,' kn')} / ${summaryValue(gust,1,' kn')}`, 'Wind / gust'],
-        [`${summaryValue(hs,1,' ft')}${waveRisk}`, 'Wave Height'],
+        [`${summaryValue(hs,1,' ft')}${waveRisk}`, 'Significant Wave Height'],
         [summaryValue(swell,1,' ft'), 'Swell Height'],
         [Number.isFinite(code) ? (WEATHER_CODE_NAMES[Math.round(code)] || `Code ${Math.round(code)}`) : '—', 'Weather'],
         [summaryValue(visibility,1,' mi'), 'Visibility'],
@@ -1363,7 +1380,7 @@
         primary:['wave_height','swell','wind_wave','wind'],
         detailGroups:{'Sea-state diagnostics':['wave_steepness','ride_harshness','surface_texture'],'Context':['current','visibility','precipitation','pressure']},
         layers:['wave_height','swell','wind_wave','wind','wave_steepness','ride_harshness','surface_texture','current','visibility','precipitation','pressure'],
-        mapFields:[['wave_height_ft','Wave Height'],['swell_height_ft','Swell Height'],['wind_wave_height_ft','Wave Height (Chop)']],
+        mapFields:[['wave_height_ft','Significant Wave Height'],['swell_height_ft','Swell Height'],['wind_wave_height_ft','Wave Height (Chop)']],
         defaults:['wave_height','swell','wind_wave'], heat:'wave_height_ft'
       },
       weather: {
@@ -1377,7 +1394,7 @@
         primary:['sst','current'],
         detailGroups:{'Trip context':['wind','surface_texture','visibility','cloud_cover','tide_level','tide_range'],'Sea state':['wave_height','swell','wind_wave']},
         layers:['sst','current','wind','surface_texture','visibility','cloud_cover','tide_level','tide_range','wave_height','swell','wind_wave'],
-        mapFields:[['sea_surface_temperature_f','Sea-surface temperature'],['wave_height_ft','Significant wave height']],
+        mapFields:[['sea_surface_temperature_f','Sea-surface temperature'],['wave_height_ft','Significant Wave Height']],
         defaults:['sst','current'], heat:'sea_surface_temperature_f'
       },
       tides: {
@@ -3222,8 +3239,8 @@
       const path = [];
       let lon = lon0, lat = lat0;
       let prevU = null, prevV = null;
-      const calmThresholdKn = 2.5;
-      const baseStepDeg = 0.08;
+      const calmThresholdKn = vectorField === 'current' ? 0.05 : 2.5;
+      const baseStepDeg = vectorField === 'current' ? 0.05 : 0.08;
       for (let i = 0; i < 30; i++) {
         if (lon < field.bbox[0] || lon > field.bbox[2] || lat < field.bbox[1] || lat > field.bbox[3]) break;
         path.push([lon, lat]);
