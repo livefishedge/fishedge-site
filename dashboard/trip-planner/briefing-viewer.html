@@ -149,7 +149,7 @@
     #bv-station-popup .bv-briefing-source{ font-size:10px; color:#7a8fa8; margin-bottom:4px; }
     #bv-station-popup .bv-row{ display:flex; justify-content:space-between; gap:8px; font-size:10px; padding-top:3px; }
     #bv-station-popup .bv-row b{ color:#fff; }
-    #bv-wave-readout{ position:fixed; right:12px; bottom:8px; z-index:21; display:none; min-width:220px; max-width:min(300px,calc(100vw - 24px)); padding:8px 10px; background:rgba(5,11,16,.96); border:1px solid #8bd7ff; border-radius:6px; color:#d6e5f2; box-shadow:0 8px 24px rgba(0,0,0,.45); font:11px/1.45 monospace; cursor:grab; }
+    #bv-wave-readout{ position:fixed; right:12px; bottom:8px; z-index:21; display:none; min-width:220px; max-width:min(300px,calc(100vw - 24px)); padding:8px 10px; background:rgba(5,11,16,.96); border:1px solid #8bd7ff; border-radius:6px; color:#d6e5f2; box-shadow:0 8px 24px rgba(0,0,0,.45); font:11px/1.45 monospace; cursor:grab; touch-action:none; }
     #bv-wave-readout.is-collapsed{min-width:0;max-width:190px;padding:5px 8px;font-size:10px;line-height:1.25}
     #bv-wave-readout.is-collapsed .bv-readout-toggle{display:none}
     #bv-wave-readout .bv-readout-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
@@ -183,9 +183,9 @@
 
     .bv-ranges {
       position: fixed; top: 151px; left: 0; right: 0; z-index: 14;
-      background: rgba(5, 11, 16, 0.95);
-      border-top: 1px solid #1b2836;
-      padding: 4px 12px 5px;
+      background: transparent;
+      border: 0;
+      padding: 0;
       pointer-events: none;
     }
     .bv-ranges-title { display:none; }
@@ -230,16 +230,20 @@
     .bv-ranges { top:157px; bottom:auto; }
     .bv-map { top:211px !important; bottom:0; }
     .bv-time, .bv-mode-context { display:none !important; }
-    .bv-active-layer-strip { right:40% !important; flex-wrap:wrap; align-content:flex-start; overflow-y:hidden; min-height:84px; box-sizing:border-box; }
+    .bv-active-layer-strip { right:0 !important; flex-direction:column; align-items:stretch; gap:3px; overflow:hidden; min-height:84px; box-sizing:border-box; }
+    .bv-layer-selector-row { display:flex; align-items:center; gap:5px; min-height:36px; padding-right:40%; overflow:hidden; }
+    .bv-layer-checkbox-row { display:flex; align-items:center; gap:5px; min-height:36px; overflow-x:auto; overflow-y:hidden; scrollbar-width:none; }
+    .bv-layer-checkbox-row::-webkit-scrollbar { display:none; }
     .bv-layer-break { flex-basis:100%; width:0; height:0; }
-    .bv-ranges { left:60%; right:0; width:40%; top:107px; box-sizing:border-box; border-left:1px solid #1b2836; }
-    #bv-wave-key { bottom:8px !important; cursor:grab; }
+    .bv-ranges { left:60%; right:0; width:40%; top:107px; box-sizing:border-box; border:0; }
+    #bv-wave-key { bottom:8px; cursor:grab; touch-action:none; }
     @media(max-width:640px){
       .bv-framebar { top:40px; gap:5px; padding-left:8px; padding-right:8px; }
       .bv-frame-date { top:85px; height:22px; padding-right:8px; font-size:10px; }
       .bv-active-layer-strip { top:107px !important; padding-left:8px; padding-right:8px; }
-      .bv-active-layer-strip { right:40% !important; min-height:84px; overflow-y:hidden; }
-      .bv-ranges { left:60%; right:0; width:40%; top:107px; border-left:1px solid #1b2836; }
+      .bv-active-layer-strip { right:0 !important; min-height:84px; overflow-y:hidden; }
+      .bv-layer-selector-row { padding-right:40%; }
+      .bv-ranges { left:60%; right:0; width:40%; top:107px; border:0; }
       .bv-map { top:195px !important; }
       .bv-details-panel { top:145px; }
       .bv-map-field select { max-width:105px; }
@@ -259,7 +263,7 @@
     <button id="bv-hamburger-btn" aria-label="Open layer menu">☰</button>
   </div>
   <div id="bv-active-layer-strip" class="bv-active-layer-strip" aria-label="Active map layers"></div>
-  <details id="bv-wave-key" hidden style="position:fixed;bottom:100px;left:12px;z-index:19;max-width:min(330px,85vw);padding:7px 10px;border-radius:5px;background:rgba(255,255,255,.94);color:#101820;font:12px/1.5 sans-serif">
+  <details id="bv-wave-key" hidden style="position:fixed;bottom:8px;left:12px;z-index:19;max-width:min(330px,85vw);padding:7px 10px;border-radius:5px;background:rgba(255,255,255,.94);color:#101820;font:12px/1.5 sans-serif">
     <summary>Wave motion · schematic · 2× time</summary>
     <div><b>━ Swell</b> · <b style="color:#ad1762">┄ Wind waves</b> · <b>│ Short chop texture</b><br>
     Crests move toward wave travel. Longer period → faster motion, wider spacing, fewer crests passing.<br>
@@ -1308,6 +1312,9 @@
       const strip = document.getElementById('bv-active-layer-strip');
       if (!strip) return;
       strip.replaceChildren();
+      const selectorRow = document.createElement('div'); selectorRow.className = 'bv-layer-selector-row';
+      const checkboxRow = document.createElement('div'); checkboxRow.className = 'bv-layer-checkbox-row';
+      strip.append(selectorRow, checkboxRow);
       document.getElementById('bv-wave-key').hidden = !(layerVisibility.swell || layerVisibility.wind_wave);
       const preset = PLANNER_PRESETS[activePlannerPreset];
       const label = document.createElement('label'); label.className = 'bv-map-field'; label.append('Color map: ');
@@ -1323,8 +1330,7 @@
       const unit = document.createElement('span'); unit.className = 'bv-map-unit';
       const activeDef = selectedHeatKey ? PRODUCTS[selectedHeatKey] : null;
       unit.textContent = activeDef ? displayUnit(selectedHeatKey, activeDef.unit || '') : '';
-      label.append(unit); strip.append(label);
-      const layerBreak = document.createElement('span'); layerBreak.className = 'bv-layer-break'; strip.append(layerBreak);
+      label.append(unit); selectorRow.append(label);
       function control(key, parent) {
         if (SCALAR_LAYERS[key]) return;
         const label = document.createElement('label'), input = document.createElement('input');
@@ -1337,9 +1343,9 @@
         const label = document.createElement('label'), input = document.createElement('input');
         input.type = 'checkbox'; input.dataset.waveMotion = 'true'; input.checked = layerVisibility.swell && layerVisibility.wind_wave;
         input.indeterminate = !!layerVisibility.swell !== !!layerVisibility.wind_wave;
-        label.append(input, 'Wave motion'); strip.append(label);
+        label.append(input, 'Wave motion'); checkboxRow.append(label);
       }
-      preset.primary.filter(k => activePlannerPreset !== 'sea' || !['swell','wind_wave'].includes(k)).forEach(k => control(k, strip));
+      preset.primary.filter(k => activePlannerPreset !== 'sea' || !['swell','wind_wave'].includes(k)).forEach(k => control(k, checkboxRow));
       const details = document.createElement('details'); details.className = 'bv-layer-details'; details.open = detailsOpen;
       const summary = document.createElement('summary'); summary.textContent = 'Details'; details.append(summary);
       const panel = document.createElement('div'); panel.className = 'bv-details-panel';
@@ -1360,14 +1366,14 @@
         const button = document.createElement('button'); button.type='button'; button.dataset.station='true'; button.textContent='Open station chart'; panel.append(button);
       }
       const note = document.createElement('p'); note.textContent = 'Map choices replace the fill. Current is a regional surface forecast, not inlet-resolving flow.';
-      panel.append(note); details.append(panel); strip.append(details);
+      panel.append(note); details.append(panel); checkboxRow.append(details);
       details.addEventListener('toggle', () => { if(details.isConnected) detailsOpen=details.open; });
       if (activePlannerPreset === 'tides') {
-        const button=document.createElement('button');button.type='button';button.dataset.station='true';button.textContent='Station chart';strip.append(button);
+        const button=document.createElement('button');button.type='button';button.dataset.station='true';button.textContent='Station chart';checkboxRow.append(button);
       }
-      const reset=document.createElement('button');reset.type='button';reset.dataset.resetView='true';reset.textContent='Reset view';strip.append(reset);
+      const reset=document.createElement('button');reset.type='button';reset.dataset.resetView='true';reset.textContent='Reset view';checkboxRow.append(reset);
       for (const key of preset.layers.filter(k => !SCALAR_LAYERS[k] && layerVisibility[k] && !preset.primary.includes(k))) {
-        const chip=document.createElement('button');chip.type='button';chip.dataset.removeLayer=key;chip.textContent=(LAYER_LABELS[key]||key)+' ×';strip.append(chip);
+        const chip=document.createElement('button');chip.type='button';chip.dataset.removeLayer=key;chip.textContent=(LAYER_LABELS[key]||key)+' ×';checkboxRow.append(chip);
       }
     }
     function setupActiveLayerStrip() {

@@ -70,8 +70,8 @@ const url = process.env.PLANNER_URL || 'http://127.0.0.1:8766/trip-planner/brief
     const readoutAfterDrag = await page.locator('#bv-wave-readout').boundingBox();
     assert(readoutAfterDrag.x !== readoutBeforeDrag.x || readoutAfterDrag.y !== readoutBeforeDrag.y,'lat/lon readout is draggable');
     const desktopRanges = await page.locator('.bv-ranges').boundingBox();
-    const desktopStrip = await page.locator('#bv-active-layer-strip').boundingBox();
-    assert(desktopRanges.x >= desktopStrip.x + desktopStrip.width - 2,'desktop colorbar is to the right of layer controls');
+    const desktopSelectorRow = await page.locator('.bv-layer-selector-row').boundingBox();
+    assert(desktopRanges.x >= desktopSelectorRow.x + desktopSelectorRow.width * .55,'desktop colorbar is to the right of selector row');
     await page.locator('[data-preset=tides]').click();
     assert.equal(await select().inputValue(),'','Tides opens station-first');
     await page.waitForTimeout(250);
@@ -97,9 +97,10 @@ const url = process.env.PLANNER_URL || 'http://127.0.0.1:8766/trip-planner/brief
     const framebar = await page.locator('.bv-framebar').boundingBox();
     const dateRow = await page.locator('.bv-frame-date').boundingBox();
     const activeStrip = await page.locator('#bv-active-layer-strip').boundingBox();
+    const selectorRow = await page.locator('.bv-layer-selector-row').boundingBox();
     assert(framebar.y + framebar.height <= dateRow.y + 1,'playback row precedes forecast date row');
     assert(dateRow.y + dateRow.height <= activeStrip.y + 1,'forecast date row precedes layer row');
-    assert(ranges.x >= activeStrip.x + activeStrip.width - 2 && Math.abs(ranges.y - activeStrip.y) < 2,'colorbar shares the selector row');
+    assert(ranges.x >= selectorRow.x + selectorRow.width * .55 && Math.abs(ranges.y - selectorRow.y) < 4,'colorbar shares the selector row');
     assert(!/Color map:/.test(await page.locator('.bv-ranges-title').innerText()),'colorbar has no duplicate Color map label');
     await page.screenshot({path:'/tmp/planner-audit-mobile.png'});
     assert.deepEqual(errors,[]);
