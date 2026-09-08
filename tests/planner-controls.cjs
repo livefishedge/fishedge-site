@@ -34,6 +34,12 @@ const url = process.env.PLANNER_URL || 'http://127.0.0.1:8766/trip-planner/brief
     await page.locator('[data-preset=sea]').click();
     await select().selectOption('wave_height_ft');
     await page.locator('[data-wave-motion]').check();
+    const waveKey = page.locator('#bv-wave-key');
+    const waveKeyBefore = await waveKey.boundingBox();
+    await page.mouse.move(waveKeyBefore.x + 60, waveKeyBefore.y + 10);
+    await page.mouse.down(); await page.mouse.move(waveKeyBefore.x + 90, waveKeyBefore.y + 25); await page.mouse.up();
+    const waveKeyAfter = await waveKey.boundingBox();
+    assert(waveKeyAfter.x !== waveKeyBefore.x || waveKeyAfter.y !== waveKeyBefore.y,'Wave Motion card is draggable');
     const waveFrame = async()=>page.evaluate(()=>{const c=document.querySelector('.bv-streamlines-canvas'),d=c.getContext('2d').getImageData(0,0,c.width,c.height).data;let s=0;for(let i=0;i<d.length;i+=4){const p=i/4;s=(s+(p%997)*d[i+3]+d[i]*3+d[i+1]*5+d[i+2]*7)%1000000007}return s});
     await page.waitForTimeout(900); const waveBefore=await waveFrame(); await page.waitForTimeout(650); const waveAfter=await waveFrame();
     assert(waveBefore>0 && waveAfter>0 && waveBefore!==waveAfter,'wave motion changes rendered crests');
@@ -93,7 +99,7 @@ const url = process.env.PLANNER_URL || 'http://127.0.0.1:8766/trip-planner/brief
     const activeStrip = await page.locator('#bv-active-layer-strip').boundingBox();
     assert(framebar.y + framebar.height <= dateRow.y + 1,'playback row precedes forecast date row');
     assert(dateRow.y + dateRow.height <= activeStrip.y + 1,'forecast date row precedes layer row');
-    assert(activeStrip.y + activeStrip.height <= ranges.y + 1,'layer row precedes colorbar');
+    assert(ranges.x >= activeStrip.x + activeStrip.width - 2 && Math.abs(ranges.y - activeStrip.y) < 2,'colorbar shares the selector row');
     assert(!/Color map:/.test(await page.locator('.bv-ranges-title').innerText()),'colorbar has no duplicate Color map label');
     await page.screenshot({path:'/tmp/planner-audit-mobile.png'});
     assert.deepEqual(errors,[]);

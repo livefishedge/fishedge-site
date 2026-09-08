@@ -238,10 +238,11 @@
       .bv-framebar { top:40px; gap:5px; padding-left:8px; padding-right:8px; }
       .bv-frame-date { top:85px; height:22px; padding-right:8px; font-size:10px; }
       .bv-active-layer-strip { top:107px !important; padding-left:8px; padding-right:8px; }
-      .bv-active-layer-strip { right:0 !important; min-height:84px; overflow-y:hidden; }
-      .bv-ranges { left:0; right:0; width:auto; top:193px; border-left:0; }
-      .bv-map { top:247px !important; }
+      .bv-active-layer-strip { right:40% !important; min-height:84px; overflow-y:hidden; }
+      .bv-ranges { left:60%; right:0; width:40%; top:107px; border-left:1px solid #1b2836; }
+      .bv-map { top:195px !important; }
       .bv-details-panel { top:145px; }
+      .bv-map-field select { max-width:105px; }
     }
   </style>
 </head>
@@ -988,7 +989,8 @@
       let startX = 0, startY = 0, originLeft = 0, originTop = 0, moved = false;
       element.addEventListener('pointerdown', event => {
         if (event.button !== undefined && event.button !== 0) return;
-        if (event.target.closest?.('.bv-readout-toggle, summary, button, input, select')) return;
+        const interactive = event.target.closest?.('.bv-readout-toggle, button, input, select');
+        if (interactive || (element.id !== 'bv-wave-key' && event.target.closest?.('summary'))) return;
         const rect = element.getBoundingClientRect();
         startX = event.clientX; startY = event.clientY;
         originLeft = rect.left; originTop = rect.top; moved = false;
