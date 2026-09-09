@@ -81,6 +81,7 @@
     .bv-top-modes .bv-preset:hover,.bv-top-modes .bv-preset.active{ background:#17456a; border-color:#4fc3f7; color:#fff; }
     .bv-top-modes .bv-preset small{ display:none; }
     .bv-active-layer-strip{ position:fixed; top:44px; left:0; right:0; z-index:2100; display:flex; align-items:center; gap:5px; min-height:28px; padding:3px 12px; overflow-x:auto; background:rgba(5,11,16,.9); border-bottom:1px solid rgba(255,255,255,.12); scrollbar-width:none; }
+    .bv-active-layer-strip[hidden]{ display:none !important; }
     .bv-active-layer-strip::-webkit-scrollbar{ display:none; }
     .bv-active-layer-strip label{ display:flex; align-items:center; gap:4px; flex:0 0 auto; padding:3px 6px; border:1px solid rgba(79,195,247,.35); border-radius:4px; background:rgba(19,35,51,.82); color:#d6e5f2; font-size:10px; font-weight:800; white-space:nowrap; cursor:pointer; }
     .bv-active-layer-strip input{ width:12px; height:12px; margin:0; accent-color:#4fc3f7; }
@@ -107,7 +108,10 @@
     .bv-mode-context{ position:fixed; top:73px; left:0; right:0; z-index:20; display:none; align-items:center; gap:8px; min-height:24px; padding:3px 12px; overflow-x:auto; background:rgba(5,11,16,.82); border-bottom:1px solid rgba(255,255,255,.08); color:#d6e5f2; font:700 10px monospace; white-space:nowrap; }
     .bv-mode-context.visible{ display:flex; }
     .bv-mode-context span{ padding:2px 5px; border:1px solid rgba(255,255,255,.18); border-radius:3px; }
-    #bv-side-panel{ display:none; }
+    #bv-side-panel{ display:flex; flex-direction:column; gap:8px; font-size:11px; color:#d6e5f2; }
+    .bv-moon-mode-panel{ position:fixed; top:76px; right:12px; z-index:2201; width:min(300px,calc(100vw - 24px)); max-height:calc(100dvh - 120px); overflow:auto; padding:7px 10px; background:rgba(5,11,16,.96); border:1px solid #4fc3f7; border-radius:7px; box-shadow:0 8px 24px rgba(0,0,0,.5); color:#d6e5f2; }
+    .bv-moon-mode-panel:not([open]){ display:none; }
+    .bv-moon-mode-panel summary{ cursor:pointer; color:#fff; font-size:11px; font-weight:800; letter-spacing:.04em; }
     #bv-menu-panel .bv-preset{ border:1px solid #2a3a4d; border-radius:6px; padding:7px 6px; background:#132333; color:#d6e5f2; font:700 11px/1.1 inherit; cursor:pointer; text-align:left; }
     #bv-menu-panel .bv-preset:hover,#bv-menu-panel .bv-preset.active{ background:#17456a; border-color:#4fc3f7; color:#fff; }
     #bv-menu-panel .bv-preset small{ display:block; margin-top:3px; color:#8fa6bb; font-size:9px; font-weight:600; }
@@ -118,18 +122,7 @@
     #bv-menu-panel .bv-home{ display:block; margin-top:auto; padding:8px 10px; border-top:1px solid rgba(255,255,255,.12); color:#4fc3f7; text-decoration:none; font-size:12px; font-weight:800; text-align:center; }
     #bv-menu-panel .bv-home:hover{ background:rgba(77,125,255,.12); color:#fff; }
 
-    /* Briefing details live inside the hamburger menu so the map remains
-       unobstructed. */
-    #bv-side-panel{
-      position:static;
-      width:auto;
-      display:flex; flex-direction:column; gap:8px;
-      padding:0;
-      background:transparent; border:0; border-radius:0;
-      box-shadow:none; backdrop-filter:none;
-      font-size:11px; color:#d6e5f2;
-      max-height:none; overflow:visible;
-    }
+    /* Moon and sun details live in their own mode dropdown. */
     #bv-side-panel h3{ margin:0 0 4px 0; font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:#7a8fa8; font-weight:800; }
     #bv-side-panel .bv-row{ display:flex; justify-content:space-between; align-items:center; gap:8px; padding:3px 0; }
     #bv-side-panel .bv-row b{ color:#fff; font-weight:700; }
@@ -154,6 +147,9 @@
     #bv-wave-readout.is-collapsed .bv-readout-toggle{display:none}
     #bv-wave-readout .bv-readout-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
     #bv-wave-readout .bv-readout-toggle{border:1px solid #55758c;border-radius:3px;background:#132333;color:#d6e5f2;cursor:pointer;font:700 12px monospace;padding:0 4px}
+    #bv-wave-readout .bv-readout-body{ display:grid; gap:4px; margin-top:5px; }
+    #bv-wave-readout .bv-readout-time{ color:#9fb0c3; font-size:9px; padding-bottom:2px; border-bottom:1px solid rgba(255,255,255,.12); }
+    #bv-wave-readout .bv-readout-body > div:not(.bv-readout-time){ padding:5px 6px; border:1px solid rgba(255,255,255,.1); border-radius:5px; background:rgba(19,35,51,.65); }
     #bv-click-marker{width:8px;height:8px;border:1px solid #fff;border-radius:50%;box-shadow:0 0 0 1px #e91e63,0 0 6px #000;transform:translate(-50%,-50%);pointer-events:none;display:none}
     #bv-wave-readout b{ color:#fff; }
     .dot-temp { background: #ff8c00; }
@@ -165,10 +161,11 @@
 
     .bv-framebar {
       position: fixed; top: 44px; left: 0; right: 0; z-index: 15;
-      display: flex; align-items: center; gap: 10px;
+      display: flex; flex-direction:column; align-items:stretch; gap:2px;
       padding: 6px 14px; background: rgba(5, 11, 16, 0.95);
       border-top: 1px solid #1b2836;
     }
+    .bv-frame-controls { display:flex; align-items:center; gap:10px; min-width:0; }
     .bv-framebar button {
       background: #1b2836; color: #b3e5fc; border: 1px solid #2a3a4d;
       width: 32px; height: 32px; border-radius: 4px; font-size: 16px; cursor: pointer;
@@ -178,8 +175,8 @@
     .bv-framebar button.playing { background: #4fc3f7; color: #050b10; border-color: #4fc3f7; }
     #bv-slider { flex: 1; min-width: 100px; accent-color: #4fc3f7; height: 6px; }
     #bv-speed { width: 52px; height: 30px; padding: 0 2px; background: #1b2836; color: #b3e5fc; border: 1px solid #2a3a4d; border-radius: 4px; font: 700 11px monospace; }
-    .bv-frame-label { font-size: 12px; color: #e3f2fd; font-family: monospace; min-width: 140px; text-align: right; }
-    .bv-frame-date { position:fixed; top:83px; left:0; right:0; z-index:15; height:24px; display:flex; align-items:center; justify-content:flex-end; padding:0 14px; box-sizing:border-box; background:rgba(5,11,16,.95); border-top:1px solid #1b2836; color:#e3f2fd; font:11px monospace; }
+    .bv-frame-label { display:flex; justify-content:flex-end; font-size: 11px; color: #e3f2fd; font-family: monospace; min-width: 0; text-align: right; }
+    .bv-frame-date { display:flex; align-items:center; justify-content:flex-end; padding:0 2px 2px; box-sizing:border-box; color:#e3f2fd; font:11px monospace; }
 
     .bv-ranges {
       position: fixed; top: 151px; left: 0; right: 0; z-index: 14;
@@ -192,8 +189,13 @@
     .bv-ranges-title b { color: #e3f2fd; font-weight: 600; }
     #bv-cbar { width: 100%; height: 22px; display:block; }
     .bv-ranges-ticks { display: flex; justify-content: space-between; font-size: 9px; line-height: 1; color: #9fb0c3; font-family: monospace; margin-top: 1px; }
+    .bv-map-field-shell{ align-items:center; max-width:none; overflow:visible; }
+    .bv-map-field-shell .bv-ranges{ position:static; display:flex; align-items:center; gap:5px; width:min(40vw,360px); min-width:140px; margin-left:4px; pointer-events:auto; }
+    .bv-map-field-shell .bv-ranges #bv-cbar{ flex:1 1 auto; min-width:0; width:auto; height:18px; }
+    .bv-map-field-shell .bv-ranges .bv-ranges-ticks{ flex:0 0 102px; margin-top:0; }
 
     .bv-map { position: absolute; top: 195px; left: 0; right: 0; bottom: 0; touch-action: none; }
+    body.bv-moon-active .bv-map{ top:113px !important; }
     .bv-flow-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 4; mix-blend-mode: screen; }
     .bv-streamlines-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3; }
     .bv-tide-overlay-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 6; mix-blend-mode: normal; }
@@ -215,7 +217,8 @@
       .bv-active-layer-strip{ top:42px; padding-left:8px; padding-right:8px; }
       .bv-products button { font-size: 11px; padding: 3px 6px; }
       .bv-map { top:72px; bottom:108px; }
-      .bv-framebar { gap: 5px; padding-left: 8px; padding-right: 8px; }
+      .bv-framebar { gap: 2px; padding-left: 8px; padding-right: 8px; }
+      .bv-frame-controls { gap:5px; }
       #bv-slider { min-width: 60px; }
       #bv-speed { width: 48px; }
       .bv-frame-label { min-width: auto; font-size: 10px; }
@@ -225,25 +228,25 @@
        forecast time, layer controls, then the colorbar. They must not overlap
        the map or one another on small screens. */
     .bv-framebar { top:44px; bottom:auto; }
-    .bv-frame-date { top:89px; }
+    .bv-frame-date { top:auto; }
     .bv-active-layer-strip { top:113px !important; }
-    .bv-ranges { top:157px; bottom:auto; }
+    .bv-ranges { top:auto; bottom:auto; }
     .bv-map { top:211px !important; bottom:0; }
     .bv-time, .bv-mode-context { display:none !important; }
     .bv-active-layer-strip { right:0 !important; flex-direction:column; align-items:stretch; gap:3px; overflow:hidden; min-height:84px; box-sizing:border-box; }
-    .bv-layer-selector-row { display:flex; align-items:center; gap:5px; min-height:36px; padding-right:40%; overflow:hidden; }
+    .bv-layer-selector-row { display:flex; align-items:center; gap:5px; width:430px; max-width:calc(100vw - 16px); min-height:36px; overflow:visible; }
     .bv-layer-checkbox-row { display:flex; align-items:center; gap:5px; min-height:36px; overflow-x:auto; overflow-y:hidden; scrollbar-width:none; }
     .bv-layer-checkbox-row::-webkit-scrollbar { display:none; }
     .bv-layer-break { flex-basis:100%; width:0; height:0; }
-    .bv-ranges { left:60%; right:0; width:40%; top:107px; box-sizing:border-box; border:0; z-index:2101; }
+    .bv-ranges { box-sizing:border-box; border:0; z-index:2101; }
     #bv-wave-key { bottom:8px; cursor:grab; touch-action:none; }
     @media(max-width:640px){
-      .bv-framebar { top:40px; gap:5px; padding-left:8px; padding-right:8px; }
-      .bv-frame-date { top:85px; height:22px; padding-right:8px; font-size:10px; }
+      .bv-framebar { top:40px; gap:2px; padding-left:8px; padding-right:8px; }
+      .bv-frame-date { height:18px; padding-right:0; font-size:10px; }
       .bv-active-layer-strip { top:107px !important; padding-left:8px; padding-right:8px; }
       .bv-active-layer-strip { right:0 !important; min-height:84px; overflow-y:hidden; }
-      .bv-layer-selector-row { padding-right:40%; }
-      .bv-ranges { left:60%; right:0; width:40%; top:107px; border:0; z-index:2101; }
+      .bv-layer-selector-row { width:360px; max-width:calc(100vw - 16px); overflow:visible; }
+      .bv-map-field-shell .bv-ranges{ width:183px; min-width:183px; }
       .bv-map { top:195px !important; }
       .bv-details-panel { top:145px; }
       .bv-map-field select { max-width:105px; }
@@ -253,10 +256,11 @@
 <body>
   <div class="bv-toolbar">
     <div class="bv-top-modes" id="bv-top-modes" aria-label="Planning view">
-      <button class="bv-preset active" type="button" data-preset="sea" title="Sea state: wave height, swell, chop, steepness, and ride harshness" aria-label="Sea State">Sea State</button>
       <button class="bv-preset" type="button" data-preset="weather" title="Weather: visibility, precipitation, crew exposure, clouds, and pressure" aria-label="Weather">Weather</button>
-      <button class="bv-preset" type="button" data-preset="fishing" title="Currents: SST, forecast current, and surface height when available" aria-label="Currents">Currents</button>
+      <button class="bv-preset active" type="button" data-preset="sea" title="Sea state: wave height, swell, chop, steepness, and ride harshness" aria-label="Sea State">Sea State</button>
       <button class="bv-preset" type="button" data-preset="tides" title="Tides: tidal stage and tidal range" aria-label="Tides">Tides</button>
+      <button class="bv-preset" type="button" data-preset="fishing" title="Currents: SST, forecast current, and surface height when available" aria-label="Currents">Currents</button>
+      <button class="bv-preset" type="button" data-preset="moon" title="Moon and sun: phase, illumination, sunrise, and sunset" aria-label="Moon">Moon</button>
     </div>
     <div class="bv-time" id="bv-time" hidden aria-hidden="true"></div>
     <button id="bv-hamburger-btn" aria-label="Open layer menu">☰</button>
@@ -307,14 +311,13 @@
         </div>
       </div>
     </div>
-    <div class="bv-section" aria-live="polite">
-      <div class="bv-section-title">Current conditions</div>
-      <div class="bv-conditions" id="bv-conditions">
-        <div class="bv-condition"><b>—</b><span>Loading frame</span></div>
-      </div>
-    </div>
     <div class="bv-status" id="bv-menu-status"></div>
-    <div id="bv-side-panel" aria-label="Tide and moon briefing">
+    <a class="bv-home" href="/">Home</a>
+  </div>
+
+  <details id="bv-moon-mode-panel" class="bv-moon-mode-panel" hidden aria-label="Moon and sun briefing">
+    <summary>Moon &amp; Sun</summary>
+    <div id="bv-side-panel">
     <div class="bv-section">
       <h3>Moon</h3>
       <svg id="bv-moon-svg" viewBox="0 0 200 110" role="img" aria-label="Moon phase visualization"></svg>
@@ -329,8 +332,7 @@
       <div class="bv-row"><span>Sunset</span><b id="bv-sun-set">—</b></div>
     </div>
     </div>
-    <a class="bv-home" href="/">Home</a>
-  </div>
+  </details>
 
   <div id="bv-map" class="bv-map"></div>
   <div id="bv-wave-readout" role="status" aria-live="polite"><div class="bv-readout-head"><span data-readout-title>Forecast sample</span><button class="bv-readout-toggle" type="button" aria-expanded="true" aria-label="Shrink readout">−</button></div><div data-readout-body></div></div>
@@ -346,6 +348,8 @@
   </div>
 
   <div class="bv-framebar">
+    <div class="bv-frame-date"><span class="bv-frame-label" id="bv-frame-label">—</span></div>
+    <div class="bv-frame-controls">
     <button id="bv-prev" aria-label="Previous frame">‹</button>
     <button id="bv-play" aria-label="Play">▶</button>
     <input id="bv-slider" type="range" min="0" max="0" step="1" value="0" aria-label="Frame">
@@ -356,8 +360,8 @@
       <option value="2">2×</option>
       <option value="4">4×</option>
     </select>
+    </div>
   </div>
-  <div class="bv-frame-date"><span class="bv-frame-label" id="bv-frame-label">—</span></div>
 
   <div class="bv-ranges">
     <div class="bv-ranges-title">
@@ -1080,7 +1084,7 @@
       }
       if (!rows.length) rows.push('<div>No checked layer data at this location</div>');
       waveReadout.querySelector('[data-readout-title]').textContent = `${formatCoordinate(lon, 'E', 'W')}, ${formatCoordinate(lat, 'N', 'S')}`;
-      readoutBody.innerHTML = `${timeLabel} · forecast<br>${rows.join('')}`;
+      readoutBody.innerHTML = `<div class="bv-readout-time">${timeLabel} · forecast</div>${rows.join('')}`;
       waveReadout.style.display = 'block';
     }
     const stationMarkerOverlays = [];
@@ -1309,13 +1313,16 @@
     function renderActiveLayerStrip() {
       const strip = document.getElementById('bv-active-layer-strip');
       if (!strip) return;
+      const isMoon = activePlannerPreset === 'moon';
+      strip.hidden = isMoon;
+      const ranges = document.querySelector('.bv-ranges');
       strip.replaceChildren();
       const selectorRow = document.createElement('div'); selectorRow.className = 'bv-layer-selector-row';
       const checkboxRow = document.createElement('div'); checkboxRow.className = 'bv-layer-checkbox-row';
       strip.append(selectorRow, checkboxRow);
       document.getElementById('bv-wave-key').hidden = !(layerVisibility.swell || layerVisibility.wind_wave);
       const preset = PLANNER_PRESETS[activePlannerPreset];
-      const label = document.createElement('label'); label.className = 'bv-map-field'; label.append('Color map: ');
+      const label = document.createElement('label'); label.className = 'bv-map-field bv-map-field-shell'; label.append('Color map: ');
       const select = document.createElement('select'); select.dataset.mapField = 'true';
       const fields = new Set([...preset.mapFields.map(pair => pair[0]), ...preset.layers.map(k => SCALAR_LAYERS[k]).filter(Boolean), selectedHeatKey].filter(Boolean));
       select.add(new Option('None', ''));
@@ -1328,7 +1335,9 @@
       const unit = document.createElement('span'); unit.className = 'bv-map-unit';
       const activeDef = selectedHeatKey ? PRODUCTS[selectedHeatKey] : null;
       unit.textContent = activeDef ? displayUnit(selectedHeatKey, activeDef.unit || '') : '';
-      label.append(unit); selectorRow.append(label);
+      label.append(unit);
+      if (ranges) label.append(ranges);
+      selectorRow.append(label);
       function control(key, parent) {
         if (SCALAR_LAYERS[key]) return;
         const label = document.createElement('label'), input = document.createElement('input');
@@ -1464,6 +1473,9 @@
         mapFields:[['visibility_mi','Visibility'],['precipitation_probability_pct','Precipitation chance'],['temperature_f','Air temperature'],['apparent_temperature_f','Feels Like'],['relative_humidity_pct','Humidity'],['cloud_cover_pct','Cloud cover'],['pressure_hpa','Pressure']],
         defaults:['visibility'], heat:'visibility_mi'
       },
+      moon: {
+        primary:[], detailGroups:{}, layers:[], mapFields:[], defaults:[], heat:null
+      },
       fishing: {
         primary:['sst','current','surface_height'],
         detailGroups:{},
@@ -1484,6 +1496,12 @@
       if (!preset) return;
       if (!reset) viewSettings[activePlannerPreset] = {layers:{...layerVisibility}, heat:selectedHeatKey};
       activePlannerPreset = name; detailsOpen = false;
+      document.body.classList.toggle('bv-moon-active', name === 'moon');
+      const moonPanel = document.getElementById('bv-moon-mode-panel');
+      if (moonPanel) {
+        moonPanel.hidden = name !== 'moon';
+        moonPanel.open = name === 'moon';
+      }
       // Station popups are an Inlets interaction; close the stop-event
       // overlay when returning to a map-oriented view.
       if (name !== 'tides') { stationPopup.style.display = 'none'; stationOverlay.setPosition(undefined); }
@@ -1758,6 +1776,10 @@
       if (!scalarKey) {
         // With both partition layers selected there is deliberately no wave
         // scalar heat field, so do not leave a colorbar that implies one.
+        ranges.style.display = 'none';
+        return;
+      }
+      if (activePlannerPreset === 'moon') {
         ranges.style.display = 'none';
         return;
       }
