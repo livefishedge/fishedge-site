@@ -1415,6 +1415,9 @@
     let selectedHeatKey = 'wave_height_ft';
     const particles = [];
     const currentParticles = [];
+    // Display multiplier only: forecast current values/readouts remain in
+    // physical units, while slow modeled currents remain visually legible.
+    const CURRENT_VISUAL_SPEED_MULTIPLIER = 5;
     const gustParticles = [];
 
     function hasVisibleRasterVariable() {
@@ -3860,7 +3863,7 @@
               continue;
             }
             const cosLat = Math.cos(p.lat * Math.PI / 180);
-            const dt = vec.speed * 0.00035;
+            const dt = vec.speed * 0.00035 * CURRENT_VISUAL_SPEED_MULTIPLIER;
             const oldLon = p.lon, oldLat = p.lat;
             p.lon += (vec.u / vec.speed) * dt / cosLat;
             p.lat += (vec.v / vec.speed) * dt;
