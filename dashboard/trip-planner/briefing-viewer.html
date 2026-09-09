@@ -3589,9 +3589,10 @@
       if (!currentFrame || !forecastData) return;
       resizeOverlayCanvases();
       const dpr = flowCanvas.width / mapEl.clientWidth;
-      if (!preserveCanvas) flowCtx.clearRect(0, 0, flowCanvas.width, flowCanvas.height);
-      flowCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
       const contourKey = requestedKey || (currentProduct === 'surface_height_m' ? 'surface_height_m' : 'pressure_hpa');
+      const contourCtx = contourKey === 'surface_height_m' ? streamlineCtx : flowCtx;
+      if (!preserveCanvas) contourCtx.clearRect(0, 0, flowCanvas.width, flowCanvas.height);
+      contourCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
       const sourceGrid = currentFrame[contourKey];
       if (!Array.isArray(sourceGrid)) return;
       const finiteSurface = contourKey === 'surface_height_m'
@@ -3618,10 +3619,10 @@
         : ((vmax - vmin) < 10 ? 1 : 2);
       const levels = [];
       for (let v = Math.ceil(vmin / step) * step; v <= vmax; v += step) levels.push(v);
-      flowCtx.strokeStyle = contourKey === 'surface_height_m' ? 'rgba(255, 220, 110, 0.88)' : 'rgba(255, 255, 255, 0.55)';
-      flowCtx.lineWidth = 0.8;
-      flowCtx.font = '9px monospace';
-      flowCtx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+      contourCtx.strokeStyle = contourKey === 'surface_height_m' ? 'rgba(255, 220, 110, 0.88)' : 'rgba(255, 255, 255, 0.55)';
+      contourCtx.lineWidth = 0.8;
+      contourCtx.font = '9px monospace';
+      contourCtx.fillStyle = 'rgba(255, 255, 255, 0.7)';
       const toPxX = lon => map.getPixelFromCoordinate(ol.proj.fromLonLat([lon, lats[0]], mapProjection))?.[0];
       const toPxY = lat => map.getPixelFromCoordinate(ol.proj.fromLonLat([lons[0], lat], mapProjection))?.[1];
       const xMin = toPxX(lons[0]), xMax = toPxX(lons[nx-1]);
@@ -3660,17 +3661,17 @@
             if (edges.length >= 2) cellPoints.push(edges);
           }
         }
-        flowCtx.beginPath();
+        contourCtx.beginPath();
         for (const seg of cellPoints) {
-          flowCtx.moveTo(seg[0][0], seg[0][1]);
-          flowCtx.lineTo(seg[1][0], seg[1][1]);
+          contourCtx.moveTo(seg[0][0], seg[0][1]);
+          contourCtx.lineTo(seg[1][0], seg[1][1]);
         }
-        flowCtx.stroke();
+        contourCtx.stroke();
         // label every 4th level
         if (cellPoints.length && (contourKey === 'surface_height_m' || level % 4 === 0) && cellPoints[0][0]) {
           const [lx, ly] = cellPoints[0][0];
           const unitKey = contourKey === 'surface_height_m' ? 'surface_height_m' : 'pressure_hpa';
-          flowCtx.fillText(`${level.toFixed(contourKey === 'surface_height_m' ? 2 : (unitModes.pressure_hpa === 'imperial' ? 2 : 0))} ${displayUnit(unitKey, contourKey === 'surface_height_m' ? 'm' : 'hPa')}`, lx + 2, ly - 2);
+          contourCtx.fillText(`${level.toFixed(contourKey === 'surface_height_m' ? 2 : (unitModes.pressure_hpa === 'imperial' ? 2 : 0))} ${displayUnit(unitKey, contourKey === 'surface_height_m' ? 'm' : 'hPa')}`, lx + 2, ly - 2);
         }
       }
     }
@@ -3743,7 +3744,7 @@
       if (!forecastData || !mapEl) return;
       const rect = mapEl.getBoundingClientRect();
       const area = Math.max(1, rect.width * rect.height);
-      const target = Math.max(500, Math.min(2200, Math.round(area / 500)));
+      const target = Math.max(5000, Math.min(22000, Math.round(area / 50)));
       let attempts = 0;
       while (currentParticles.length < target && attempts++ < target * 20) {
         const lon = bbox[0] + Math.random() * (bbox[2] - bbox[0]);

@@ -24,5 +24,5 @@ assert(html.includes("mapFields:[['sea_surface_temperature_f','Sea-surface tempe
 assert(html.includes('const currentParticles = []'), 'currents must have an animated particle layer');
 assert(html.includes('const dt = vec.speed * 0.00035'), 'current particles must move slower than wind particles');
 assert(html.includes('currentParticleColor'), 'current particles must use SST-origin tinting');
-assert(html.includes('Math.max(500, Math.min(2200'), 'current particles must be dense enough to read');
+assert(html.includes('Math.max(5000, Math.min(22000'), 'current particles must be 10x denser');
 console.log('PASS: planner scale, labels, gust behavior, and progressive-detail contracts');
