@@ -1415,7 +1415,6 @@
     let selectedHeatKey = 'wave_height_ft';
     const particles = [];
     const currentParticles = [];
-    const currentWaterSeeds = [];
     // Display multiplier only: forecast current values/readouts remain in
     // physical units, while slow modeled currents remain visually legible.
     const CURRENT_VISUAL_SPEED_MULTIPLIER = 10;
@@ -3746,30 +3745,23 @@
     function seedCurrentParticles() {
       currentParticles.length = 0;
       if (!forecastData || !mapEl) return;
-      if (!currentWaterSeeds.length) {
-        const lons = forecastData.lons || [], lats = forecastData.lats || [];
-        for (let yi = 1; yi < lats.length - 1; yi++) for (let xi = 1; xi < lons.length - 1; xi++) {
-          if (isCurrentWaterPoint(lons[xi], lats[yi])) currentWaterSeeds.push([lons[xi], lats[yi]]);
-        }
-      }
-      if (!currentWaterSeeds.length) return;
       const rect = mapEl.getBoundingClientRect();
       const area = Math.max(1, rect.width * rect.height);
-      // Tenfold visual density over the original ~500 mobile seeds, bounded
-      // so mode switches remain responsive on constrained devices.
-      const target = Math.max(2500, Math.min(5000, Math.round(area / 100)));
-      for (let i = 0; i < target; i++) {
-        const seed = currentWaterSeeds[Math.floor(Math.random() * currentWaterSeeds.length)];
-        const lon = seed[0] + (Math.random() - 0.5) * 0.12;
-        const lat = seed[1] + (Math.random() - 0.5) * 0.12;
+      const target = Math.max(5000, Math.min(22000, Math.round(area / 50)));
+      let attempts = 0;
+      while (currentParticles.length < target && attempts++ < target * 20) {
+        const lon = bbox[0] + Math.random() * (bbox[2] - bbox[0]);
+        const lat = bbox[1] + Math.random() * (bbox[3] - bbox[1]);
+        if (!isCurrentWaterPoint(lon, lat)) continue;
         currentParticles.push({lon, lat, age: Math.random() * 180, maxAge: 220 + Math.random() * 240});
       }
     }
 
     function randomCurrentParticle() {
-      if (currentWaterSeeds.length) {
-        const seed = currentWaterSeeds[Math.floor(Math.random() * currentWaterSeeds.length)];
-        return {lon: seed[0], lat: seed[1], age: 0, maxAge: 220 + Math.random() * 240};
+      for (let attempt = 0; attempt < 40; attempt++) {
+        const lon = bbox[0] + Math.random() * (bbox[2] - bbox[0]);
+        const lat = bbox[1] + Math.random() * (bbox[3] - bbox[1]);
+        if (isCurrentWaterPoint(lon, lat)) return {lon, lat, age: 0, maxAge: 220 + Math.random() * 240};
       }
       return {lon: bbox[0], lat: bbox[1], age: 0, maxAge: 1};
     }

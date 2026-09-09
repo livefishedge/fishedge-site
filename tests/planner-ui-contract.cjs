@@ -25,6 +25,5 @@ assert(html.includes('const currentParticles = []'), 'currents must have an anim
 assert(html.includes('const dt = vec.speed * 0.00035'), 'current particles must move slower than wind particles');
 assert(html.includes('CURRENT_VISUAL_SPEED_MULTIPLIER = 10'), 'current particle display speed must be exaggerated 10x');
 assert(html.includes('currentParticleColor'), 'current particles must use SST-origin tinting');
-assert(html.includes('Math.max(2500, Math.min(5000'), 'current particles must be substantially denser');
-assert(html.includes('const currentWaterSeeds = []'), 'current particle seeds must be cached');
+assert(html.includes('Math.max(5000, Math.min(22000'), 'current particles must be substantially denser');
 console.log('PASS: planner scale, labels, gust behavior, and progressive-detail contracts');
