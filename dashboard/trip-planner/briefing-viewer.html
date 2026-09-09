@@ -449,7 +449,7 @@
       sea_surface_temperature_f: { name: 'Sea-surface temperature', unit: '°F', scale: 'SST', viz: 'heat', dataKey: 'sea_surface_temperature_f', dynamicRange: false, fixedRange: [40, 90] },
       wave_steepness: { name: 'Surface Steepness', unit: 'Sₛ', scale: 'ALERT', viz: 'heat', dataKey: 'wave_steepness', dynamicRange: false, fixedRange: [0, 0.10] },
       ride_harshness_index: { name: 'Ride Harshness', unit: '0 smooth · 3 severe', scale: 'RIDE', viz: 'heat', dataKey: 'ride_harshness_index', dynamicRange: false, fixedRange: [0, 3] },
-      surface_height_m: { name: 'Surface Height', unit: 'm', scale: 'SLA', viz: 'heat', dataKey: 'surface_height_m', dynamicRange: false, fixedRange: [-1, 1] },
+      surface_height_m: { name: 'Sea Surface Height Anomaly', unit: 'm', scale: 'SLA', viz: 'contours', dataKey: 'surface_height_m', dynamicRange: false, fixedRange: [-1, 1] },
       current_speed_kn: { name: 'Forecast current', unit: 'kn', scale: 'CHL', viz: 'streamlines', dataKey: 'current_speed_kn', dynamicRange: false, fixedRange: [0, 4], dirKey: 'current_direction_deg' },
       wind_speed_kn: { name: 'Wind flow',   unit: 'kn',  scale: 'CHL', viz: 'streamlines', dynamicRange: false },
       pressure_hpa:  { name: 'Pressure',    unit: 'hPa', scale: 'SLA', viz: 'contours',    dynamicRange: false, fixedRange: [980, 1040]  },
@@ -2264,6 +2264,15 @@
       return waveMaskCtx.getImageData(x, y, 1, 1).data[3] >= 128;
     }
 
+    function isCurrentWaterPoint(lon, lat) {
+      if (waveMaskImage?.complete && waveMaskImage.naturalWidth) return isCoastWaterPoint(lon, lat);
+      const lons = forecastData?.lons || [], lats = forecastData?.lats || [];
+      if (lons.length < 2 || lats.length < 2) return false;
+      const xi = Math.max(0, Math.min(lons.length - 2, Math.floor((lon - lons[0]) / (lons[1] - lons[0]))));
+      const yi = Math.max(0, Math.min(lats.length - 2, Math.floor((lat - lats[0]) / (lats[1] - lats[0]))));
+      return forecastData?.tide_water_cells?.[yi]?.[xi] === true;
+    }
+
     function isOceanPoint(lon, lat, kind = 'wave') {
       const lons = forecastData?.lons, lats = forecastData?.lats;
       if (!lons || !lats || lons.length < 2 || lats.length < 2) return false;
@@ -3124,6 +3133,7 @@
         for (let xi = 1; xi < lons.length - 1; xi += lonStep) {
           if (lons[xi] < bbox[0] || lons[xi] > bbox[2] ||
               lats[yi] < bbox[1] || lats[yi] > bbox[3]) continue;
+          if (vectorField === 'current' && !isCurrentWaterPoint(lons[xi], lats[yi])) continue;
           if (!isOceanPoint(lons[xi], lats[yi])) continue;
           const seedProj = ol.proj.fromLonLat([lons[xi], lats[yi]], mapProjection);
           const seedPx = map.getPixelFromCoordinate(seedProj);
@@ -3579,19 +3589,34 @@
       const dpr = flowCanvas.width / mapEl.clientWidth;
       if (!preserveCanvas) flowCtx.clearRect(0, 0, flowCanvas.width, flowCanvas.height);
       flowCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const grid = currentFrame.pressure_hpa.map(row => row.map(value => convertDisplayValue('pressure_hpa', value)));
+      const contourKey = currentProduct === 'surface_height_m' ? 'surface_height_m' : 'pressure_hpa';
+      const sourceGrid = currentFrame[contourKey];
+      if (!Array.isArray(sourceGrid)) return;
+      const finiteSurface = contourKey === 'surface_height_m'
+        ? sourceGrid.flat().filter(Number.isFinite)
+        : [];
+      const surfaceMean = finiteSurface.length
+        ? finiteSurface.reduce((sum, value) => sum + value, 0) / finiteSurface.length
+        : 0;
+      // OFS provides total free-surface elevation (zeta), not a precomputed
+      // satellite SLA. Remove the frame-wide datum before drawing contours so
+      // the displayed field is an explicit relative anomaly, comparable to
+      // the Captain's dashboard anomaly view.
+      const grid = sourceGrid.map(row => row.map(value => convertDisplayValue(contourKey, contourKey === 'surface_height_m' && Number.isFinite(value) ? value - surfaceMean : value)));
       if (!grid || !grid.length) return;
       const lons = forecastData.lons, lats = forecastData.lats;
       const nx = lons.length, ny = lats.length;
       const flat = grid.flat().filter(v => v != null && Number.isFinite(v));
       if (!flat.length) return;
       const vmin = Math.min(...flat), vmax = Math.max(...flat);
-      const step = unitModes.pressure_hpa === 'imperial'
+      const step = contourKey === 'surface_height_m'
+        ? 0.10
+        : unitModes.pressure_hpa === 'imperial'
         ? ((vmax - vmin) < 0.3 ? 0.05 : 0.1)
         : ((vmax - vmin) < 10 ? 1 : 2);
       const levels = [];
       for (let v = Math.ceil(vmin / step) * step; v <= vmax; v += step) levels.push(v);
-      flowCtx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
+      flowCtx.strokeStyle = contourKey === 'surface_height_m' ? 'rgba(255, 220, 110, 0.88)' : 'rgba(255, 255, 255, 0.55)';
       flowCtx.lineWidth = 0.8;
       flowCtx.font = '9px monospace';
       flowCtx.fillStyle = 'rgba(255, 255, 255, 0.7)';
@@ -3640,9 +3665,10 @@
         }
         flowCtx.stroke();
         // label every 4th level
-        if (cellPoints.length && level % 4 === 0 && cellPoints[0][0]) {
+        if (cellPoints.length && (contourKey === 'surface_height_m' || level % 4 === 0) && cellPoints[0][0]) {
           const [lx, ly] = cellPoints[0][0];
-          flowCtx.fillText(`${level.toFixed(unitModes.pressure_hpa === 'imperial' ? 2 : 0)} ${displayUnit('pressure_hpa', 'hPa')}`, lx + 2, ly - 2);
+          const unitKey = contourKey === 'surface_height_m' ? 'surface_height_m' : 'pressure_hpa';
+          flowCtx.fillText(`${level.toFixed(contourKey === 'surface_height_m' ? 2 : (unitModes.pressure_hpa === 'imperial' ? 2 : 0))} ${displayUnit(unitKey, contourKey === 'surface_height_m' ? 'm' : 'hPa')}`, lx + 2, ly - 2);
         }
       }
     }
@@ -3716,23 +3742,22 @@
       const rect = mapEl.getBoundingClientRect();
       const area = Math.max(1, rect.width * rect.height);
       const target = Math.max(150, Math.min(700, Math.round(area / 1500)));
-      for (let i = 0; i < target; i++) {
-        currentParticles.push({
-          lon: bbox[0] + Math.random() * (bbox[2] - bbox[0]),
-          lat: bbox[1] + Math.random() * (bbox[3] - bbox[1]),
-          age: Math.random() * 100,
-          maxAge: 85 + Math.random() * 120,
-        });
+      let attempts = 0;
+      while (currentParticles.length < target && attempts++ < target * 20) {
+        const lon = bbox[0] + Math.random() * (bbox[2] - bbox[0]);
+        const lat = bbox[1] + Math.random() * (bbox[3] - bbox[1]);
+        if (!isCurrentWaterPoint(lon, lat)) continue;
+        currentParticles.push({lon, lat, age: Math.random() * 100, maxAge: 85 + Math.random() * 120});
       }
     }
 
     function randomCurrentParticle() {
-      return {
-        lon: bbox[0] + Math.random() * (bbox[2] - bbox[0]),
-        lat: bbox[1] + Math.random() * (bbox[3] - bbox[1]),
-        age: 0,
-        maxAge: 85 + Math.random() * 120,
-      };
+      for (let attempt = 0; attempt < 40; attempt++) {
+        const lon = bbox[0] + Math.random() * (bbox[2] - bbox[0]);
+        const lat = bbox[1] + Math.random() * (bbox[3] - bbox[1]);
+        if (isCurrentWaterPoint(lon, lat)) return {lon, lat, age: 0, maxAge: 85 + Math.random() * 120};
+      }
+      return {lon: bbox[0], lat: bbox[1], age: 0, maxAge: 1};
     }
 
     function currentParticleColor(lon, lat) {
@@ -3826,7 +3851,7 @@
           for (let i = 0; i < currentParticles.length; i++) {
             const p = currentParticles[i];
             const vec = bilinearVec(currentFrame, p.lon, p.lat, 'current');
-            if (!vec || vec.speed < 0.05 || p.age >= p.maxAge ||
+            if (!vec || !isCurrentWaterPoint(p.lon, p.lat) || vec.speed < 0.05 || p.age >= p.maxAge ||
                 p.lon < bbox[0] || p.lon > bbox[2] || p.lat < bbox[1] || p.lat > bbox[3]) {
               currentParticles[i] = randomCurrentParticle();
               continue;
