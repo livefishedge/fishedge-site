@@ -29,8 +29,7 @@ const url = process.env.PLANNER_URL || 'http://127.0.0.1:8766/trip-planner/brief
     await page.locator('[data-preset=fishing]').click();
     await page.locator('[data-preset=weather]').click();
     assert.equal(await select().inputValue(),'dew_point_f','view remembers field');
-    await page.locator('[data-reset-view]').click();
-    assert.equal(await select().inputValue(),'visibility_mi');
+    assert.equal(await page.locator('[data-reset-view]').count(),0,'Reset view is removed');
     await page.locator('[data-preset=sea]').click();
     await select().selectOption('wave_height_ft');
     await page.locator('[data-wave-motion]').check();
@@ -71,7 +70,7 @@ const url = process.env.PLANNER_URL || 'http://127.0.0.1:8766/trip-planner/brief
     assert(readoutAfterDrag.x !== readoutBeforeDrag.x || readoutAfterDrag.y !== readoutBeforeDrag.y,'lat/lon readout is draggable');
     const desktopRanges = await page.locator('.bv-ranges').boundingBox();
     const desktopSelectorRow = await page.locator('.bv-layer-selector-row').boundingBox();
-    assert(desktopRanges.x >= desktopSelectorRow.x + desktopSelectorRow.width * .55,'desktop colorbar is to the right of selector row');
+    assert(desktopRanges.x >= desktopSelectorRow.x && desktopRanges.x + desktopRanges.width <= 1200,'desktop colorbar is contained in selector row');
     await page.locator('[data-preset=tides]').click();
     assert.equal(await select().inputValue(),'','Tides opens station-first');
     await page.waitForTimeout(250);

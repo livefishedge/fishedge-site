@@ -525,6 +525,17 @@ def add_derived_marine_fields(frames):
             return [[None if v is None else fn(float(v)) for v in row] for row in grid] if grid else None
         frame["current_speed_kn"] = map_grid(current_kmh, lambda v: v / 1.852)
         frame["current_direction_deg"] = current_dir
+        # Preserve explicit east/north current components for downstream
+        # renderers.  Open-Meteo supplies speed plus direction; keeping the
+        # converted u/v fields avoids treating ocean flow like wind or
+        # interpolating circular direction angles.
+        if current_kmh and current_dir:
+            frame["current_u_ms"] = [[None if current_kmh[yi][xi] is None or current_dir[yi][xi] is None else
+                                       -float(current_kmh[yi][xi]) / 3.6 * np.sin(float(current_dir[yi][xi]) * np.pi / 180.0)
+                                       for xi in range(len(current_kmh[yi]))] for yi in range(len(current_kmh))]
+            frame["current_v_ms"] = [[None if current_kmh[yi][xi] is None or current_dir[yi][xi] is None else
+                                       -float(current_kmh[yi][xi]) / 3.6 * np.cos(float(current_dir[yi][xi]) * np.pi / 180.0)
+                                       for xi in range(len(current_kmh[yi]))] for yi in range(len(current_kmh))]
         frame["sea_surface_temperature_f"] = map_grid(sst_c, lambda v: v * 9.0 / 5.0 + 32.0)
         hs = frame.get("wave_height")
         period = frame.get("wave_period")
@@ -764,7 +775,7 @@ def main():
             "wave_height_ft": "ft", "swell_height_ft": "ft", "wind_wave_height_ft": "ft",
             "wave_direction_deg": "deg", "swell_direction_deg": "deg", "wind_wave_direction_deg": "deg",
             "wave_period_s": "s", "swell_period_s": "s", "wind_wave_period_s": "s",
-            "current_speed_kn": "kn", "current_direction_deg": "deg",
+            "current_speed_kn": "kn", "current_direction_deg": "deg", "current_u_ms": "m/s", "current_v_ms": "m/s",
             "sea_surface_temperature_f": "°F",
             "wave_steepness": "dimensionless", "ride_harshness_index": "0=smooth, 3=severe",
             "wind_speed_kn": "kn", "wind_gust_kn": "kn", "wind_direction_deg": "deg",

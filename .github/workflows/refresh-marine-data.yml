@@ -1,0 +1,42 @@
+name: Refresh marine and tidal data
+
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install pipeline dependencies
+        run: python -m pip install --disable-pip-version-check requests numpy scipy xarray netcdf4
+      - name: Refresh wave/weather forecast and CO-OPS observations
+        run: |
+          python scripts/fetch_wave_openmeteo.py
+          python scripts/refresh_tide_measurements.py \
+            data/usec_md/briefing/forecast.json \
+            dashboard/trip-planner/data/usec_md/briefing/forecast.json
+      - name: Merge NOAA OFS currents and sea-surface height when available
+        continue-on-error: true
+        run: |
+          python scripts/fetch_ofs_tidal_forecast.py \
+            --date "$(date -u +%Y%m%d)" --hours 24 \
+            --merge-forecast data/usec_md/briefing/forecast.json \
+            --merge-forecast dashboard/trip-planner/data/usec_md/briefing/forecast.json
+      - name: Commit refreshed artifacts
+        run: |
+          git config user.name 'FishEdge data refresh'
+          git config user.email 'actions@users.noreply.github.com'
+          git add data/usec_md/briefing/forecast.json dashboard/trip-planner/data/usec_md/briefing/forecast.json
+          if [ -f data/usec_md/briefing/tidal_forecast.json ]; then git add data/usec_md/briefing/tidal_forecast.json; fi
+          git diff --cached --quiet || git commit -m "chore: refresh marine and CO-OPS data"
+          git push

@@ -87,7 +87,10 @@
     .bv-active-layer-strip label{ display:flex; align-items:center; gap:4px; flex:0 0 auto; padding:3px 6px; border:1px solid rgba(79,195,247,.35); border-radius:4px; background:rgba(19,35,51,.82); color:#d6e5f2; font-size:10px; font-weight:800; white-space:nowrap; cursor:pointer; }
     .bv-active-layer-strip input{ width:12px; height:12px; margin:0; accent-color:#4fc3f7; }
     .bv-active-layer-strip .bv-active-empty{ color:#7a8fa8; font-size:10px; font-style:italic; }
-    .bv-layer-details{ flex:0 0 auto; color:#d6e5f2; font-size:10px; }
+    .bv-layer-details{ flex:0 0 auto; color:#d6e5f2; font-size:10px; margin-left:auto; }
+    .bv-layer-details.is-stowed > summary{ opacity:.65; }
+    .bv-layer-details > summary::after{ content:' ×'; color:#9fb0c3; font-weight:600; }
+    .bv-layer-details[open] > summary::after{ content:' −'; }
     .bv-layer-details summary{ cursor:pointer; padding:4px 7px; border:1px solid rgba(79,195,247,.35); border-radius:4px; background:rgba(19,35,51,.82); font-weight:800; white-space:nowrap; }
     .bv-layer-details[open]{ display:block; }
     .bv-details-panel{box-sizing:border-box;position:fixed;top:112px;right:12px;width:min(360px,calc(100vw - 24px));max-height:calc(100dvh - 240px);overflow:auto;padding:12px;background:#0b1825;border:1px solid #4fc3f7;border-radius:8px;box-shadow:0 5px 20px #0008;white-space:normal}
@@ -234,7 +237,7 @@
     .bv-map { top:172px !important; bottom:0; }
     .bv-time, .bv-mode-context { display:none !important; }
     .bv-active-layer-strip { right:0 !important; flex-direction:column; align-items:stretch; gap:3px; overflow:hidden; min-height:84px; box-sizing:border-box; }
-    .bv-layer-selector-row { display:flex; align-items:center; gap:5px; width:430px; max-width:calc(100vw - 16px); min-height:36px; overflow:visible; }
+    .bv-layer-selector-row { display:flex; align-items:center; gap:5px; width:100%; box-sizing:border-box; min-height:36px; overflow:visible; }
     .bv-layer-checkbox-row { display:flex; align-items:center; gap:5px; min-height:36px; overflow-x:auto; overflow-y:hidden; scrollbar-width:none; }
     .bv-layer-checkbox-row::-webkit-scrollbar { display:none; }
     .bv-layer-break { flex-basis:100%; width:0; height:0; }
@@ -245,7 +248,7 @@
       .bv-frame-date { font-size:9px; }
       .bv-active-layer-strip { top:80px !important; padding-left:8px; padding-right:8px; }
       .bv-active-layer-strip { right:0 !important; min-height:84px; overflow-y:hidden; }
-      .bv-layer-selector-row { width:360px; max-width:calc(100vw - 16px); overflow:visible; }
+      .bv-layer-selector-row { width:100%; max-width:none; overflow:visible; }
       .bv-map-field-shell .bv-ranges{ width:183px; min-width:183px; }
       .bv-map { top:164px !important; }
       .bv-details-panel { top:145px; }
@@ -1373,12 +1376,12 @@
         const button = document.createElement('button'); button.type='button'; button.dataset.station='true'; button.textContent='Open station chart'; panel.append(button);
       }
       const note = document.createElement('p'); note.textContent = 'Map choices replace the fill. Current is a regional surface forecast, not inlet-resolving flow.';
-      panel.append(note); details.append(panel); checkboxRow.append(details);
+      panel.append(note); details.append(panel); selectorRow.append(details);
       details.addEventListener('toggle', () => { if(details.isConnected) detailsOpen=details.open; });
       if (activePlannerPreset === 'tides') {
         const button=document.createElement('button');button.type='button';button.dataset.station='true';button.textContent='Station chart';checkboxRow.append(button);
       }
-      const reset=document.createElement('button');reset.type='button';reset.dataset.resetView='true';reset.textContent='Reset view';checkboxRow.append(reset);
+      // Reset view was removed per 12:41 ET request.
       for (const key of preset.layers.filter(k => !SCALAR_LAYERS[k] && layerVisibility[k] && !preset.primary.includes(k))) {
         const chip=document.createElement('button');chip.type='button';chip.dataset.removeLayer=key;chip.textContent=(LAYER_LABELS[key]||key)+' ×';checkboxRow.append(chip);
       }
@@ -1398,6 +1401,12 @@
         else if(button.dataset.removeLayer) { layerVisibility[button.dataset.removeLayer]=false;refreshPlanner(); }
         else if(button.hasAttribute('data-reset-view')) applyPlannerPreset(activePlannerPreset, true);
         else if(button.hasAttribute('data-station')) openTideStation(activeTideStation);
+      });
+      // Details is a disclosure, not a mode lock. Clicking the map, toolbar,
+      // or any other page surface stows the panel immediately.
+      document.addEventListener('click', event => {
+        const open = document.querySelector('.bv-layer-details[open]');
+        if (open && !event.target.closest('.bv-layer-details')) { open.open = false; detailsOpen = false; }
       });
     }
     let selectedHeatKey = 'wave_height_ft';
@@ -3285,6 +3294,7 @@
 
     function bilinearVec(frame, lon, lat, vectorField = 'wind') {
       const lons = forecastData.lons, lats = forecastData.lats;
+      const explicitCurrent = vectorField === 'current' && frame.current_u_ms && frame.current_v_ms;
       const speedGrid = vectorField === 'current' ? frame.current_speed_kn :
         vectorField === 'gust' ? frame.wind_gust_kn : frame.wind_speed_kn;
       const dirGrid = vectorField === 'current' ? frame.current_direction_deg : frame.wind_direction_deg;
@@ -3301,6 +3311,12 @@
       // reversed wind axis—the exact kind of false convergence this viewer
       // previously displayed.
       const corner = (yy, xx) => {
+        if (explicitCurrent) {
+          const u = frame.current_u_ms[yy]?.[xx], v = frame.current_v_ms[yy]?.[xx];
+          if (!Number.isFinite(u) || !Number.isFinite(v)) return null;
+          const uk = Number(u) * 1.943844492, vk = Number(v) * 1.943844492;
+          return { u: uk, v: vk };
+        }
         const sp = speedGrid[yy]?.[xx], deg = dirGrid[yy]?.[xx];
         if (sp == null || !Number.isFinite(sp)) return null;
         if (deg == null || !Number.isFinite(deg)) return null;

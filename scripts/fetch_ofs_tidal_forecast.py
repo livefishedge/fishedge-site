@@ -198,6 +198,9 @@ def build_payload(date, hours, cycle=None):
         frames_by_time[time_ms] = {
             "time": iso_hour(time_ms),
             "water_level_m": np.where(np.isfinite(merged), merged, None).tolist(),
+            # Captain-facing alias for the forecast sea-surface elevation;
+            # this is OFS zeta (total free-surface height), not an SSH anomaly.
+            "surface_height_m": np.where(np.isfinite(merged), merged, None).tolist(),
             "water_level_ft": np.where(np.isfinite(merged), merged * 3.280839895, None).tolist(),
             "tide_height_ft": np.where(np.isfinite(merged), merged * 3.280839895, None).tolist(),
             "current_u_ms": np.where(np.isfinite(merged_u), merged_u, None).tolist(),
@@ -216,7 +219,7 @@ def build_payload(date, hours, cycle=None):
         "lats": target_lats,
         "lons": target_lons,
         "frame_interval_hours": 1,
-        "units": {"water_level_m": "m", "water_level_ft": "ft", "tide_height_ft": "ft", "current_u_ms": "m/s", "current_v_ms": "m/s", "current_speed_kn": "kn"},
+        "units": {"water_level_m": "m", "surface_height_m": "m", "water_level_ft": "ft", "tide_height_ft": "ft", "current_u_ms": "m/s", "current_v_ms": "m/s", "current_speed_kn": "kn"},
         "datum": "model free-surface datum; do not label as MLLW without a datum transform",
         "variable": "zeta",
         "source": "NOAA NOS Operational Forecast Systems via noaa-ofs-pds",
@@ -245,6 +248,7 @@ def merge_forecast(path, tidal):
         if ofs:
             frame["tide_height_ft"] = ofs["tide_height_ft"]
             frame["water_level_ft"] = ofs["water_level_ft"]
+            frame["surface_height_m"] = ofs["surface_height_m"]
             frame["tide_model_source"] = ofs["model_source"]
             frame["tide_model_coverage_cells"] = ofs["coverage_cells"]
             for key in ("current_u_ms", "current_v_ms", "current_speed_kn"):
