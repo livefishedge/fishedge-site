@@ -309,7 +309,7 @@
           <label title="Significant wave height combines wind waves and swell"><input type="checkbox" data-layer="wave_height" checked><span class="bv-dot dot-wave"></span>Significant Wave Height <button class="bv-unit-toggle" type="button" data-unit-key="wave_height_ft">ft</button></label>
           <label title="Forecast surface current speed and direction"><input type="checkbox" data-layer="current"><span class="bv-dot dot-wind"></span>Forecast Current <button class="bv-unit-toggle" type="button" data-unit-key="current_speed_kn">kn</button></label>
           <label title="Sea-surface temperature from the marine forecast"><input type="checkbox" data-layer="sst"><span class="bv-dot dot-temp"></span>Sea-Surface Temp <button class="bv-unit-toggle" type="button" data-unit-key="sea_surface_temperature_f">°F</button></label>
-          <label title="NOAA OFS sea-surface height anomaly contours; available only where the OFS forecast overlaps this frame"><input type="checkbox" data-layer="surface_height"><span class="bv-dot dot-tide"></span>Sea Surface Height Anomaly <button class="bv-unit-toggle" type="button" data-unit-key="surface_height_m">m</button></label>
+          <label title="NOAA OFS sea-level anomaly contours; available only where the OFS forecast overlaps this frame"><input type="checkbox" data-layer="surface_height"><span class="bv-dot dot-tide"></span>Sea Level Anomaly <button class="bv-unit-toggle" type="button" data-unit-key="surface_height_m">m</button></label>
           <label title="Wave height relative to wavelength; orange and red indicate increasingly uncomfortable or dangerous steepness"><input type="checkbox" data-layer="wave_steepness" checked><span class="bv-dot dot-wave"></span>Surface Steepness</label>
           <label title="Derived ride comfort: green is smooth, orange marks discomfort, red marks very uncomfortable conditions"><input type="checkbox" data-layer="ride_harshness"><span class="bv-dot dot-wave"></span>Ride Harshness</label>
         </div>
@@ -450,7 +450,7 @@
       sea_surface_temperature_f: { name: 'Sea-surface temperature', unit: '°F', scale: 'SST', viz: 'heat', dataKey: 'sea_surface_temperature_f', dynamicRange: false, fixedRange: [40, 90] },
       wave_steepness: { name: 'Surface Steepness', unit: 'Sₛ', scale: 'ALERT', viz: 'heat', dataKey: 'wave_steepness', dynamicRange: false, fixedRange: [0, 0.10] },
       ride_harshness_index: { name: 'Ride Harshness', unit: '0 smooth · 3 severe', scale: 'RIDE', viz: 'heat', dataKey: 'ride_harshness_index', dynamicRange: false, fixedRange: [0, 3] },
-      surface_height_m: { name: 'Sea Surface Height Anomaly', unit: 'm', scale: 'SLA', viz: 'contours', dataKey: 'surface_height_m', dynamicRange: false, fixedRange: [-1, 1] },
+      surface_height_m: { name: 'Sea Level Anomaly', unit: 'm', scale: 'SLA', viz: 'contours', dataKey: 'surface_height_m', dynamicRange: false, fixedRange: [-1, 1] },
       current_speed_kn: { name: 'Forecast current', unit: 'kn', scale: 'CHL', viz: 'streamlines', dataKey: 'current_speed_kn', dynamicRange: false, fixedRange: [0, 4], dirKey: 'current_direction_deg' },
       wind_speed_kn: { name: 'Wind flow',   unit: 'kn',  scale: 'CHL', viz: 'streamlines', dynamicRange: false },
       pressure_hpa:  { name: 'Pressure',    unit: 'hPa', scale: 'SLA', viz: 'contours',    dynamicRange: false, fixedRange: [980, 1040]  },
@@ -1293,7 +1293,7 @@
       precipitation_probability:'Precip. Chance', uv_index:'UV Index', pressure:'Pressure', wind:'Wind + Gust', wind_gust:'Gust',
       tide_level:'Tidal Stage', tide_range:'Tidal Range', wind_wave:'Wave Height (Chop)', swell:'Swell Height', wave_height:'Significant Wave Height',
       current:'Forecast Current',
-      sst:'Sea-Surface Temp', wave_steepness:'Surface Steepness', ride_harshness:'Ride Harshness', surface_height:'Surface Height'
+      sst:'Sea-Surface Temp', wave_steepness:'Surface Steepness', ride_harshness:'Ride Harshness', surface_height:'Sea Level Anomaly'
     };
     const SCALAR_LAYERS = {
       wave_height:'wave_height_ft', temperature:'temperature_f', apparent_temperature:'apparent_temperature_f',
@@ -1415,9 +1415,10 @@
     let selectedHeatKey = 'wave_height_ft';
     const particles = [];
     const currentParticles = [];
+    const currentWaterSeeds = [];
     // Display multiplier only: forecast current values/readouts remain in
     // physical units, while slow modeled currents remain visually legible.
-    const CURRENT_VISUAL_SPEED_MULTIPLIER = 5;
+    const CURRENT_VISUAL_SPEED_MULTIPLIER = 10;
     const gustParticles = [];
 
     function hasVisibleRasterVariable() {
@@ -3745,23 +3746,30 @@
     function seedCurrentParticles() {
       currentParticles.length = 0;
       if (!forecastData || !mapEl) return;
+      if (!currentWaterSeeds.length) {
+        const lons = forecastData.lons || [], lats = forecastData.lats || [];
+        for (let yi = 1; yi < lats.length - 1; yi++) for (let xi = 1; xi < lons.length - 1; xi++) {
+          if (isCurrentWaterPoint(lons[xi], lats[yi])) currentWaterSeeds.push([lons[xi], lats[yi]]);
+        }
+      }
+      if (!currentWaterSeeds.length) return;
       const rect = mapEl.getBoundingClientRect();
       const area = Math.max(1, rect.width * rect.height);
-      const target = Math.max(5000, Math.min(22000, Math.round(area / 50)));
-      let attempts = 0;
-      while (currentParticles.length < target && attempts++ < target * 20) {
-        const lon = bbox[0] + Math.random() * (bbox[2] - bbox[0]);
-        const lat = bbox[1] + Math.random() * (bbox[3] - bbox[1]);
-        if (!isCurrentWaterPoint(lon, lat)) continue;
+      // Tenfold visual density over the original ~500 mobile seeds, bounded
+      // so mode switches remain responsive on constrained devices.
+      const target = Math.max(2500, Math.min(5000, Math.round(area / 100)));
+      for (let i = 0; i < target; i++) {
+        const seed = currentWaterSeeds[Math.floor(Math.random() * currentWaterSeeds.length)];
+        const lon = seed[0] + (Math.random() - 0.5) * 0.12;
+        const lat = seed[1] + (Math.random() - 0.5) * 0.12;
         currentParticles.push({lon, lat, age: Math.random() * 180, maxAge: 220 + Math.random() * 240});
       }
     }
 
     function randomCurrentParticle() {
-      for (let attempt = 0; attempt < 40; attempt++) {
-        const lon = bbox[0] + Math.random() * (bbox[2] - bbox[0]);
-        const lat = bbox[1] + Math.random() * (bbox[3] - bbox[1]);
-        if (isCurrentWaterPoint(lon, lat)) return {lon, lat, age: 0, maxAge: 220 + Math.random() * 240};
+      if (currentWaterSeeds.length) {
+        const seed = currentWaterSeeds[Math.floor(Math.random() * currentWaterSeeds.length)];
+        return {lon: seed[0], lat: seed[1], age: 0, maxAge: 220 + Math.random() * 240};
       }
       return {lon: bbox[0], lat: bbox[1], age: 0, maxAge: 1};
     }
@@ -3769,7 +3777,7 @@
     function currentParticleColor(lon, lat) {
       const temp = sampleGridAtPoint(currentFrame?.sea_surface_temperature_f, lat, lon, true);
       if (!Number.isFinite(temp)) return '#70d6ff';
-      return sampleScale('SST', Math.max(0, Math.min(1, (temp - 40) / 50)));
+      return sampleScale('SST', Math.max(0, Math.min(1, (temp - 60) / 30)));
     }
 
     function startParticleAnimation() {
@@ -3857,7 +3865,10 @@
           for (let i = 0; i < currentParticles.length; i++) {
             const p = currentParticles[i];
             const vec = bilinearVec(currentFrame, p.lon, p.lat, 'current');
-            if (!vec || !isCurrentWaterPoint(p.lon, p.lat) || vec.speed < 0.05 || p.age >= p.maxAge ||
+            // Mask at spawn and periodically while advecting; sampling the
+            // image for every particle on every frame is prohibitively costly
+            // at the requested 10x density.
+            if (!vec || ((p.age % 30) === 0 && !isCurrentWaterPoint(p.lon, p.lat)) || vec.speed < 0.05 || p.age >= p.maxAge ||
                 p.lon < bbox[0] || p.lon > bbox[2] || p.lat < bbox[1] || p.lat > bbox[3]) {
               currentParticles[i] = randomCurrentParticle();
               continue;
