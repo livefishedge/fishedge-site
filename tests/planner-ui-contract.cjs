@@ -19,8 +19,10 @@ const weatherDetail = html.slice(html.indexOf("weather: {"), html.indexOf("fishi
 assert(weatherDetail.includes("'cloud_low'") && weatherDetail.includes("'cloud_mid'"), 'low/mid cloud must remain in Weather Details');
 const seaDetail = html.slice(html.indexOf("sea: {"), html.indexOf("weather: {"));
 assert(!seaDetail.includes("'surface_texture'"), 'surface texture must be removed from Sea Details');
-assert(html.includes("surface_height:'surface_height_m'"), 'Currents mode must expose optional Surface Height data');
+assert(html.includes('data-layer="surface_height"'), 'Currents mode must expose Sea Surface Height anomaly contours');
+assert(html.includes("mapFields:[['sea_surface_temperature_f','Sea-surface temperature']]"), 'SST must remain the only Currents color-map field');
 assert(html.includes('const currentParticles = []'), 'currents must have an animated particle layer');
 assert(html.includes('const dt = vec.speed * 0.00035'), 'current particles must move slower than wind particles');
 assert(html.includes('currentParticleColor'), 'current particles must use SST-origin tinting');
+assert(html.includes('Math.max(500, Math.min(2200'), 'current particles must be dense enough to read');
 console.log('PASS: planner scale, labels, gust behavior, and progressive-detail contracts');

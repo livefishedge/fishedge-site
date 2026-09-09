@@ -309,6 +309,7 @@
           <label title="Significant wave height combines wind waves and swell"><input type="checkbox" data-layer="wave_height" checked><span class="bv-dot dot-wave"></span>Significant Wave Height <button class="bv-unit-toggle" type="button" data-unit-key="wave_height_ft">ft</button></label>
           <label title="Forecast surface current speed and direction"><input type="checkbox" data-layer="current"><span class="bv-dot dot-wind"></span>Forecast Current <button class="bv-unit-toggle" type="button" data-unit-key="current_speed_kn">kn</button></label>
           <label title="Sea-surface temperature from the marine forecast"><input type="checkbox" data-layer="sst"><span class="bv-dot dot-temp"></span>Sea-Surface Temp <button class="bv-unit-toggle" type="button" data-unit-key="sea_surface_temperature_f">°F</button></label>
+          <label title="NOAA OFS sea-surface height anomaly contours; available only where the OFS forecast overlaps this frame"><input type="checkbox" data-layer="surface_height"><span class="bv-dot dot-tide"></span>Sea Surface Height Anomaly <button class="bv-unit-toggle" type="button" data-unit-key="surface_height_m">m</button></label>
           <label title="Wave height relative to wavelength; orange and red indicate increasingly uncomfortable or dangerous steepness"><input type="checkbox" data-layer="wave_steepness" checked><span class="bv-dot dot-wave"></span>Surface Steepness</label>
           <label title="Derived ride comfort: green is smooth, orange marks discomfort, red marks very uncomfortable conditions"><input type="checkbox" data-layer="ride_harshness"><span class="bv-dot dot-wave"></span>Ride Harshness</label>
         </div>
@@ -1229,7 +1230,7 @@
     let activeRange = null; // {vmin, vmax} computed per-frame when dynamicRange=true
     let localTideExtrema = null;
     const unitModes = { temperature_f: 'imperial', apparent_temperature_f: 'imperial', dew_point_f: 'imperial', wave_height_ft: 'imperial', swell_height_ft: 'imperial', wind_wave_height_ft: 'imperial', wind_speed_kn: 'imperial', wind_gust_kn: 'imperial', current_speed_kn: 'imperial', pressure_hpa: 'metric', tide_range_ft: 'imperial', visibility_mi: 'imperial', precipitation_in: 'imperial', rain_in: 'imperial', showers_in: 'imperial', snowfall_in: 'imperial', sea_surface_temperature_f: 'imperial' };
-    const UNIT_LABELS = { temperature_f: ['°F', '°C'], apparent_temperature_f: ['°F', '°C'], dew_point_f: ['°F', '°C'], sea_surface_temperature_f: ['°F', '°C'], wave_height_ft: ['ft', 'm'], swell_height_ft: ['ft', 'm'], wind_wave_height_ft: ['ft', 'm'], wind_speed_kn: ['kn', 'm/s'], wind_gust_kn: ['kn', 'm/s'], current_speed_kn: ['kn', 'm/s'], pressure_hpa: ['hPa', 'inHg'], tide_range_ft: ['ft', 'm'], visibility_mi: ['mi', 'km'], precipitation_in: ['in', 'mm'], rain_in: ['in', 'mm'], showers_in: ['in', 'mm'], snowfall_in: ['in', 'mm'] };
+    const UNIT_LABELS = { temperature_f: ['°F', '°C'], apparent_temperature_f: ['°F', '°C'], dew_point_f: ['°F', '°C'], sea_surface_temperature_f: ['°F', '°C'], wave_height_ft: ['ft', 'm'], swell_height_ft: ['ft', 'm'], wind_wave_height_ft: ['ft', 'm'], wind_speed_kn: ['kn', 'm/s'], wind_gust_kn: ['kn', 'm/s'], current_speed_kn: ['kn', 'm/s'], pressure_hpa: ['hPa', 'inHg'], tide_range_ft: ['ft', 'm'], surface_height_m: ['m', 'm'], visibility_mi: ['mi', 'km'], precipitation_in: ['in', 'mm'], rain_in: ['in', 'mm'], showers_in: ['in', 'mm'], snowfall_in: ['in', 'mm'] };
     function convertDisplayValue(key, value) {
       if (!Number.isFinite(value)) return value;
       if (key === 'pressure_hpa' && unitModes[key] === 'imperial') return value * 0.0295299831;
@@ -1300,7 +1301,7 @@
       cloud_low:'cloud_cover_low_pct', cloud_mid:'cloud_cover_mid_pct', cloud_high:'cloud_cover_high_pct',
       visibility:'visibility_mi', precipitation:'precipitation_in', precipitation_probability:'precipitation_probability_pct',
       rain:'rain_in', showers:'showers_in', snowfall:'snowfall_in', uv_index:'uv_index', sst:'sea_surface_temperature_f',
-      wave_steepness:'wave_steepness', ride_harshness:'ride_harshness_index', surface_height:'surface_height_m', tide_level:'astronomical_tide_ft'
+      wave_steepness:'wave_steepness', ride_harshness:'ride_harshness_index', tide_level:'astronomical_tide_ft'
     };
     const viewSettings = {};
     let detailsOpen = false;
@@ -1491,7 +1492,7 @@
         primary:['sst','current','surface_height'],
         detailGroups:{},
         layers:['sst','current','surface_height'],
-        mapFields:[['sea_surface_temperature_f','Sea-surface temperature'],['surface_height_m','Surface Height']],
+        mapFields:[['sea_surface_temperature_f','Sea-surface temperature']],
         defaults:['sst','current'], heat:'sea_surface_temperature_f'
       },
       tides: {
@@ -1986,6 +1987,7 @@
       // Current arrows/streamlines are independent of the selected scalar
       // field, so Fuel and Inlet can show them over wave/tide backgrounds.
       if (layerVisibility.current) drawStreamlines(!!layerVisibility.wind, 'current');
+      if (layerVisibility.surface_height) drawIsobars(true, 'surface_height_m');
       if (layerVisibility.current || layerVisibility.wind || layerVisibility.wind_gust) startParticleAnimation();
       drawSteepnessWarnings();
       // Co-range overlay is independent of the selected base product.
@@ -3583,13 +3585,13 @@
     }
 
     // ---- isobars (marching squares for pressure) ----
-    function drawIsobars(preserveCanvas = false) {
+    function drawIsobars(preserveCanvas = false, requestedKey = null) {
       if (!currentFrame || !forecastData) return;
       resizeOverlayCanvases();
       const dpr = flowCanvas.width / mapEl.clientWidth;
       if (!preserveCanvas) flowCtx.clearRect(0, 0, flowCanvas.width, flowCanvas.height);
       flowCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const contourKey = currentProduct === 'surface_height_m' ? 'surface_height_m' : 'pressure_hpa';
+      const contourKey = requestedKey || (currentProduct === 'surface_height_m' ? 'surface_height_m' : 'pressure_hpa');
       const sourceGrid = currentFrame[contourKey];
       if (!Array.isArray(sourceGrid)) return;
       const finiteSurface = contourKey === 'surface_height_m'
@@ -3741,13 +3743,13 @@
       if (!forecastData || !mapEl) return;
       const rect = mapEl.getBoundingClientRect();
       const area = Math.max(1, rect.width * rect.height);
-      const target = Math.max(150, Math.min(700, Math.round(area / 1500)));
+      const target = Math.max(500, Math.min(2200, Math.round(area / 500)));
       let attempts = 0;
       while (currentParticles.length < target && attempts++ < target * 20) {
         const lon = bbox[0] + Math.random() * (bbox[2] - bbox[0]);
         const lat = bbox[1] + Math.random() * (bbox[3] - bbox[1]);
         if (!isCurrentWaterPoint(lon, lat)) continue;
-        currentParticles.push({lon, lat, age: Math.random() * 100, maxAge: 85 + Math.random() * 120});
+        currentParticles.push({lon, lat, age: Math.random() * 180, maxAge: 220 + Math.random() * 240});
       }
     }
 
@@ -3755,7 +3757,7 @@
       for (let attempt = 0; attempt < 40; attempt++) {
         const lon = bbox[0] + Math.random() * (bbox[2] - bbox[0]);
         const lat = bbox[1] + Math.random() * (bbox[3] - bbox[1]);
-        if (isCurrentWaterPoint(lon, lat)) return {lon, lat, age: 0, maxAge: 85 + Math.random() * 120};
+        if (isCurrentWaterPoint(lon, lat)) return {lon, lat, age: 0, maxAge: 220 + Math.random() * 240};
       }
       return {lon: bbox[0], lat: bbox[1], age: 0, maxAge: 1};
     }
@@ -3865,9 +3867,9 @@
             const beforePx = map.getPixelFromCoordinate(ol.proj.fromLonLat([oldLon, oldLat], mapProjection));
             const afterPx = map.getPixelFromCoordinate(ol.proj.fromLonLat([p.lon, p.lat], mapProjection));
             if (!beforePx || !afterPx) continue;
-            flowCtx.globalAlpha = Math.max(0.18, Math.min(0.72, (1 - p.age / p.maxAge) * 0.9));
+            flowCtx.globalAlpha = Math.max(0.28, Math.min(0.88, (1 - p.age / p.maxAge) * 1.05));
             flowCtx.strokeStyle = currentParticleColor(oldLon, oldLat);
-            flowCtx.lineWidth = 0.8;
+            flowCtx.lineWidth = 1.15;
             flowCtx.lineCap = 'round';
             flowCtx.beginPath();
             flowCtx.moveTo(beforePx[0], beforePx[1]);
