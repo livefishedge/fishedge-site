@@ -26,4 +26,5 @@ assert(html.includes('const dt = vec.speed * 0.00035'), 'current particles must 
 assert(html.includes('CURRENT_VISUAL_SPEED_MULTIPLIER = 10'), 'current particle display speed must be exaggerated 10x');
 assert(html.includes('currentParticleColor'), 'current particles must use SST-origin tinting');
 assert(html.includes('Math.max(5000, Math.min(22000'), 'current particles must be substantially denser');
+assert(html.includes("fixedRange: [60, 90]"), 'SST range must be 60–90°F');
 console.log('PASS: planner scale, labels, gust behavior, and progressive-detail contracts');
