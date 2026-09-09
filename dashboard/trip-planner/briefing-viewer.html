@@ -1121,6 +1121,8 @@
     }
     drawTideStations();
     map.on('singleclick', event => {
+      const openDetails = document.querySelector('.bv-layer-details[open]');
+      if (openDetails) { openDetails.open = false; detailsOpen = false; }
       const feature = activePlannerPreset === 'tides' && map.forEachFeatureAtPixel(event.pixel, value => value, {
         layerFilter: layer => layer === stationLayer,
         hitTolerance: 12,
