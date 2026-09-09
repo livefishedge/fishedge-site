@@ -305,7 +305,6 @@
           <label title="Sea-surface temperature from the marine forecast"><input type="checkbox" data-layer="sst"><span class="bv-dot dot-temp"></span>Sea-Surface Temp <button class="bv-unit-toggle" type="button" data-unit-key="sea_surface_temperature_f">°F</button></label>
           <label title="Wave height relative to wavelength; orange and red indicate increasingly uncomfortable or dangerous steepness"><input type="checkbox" data-layer="wave_steepness" checked><span class="bv-dot dot-wave"></span>Surface Steepness</label>
           <label title="Derived ride comfort: green is smooth, orange marks discomfort, red marks very uncomfortable conditions"><input type="checkbox" data-layer="ride_harshness"><span class="bv-dot dot-wave"></span>Ride Harshness</label>
-          <label title="Technical whitecap/roughness proxy; available under Sea Details"><input type="checkbox" data-layer="surface_texture"><span class="bv-dot dot-wind"></span>Surface Texture</label>
         </div>
       </div>
     </div>
@@ -444,7 +443,6 @@
       sea_surface_temperature_f: { name: 'Sea-surface temperature', unit: '°F', scale: 'SST', viz: 'heat', dataKey: 'sea_surface_temperature_f', dynamicRange: false, fixedRange: [40, 90] },
       wave_steepness: { name: 'Surface Steepness', unit: 'Sₛ', scale: 'ALERT', viz: 'heat', dataKey: 'wave_steepness', dynamicRange: false, fixedRange: [0, 0.10] },
       ride_harshness_index: { name: 'Ride Harshness', unit: '0 smooth · 3 severe', scale: 'RIDE', viz: 'heat', dataKey: 'ride_harshness_index', dynamicRange: false, fixedRange: [0, 3] },
-      surface_texture_index: { name: 'Surface texture', unit: 'kn proxy', scale: 'UV', viz: 'heat', dataKey: 'surface_texture_index', dynamicRange: false, fixedRange: [0, 20] },
       current_speed_kn: { name: 'Forecast current', unit: 'kn', scale: 'CHL', viz: 'streamlines', dataKey: 'current_speed_kn', dynamicRange: false, fixedRange: [0, 4], dirKey: 'current_direction_deg' },
       wind_speed_kn: { name: 'Wind flow',   unit: 'kn',  scale: 'CHL', viz: 'streamlines', dynamicRange: false },
       pressure_hpa:  { name: 'Pressure',    unit: 'hPa', scale: 'SLA', viz: 'contours',    dynamicRange: false, fixedRange: [980, 1040]  },
@@ -1042,7 +1040,7 @@
       const rows = [];
       const checked = key => !!layerVisibility[key];
       const onLand = waveMaskImage && waveMaskImage.complete && !isCoastWaterPoint(lon, lat);
-      const marineKeys = new Set(['wave_height','sst','wave_steepness','ride_harshness','surface_texture','tide_level']);
+      const marineKeys = new Set(['wave_height','sst','wave_steepness','ride_harshness','tide_level']);
       for (const layer of Object.keys(SCALAR_LAYERS)) {
         if (!checked(layer)) continue;
         const dataKey = SCALAR_LAYERS[layer];
@@ -1262,7 +1260,7 @@
     }
     // Sea is the calm default: one wave map plus coordinated partition
     // motion. Other scalar diagnostics stay off until explicitly selected.
-    const layerVisibility = { wave_height: true, temperature: false, apparent_temperature: false, dew_point: false, humidity: false, cloud_cover: false, cloud_low: false, cloud_mid: false, cloud_high: false, visibility: false, precipitation: false, rain: false, showers: false, snowfall: false, precipitation_probability: false, uv_index: false, pressure: false, wind_gust: true, tide_level: false, tide_range: false, swell: true, wind_wave: true, wind: true, current: false, sst: false, wave_steepness: false, ride_harshness: false, surface_texture: false };
+    const layerVisibility = { wave_height: true, temperature: false, apparent_temperature: false, dew_point: false, humidity: false, cloud_cover: false, cloud_low: false, cloud_mid: false, cloud_high: false, visibility: false, precipitation: false, rain: false, showers: false, snowfall: false, precipitation_probability: false, pressure: false, wind_gust: true, tide_level: false, tide_range: false, swell: true, wind_wave: true, wind: true, current: false, sst: false, wave_steepness: false, ride_harshness: false };
     let activePlannerPreset = 'sea';
     function syncStationVisibility() {
       const showStations = activePlannerPreset === 'tides' || !!(layerVisibility.tide_level || layerVisibility.tide_range);
@@ -1285,7 +1283,7 @@
       precipitation_probability:'Precip. Chance', uv_index:'UV Index', pressure:'Pressure', wind:'Wind + Gust', wind_gust:'Gust',
       tide_level:'Tidal Stage', tide_range:'Tidal Range', wind_wave:'Wave Height (Chop)', swell:'Swell Height', wave_height:'Significant Wave Height',
       current:'Forecast Current',
-      sst:'Sea-Surface Temp', wave_steepness:'Surface Steepness', ride_harshness:'Ride Harshness', surface_texture:'Surface Texture'
+      sst:'Sea-Surface Temp', wave_steepness:'Surface Steepness', ride_harshness:'Ride Harshness'
     };
     const SCALAR_LAYERS = {
       wave_height:'wave_height_ft', temperature:'temperature_f', apparent_temperature:'apparent_temperature_f',
@@ -1293,7 +1291,7 @@
       cloud_low:'cloud_cover_low_pct', cloud_mid:'cloud_cover_mid_pct', cloud_high:'cloud_cover_high_pct',
       visibility:'visibility_mi', precipitation:'precipitation_in', precipitation_probability:'precipitation_probability_pct',
       rain:'rain_in', showers:'showers_in', snowfall:'snowfall_in', uv_index:'uv_index', sst:'sea_surface_temperature_f',
-      wave_steepness:'wave_steepness', ride_harshness:'ride_harshness_index', surface_texture:'surface_texture_index', tide_level:'astronomical_tide_ft'
+      wave_steepness:'wave_steepness', ride_harshness:'ride_harshness_index', tide_level:'astronomical_tide_ft'
     };
     const viewSettings = {};
     let detailsOpen = false;
@@ -1401,7 +1399,7 @@
       // The composite raster is the scalar heat field. Directional variables
       // are drawn on transparent canvases, so they must never keep the raster
       // alive after the scalar checkboxes are cleared.
-      return !!(layerVisibility.wave_height || layerVisibility.swell || layerVisibility.wind_wave || layerVisibility.temperature || layerVisibility.apparent_temperature || layerVisibility.dew_point || layerVisibility.humidity || layerVisibility.cloud_cover || layerVisibility.cloud_low || layerVisibility.cloud_mid || layerVisibility.cloud_high || layerVisibility.visibility || layerVisibility.precipitation || layerVisibility.rain || layerVisibility.showers || layerVisibility.snowfall || layerVisibility.precipitation_probability || layerVisibility.uv_index || layerVisibility.pressure || layerVisibility.sst || layerVisibility.wave_steepness || layerVisibility.ride_harshness || layerVisibility.surface_texture || layerVisibility.tide_level);
+      return !!(layerVisibility.wave_height || layerVisibility.swell || layerVisibility.wind_wave || layerVisibility.temperature || layerVisibility.apparent_temperature || layerVisibility.dew_point || layerVisibility.humidity || layerVisibility.cloud_cover || layerVisibility.cloud_low || layerVisibility.cloud_mid || layerVisibility.cloud_high || layerVisibility.visibility || layerVisibility.precipitation || layerVisibility.rain || layerVisibility.showers || layerVisibility.snowfall || layerVisibility.precipitation_probability || layerVisibility.uv_index || layerVisibility.pressure || layerVisibility.sst || layerVisibility.wave_steepness || layerVisibility.ride_harshness || layerVisibility.tide_level);
     }
 
     // Priority: significant wave height > exactly one partition > temperature > tide > pressure.
@@ -1453,8 +1451,8 @@
       // deliberate, but it stays behind Details until requested.
       sea: {
         primary:['wave_height','swell','wind_wave','wind'],
-        detailGroups:{'Sea-state diagnostics':['wave_steepness','ride_harshness','surface_texture'],'Context':['current','visibility','precipitation','pressure']},
-        layers:['wave_height','swell','wind_wave','wind','wave_steepness','ride_harshness','surface_texture','current','visibility','precipitation','pressure'],
+        detailGroups:{'Sea-state diagnostics':['wave_steepness','ride_harshness'],'Context':['current','visibility','precipitation','pressure']},
+        layers:['wave_height','swell','wind_wave','wind','wave_steepness','ride_harshness','current','visibility','precipitation','pressure'],
         mapFields:[['wave_height_ft','Significant Wave Height'],['swell_height_ft','Swell Height'],['wind_wave_height_ft','Wave Height (Chop)']],
         defaults:['wave_height','swell','wind_wave'], heat:'wave_height_ft'
       },
@@ -1467,8 +1465,8 @@
       },
       fishing: {
         primary:['sst','current'],
-        detailGroups:{'Trip context':['wind','surface_texture','visibility','cloud_cover','tide_level','tide_range'],'Sea state':['wave_height','swell','wind_wave']},
-        layers:['sst','current','wind','surface_texture','visibility','cloud_cover','tide_level','tide_range','wave_height','swell','wind_wave'],
+        detailGroups:{'Trip context':['wind','visibility','cloud_cover','tide_level','tide_range'],'Sea state':['wave_height','swell','wind_wave']},
+        layers:['sst','current','wind','visibility','cloud_cover','tide_level','tide_range','wave_height','swell','wind_wave'],
         mapFields:[['sea_surface_temperature_f','Sea-surface temperature'],['wave_height_ft','Significant Wave Height']],
         defaults:['sst','current'], heat:'sea_surface_temperature_f'
       },
@@ -1594,7 +1592,7 @@
       const def = PRODUCTS[productKey];
       const dataKey = productKey === 'wave_composite' ? (activeHeatKey() || def.dataKey) : (def.dataKey || productKey);
       const rasterDef = PRODUCTS[dataKey] || def;
-      const oceanOnly = ['wave_height_ft', 'swell_height_ft', 'wind_wave_height_ft', 'wave_period_s', 'sea_surface_temperature_f', 'wave_steepness', 'ride_harshness_index', 'surface_texture_index', 'astronomical_tide_ft'].includes(dataKey);
+      const oceanOnly = ['wave_height_ft', 'swell_height_ft', 'wind_wave_height_ft', 'wave_period_s', 'sea_surface_temperature_f', 'wave_steepness', 'ride_harshness_index', 'astronomical_tide_ft'].includes(dataKey);
       if (oceanOnly) ensureWaveMaskImage();
       const grid = frame[dataKey];
       if (!grid || !grid.length || !grid[0].length) return;
@@ -1837,7 +1835,7 @@
         pressure: hasGrid('pressure_hpa'), wind_gust: hasGrid('wind_gust_kn'),
         current: hasGrid('current_speed_kn') && hasGrid('current_direction_deg'),
         sst: hasGrid('sea_surface_temperature_f'), wave_steepness: hasGrid('wave_steepness'),
-        ride_harshness: hasGrid('ride_harshness_index'), surface_texture: hasGrid('surface_texture_index'),
+        ride_harshness: hasGrid('ride_harshness_index'),
         tide_level: hasGrid('astronomical_tide_ft'), tide_range: hasGrid('tide_range_ft'),
         wind: hasGrid('wind_speed_kn') && hasGrid('wind_direction_deg'),
         wind_wave: hasGrid('wind_wave_height_ft') && hasGrid('wind_wave_direction_deg'),
@@ -2270,7 +2268,7 @@
 
     const scalarBackdrop = document.createElement('canvas');
     function drawScalarAndWaves(heatKey) {
-      const marine = ['wave_height_ft','swell_height_ft','wind_wave_height_ft','sea_surface_temperature_f','wave_steepness','ride_harshness_index','surface_texture_index'].includes(heatKey);
+      const marine = ['wave_height_ft','swell_height_ft','wind_wave_height_ft','sea_surface_temperature_f','wave_steepness','ride_harshness_index'].includes(heatKey);
       if (heatKey) drawWaveHeatOverlay();
       const waves = layerVisibility.swell || layerVisibility.wind_wave;
       if (waves && heatKey && !marine) {

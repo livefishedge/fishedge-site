@@ -16,5 +16,5 @@ assert(html.includes('#bv-wave-readout.is-collapsed .bv-readout-toggle{display:n
 const weatherDetail = html.slice(html.indexOf("weather: {"), html.indexOf("fishing: {"));
 assert(weatherDetail.includes("'cloud_low'") && weatherDetail.includes("'cloud_mid'"), 'low/mid cloud must remain in Weather Details');
 const seaDetail = html.slice(html.indexOf("sea: {"), html.indexOf("weather: {"));
-assert(seaDetail.includes("'surface_texture'"), 'surface texture must remain in Sea Details');
+assert(!seaDetail.includes("'surface_texture'"), 'surface texture must be removed from Sea Details');
 console.log('PASS: planner scale, labels, gust behavior, and progressive-detail contracts');
