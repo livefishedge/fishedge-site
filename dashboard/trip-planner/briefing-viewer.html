@@ -3300,7 +3300,11 @@
       const speedGrid = vectorField === 'current' ? frame.current_speed_kn :
         vectorField === 'gust' ? frame.wind_gust_kn : frame.wind_speed_kn;
       const dirGrid = vectorField === 'current' ? frame.current_direction_deg : frame.wind_direction_deg;
-      if (!speedGrid || !dirGrid || lons.length < 2 || lats.length < 2) return null;
+      // Ocean forecast files may provide authoritative u/v components without
+      // a redundant speed/direction pair. Do not discard that field merely
+      // because the derived pair is absent; speed/direction is only the
+      // fallback path for legacy artifacts.
+      if ((!explicitCurrent && (!speedGrid || !dirGrid)) || lons.length < 2 || lats.length < 2) return null;
       if (lon < lons[0] || lon > lons[lons.length-1] || lat < lats[0] || lat > lats[lats.length-1]) return null;
       const dlon = (lons[lons.length-1] - lons[0]) / (lons.length-1);
       const dlat = (lats[lats.length-1] - lats[0]) / (lats.length-1);
@@ -3319,11 +3323,15 @@
           const uk = Number(u) * 1.943844492, vk = Number(v) * 1.943844492;
           return { u: uk, v: vk };
         }
-        const sp = speedGrid[yy]?.[xx], deg = dirGrid[yy]?.[xx];
+        const sp = speedGrid?.[yy]?.[xx], deg = dirGrid?.[yy]?.[xx];
         if (sp == null || !Number.isFinite(sp)) return null;
         if (deg == null || !Number.isFinite(deg)) return null;
         const rad = Number(deg) * Math.PI / 180;
-        return { u: -Number(sp) * Math.sin(rad), v: -Number(sp) * Math.cos(rad) };
+        // Wind directions are meteorological (coming FROM); ocean-current
+        // directions describe where water is moving TO. Keep the conventions
+        // distinct so legacy current grids do not render exactly backwards.
+        const sign = vectorField === 'current' ? 1 : -1;
+        return { u: sign * Number(sp) * Math.sin(rad), v: sign * Number(sp) * Math.cos(rad) };
       };
       const c00 = corner(y0, x0), c10 = corner(y0, x0 + 1);
       const c01 = corner(y0 + 1, x0), c11 = corner(y0 + 1, x0 + 1);

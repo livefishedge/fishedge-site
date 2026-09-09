@@ -531,10 +531,10 @@ def add_derived_marine_fields(frames):
         # interpolating circular direction angles.
         if current_kmh and current_dir:
             frame["current_u_ms"] = [[None if current_kmh[yi][xi] is None or current_dir[yi][xi] is None else
-                                       -float(current_kmh[yi][xi]) / 3.6 * np.sin(float(current_dir[yi][xi]) * np.pi / 180.0)
+                                       float(current_kmh[yi][xi]) / 3.6 * np.sin(float(current_dir[yi][xi]) * np.pi / 180.0)
                                        for xi in range(len(current_kmh[yi]))] for yi in range(len(current_kmh))]
             frame["current_v_ms"] = [[None if current_kmh[yi][xi] is None or current_dir[yi][xi] is None else
-                                       -float(current_kmh[yi][xi]) / 3.6 * np.cos(float(current_dir[yi][xi]) * np.pi / 180.0)
+                                       float(current_kmh[yi][xi]) / 3.6 * np.cos(float(current_dir[yi][xi]) * np.pi / 180.0)
                                        for xi in range(len(current_kmh[yi]))] for yi in range(len(current_kmh))]
         frame["sea_surface_temperature_f"] = map_grid(sst_c, lambda v: v * 9.0 / 5.0 + 32.0)
         hs = frame.get("wave_height")
