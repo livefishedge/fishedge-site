@@ -310,7 +310,7 @@
           <label title="Significant wave height combines wind waves and swell"><input type="checkbox" data-layer="wave_height" checked><span class="bv-dot dot-wave"></span>Significant Wave Height <button class="bv-unit-toggle" type="button" data-unit-key="wave_height_ft">ft</button></label>
           <label title="Forecast surface current speed and direction"><input type="checkbox" data-layer="current"><span class="bv-dot dot-wind"></span>Forecast Current <button class="bv-unit-toggle" type="button" data-unit-key="current_speed_kn">kn</button></label>
           <label title="Sea-surface temperature from the marine forecast"><input type="checkbox" data-layer="sst"><span class="bv-dot dot-temp"></span>Sea-Surface Temp <button class="bv-unit-toggle" type="button" data-unit-key="sea_surface_temperature_f">°F</button></label>
-          <label title="NOAA OFS sea-level anomaly contours; available only where the OFS forecast overlaps this frame"><input type="checkbox" data-layer="surface_height"><span class="bv-dot dot-tide"></span>Sea Level Anomaly <button class="bv-unit-toggle" type="button" data-unit-key="surface_height_m">m</button></label>
+          <label title="CMEMS DUACS daily altimetry sea-level anomaly contours; source date shown in the status line"><input type="checkbox" data-layer="surface_height"><span class="bv-dot dot-tide"></span>Sea Level Anomaly <button class="bv-unit-toggle" type="button" data-unit-key="surface_height_m">m</button></label>
           <label title="Wave height relative to wavelength; orange and red indicate increasingly uncomfortable or dangerous steepness"><input type="checkbox" data-layer="wave_steepness" checked><span class="bv-dot dot-wave"></span>Surface Steepness</label>
           <label title="Derived ride comfort: green is smooth, orange marks discomfort, red marks very uncomfortable conditions"><input type="checkbox" data-layer="ride_harshness"><span class="bv-dot dot-wave"></span>Ride Harshness</label>
         </div>
@@ -406,6 +406,11 @@
     let playSpeed = 1;
     let playIntervalMs = BASE_PLAY_MS;
     let fieldBbox = bbox;
+    // Verified offshore product used by the Captain's Dashboard: daily CMEMS
+    // DUACS along-track/multi-mission gridded sea-level anomaly. This stays
+    // separate from NOAA OFS zeta (total coastal free-surface elevation).
+    let slaProduct = null;
+    let slaProductPromise = null;
     const rasterProjection = 'EPSG:4326';
     const mapProjection = 'EPSG:3857';
 
@@ -881,6 +886,56 @@
       const r = await fetch(proxied, { cache: 'no-store' });
       if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
       return r.json();
+    }
+
+    // The source contract is the same one used by dashboard/index.html. The
+    // manifest gives us the newest available analysis and the local fallback
+    // keeps dev independent of the production hostname/cache.
+    const SLA_MANIFEST_URLS = ['/dashboard/index-usec_md.json', '/index-usec_md.json'];
+    async function loadSlaProduct() {
+      if (slaProductPromise) return slaProductPromise;
+      slaProductPromise = (async () => {
+        let manifest = null;
+        let manifestError = null;
+        for (const manifestUrl of SLA_MANIFEST_URLS) {
+          try { manifest = await fetchJson(manifestUrl); break; } catch (error) { manifestError = error; }
+        }
+        if (!manifest) throw manifestError || new Error('CMEMS DUACS SLA manifest unavailable');
+        const frames = (manifest?.frames?.sla || []).slice().sort((a, b) =>
+          String(b.time_iso || '').localeCompare(String(a.time_iso || '')));
+        if (!frames.length) throw new Error('CMEMS DUACS SLA manifest has no frames');
+        let lastError = null;
+        for (const frame of frames) {
+          const remote = String(frame.json_path || '');
+          const file = remote.split('/').pop();
+          const paths = [`/dashboard/data/sla/${file}`, `/data/sla/${file}`, remote];
+          for (const path of paths) {
+            try {
+              const data = await fetchJson(path);
+              const raw = data?.sla;
+              if (!Array.isArray(raw) || !raw.length || !Array.isArray(raw[0])) throw new Error('SLA grid missing');
+              const finite = raw.flat().filter(Number.isFinite);
+              if (finite.length < 100) throw new Error('SLA grid has insufficient finite coverage');
+              const [lonMin, latMin, lonMax, latMax] = (data.bbox || []).map(Number);
+              if (![lonMin, latMin, lonMax, latMax].every(Number.isFinite)) throw new Error('SLA bbox missing');
+              const ny = Number(data.ny) || raw.length;
+              const nx = Number(data.nx) || raw[0].length;
+              const linspace = (a, b, n) => Array.from({ length: n }, (_, i) => n === 1 ? a : a + (b - a) * i / (n - 1));
+              return {
+                ...data,
+                source: 'CMEMS DUACS gridded altimetry',
+                source_url: 'https://data.marine.copernicus.eu/product/SEALEVEL_GLO_PHY_L4_MY_008_047',
+                source_frame: frame,
+                lons: linspace(lonMin, lonMax, nx),
+                lats: linspace(latMin, latMax, ny),
+                finite_count: finite.length,
+              };
+            } catch (error) { lastError = error; }
+          }
+        }
+        throw lastError || new Error('CMEMS DUACS SLA load failed');
+      })();
+      return slaProductPromise;
     }
 
     // Keep old cached artifacts readable, but make every renderer consume the
@@ -1885,7 +1940,7 @@
         pressure: hasGrid('pressure_hpa'), wind_gust: hasGrid('wind_gust_kn'),
         current: hasGrid('current_speed_kn') && hasGrid('current_direction_deg'),
         sst: hasGrid('sea_surface_temperature_f'), wave_steepness: hasGrid('wave_steepness'),
-        ride_harshness: hasGrid('ride_harshness_index'), surface_height: hasGrid('surface_height_m'),
+        ride_harshness: hasGrid('ride_harshness_index'), surface_height: !!slaProduct && Number(slaProduct.finite_count) > 0,
         tide_level: hasGrid('astronomical_tide_ft'), tide_range: hasGrid('tide_range_ft'),
         wind: hasGrid('wind_speed_kn') && hasGrid('wind_direction_deg'),
         wind_wave: hasGrid('wind_wave_height_ft') && hasGrid('wind_wave_direction_deg'),
@@ -1895,12 +1950,14 @@
         const input = document.querySelector(`#bv-layers input[data-layer="${key}"]`);
         const label = input?.closest('label');
         if (!input || !label) continue;
-        const anyFrameAvailable = ['tide_range','surface_height'].includes(key) && forecastData && forecastData.frames
-          ? forecastData.frames.some(frame => {
-              const grid = frame?.[key === 'surface_height' ? 'surface_height_m' : 'tide_range_ft'];
-              return Array.isArray(grid) && grid.some(row => Array.isArray(row) && row.some(Number.isFinite));
-            })
-          : available[key];
+        const anyFrameAvailable = key === 'surface_height'
+          ? available.surface_height
+          : (key === 'tide_range' && forecastData && forecastData.frames
+            ? forecastData.frames.some(frame => {
+                const grid = frame?.tide_range_ft;
+                return Array.isArray(grid) && grid.some(row => Array.isArray(row) && row.some(Number.isFinite));
+              })
+            : available[key]);
         // The co-range control is available only when the static harmonic
         // amplitude field is present in the current forecast artifact.
         const awaitingHtp = ['tide_range'].includes(key) && !anyFrameAvailable;
@@ -1910,7 +1967,7 @@
         if (!anyFrameAvailable && !awaitingHtp) { input.checked = false; layerVisibility[key] = false; }
         else if (['tide_range'].includes(key)) input.checked = layerVisibility[key];
         label.classList.toggle('unavailable', !available[key]);
-        label.title = available[key] ? '' : (awaitingHtp ? 'Waiting for harmonic tide data' : `No ${key} grid in current forecast frame`);
+        label.title = available[key] ? (key === 'surface_height' ? 'CMEMS DUACS daily altimetry SLA; source date appears in the status line' : '') : (awaitingHtp ? 'Waiting for harmonic tide data' : `No ${key} grid in current forecast frame`);
       }
       const tideStatus = document.getElementById('bv-menu-status');
       if (tideStatus && !available.tide_range) {
@@ -3326,6 +3383,7 @@
     }
 
     function bilinearVec(frame, lon, lat, vectorField = 'wind') {
+      if (!forecastData || !frame) return null;
       const lons = forecastData.lons, lats = forecastData.lats;
       const explicitCurrent = vectorField === 'current' && frame.current_u_ms && frame.current_v_ms;
       const speedGrid = vectorField === 'current' ? frame.current_speed_kn :
@@ -3603,8 +3661,103 @@
       }
     }
 
+    // ---- CMEMS DUACS SLA contours (native source grid) ----
+    function drawSlaContours(preserveCanvas = false) {
+      if (!slaProduct || !slaCtx || !map) return;
+      // Use the same high-resolution projected coastline mask as the marine
+      // layers. Fail closed until it is ready; source finite values alone can
+      // include coastal interpolation cells that must not paint on land.
+      ensureWaveMaskImage();
+      const exactMaskReady = waveMaskImage?.complete && waveMaskImage.naturalWidth > 0;
+      resizeOverlayCanvases();
+      const dpr = slaCanvas.width / Math.max(1, mapEl.clientWidth);
+      if (!preserveCanvas) slaCtx.clearRect(0, 0, slaCanvas.width, slaCanvas.height);
+      slaCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      slaCtx.globalCompositeOperation = 'source-over';
+      slaCtx.globalAlpha = 1;
+      const raw = slaProduct.sla;
+      const lons = slaProduct.lons, lats = slaProduct.lats;
+      const ny = Math.min(lats.length, raw.length);
+      const nx = Math.min(lons.length, raw[0]?.length || 0);
+      if (nx < 2 || ny < 2) return;
+      if (!exactMaskReady) {
+        const status = document.getElementById('bv-menu-status');
+        if (status) status.textContent = 'Sea Level Anomaly · CMEMS DUACS · waiting for coastline mask';
+        return;
+      }
+      const finite = raw.flat().filter(Number.isFinite);
+      if (finite.length < 100) return;
+      // CMEMS SLA is already referenced to its documented mean sea-surface
+      // reference. Never subtract a current-frame mean and never use OFS zeta.
+      const contourStep = 0.02;
+      const vmin = Math.floor(Math.min(...finite) / contourStep) * contourStep;
+      const vmax = Math.ceil(Math.max(...finite) / contourStep) * contourStep;
+      const pixelAt = (lon, lat) => map.getPixelFromCoordinate(ol.proj.fromLonLat([lon, lat], mapProjection));
+      const openWater = forecastData.wave_open_water_cells || forecastData.wave_water_cells;
+      const forecastLons = forecastData.lons || [], forecastLats = forecastData.lats || [];
+      const openOceanAt = (lon, lat) => {
+        if (!Array.isArray(openWater) || forecastLons.length < 2 || forecastLats.length < 2) return true;
+        const dx = forecastLons[1] - forecastLons[0], dy = forecastLats[1] - forecastLats[0];
+        if (!Number.isFinite(dx) || !Number.isFinite(dy) || !dx || !dy) return false;
+        const xi = Math.max(0, Math.min(forecastLons.length - 2, Math.floor((lon - forecastLons[0]) / dx)));
+        const yi = Math.max(0, Math.min(forecastLats.length - 2, Math.floor((lat - forecastLats[0]) / dy)));
+        return openWater[yi]?.[xi] === true;
+      };
+      const value = (x, y) => Number(raw[y]?.[x]);
+      const lerp = (a, b, t) => a + (b - a) * t;
+      const intersect = (p1, v1, p2, v2, level) => {
+        if (!Number.isFinite(v1) || !Number.isFinite(v2) || v1 === v2) return null;
+        const t = (level - v1) / (v2 - v1);
+        return [lerp(p1[0], p2[0], t), lerp(p1[1], p2[1], t)];
+      };
+      let segments = 0;
+      slaCtx.strokeStyle = 'rgba(255, 226, 120, 0.95)';
+      slaCtx.lineWidth = 1.35;
+      slaCtx.lineCap = 'round';
+      slaCtx.font = '9px monospace';
+      for (let level = vmin; level <= vmax + contourStep * 0.25; level += contourStep) {
+        const rounded = Number(level.toFixed(4));
+        const paths = [];
+        for (let y = 0; y < ny - 1; y++) for (let x = 0; x < nx - 1; x++) {
+          const v00=value(x,y), v10=value(x+1,y), v11=value(x+1,y+1), v01=value(x,y+1);
+          if (![v00,v10,v11,v01].every(Number.isFinite)) continue; // CMEMS source coverage mask
+          // A source cell may be finite while straddling a bay/island edge.
+          // Require every geographic corner to be water, not merely the
+          // center, so contours cannot bridge land into an inlet.
+          const corners = [[lons[x],lats[y]],[lons[x+1],lats[y]],[lons[x+1],lats[y+1]],[lons[x],lats[y+1]]];
+          if (!corners.every(([lo, la]) => isCoastWaterPoint(lo, la))) continue;
+          if (!openOceanAt((lons[x] + lons[x + 1]) / 2, (lats[y] + lats[y + 1]) / 2)) continue;
+          const ll = corners.map(([lo,la]) => pixelAt(lo,la));
+          if (!ll.every(p => p && Number.isFinite(p[0]) && Number.isFinite(p[1]))) continue;
+          const hits = [];
+          for (const [a,b,va,vb] of [[0,1,v00,v10],[1,2,v10,v11],[2,3,v11,v01],[3,0,v01,v00]]) {
+            if ((va < rounded) !== (vb < rounded)) { const hit = intersect(ll[a],va,ll[b],vb,rounded); if (hit) hits.push(hit); }
+          }
+          for (let k=0; k+1<hits.length; k+=2) paths.push([hits[k],hits[k+1]]);
+        }
+        if (!paths.length) continue;
+        segments += paths.length;
+        slaCtx.beginPath();
+        for (const [a,b] of paths) { slaCtx.moveTo(a[0],a[1]); slaCtx.lineTo(b[0],b[1]); }
+        slaCtx.stroke();
+        const lineNo = Math.round((rounded - vmin) / contourStep);
+        if (lineNo % 5 === 0) {
+          const first = paths[0][0];
+          slaCtx.fillStyle = 'rgba(255,245,190,0.95)';
+          slaCtx.fillText(`${rounded.toFixed(2)} m`, first[0] + 3, first[1] - 3);
+        }
+      }
+      const status = document.getElementById('bv-menu-status');
+      const valid = slaProduct.analysis_time ? new Date(slaProduct.analysis_time).toLocaleDateString('en-US', {timeZone:'America/New_York'}) : 'source date unavailable';
+      if (status) status.textContent = segments
+        ? `Sea Level Anomaly · CMEMS DUACS · ${valid} · ${segments} offshore contour segments`
+        : `Sea Level Anomaly · CMEMS DUACS · ${valid} · no valid offshore crossings`;
+    }
+
     // ---- isobars (marching squares for pressure) ----
     function drawIsobars(preserveCanvas = false, requestedKey = null) {
+      const requestedContourKey = requestedKey || (currentProduct === 'surface_height_m' ? 'surface_height_m' : 'pressure_hpa');
+      if (requestedContourKey === 'surface_height_m') { drawSlaContours(preserveCanvas); return; }
       if (!currentFrame || !forecastData) return;
       resizeOverlayCanvases();
       const dpr = flowCanvas.width / mapEl.clientWidth;
@@ -3617,56 +3770,24 @@
       contourCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
       contourCtx.globalCompositeOperation = 'source-over';
       contourCtx.globalAlpha = 1;
-      // OFS is an optional nested forecast. Some forecast hours legitimately
-      // have no OFS frame. Use the nearest frame with finite values rather
-      // than silently drawing an empty overlay; report the source time so the
-      // captain can distinguish it from the selected weather hour.
-      let contourFrame = currentFrame;
-      if (contourKey === 'surface_height_m' && !gridAvailable('surface_height_m')) {
-        const candidates = (forecastData.frames || []).filter(frame => {
-          const grid = frame?.surface_height_m;
-          return Array.isArray(grid) && grid.some(row => Array.isArray(row) && row.some(Number.isFinite));
-        });
-        const targetMs = parseForecastTime(currentFrame.time);
-        candidates.sort((a, b) => Math.abs(parseForecastTime(a.time) - targetMs) - Math.abs(parseForecastTime(b.time) - targetMs));
-        if (candidates[0]) contourFrame = candidates[0];
-      }
-      const sourceGrid = contourFrame[contourKey];
+      // Pressure remains the only non-SLA contour path here. The SLA path
+      // returned above is backed by CMEMS DUACS and never reaches this code.
+      const sourceGrid = currentFrame[contourKey];
       if (!Array.isArray(sourceGrid)) return;
-      const finiteSurface = contourKey === 'surface_height_m'
-        ? sourceGrid.flat().filter(Number.isFinite)
-        : [];
-      const surfaceMean = finiteSurface.length
-        ? finiteSurface.reduce((sum, value) => sum + value, 0) / finiteSurface.length
-        : 0;
-      // OFS provides total free-surface elevation (zeta), not a precomputed
-      // satellite SLA. Remove the frame-wide datum before drawing contours so
-      // the displayed field is an explicit relative anomaly, comparable to
-      // the Captain's dashboard anomaly view.
-      const grid = sourceGrid.map(row => row.map(value => convertDisplayValue(contourKey, contourKey === 'surface_height_m' && Number.isFinite(value) ? value - surfaceMean : value)));
+      const grid = sourceGrid.map(row => row.map(value => convertDisplayValue(contourKey, value)));
       if (!grid || !grid.length) return;
       const lons = forecastData.lons, lats = forecastData.lats;
       const nx = lons.length, ny = lats.length;
       const flat = grid.flat().filter(v => v != null && Number.isFinite(v));
       if (!flat.length) return;
-      if (contourKey === 'surface_height_m') {
-        const status = document.getElementById('bv-menu-status');
-        const selectedTime = parseForecastTime(currentFrame.time);
-        const sourceTime = parseForecastTime(contourFrame.time);
-        if (status) status.textContent = sourceTime === selectedTime
-          ? 'Sea Level Anomaly · NOAA OFS · selected forecast hour'
-          : `Sea Level Anomaly · NOAA OFS · nearest available ${new Date(sourceTime).toLocaleString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'America/New_York' })} ET`;
-      }
       const vmin = Math.min(...flat), vmax = Math.max(...flat);
-      const step = contourKey === 'surface_height_m'
-        ? 0.10
-        : unitModes.pressure_hpa === 'imperial'
+      const step = unitModes.pressure_hpa === 'imperial'
         ? ((vmax - vmin) < 0.3 ? 0.05 : 0.1)
         : ((vmax - vmin) < 10 ? 1 : 2);
       const levels = [];
       for (let v = Math.ceil(vmin / step) * step; v <= vmax; v += step) levels.push(v);
       let drawnCells = 0;
-      contourCtx.strokeStyle = contourKey === 'surface_height_m' ? 'rgba(255, 220, 110, 0.88)' : 'rgba(255, 255, 255, 0.55)';
+      contourCtx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
       contourCtx.lineWidth = 0.8;
       contourCtx.font = '9px monospace';
       contourCtx.fillStyle = 'rgba(255, 255, 255, 0.7)';
@@ -3726,17 +3847,10 @@
         }
         contourCtx.stroke();
         // label every 4th level
-        if (cellPoints.length && (contourKey === 'surface_height_m' || level % 4 === 0) && cellPoints[0][0]) {
+        if (cellPoints.length && level % 4 === 0 && cellPoints[0][0]) {
           const [lx, ly] = cellPoints[0][0];
-          const unitKey = contourKey === 'surface_height_m' ? 'surface_height_m' : 'pressure_hpa';
-          contourCtx.fillText(`${level.toFixed(contourKey === 'surface_height_m' ? 2 : (unitModes.pressure_hpa === 'imperial' ? 2 : 0))} ${displayUnit(unitKey, contourKey === 'surface_height_m' ? 'm' : 'hPa')}`, lx + 2, ly - 2);
+          contourCtx.fillText(`${level.toFixed(unitModes.pressure_hpa === 'imperial' ? 2 : 0)} ${displayUnit('pressure_hpa', 'hPa')}`, lx + 2, ly - 2);
         }
-      }
-      if (contourKey === 'surface_height_m') {
-        const status = document.getElementById('bv-menu-status');
-        if (status) status.textContent = drawnCells
-          ? `Sea Level Anomaly · NOAA OFS · ${drawnCells} contour segments`
-          : 'Sea Level Anomaly · NOAA OFS · no contour crossings in this frame';
       }
     }
 
@@ -3772,7 +3886,7 @@
 
     function seedGustParticles() {
       gustParticles.length = 0;
-      if (!forecastData || !mapEl) return;
+      if (!forecastData || !currentFrame || !mapEl) return;
       const rect = mapEl.getBoundingClientRect();
       const area = Math.max(1, rect.width * rect.height);
       // Gusts are less frequent than wind particles, but every seeded burst
@@ -3791,6 +3905,7 @@
     }
 
     function randomValidGustParticle() {
+      if (!forecastData || !currentFrame) return null;
       for (let attempt = 0; attempt < 40; attempt++) {
         const lon = bbox[0] + Math.random() * (bbox[2] - bbox[0]);
         const lat = bbox[1] + Math.random() * (bbox[3] - bbox[1]);
@@ -4175,6 +4290,18 @@
         }
         if (!forecastData.quality) {
           console.warn('forecast is fresh but lacks quality metadata; treating as legacy-unvalidated');
+        }
+        // Load the verified daily altimetry product separately from the
+        // hourly OFS/coastal forecast. Failure disables SLA explicitly rather
+        // than fabricating a contour from total coastal water level.
+        try {
+          slaProduct = await loadSlaProduct();
+          console.info('[SLA] loaded CMEMS DUACS', slaProduct.analysis_time, slaProduct.finite_count, 'finite cells');
+        } catch (slaError) {
+          slaProduct = null;
+          console.warn('[SLA] unavailable:', slaError);
+          const status = document.getElementById('bv-menu-status');
+          if (status) status.textContent = 'Sea Level Anomaly unavailable: CMEMS source could not be loaded';
         }
         const frames = forecastData.frames || [];
         if (!frames.length) {
