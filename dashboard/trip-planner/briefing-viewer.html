@@ -3670,12 +3670,13 @@
       contourCtx.lineWidth = 0.8;
       contourCtx.font = '9px monospace';
       contourCtx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-      const toPxX = lon => map.getPixelFromCoordinate(ol.proj.fromLonLat([lon, lats[0]], mapProjection))?.[0];
-      const toPxY = lat => map.getPixelFromCoordinate(ol.proj.fromLonLat([lons[0], lat], mapProjection))?.[1];
-      const xMin = toPxX(lons[0]), xMax = toPxX(lons[nx-1]);
-      const yMin = toPxY(lats[ny-1]), yMax = toPxY(lats[0]);
-      const w = xMax - xMin, h = yMin - yMax;
-      if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) return;
+      // Project every geographic corner independently. Do not assume that
+      // latitude ordering or screen-Y direction is stable; that assumption
+      // was suppressing valid contours when the grid/projection orientation
+      // changed.
+      const pixelAt = (lon, lat) => map.getPixelFromCoordinate(
+        ol.proj.fromLonLat([lon, lat], mapProjection)
+      );
       const lerp = (a, b, t) => a + (b - a) * t;
       const sample = (xi, yi) => {
         if (xi < 0 || xi >= nx || yi < 0 || yi >= ny) return null;
@@ -3694,17 +3695,19 @@
             const v01 = sample(xi, yi+1), v11 = sample(xi+1, yi+1);
             if (v00 == null || v10 == null || v01 == null || v11 == null) continue;
             // cell corners in pixel space
-            const x0 = lerp(xMin, xMax, xi / (nx-1));
-            const x1 = lerp(xMin, xMax, (xi+1) / (nx-1));
-            const y0 = lerp(yMax, yMin, yi / (ny-1));
-            const y1 = lerp(yMax, yMin, (yi+1) / (ny-1));
+            const p00 = pixelAt(lons[xi], lats[yi]);
+            const p10 = pixelAt(lons[xi + 1], lats[yi]);
+            const p01 = pixelAt(lons[xi], lats[yi + 1]);
+            const p11 = pixelAt(lons[xi + 1], lats[yi + 1]);
+            if (![p00, p10, p01, p11].every(p => p && Number.isFinite(p[0]) && Number.isFinite(p[1]))) continue;
+            const [x0, y0] = p00, [x1, y10] = p10, [x01, y1] = p01, [x11, y11] = p11;
             const idx = (v00 > level ? 1 : 0) | (v10 > level ? 2 : 0) | (v11 > level ? 4 : 0) | (v01 > level ? 8 : 0);
             if (idx === 0 || idx === 15) continue;
             const edges = [];
-            if ((v00 > level) !== (v10 > level)) edges.push(lerpX(x0, y0, v00, x1, y0, v10, level));
-            if ((v10 > level) !== (v11 > level)) edges.push(lerpX(x1, y0, v10, x1, y1, v11, level));
-            if ((v01 > level) !== (v11 > level)) edges.push(lerpX(x0, y1, v01, x1, y1, v11, level));
-            if ((v00 > level) !== (v01 > level)) edges.push(lerpX(x0, y0, v00, x0, y1, v01, level));
+            if ((v00 > level) !== (v10 > level)) edges.push(lerpX(x0, y0, v00, x1, y10, v10, level));
+            if ((v10 > level) !== (v11 > level)) edges.push(lerpX(x1, y10, v10, x11, y11, v11, level));
+            if ((v01 > level) !== (v11 > level)) edges.push(lerpX(x01, y1, v01, x11, y11, v11, level));
+            if ((v00 > level) !== (v01 > level)) edges.push(lerpX(x0, y0, v00, x01, y1, v01, level));
             if (edges.length >= 2) cellPoints.push(edges);
           }
         }
