@@ -1889,7 +1889,10 @@
         const label = input?.closest('label');
         if (!input || !label) continue;
         const anyFrameAvailable = ['tide_range','surface_height'].includes(key) && forecastData && forecastData.frames
-          ? forecastData.frames.some(frame => Array.isArray(frame?.[key === 'surface_height' ? 'surface_height_m' : 'tide_range_ft']) && frame[key === 'surface_height' ? 'surface_height_m' : 'tide_range_ft'].length > 0)
+          ? forecastData.frames.some(frame => {
+              const grid = frame?.[key === 'surface_height' ? 'surface_height_m' : 'tide_range_ft'];
+              return Array.isArray(grid) && grid.some(row => Array.isArray(row) && row.some(Number.isFinite));
+            })
           : available[key];
         // The co-range control is available only when the static harmonic
         // amplitude field is present in the current forecast artifact.
@@ -3601,7 +3604,21 @@
       const contourCtx = contourKey === 'surface_height_m' ? streamlineCtx : flowCtx;
       if (!preserveCanvas) contourCtx.clearRect(0, 0, flowCanvas.width, flowCanvas.height);
       contourCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const sourceGrid = currentFrame[contourKey];
+      // OFS is an optional nested forecast. Some forecast hours legitimately
+      // have no OFS frame. Use the nearest frame with finite values rather
+      // than silently drawing an empty overlay; report the source time so the
+      // captain can distinguish it from the selected weather hour.
+      let contourFrame = currentFrame;
+      if (contourKey === 'surface_height_m' && !gridAvailable('surface_height_m')) {
+        const candidates = (forecastData.frames || []).filter(frame => {
+          const grid = frame?.surface_height_m;
+          return Array.isArray(grid) && grid.some(row => Array.isArray(row) && row.some(Number.isFinite));
+        });
+        const targetMs = parseForecastTime(currentFrame.time);
+        candidates.sort((a, b) => Math.abs(parseForecastTime(a.time) - targetMs) - Math.abs(parseForecastTime(b.time) - targetMs));
+        if (candidates[0]) contourFrame = candidates[0];
+      }
+      const sourceGrid = contourFrame[contourKey];
       if (!Array.isArray(sourceGrid)) return;
       const finiteSurface = contourKey === 'surface_height_m'
         ? sourceGrid.flat().filter(Number.isFinite)
@@ -3619,6 +3636,14 @@
       const nx = lons.length, ny = lats.length;
       const flat = grid.flat().filter(v => v != null && Number.isFinite(v));
       if (!flat.length) return;
+      if (contourKey === 'surface_height_m') {
+        const status = document.getElementById('bv-menu-status');
+        const selectedTime = parseForecastTime(currentFrame.time);
+        const sourceTime = parseForecastTime(contourFrame.time);
+        if (status) status.textContent = sourceTime === selectedTime
+          ? 'Sea Level Anomaly · NOAA OFS · selected forecast hour'
+          : `Sea Level Anomaly · NOAA OFS · nearest available ${new Date(sourceTime).toLocaleString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'America/New_York' })} ET`;
+      }
       const vmin = Math.min(...flat), vmax = Math.max(...flat);
       const step = contourKey === 'surface_height_m'
         ? 0.10
