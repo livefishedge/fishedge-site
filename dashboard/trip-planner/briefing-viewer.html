@@ -4134,6 +4134,14 @@
       gustParticles.length = 0;
     }
 
+    // Map panning and pinch gestures already consume a large portion of the
+    // mobile frame budget. Suspend the dense particle RAF without destroying
+    // its pool; moveend redraws the field in the settled projection.
+    function pauseParticleAnimationForMapGesture() {
+      if (particleRaf) { cancelAnimationFrame(particleRaf); particleRaf = 0; }
+      if (flowCtx && flowCanvas) flowCtx.clearRect(0, 0, flowCanvas.width, flowCanvas.height);
+    }
+
     // ---- UI wiring ----
     function setProduct(key) {
       currentProduct = key;
@@ -4233,7 +4241,20 @@
     }
     map.getView().on('change:resolution', deferViewportRedraw);
     map.getView().on('change:rotation', deferViewportRedraw);
+    let mapPointerDragging = false;
+    map.on('pointerdrag', () => {
+      if (mapPointerDragging) return;
+      mapPointerDragging = true;
+      pauseParticleAnimationForMapGesture();
+      stopWavePacketAnimation();
+    });
     map.on('moveend', scheduleOverlayRedraw);
+    map.on('moveend', () => {
+      if (!mapPointerDragging) return;
+      mapPointerDragging = false;
+      // drawOverlaysForProduct() is debounced by scheduleOverlayRedraw above;
+      // it will restart the particle RAF once the map has settled.
+    });
     map.on('change:size', () => {
       // re-seed particles to new viewport area, redraw
       seedWindParticles();
