@@ -4242,6 +4242,14 @@
     map.getView().on('change:resolution', deferViewportRedraw);
     map.getView().on('change:rotation', deferViewportRedraw);
     let mapPointerDragging = false;
+    map.on('movestart', () => {
+      // movestart fires before the first pointerdrag frame, which prevents
+      // one expensive particle pass from racing the start of a pan.
+      if (mapPointerDragging) return;
+      mapPointerDragging = true;
+      pauseParticleAnimationForMapGesture();
+      stopWavePacketAnimation();
+    });
     map.on('pointerdrag', () => {
       if (mapPointerDragging) return;
       mapPointerDragging = true;
