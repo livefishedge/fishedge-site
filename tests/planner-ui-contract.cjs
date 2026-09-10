@@ -20,6 +20,9 @@ assert(weatherDetail.includes("'cloud_low'") && weatherDetail.includes("'cloud_m
 const seaDetail = html.slice(html.indexOf("sea: {"), html.indexOf("weather: {"));
 assert(!seaDetail.includes("'surface_texture'"), 'surface texture must be removed from Sea Details');
 assert(html.includes('data-layer="surface_height"'), 'Currents mode must expose Sea Surface Height anomaly contours');
+assert(html.includes("surface_height_m: ['m', 'ft']"), 'SLA unit toggle must expose metric and imperial labels');
+assert(html.includes("key === 'surface_height_m' && unitModes[key] === 'imperial'"), 'SLA imperial conversion must be implemented');
+assert(html.includes("displayUnit('surface_height_m', 'm')"), 'SLA contour labels must honor the selected unit');
 assert(html.includes("mapFields:[['sea_surface_temperature_f','Sea-surface temperature']]"), 'SST must remain the only Currents color-map field');
 assert(html.includes('const currentParticles = []'), 'currents must have an animated particle layer');
 assert(html.includes('const dt = vec.speed * 0.00035'), 'current particles must move slower than wind particles');

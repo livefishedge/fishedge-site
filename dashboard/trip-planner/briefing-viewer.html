@@ -1291,11 +1291,12 @@
     let currentFrame = null;
     let activeRange = null; // {vmin, vmax} computed per-frame when dynamicRange=true
     let localTideExtrema = null;
-    const unitModes = { temperature_f: 'imperial', apparent_temperature_f: 'imperial', dew_point_f: 'imperial', wave_height_ft: 'imperial', swell_height_ft: 'imperial', wind_wave_height_ft: 'imperial', wind_speed_kn: 'imperial', wind_gust_kn: 'imperial', current_speed_kn: 'imperial', pressure_hpa: 'metric', tide_range_ft: 'imperial', visibility_mi: 'imperial', precipitation_in: 'imperial', rain_in: 'imperial', showers_in: 'imperial', snowfall_in: 'imperial', sea_surface_temperature_f: 'imperial' };
-    const UNIT_LABELS = { temperature_f: ['°F', '°C'], apparent_temperature_f: ['°F', '°C'], dew_point_f: ['°F', '°C'], sea_surface_temperature_f: ['°F', '°C'], wave_height_ft: ['ft', 'm'], swell_height_ft: ['ft', 'm'], wind_wave_height_ft: ['ft', 'm'], wind_speed_kn: ['kn', 'm/s'], wind_gust_kn: ['kn', 'm/s'], current_speed_kn: ['kn', 'm/s'], pressure_hpa: ['hPa', 'inHg'], tide_range_ft: ['ft', 'm'], surface_height_m: ['m', 'm'], visibility_mi: ['mi', 'km'], precipitation_in: ['in', 'mm'], rain_in: ['in', 'mm'], showers_in: ['in', 'mm'], snowfall_in: ['in', 'mm'] };
+    const unitModes = { temperature_f: 'imperial', apparent_temperature_f: 'imperial', dew_point_f: 'imperial', wave_height_ft: 'imperial', swell_height_ft: 'imperial', wind_wave_height_ft: 'imperial', wind_speed_kn: 'imperial', wind_gust_kn: 'imperial', current_speed_kn: 'imperial', pressure_hpa: 'metric', tide_range_ft: 'imperial', surface_height_m: 'metric', visibility_mi: 'imperial', precipitation_in: 'imperial', rain_in: 'imperial', showers_in: 'imperial', snowfall_in: 'imperial', sea_surface_temperature_f: 'imperial' };
+    const UNIT_LABELS = { temperature_f: ['°F', '°C'], apparent_temperature_f: ['°F', '°C'], dew_point_f: ['°F', '°C'], sea_surface_temperature_f: ['°F', '°C'], wave_height_ft: ['ft', 'm'], swell_height_ft: ['ft', 'm'], wind_wave_height_ft: ['ft', 'm'], wind_speed_kn: ['kn', 'm/s'], wind_gust_kn: ['kn', 'm/s'], current_speed_kn: ['kn', 'm/s'], pressure_hpa: ['hPa', 'inHg'], tide_range_ft: ['ft', 'm'], surface_height_m: ['m', 'ft'], visibility_mi: ['mi', 'km'], precipitation_in: ['in', 'mm'], rain_in: ['in', 'mm'], showers_in: ['in', 'mm'], snowfall_in: ['in', 'mm'] };
     function convertDisplayValue(key, value) {
       if (!Number.isFinite(value)) return value;
       if (key === 'pressure_hpa' && unitModes[key] === 'imperial') return value * 0.0295299831;
+      if (key === 'surface_height_m' && unitModes[key] === 'imperial') return value * 3.280839895;
       if (key === 'tide_range_ft' && unitModes[key] === 'metric') return value * 0.3048;
       if (key === 'visibility_mi' && unitModes[key] === 'metric') return value * 1.609344;
       if (key === 'precipitation_in' && unitModes[key] === 'metric') return value * 25.4;
@@ -1315,6 +1316,7 @@
       if (unitModes[key] === 'metric' && ['wind_gust_kn', 'current_speed_kn'].includes(key)) return 'm/s';
       if (unitModes[key] === 'imperial' && key === 'pressure_hpa') return 'inHg';
       if (unitModes[key] === 'metric' && key === 'tide_range_ft') return 'm';
+      if (unitModes[key] === 'imperial' && key === 'surface_height_m') return 'ft';
       if (unitModes[key] === 'metric' && key === 'visibility_mi') return 'km';
       if (unitModes[key] === 'metric' && key === 'precipitation_in') return 'mm';
       if (unitModes[key] === 'metric' && ['rain_in', 'showers_in', 'snowfall_in'].includes(key)) return 'mm';
@@ -3744,7 +3746,8 @@
         if (lineNo % 5 === 0) {
           const first = paths[0][0];
           slaCtx.fillStyle = 'rgba(255,245,190,0.95)';
-          slaCtx.fillText(`${rounded.toFixed(2)} m`, first[0] + 3, first[1] - 3);
+          const shown = convertDisplayValue('surface_height_m', rounded);
+          slaCtx.fillText(`${shown.toFixed(2)} ${displayUnit('surface_height_m', 'm')}`, first[0] + 3, first[1] - 3);
         }
       }
       const status = document.getElementById('bv-menu-status');
