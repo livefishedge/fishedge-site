@@ -1888,8 +1888,8 @@
         const input = document.querySelector(`#bv-layers input[data-layer="${key}"]`);
         const label = input?.closest('label');
         if (!input || !label) continue;
-        const anyFrameAvailable = ['tide_range'].includes(key) && forecastData && forecastData.frames
-          ? forecastData.frames.some(frame => Array.isArray(frame?.tide_range_ft) && frame.tide_range_ft.length > 0)
+        const anyFrameAvailable = ['tide_range','surface_height'].includes(key) && forecastData && forecastData.frames
+          ? forecastData.frames.some(frame => Array.isArray(frame?.[key === 'surface_height' ? 'surface_height_m' : 'tide_range_ft']) && frame[key === 'surface_height' ? 'surface_height_m' : 'tide_range_ft'].length > 0)
           : available[key];
         // The co-range control is available only when the static harmonic
         // amplitude field is present in the current forecast artifact.
