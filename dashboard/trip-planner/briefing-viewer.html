@@ -3601,7 +3601,10 @@
       resizeOverlayCanvases();
       const dpr = flowCanvas.width / mapEl.clientWidth;
       const contourKey = requestedKey || (currentProduct === 'surface_height_m' ? 'surface_height_m' : 'pressure_hpa');
-      const contourCtx = contourKey === 'surface_height_m' ? streamlineCtx : flowCtx;
+      // SLA contours must sit above the raster and animated flow layers. The
+      // dedicated tide overlay is persistent (unlike flowCtx) and has the
+      // highest map-canvas z-index, so contours remain visible over SST.
+      const contourCtx = contourKey === 'surface_height_m' ? tideCtx : flowCtx;
       if (!preserveCanvas) contourCtx.clearRect(0, 0, flowCanvas.width, flowCanvas.height);
       contourCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
       // OFS is an optional nested forecast. Some forecast hours legitimately
