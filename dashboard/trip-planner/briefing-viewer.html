@@ -3750,8 +3750,8 @@
         // Build a fine seed lattice once. This avoids probing the canvas mask
         // hundreds of thousands of times while still distributing particles
         // continuously across water instead of a sparse coarse grid.
-        for (let lat = bbox[1] + 0.1; lat < bbox[3]; lat += 0.2) {
-          for (let lon = bbox[0] + 0.1; lon < bbox[2]; lon += 0.2) {
+        for (let lat = bbox[1] + 0.025; lat < bbox[3]; lat += 0.05) {
+          for (let lon = bbox[0] + 0.025; lon < bbox[2]; lon += 0.05) {
             if (isCurrentWaterPoint(lon, lat)) currentWaterSeeds.push([lon, lat]);
           }
         }
@@ -3763,14 +3763,14 @@
       let attempts = 0;
       while (currentParticles.length < target && attempts++ < target * 3) {
         const seed = currentWaterSeeds[Math.floor(Math.random() * currentWaterSeeds.length)];
-        const lon = seed[0] + (Math.random() - 0.5) * 0.045;
-        const lat = seed[1] + (Math.random() - 0.5) * 0.045;
+        const lon = seed[0] + (Math.random() - 0.5) * 0.05;
+        const lat = seed[1] + (Math.random() - 0.5) * 0.05;
         currentParticles.push({lon, lat, age: Math.random() * 180, maxAge: 220 + Math.random() * 240});
       }
     }
 
     function randomCurrentParticle() {
-      if (currentWaterSeeds.length) { const seed = currentWaterSeeds[Math.floor(Math.random() * currentWaterSeeds.length)]; return {lon: seed[0], lat: seed[1], age: 0, maxAge: 220 + Math.random() * 240}; }
+      if (currentWaterSeeds.length) { const seed = currentWaterSeeds[Math.floor(Math.random() * currentWaterSeeds.length)]; return {lon: seed[0] + (Math.random() - 0.5) * 0.05, lat: seed[1] + (Math.random() - 0.5) * 0.05, age: 0, maxAge: 220 + Math.random() * 240}; }
       return {lon: bbox[0], lat: bbox[1], age: 0, maxAge: 1};
     }
 
