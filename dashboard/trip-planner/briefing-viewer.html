@@ -3655,6 +3655,7 @@
         : ((vmax - vmin) < 10 ? 1 : 2);
       const levels = [];
       for (let v = Math.ceil(vmin / step) * step; v <= vmax; v += step) levels.push(v);
+      let drawnCells = 0;
       contourCtx.strokeStyle = contourKey === 'surface_height_m' ? 'rgba(255, 220, 110, 0.88)' : 'rgba(255, 255, 255, 0.55)';
       contourCtx.lineWidth = 0.8;
       contourCtx.font = '9px monospace';
@@ -3697,6 +3698,7 @@
             if (edges.length >= 2) cellPoints.push(edges);
           }
         }
+        drawnCells += cellPoints.length;
         contourCtx.beginPath();
         for (const seg of cellPoints) {
           contourCtx.moveTo(seg[0][0], seg[0][1]);
@@ -3709,6 +3711,10 @@
           const unitKey = contourKey === 'surface_height_m' ? 'surface_height_m' : 'pressure_hpa';
           contourCtx.fillText(`${level.toFixed(contourKey === 'surface_height_m' ? 2 : (unitModes.pressure_hpa === 'imperial' ? 2 : 0))} ${displayUnit(unitKey, contourKey === 'surface_height_m' ? 'm' : 'hPa')}`, lx + 2, ly - 2);
         }
+      }
+      if (contourKey === 'surface_height_m') {
+        const status = document.getElementById('bv-menu-status');
+        if (status && drawnCells === 0) status.textContent = 'Sea Level Anomaly · NOAA OFS · no contour crossings in this frame';
       }
     }
 
