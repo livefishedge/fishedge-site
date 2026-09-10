@@ -3024,6 +3024,10 @@
         if (layerVisibility.pressure) drawIsobars(true);
         if (layerVisibility.wind) drawStreamlines(true);
         if (layerVisibility.current) drawStreamlines(true, 'current');
+        // Sea-level anomaly is a persistent contour overlay. Wave packet
+        // animation redraws the streamline canvas every tick, so redraw the
+        // anomaly after that clear or it disappears as soon as animation runs.
+        if (layerVisibility.surface_height) drawIsobars(true, 'surface_height_m');
         wavePacketRaf = requestAnimationFrame(tick);
       };
       wavePacketRaf = requestAnimationFrame(tick);
