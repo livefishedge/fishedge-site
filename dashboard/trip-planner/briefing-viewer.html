@@ -1415,6 +1415,7 @@
     let selectedHeatKey = 'wave_height_ft';
     const particles = [];
     const currentParticles = [];
+    const currentWaterSeeds = [];
     // Display multiplier only: forecast current values/readouts remain in
     // physical units, while slow modeled currents remain visually legible.
     const CURRENT_VISUAL_SPEED_MULTIPLIER = 10;
@@ -3745,24 +3746,31 @@
     function seedCurrentParticles() {
       currentParticles.length = 0;
       if (!forecastData || !mapEl) return;
+      if (!currentWaterSeeds.length) {
+        // Build a fine seed lattice once. This avoids probing the canvas mask
+        // hundreds of thousands of times while still distributing particles
+        // continuously across water instead of a sparse coarse grid.
+        for (let lat = bbox[1] + 0.1; lat < bbox[3]; lat += 0.2) {
+          for (let lon = bbox[0] + 0.1; lon < bbox[2]; lon += 0.2) {
+            if (isCurrentWaterPoint(lon, lat)) currentWaterSeeds.push([lon, lat]);
+          }
+        }
+      }
+      if (!currentWaterSeeds.length) return;
       const rect = mapEl.getBoundingClientRect();
       const area = Math.max(1, rect.width * rect.height);
-      const target = Math.max(5000, Math.min(22000, Math.round(area / 50)));
+      const target = Math.max(1500, Math.min(3000, Math.round(area / 150)));
       let attempts = 0;
-      while (currentParticles.length < target && attempts++ < target * 20) {
-        const lon = bbox[0] + Math.random() * (bbox[2] - bbox[0]);
-        const lat = bbox[1] + Math.random() * (bbox[3] - bbox[1]);
-        if (!isCurrentWaterPoint(lon, lat)) continue;
+      while (currentParticles.length < target && attempts++ < target * 3) {
+        const seed = currentWaterSeeds[Math.floor(Math.random() * currentWaterSeeds.length)];
+        const lon = seed[0] + (Math.random() - 0.5) * 0.045;
+        const lat = seed[1] + (Math.random() - 0.5) * 0.045;
         currentParticles.push({lon, lat, age: Math.random() * 180, maxAge: 220 + Math.random() * 240});
       }
     }
 
     function randomCurrentParticle() {
-      for (let attempt = 0; attempt < 40; attempt++) {
-        const lon = bbox[0] + Math.random() * (bbox[2] - bbox[0]);
-        const lat = bbox[1] + Math.random() * (bbox[3] - bbox[1]);
-        if (isCurrentWaterPoint(lon, lat)) return {lon, lat, age: 0, maxAge: 220 + Math.random() * 240};
-      }
+      if (currentWaterSeeds.length) { const seed = currentWaterSeeds[Math.floor(Math.random() * currentWaterSeeds.length)]; return {lon: seed[0], lat: seed[1], age: 0, maxAge: 220 + Math.random() * 240}; }
       return {lon: bbox[0], lat: bbox[1], age: 0, maxAge: 1};
     }
 
