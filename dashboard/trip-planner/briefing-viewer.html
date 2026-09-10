@@ -203,6 +203,7 @@
     .bv-flow-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 4; mix-blend-mode: screen; }
     .bv-streamlines-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3; }
     .bv-tide-overlay-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 6; mix-blend-mode: normal; }
+    .bv-sla-overlay-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 7; mix-blend-mode: normal; }
     #bv-map > canvas.bv-tide-overlay-canvas { position: absolute !important; inset: 0 !important; z-index: 6 !important; pointer-events: none !important; }
 
     .ol-attribution { color: #6b7d92 !important; background: rgba(5, 11, 16, 0.8) !important; font-size: 10px !important; pointer-events: none; }
@@ -1187,6 +1188,12 @@
     tideCanvas.setAttribute('aria-hidden', 'true');
     mapEl.appendChild(tideCanvas);
     const tideCtx = tideCanvas.getContext('2d');
+    // Keep SLA contours isolated from tidal redraws and animated flow trails.
+    const slaCanvas = document.createElement('canvas');
+    slaCanvas.className = 'bv-sla-overlay-canvas';
+    slaCanvas.setAttribute('aria-hidden', 'true');
+    mapEl.appendChild(slaCanvas);
+    const slaCtx = slaCanvas.getContext('2d');
 
     // client-rendered raster layer (replaces old PNG ImageStatic)
     const rasterLayer = new ol.layer.Image({
@@ -1920,6 +1927,7 @@
       streamlineCtx && streamlineCtx.clearRect(0, 0, streamlineCanvas.width, streamlineCanvas.height);
       flowCtx && flowCtx.clearRect(0, 0, flowCanvas.width, flowCanvas.height);
       tideCtx && tideCtx.clearRect(0, 0, tideCanvas.width, tideCanvas.height);
+      slaCtx && slaCtx.clearRect(0, 0, slaCanvas.width, slaCanvas.height);
     }
 
     function drawSteepnessWarnings() {
@@ -3372,7 +3380,7 @@
       const dpr = Math.max(1, Math.min(1.5, window.devicePixelRatio || 1));
       const W = Math.max(1, Math.round(rect.width * dpr));
       const H = Math.max(1, Math.round(rect.height * dpr));
-      [flowCanvas, streamlineCanvas, tideCanvas].forEach(c => {
+      [flowCanvas, streamlineCanvas, tideCanvas, slaCanvas].forEach(c => {
         if (c.width !== W || c.height !== H) {
           c.width = W; c.height = H;
           c.style.width = rect.width + 'px';
@@ -3604,7 +3612,7 @@
       // SLA contours must sit above the raster and animated flow layers. The
       // dedicated tide overlay is persistent (unlike flowCtx) and has the
       // highest map-canvas z-index, so contours remain visible over SST.
-      const contourCtx = contourKey === 'surface_height_m' ? tideCtx : flowCtx;
+      const contourCtx = contourKey === 'surface_height_m' ? slaCtx : flowCtx;
       if (!preserveCanvas) contourCtx.clearRect(0, 0, flowCanvas.width, flowCanvas.height);
       contourCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
       // OFS is an optional nested forecast. Some forecast hours legitimately
