@@ -3615,6 +3615,8 @@
       const contourCtx = contourKey === 'surface_height_m' ? slaCtx : flowCtx;
       if (!preserveCanvas) contourCtx.clearRect(0, 0, flowCanvas.width, flowCanvas.height);
       contourCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      contourCtx.globalCompositeOperation = 'source-over';
+      contourCtx.globalAlpha = 1;
       // OFS is an optional nested forecast. Some forecast hours legitimately
       // have no OFS frame. Use the nearest frame with finite values rather
       // than silently drawing an empty overlay; report the source time so the
