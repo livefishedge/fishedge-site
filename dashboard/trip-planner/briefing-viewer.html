@@ -3694,7 +3694,10 @@
             // SLA is an ocean-only product. Never contour across land or a
             // missing coastal cell, even when the source grid has numbers
             // there from interpolation.
-            if (contourKey === 'surface_height_m' && forecastData.tide_water_cells?.[yi]?.[xi] !== true) continue;
+            if (contourKey === 'surface_height_m') {
+              const marineMask = forecastData.wave_open_water_cells || forecastData.wave_water_cells || forecastData.tide_water_cells;
+              if (marineMask?.[yi]?.[xi] !== true) continue;
+            }
             const v00 = sample(xi, yi), v10 = sample(xi+1, yi);
             const v01 = sample(xi, yi+1), v11 = sample(xi+1, yi+1);
             if (v00 == null || v10 == null || v01 == null || v11 == null) continue;
