@@ -23,8 +23,8 @@ assert(html.includes('data-layer="surface_height"'), 'Currents mode must expose 
 assert(html.includes("mapFields:[['sea_surface_temperature_f','Sea-surface temperature']]"), 'SST must remain the only Currents color-map field');
 assert(html.includes('const currentParticles = []'), 'currents must have an animated particle layer');
 assert(html.includes('const dt = vec.speed * 0.00035'), 'current particles must move slower than wind particles');
-assert(html.includes('CURRENT_VISUAL_SPEED_MULTIPLIER = 10'), 'current particle display speed must be exaggerated 10x');
+assert(html.includes('CURRENT_VISUAL_SPEED_MULTIPLIER = 5'), 'current particle display speed must be restored to 5x');
 assert(html.includes('currentParticleColor'), 'current particles must use SST-origin tinting');
 assert(html.includes('Math.max(1500, Math.min(3000'), 'current particles must be substantially denser');
-assert(html.includes("fixedRange: [60, 90]"), 'SST range must be 60–90°F');
+assert(html.includes("fixedRange: [65, 85]"), 'SST range must be 65–85°F');
 console.log('PASS: planner scale, labels, gust behavior, and progressive-detail contracts');
