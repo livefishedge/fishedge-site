@@ -3501,13 +3501,42 @@
     // (u,v) field. A long one-way trace makes most paths terminate on the
     // downstream bbox edge and creates a false convergence wall, so keep the
     // visible segment local and let particles communicate longer-range flow.
+    function traceCurrentDirection(lon0, lat0, direction, maxSteps = 96) {
+      const path = [];
+      let lon = lon0, lat = lat0;
+      for (let i = 0; i < maxSteps; i++) {
+        if (lon < fieldBbox[0] || lon > fieldBbox[2] || lat < fieldBbox[1] || lat > fieldBbox[3] ||
+            (i % 4 === 0 && !isCurrentWaterPoint(lon, lat))) break;
+        path.push([lon, lat]);
+        const v0 = bilinearVec(currentFrame, lon, lat, 'current');
+        if (!v0 || v0.speed < 0.01) break;
+        const cosLat = Math.max(0.35, Math.cos(lat * Math.PI / 180));
+        const step = 0.055 * direction;
+        const hLon = (v0.u / v0.speed) * step / cosLat;
+        const hLat = (v0.v / v0.speed) * step;
+        const midLon = lon + hLon * 0.5, midLat = lat + hLat * 0.5;
+        const vm = bilinearVec(currentFrame, midLon, midLat, 'current');
+        if (!vm || vm.speed < 0.01 || (i % 4 === 0 && !isCurrentWaterPoint(midLon, midLat))) break;
+        const midCos = Math.max(0.35, Math.cos(midLat * Math.PI / 180));
+        lon += (vm.u / vm.speed) * step / midCos;
+        lat += (vm.v / vm.speed) * step;
+      }
+      return path;
+    }
+
     function traceStreamline(field, lon0, lat0, vectorField = 'wind') {
+      if (vectorField === 'current') {
+        const forward = traceCurrentDirection(lon0, lat0, 1, 112);
+        const backward = traceCurrentDirection(lon0, lat0, -1, 112).reverse();
+        backward.pop();
+        return backward.concat(forward);
+      }
       const path = [];
       let lon = lon0, lat = lat0;
       let prevU = null, prevV = null;
       const calmThresholdKn = vectorField === 'current' ? 0.05 : 2.5;
       const baseStepDeg = vectorField === 'current' ? 0.085 : 0.08;
-      const maxSteps = vectorField === 'current' ? 64 : 30;
+      const maxSteps = 30;
       for (let i = 0; i < maxSteps; i++) {
         if (lon < field.bbox[0] || lon > field.bbox[2] || lat < field.bbox[1] || lat > field.bbox[3]) break;
         path.push([lon, lat]);
@@ -3998,7 +4027,7 @@
     }
 
     function makeCurrentParticle(lon, lat, age = 0) {
-      return { lon, lat, age, maxAge: 220 + Math.random() * 240, trail: [] };
+      return { lon, lat, age, maxAge: 420 + Math.random() * 300, trail: [] };
     }
 
     function seedCurrentParticles() {
@@ -4143,15 +4172,23 @@
               currentParticles[i] = randomCurrentParticle();
               continue;
             }
-            const cosLat = Math.cos(p.lat * Math.PI / 180);
             const dt = vec.speed * 0.00035 * CURRENT_VISUAL_SPEED_MULTIPLIER;
             const oldLon = p.lon, oldLat = p.lat;
-            p.lon += (vec.u / vec.speed) * dt / cosLat;
-            p.lat += (vec.v / vec.speed) * dt;
+            // Midpoint (RK2) advection keeps long geographic trails smooth
+            // through the coarse field instead of producing angular, wind-like
+            // one-step dashes.
+            const cosLat = Math.max(0.35, Math.cos(p.lat * Math.PI / 180));
+            const midLon = p.lon + (vec.u / vec.speed) * dt * 0.5 / cosLat;
+            const midLat = p.lat + (vec.v / vec.speed) * dt * 0.5;
+            const midVec = bilinearVec(currentFrame, midLon, midLat, 'current');
+            const adv = midVec && midVec.speed >= 0.01 ? midVec : vec;
+            const midCos = Math.max(0.35, Math.cos(midLat * Math.PI / 180));
+            p.lon += (adv.u / adv.speed) * dt / midCos;
+            p.lat += (adv.v / adv.speed) * dt;
             p.age += 1;
             p.trail = Array.isArray(p.trail) ? p.trail : [];
             p.trail.push([oldLon, oldLat]);
-            const maxTrailPoints = mapEl.clientWidth < 600 ? 10 : 16;
+            const maxTrailPoints = mapEl.clientWidth < 600 ? 72 : 112;
             if (p.trail.length > maxTrailPoints) p.trail.splice(0, p.trail.length - maxTrailPoints);
             const trailPoints = p.trail.map(([lon, lat]) =>
               map.getPixelFromCoordinate(ol.proj.fromLonLat([lon, lat], mapProjection))
@@ -4163,9 +4200,10 @@
             flowCtx.lineCap = 'round';
             flowCtx.lineJoin = 'round';
             const allPoints = trailPoints.concat([afterPx]);
-            // Three color bands are a bounded approximation of a continuous
-            // per-segment gradient: old tail, middle trail, and live head.
-            const bands = Math.min(3, allPoints.length - 1);
+            // Use multiple short geographic bands so SST changes remain
+            // visible along a long filament instead of collapsing the whole
+            // trail to its head temperature.
+            const bands = Math.min(10, allPoints.length - 1);
             for (let band = 0; band < bands; band++) {
               const start = Math.floor(band * (allPoints.length - 1) / bands);
               const end = Math.floor((band + 1) * (allPoints.length - 1) / bands);

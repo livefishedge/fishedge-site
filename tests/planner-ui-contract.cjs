@@ -27,6 +27,9 @@ assert(html.includes("mapFields:[['sea_surface_temperature_f','Sea-surface tempe
 assert(html.includes('const currentParticles = []'), 'currents must have an animated particle layer');
 assert(html.includes('const dt = vec.speed * 0.00035'), 'current particles must move slower than wind particles');
 assert(html.includes('CURRENT_VISUAL_SPEED_MULTIPLIER = 5'), 'current particle display speed must be restored to 5x');
+assert(html.includes('maxTrailPoints = mapEl.clientWidth < 600 ? 72 : 112'), 'current trails must remain long geographic histories');
+assert(html.includes('traceCurrentDirection(lon0, lat0, direction, maxSteps = 96)'), 'current streamlines must use bounded bidirectional geographic tracing');
+assert(html.includes('Midpoint (RK2) advection'), 'current particles must use midpoint advection');
 assert(html.includes('currentParticleColor'), 'current particles must use SST-origin tinting');
 assert(html.includes('Math.max(1500, Math.min(3000'), 'current particles must be substantially denser');
 assert(html.includes("fixedRange: [65, 85]"), 'SST range must be 65–85°F');
