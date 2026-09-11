@@ -2016,6 +2016,7 @@
       clearOverlays();
       const def = PRODUCTS[currentProduct];
       const waveProduct = ['wave_composite', 'wave_height_ft', 'swell_height_ft', 'wind_wave_height_ft'].includes(currentProduct);
+      const currentsMode = activePlannerPreset === 'fishing';
       // Mike #34713: 'doubling' effect on coastlines was caused by the
       // rasterLayer still being in the layer stack at opacity 0.85 even
       // when drawFrameToTile returned early. Hide the layer entirely
@@ -2035,7 +2036,13 @@
         // again so the newly enabled composite heat layer is painted now.
         map.render();
       }
-      if (def.viz === 'streamlines') {
+      if (currentsMode) {
+        // Currents is an SST raster plus ocean-current motion. It must not
+        // enter the wave-composite lifecycle: that lifecycle retraces static
+        // fields and starts a second RAF on every mode switch.
+        drawScalarAndWaves(activeHeatKey());
+        if (layerVisibility.current) drawStreamlines(true, 'current');
+      } else if (def.viz === 'streamlines') {
         drawStreamlines();
         // Particles use the same weak-wind guard as streamlines. A coastline
         // mask is still a future refinement, but disabling the layer leaves
@@ -2060,9 +2067,10 @@
       else stopParticleAnimation();
       // Current arrows/streamlines are independent of the selected scalar
       // field, so Fuel and Inlet can show them over wave/tide backgrounds.
-      if (layerVisibility.current) drawStreamlines(!!layerVisibility.wind, 'current');
+      if (!currentsMode && layerVisibility.current) drawStreamlines(!!layerVisibility.wind, 'current');
       if (layerVisibility.surface_height) drawIsobars(true, 'surface_height_m');
       if (layerVisibility.current || layerVisibility.wind || layerVisibility.wind_gust) startParticleAnimation();
+      else stopParticleAnimation();
       drawSteepnessWarnings();
       // Co-range overlay is independent of the selected base product.
       drawTidalContours();
@@ -2363,6 +2371,9 @@
     // wind-wave field, white arrows for atmospheric 10-m wind.
     function drawWaveComposite() {
       if (!currentFrame || !forecastData) return;
+      // Currents has a separate render path; an asynchronous product callback
+      // must never restart the wave animation after the mode changes.
+      if (activePlannerPreset === 'fishing') return;
       resizeOverlayCanvases();
       const dpr = flowCanvas.width / mapEl.clientWidth;
       // Both canvases share the same transform; clear them in case prior product
@@ -3053,11 +3064,11 @@
     }
 
     function startWavePacketAnimation() {
-      if (wavePacketRaf) return;
+      if (wavePacketRaf || activePlannerPreset === 'fishing') return;
       wavePacketLastTs = 0;
       const tick = ts => {
         wavePacketRaf = 0;
-        if (currentProduct !== 'wave_composite' || !currentFrame || !forecastData) return;
+        if (activePlannerPreset === 'fishing' || currentProduct !== 'wave_composite' || !currentFrame || !forecastData) return;
         // Packet rendering integrates many map-coordinate lookups and canvas
         // strokes. Keep it at a steady ~25 fps instead of competing with the
         // browser's 60 fps compositor on mobile.
@@ -3094,10 +3105,8 @@
         if (layerVisibility.pressure) drawIsobars(true);
         if (layerVisibility.wind) drawStreamlines(true);
         if (layerVisibility.current) drawStreamlines(true, 'current');
-        // Sea-level anomaly is a persistent contour overlay. Wave packet
-        // animation redraws the streamline canvas every tick, so redraw the
-        // anomaly after that clear or it disappears as soon as animation runs.
-        if (layerVisibility.surface_height) drawIsobars(true, 'surface_height_m');
+        // SLA owns a separate persistent canvas. Static contours are rendered
+        // on source/view changes, never rebuilt by this animation tick.
         wavePacketRaf = requestAnimationFrame(tick);
       };
       wavePacketRaf = requestAnimationFrame(tick);
@@ -3756,6 +3765,7 @@
           const first = labelSegment[0], last = labelSegment[1];
           const labelX = (first[0] + last[0]) / 2;
           const labelY = (first[1] + last[1]) / 2;
+          slaCtx.save();
           slaCtx.fillStyle = 'rgba(255,245,190,0.95)';
           const shown = convertDisplayValue('surface_height_m', rounded);
           const text = `${shown.toFixed(2)} ${displayUnit('surface_height_m', 'm')}`;
@@ -3766,8 +3776,7 @@
           slaCtx.strokeText(text, labelX, labelY);
           slaCtx.fillStyle = 'rgba(255,245,190,0.98)';
           slaCtx.fillText(text, labelX, labelY);
-          slaCtx.textAlign = 'start';
-          slaCtx.textBaseline = 'alphabetic';
+          slaCtx.restore();
         }
       }
       const status = document.getElementById('bv-menu-status');
@@ -4245,6 +4254,18 @@
         drawOverlaysForProduct();
       }, 80);
     }
+    function settleMapGesture() {
+      if (!mapPointerDragging) { scheduleOverlayRedraw(); return; }
+      if (overlayRedrawTimer) { clearTimeout(overlayRedrawTimer); overlayRedrawTimer = 0; }
+      if (viewportTransitionTimer) { clearTimeout(viewportTransitionTimer); viewportTransitionTimer = 0; }
+      viewportTransitioning = false;
+      // Keep the translated frame in place until the geographic redraw has
+      // completed. Clearing the transform first exposes a stale frame.
+      drawOverlaysForProduct();
+      mapGestureCanvases.forEach(canvas => { if (canvas) canvas.style.transform = ''; });
+      mapGestureOriginCenter = null;
+      mapPointerDragging = false;
+    }
     function deferViewportRedraw() {
       viewportTransitioning = true;
       if (viewportTransitionTimer) clearTimeout(viewportTransitionTimer);
@@ -4255,6 +4276,7 @@
       stopWavePacketAnimation();
       viewportTransitionTimer = setTimeout(() => {
         viewportTransitionTimer = 0;
+        if (mapPointerDragging) return;
         viewportTransitioning = false;
         // Redraw directly after the transition. Going through the debounced
         // scheduler here can be skipped by the final moveend callback, which
@@ -4293,15 +4315,12 @@
       beginMapGesture();
       syncMapGestureOverlayPosition();
     });
-    map.on('moveend', scheduleOverlayRedraw);
-    map.on('moveend', () => {
-      if (!mapPointerDragging) return;
-      mapPointerDragging = false;
-      mapGestureCanvases.forEach(canvas => { if (canvas) canvas.style.transform = ''; });
-      mapGestureOriginCenter = null;
-      // drawOverlaysForProduct() is debounced by scheduleOverlayRedraw above;
-      // it will restart the particle RAF once the map has settled.
+    map.on('postrender', () => {
+      // OpenLayers can continue inertial movement after pointerdrag ends.
+      // Follow every rendered map frame so custom layers never trail it.
+      if (mapPointerDragging) syncMapGestureOverlayPosition();
     });
+    map.on('moveend', settleMapGesture);
     map.on('change:size', () => {
       // re-seed particles to new viewport area, redraw
       seedWindParticles();
