@@ -32,7 +32,7 @@ import requests
 import numpy as np
 
 REGION = "usec_md"
-FULL_BBOX = [-80.0, 33.0, -69.0, 43.0]
+FULL_BBOX = [-76.5, 35.5, -71.5, 40.5]
 # The planner displays the whole operational domain. Keeping the producer
 # grid on the old inner box made SST appear as a floating rectangle when the
 # map showed the full usec_md region. Use a square request that encloses the
@@ -41,7 +41,7 @@ FULL_BBOX = [-80.0, 33.0, -69.0, 43.0]
 DISPLAY_BBOX = FULL_BBOX
 FETCH_STEP_DEG = 0.5
 DISPLAY_STEP_DEG = 0.5
-N = 23  # square NxN fetch -> 11° span, covers the full 11°x10° domain
+N = 11  # square NxN fetch -> 5° span, matches Captain's Dashboard usec_md
 OUT_PATH = Path(__file__).resolve().parents[1] / "data" / "usec_md" / "briefing" / "forecast.json"
 DASHBOARD_OUT_PATH = Path(__file__).resolve().parents[1] / "dashboard" / "trip-planner" / "data" / "usec_md" / "briefing" / "forecast.json"
 FRAME_CHUNK_SIZE = 24

@@ -390,7 +390,10 @@
     const region = params.get('region') || 'usec_md';
 
     const BBOXES = {
-      usec_md:    [-77.0, 36.0, -72.0, 40.0],
+      // Canonical Captain's Dashboard region_meta bbox from
+      // dashboard/index-usec_md.json. Every planner product uses this same
+      // geographic contract; source products may have narrower coverage.
+      usec_md:    [-76.5, 35.5, -71.5, 40.5],
       usec_south: [-81.0, 31.0, -73.0, 36.0],
     };
     const bbox = BBOXES[region] || BBOXES.usec_md;
