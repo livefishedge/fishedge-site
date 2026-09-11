@@ -3607,12 +3607,14 @@
           if (!vec) continue;
           const sp = Math.sqrt(vec.u * vec.u + vec.v * vec.v);
           const t = Math.min(1, sp / maxSpeed);
-          const alpha = 0.22 + 0.40 * t;
-          const r = Math.round(180 + 60 * t);
-          const g = Math.round(215 + 30 * t);
-          const b = 230;
-          streamlineCtx.strokeStyle = `rgba(${r},${g},${b},${alpha})`;
-          streamlineCtx.lineWidth = 0.9;
+          const alpha = vectorField === 'current' ? 0.30 + 0.46 * t : 0.22 + 0.40 * t;
+          // Currents inherit the SST palette so the static transport field
+          // and moving particles read as one oceanographic visualization.
+          // Wind retains its neutral blue streamline treatment.
+          streamlineCtx.strokeStyle = vectorField === 'current'
+            ? currentParticleColor(mid[0], mid[1])
+            : `rgba(${Math.round(180 + 60 * t)},${Math.round(215 + 30 * t)},230,${alpha})`;
+          streamlineCtx.lineWidth = vectorField === 'current' ? 1.0 + 0.7 * t : 0.9;
           streamlineCtx.lineCap = 'round';
           streamlineCtx.lineJoin = 'round';
           // Fade alpha along the last 25% of the path so streamlines ending
@@ -4102,6 +4104,11 @@
         // Current particles use the same animated language as wind, but move
         // more slowly and inherit a subtle SST tint from their origin point.
         if (layerVisibility.current) {
+          // Additive blending makes intersecting SST-colored tracks glow like
+          // the reference visualization while preserving the underlying SST
+          // raster and avoiding a second expensive canvas.
+          flowCtx.save();
+          flowCtx.globalCompositeOperation = 'lighter';
           for (let i = 0; i < currentParticles.length; i++) {
             const p = currentParticles[i];
             const vec = bilinearVec(currentFrame, p.lon, p.lat, 'current');
@@ -4122,15 +4129,17 @@
             const beforePx = map.getPixelFromCoordinate(ol.proj.fromLonLat([oldLon, oldLat], mapProjection));
             const afterPx = map.getPixelFromCoordinate(ol.proj.fromLonLat([p.lon, p.lat], mapProjection));
             if (!beforePx || !afterPx) continue;
-            flowCtx.globalAlpha = Math.max(0.28, Math.min(0.88, (1 - p.age / p.maxAge) * 1.05));
+            const speedT = Math.min(1, vec.speed / 2.0);
+            flowCtx.globalAlpha = Math.max(0.30, Math.min(0.92, (0.56 + 0.30 * speedT) * (1 - p.age / p.maxAge)));
             flowCtx.strokeStyle = currentParticleColor(oldLon, oldLat);
-            flowCtx.lineWidth = 1.15;
+            flowCtx.lineWidth = 1.05 + 0.85 * speedT;
             flowCtx.lineCap = 'round';
             flowCtx.beginPath();
             flowCtx.moveTo(beforePx[0], beforePx[1]);
             flowCtx.lineTo(afterPx[0], afterPx[1]);
             flowCtx.stroke();
           }
+          flowCtx.restore();
         }
         // Gusts use the forecast wind direction and peak-speed field. Render
         // only meaningful excess over sustained wind as sparse red bursts, so
