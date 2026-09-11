@@ -200,10 +200,10 @@
 
     .bv-map { position: absolute; top: 195px; left: 0; right: 0; bottom: 0; touch-action: none; }
     body.bv-moon-active .bv-map{ top:113px !important; }
-    .bv-flow-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 4; mix-blend-mode: screen; }
-    .bv-streamlines-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3; }
-    .bv-tide-overlay-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 6; mix-blend-mode: normal; }
-    .bv-sla-overlay-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 7; mix-blend-mode: normal; }
+    .bv-flow-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 4; mix-blend-mode: screen; transform-origin: center center; }
+    .bv-streamlines-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3; transform-origin: center center; }
+    .bv-tide-overlay-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 6; mix-blend-mode: normal; transform-origin: center center; }
+    .bv-sla-overlay-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 7; mix-blend-mode: normal; transform-origin: center center; }
     #bv-map > canvas.bv-tide-overlay-canvas { position: absolute !important; inset: 0 !important; z-index: 6 !important; pointer-events: none !important; }
 
     .ol-attribution { color: #6b7d92 !important; background: rgba(5, 11, 16, 0.8) !important; font-size: 10px !important; pointer-events: none; }
@@ -2098,6 +2098,7 @@
       drawSteepnessWarnings();
       // Co-range overlay is independent of the selected base product.
       drawTidalContours();
+      overlayPaintedView = captureMapView();
     }
 
     function drawTidalContours() {
@@ -4201,7 +4202,6 @@
     // its pool; moveend redraws the field in the settled projection.
     function pauseParticleAnimationForMapGesture() {
       if (particleRaf) { cancelAnimationFrame(particleRaf); particleRaf = 0; }
-      if (flowCtx && flowCanvas) flowCtx.clearRect(0, 0, flowCanvas.width, flowCanvas.height);
     }
 
     // ---- UI wiring ----
@@ -4276,6 +4276,17 @@
     let overlayRedrawTimer = 0;
     let viewportTransitionTimer = 0;
     let viewportTransitioning = false;
+    let overlayPaintedView = null;
+    function captureMapView() {
+      const view = map.getView();
+      return {
+        center: view.getCenter()?.slice() || null,
+        resolution: Number(view.getResolution()),
+        rotation: Number(view.getRotation()) || 0,
+        width: mapEl.clientWidth,
+        height: mapEl.clientHeight,
+      };
+    }
     function scheduleOverlayRedraw() {
       if (overlayRedrawTimer) clearTimeout(overlayRedrawTimer);
       overlayRedrawTimer = setTimeout(() => {
@@ -4302,7 +4313,7 @@
       // Keep the last completed frame visible while the map is zooming. This
       // prevents repeated full-canvas/grid/contour work from accumulating in
       // the browser compositor during a pinch or wheel gesture.
-      stopParticleAnimation();
+      beginMapGesture();
       stopWavePacketAnimation();
       viewportTransitionTimer = setTimeout(() => {
         viewportTransitionTimer = 0;
@@ -4320,12 +4331,19 @@
     let mapGestureOriginCenter = null;
     const mapGestureCanvases = [flowCanvas, streamlineCanvas, tideCanvas, slaCanvas];
     function syncMapGestureOverlayPosition() {
-      if (!mapPointerDragging || !mapGestureOriginCenter) return;
-      const oldCenterPx = map.getPixelFromCoordinate(mapGestureOriginCenter);
+      if (!mapPointerDragging || !overlayPaintedView?.center) return;
+      const oldCenterPx = map.getPixelFromCoordinate(overlayPaintedView.center);
       if (!oldCenterPx) return;
-      const dx = oldCenterPx[0] - mapEl.clientWidth / 2;
-      const dy = oldCenterPx[1] - mapEl.clientHeight / 2;
-      const transform = `translate3d(${dx.toFixed(2)}px,${dy.toFixed(2)}px,0)`;
+      const cx = mapEl.clientWidth / 2, cy = mapEl.clientHeight / 2;
+      const dx = oldCenterPx[0] - cx, dy = oldCenterPx[1] - cy;
+      const currentResolution = Number(map.getView().getResolution());
+      const scale = Number.isFinite(currentResolution) && currentResolution > 0
+        ? overlayPaintedView.resolution / currentResolution : 1;
+      const rotation = (Number(map.getView().getRotation()) || 0) - overlayPaintedView.rotation;
+      const cos = Math.cos(rotation) * scale, sin = Math.sin(rotation) * scale;
+      const tx = cx + dx - cos * cx + sin * cy;
+      const ty = cy + dy - sin * cx - cos * cy;
+      const transform = `matrix(${cos.toFixed(6)},${sin.toFixed(6)},${(-sin).toFixed(6)},${cos.toFixed(6)},${tx.toFixed(2)},${ty.toFixed(2)})`;
       mapGestureCanvases.forEach(canvas => { if (canvas) canvas.style.transform = transform; });
     }
     function beginMapGesture() {
