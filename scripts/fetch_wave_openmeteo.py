@@ -12,8 +12,8 @@ Background:
     GRIB2 decoder was installed.
   - Open-Meteo wraps the same WW3 fields in JSON. The API requires same number
     of lats and lons (it zips them positionally, one response per coordinate),
-    so we fetch an NxN square grid and bilinearly interpolate to the display
-    bbox (17x21 for usec_md).
+  so we fetch an NxN square grid and bilinearly interpolate to the display
+  bbox (21x23 for the full usec_md operational domain).
 
 Returns per hour, per grid point:
   - wave_height (significant), wave_direction, wave_period
@@ -32,10 +32,16 @@ import requests
 import numpy as np
 
 REGION = "usec_md"
-DISPLAY_BBOX = [-77.0, 36.0, -72.0, 40.0]   # [W, S, E, N]
 FULL_BBOX = [-80.0, 33.0, -69.0, 43.0]
-STEP_DEG = 0.25
-N = 17  # square NxN fetch -> 4° span, covers the 5°/4° display bbox
+# The planner displays the whole operational domain. Keeping the producer
+# grid on the old inner box made SST appear as a floating rectangle when the
+# map showed the full usec_md region. Use a square request that encloses the
+# full domain; the API returns the requested coordinates and the viewer keeps
+# them as the geospatial contract.
+DISPLAY_BBOX = FULL_BBOX
+FETCH_STEP_DEG = 0.5
+DISPLAY_STEP_DEG = 0.5
+N = 23  # square NxN fetch -> 11° span, covers the full 11°x10° domain
 OUT_PATH = Path(__file__).resolve().parents[1] / "data" / "usec_md" / "briefing" / "forecast.json"
 DASHBOARD_OUT_PATH = Path(__file__).resolve().parents[1] / "dashboard" / "trip-planner" / "data" / "usec_md" / "briefing" / "forecast.json"
 
@@ -310,30 +316,45 @@ def fetch_grid(lats_grid, lons_grid, forecast_days=7):
             flat_lons.append(lon)
     npts = len(flat_lats)
     assert npts == len(flat_lons)
-    params = {
-        "latitude": ",".join(f"{x:.4f}" for x in flat_lats),
-        "longitude": ",".join(f"{x:.4f}" for x in flat_lons),
-        "hourly": ",".join(fields),
-        "length_unit": "imperial",
-        "forecast_days": forecast_days,
-        "timezone": "UTC",
-    }
-    last_err = None
-    for attempt in range(3):
-        try:
-            r = requests.get(url, params=params, timeout=120)
-            if r.status_code == 200:
-                data = r.json()
-                if not isinstance(data, list):
-                    raise RuntimeError(f"unexpected response type: {type(data).__name__}")
-                if len(data) != npts:
-                    raise RuntimeError(f"expected {npts} points, got {len(data)}")
-                return data
-            last_err = f"http {r.status_code}: {r.text[:200]}"
-        except Exception as e:
-            last_err = f"exception: {e}"
-        time.sleep(2 ** attempt)
-    raise RuntimeError(f"open-meteo fetch failed after 3 tries: {last_err}")
+    # Open-Meteo's URL becomes too large for the full operational grid when
+    # all coordinates and seven days of fields are sent in one GET. Batch the
+    # points while preserving row-major order; the returned list can still be
+    # reshaped into the same 2-D forecast grid by the caller.
+    results = []
+    batch_size = 100
+    for start in range(0, npts, batch_size):
+        end = min(npts, start + 100)
+        params = {
+            "latitude": ",".join(f"{x:.4f}" for x in flat_lats[start:end]),
+            "longitude": ",".join(f"{x:.4f}" for x in flat_lons[start:end]),
+            "hourly": ",".join(fields),
+            "length_unit": "imperial",
+            "forecast_days": forecast_days,
+            "timezone": "UTC",
+        }
+        last_err = None
+        for attempt in range(3):
+            try:
+                post_params = {**params, "latitude": flat_lats[start:end], "longitude": flat_lons[start:end], "hourly": fields, "timezone": ["UTC"] * (end - start)}
+                r = (requests.post(url, json=post_params, timeout=120) if npts > 100
+                     else requests.get(url, params=params, timeout=120))
+                if r.status_code == 200:
+                    data = r.json()
+                    if not isinstance(data, list):
+                        raise RuntimeError(f"unexpected response type: {type(data).__name__}")
+                    if len(data) != end - start:
+                        raise RuntimeError(f"expected {end - start} points, got {len(data)}")
+                    results.extend(data)
+                    if end < npts:
+                        time.sleep(16)
+                    break
+                last_err = f"http {r.status_code}: {r.text[:200]}"
+            except Exception as e:
+                last_err = f"exception: {e}"
+            time.sleep(2 ** attempt)
+        else:
+            raise RuntimeError(f"open-meteo batch {start}:{end} failed after 3 tries: {last_err}")
+    return results
 
 
 def reshape_grid(resp_list, nrows, ncols):
@@ -482,32 +503,43 @@ def fetch_atmospheric_wind(lats_grid, lons_grid, forecast_days=7):
             flat_lats.append(lat)
             flat_lons.append(lon)
     npts = len(flat_lats)
-    params = {
-        "latitude": ",".join(f"{x:.4f}" for x in flat_lats),
-        "longitude": ",".join(f"{x:.4f}" for x in flat_lons),
-        "hourly": ",".join(fields),
-        "wind_speed_unit": "kn",
-        "temperature_unit": "fahrenheit",
-        "precipitation_unit": "inch",
-        "forecast_days": forecast_days,
-        "timezone": "UTC",
-    }
-    last_err = None
-    for attempt in range(3):
-        try:
-            r = requests.get(url, params=params, timeout=120)
-            if r.status_code == 200:
-                data = r.json()
-                if not isinstance(data, list):
-                    raise RuntimeError(f"unexpected response type: {type(data).__name__}")
-                if len(data) != npts:
-                    raise RuntimeError(f"expected {npts} points, got {len(data)}")
-                return data
-            last_err = f"http {r.status_code}: {r.text[:200]}"
-        except Exception as e:
-            last_err = f"exception: {e}"
-        time.sleep(2 ** attempt)
-    raise RuntimeError(f"open-meteo forecast fetch failed after 3 tries: {last_err}")
+    results = []
+    batch_size = 100
+    for start in range(0, npts, batch_size):
+        end = min(npts, start + 100)
+        params = {
+            "latitude": ",".join(f"{x:.4f}" for x in flat_lats[start:end]),
+            "longitude": ",".join(f"{x:.4f}" for x in flat_lons[start:end]),
+            "hourly": ",".join(fields),
+            "wind_speed_unit": "kn",
+            "temperature_unit": "fahrenheit",
+            "precipitation_unit": "inch",
+            "forecast_days": forecast_days,
+            "timezone": "UTC",
+        }
+        last_err = None
+        for attempt in range(3):
+            try:
+                post_params = {**params, "latitude": flat_lats[start:end], "longitude": flat_lons[start:end], "hourly": fields, "timezone": ["UTC"] * (end - start)}
+                r = (requests.post(url, json=post_params, timeout=120) if npts > 100
+                     else requests.get(url, params=params, timeout=120))
+                if r.status_code == 200:
+                    data = r.json()
+                    if not isinstance(data, list):
+                        raise RuntimeError(f"unexpected response type: {type(data).__name__}")
+                    if len(data) != end - start:
+                        raise RuntimeError(f"expected {end - start} points, got {len(data)}")
+                    results.extend(data)
+                    if end < npts:
+                        time.sleep(16)
+                    break
+                last_err = f"http {r.status_code}: {r.text[:200]}"
+            except Exception as e:
+                last_err = f"exception: {e}"
+            time.sleep(2 ** attempt)
+        else:
+            raise RuntimeError(f"open-meteo atmospheric batch {start}:{end} failed after 3 tries: {last_err}")
+    return results
 
 
 def add_derived_marine_fields(frames):
@@ -686,7 +718,7 @@ def merge_wind_into_frames(frames, wind_resp, nrows, ncols):
 
 
 def main():
-    fetch_lats, fetch_lons = build_square_grid(DISPLAY_BBOX, STEP_DEG, N)
+    fetch_lats, fetch_lons = build_square_grid(DISPLAY_BBOX, FETCH_STEP_DEG, N)
     nrows, ncols = len(fetch_lats), len(fetch_lons)
     npts = nrows * ncols
     print(f"fetch grid: {nrows}x{ncols} ({npts} pts)")
@@ -714,16 +746,18 @@ def main():
     n_tides_fail = len(tides.get("fetch_failures") or [])
     print(f"tides: {n_tides_ok}/{len(TIDE_STATIONS)} stations ok ({n_tides_fail} failed)")
 
-    # Build display lat/lon arrays (existing contract: 0.25° step).
+    # Build a finer display grid from the API-safe source grid. Interpolation
+    # improves visual continuity; it does not add source resolution or fill
+    # missing/land values.
     dst_lats, dst_lons = [], []
     lat = DISPLAY_BBOX[1]
     while lat <= DISPLAY_BBOX[3] + 1e-9:
         dst_lats.append(round(lat, 4))
-        lat += STEP_DEG
+        lat += DISPLAY_STEP_DEG
     lon = DISPLAY_BBOX[0]
     while lon <= DISPLAY_BBOX[2] + 1e-9:
         dst_lons.append(round(lon, 4))
-        lon += STEP_DEG
+        lon += DISPLAY_STEP_DEG
     print(f"display grid: {len(dst_lats)}x{len(dst_lons)}")
 
     frames = interp_to_display(frames, fetch_lats, fetch_lons, dst_lats, dst_lons)
