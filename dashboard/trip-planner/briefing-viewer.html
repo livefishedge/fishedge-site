@@ -2469,7 +2469,12 @@
       // legacy quad path for non-wave scalar layers only; the old whole-cell
       // quads were the source of coarse shoreline cutoffs and land blocks.
       if (['wave_height_ft', 'swell_height_ft', 'wind_wave_height_ft', 'sea_surface_temperature_f'].includes(scalarKey)) {
-        drawFineWaveHeatGrid(scalarKey, grid, lons, lats, scale, r, 4, 0.62);
+        // In Currents mode the SST field is context, not the hero layer. A
+        // restrained fill keeps the fine temperature-colored filaments
+        // legible against the ocean while leaving the scalar presentation
+        // unchanged in Sea State and other modes.
+        const alpha = activePlannerPreset === 'fishing' && scalarKey === 'sea_surface_temperature_f' ? 0.18 : 0.62;
+        drawFineWaveHeatGrid(scalarKey, grid, lons, lats, scale, r, 4, alpha);
         return;
       }
       for (let yi = 0; yi < lats.length - 1; yi++) {
@@ -3501,8 +3506,9 @@
       let lon = lon0, lat = lat0;
       let prevU = null, prevV = null;
       const calmThresholdKn = vectorField === 'current' ? 0.05 : 2.5;
-      const baseStepDeg = vectorField === 'current' ? 0.05 : 0.08;
-      for (let i = 0; i < 30; i++) {
+      const baseStepDeg = vectorField === 'current' ? 0.085 : 0.08;
+      const maxSteps = vectorField === 'current' ? 64 : 30;
+      for (let i = 0; i < maxSteps; i++) {
         if (lon < field.bbox[0] || lon > field.bbox[2] || lat < field.bbox[1] || lat > field.bbox[3]) break;
         path.push([lon, lat]);
         const vec = bilinearVec(currentFrame, lon, lat, vectorField);
@@ -3526,7 +3532,10 @@
         const cosLat = Math.max(0.35, Math.cos(lat * Math.PI / 180));
         lon += (vec.u / sp) * stepDeg / cosLat;
         lat += (vec.v / sp) * stepDeg;
-        for (let j = Math.max(0, path.length - 8); j < path.length - 2; j++) {
+        // Current streamlines may legitimately recirculate around an eddy.
+        // Do not terminate them merely because they revisit a nearby point;
+        // the bounded step count above is the safety limit.
+        if (vectorField !== 'current') for (let j = Math.max(0, path.length - 8); j < path.length - 2; j++) {
           const prior = path[j];
           if (Math.hypot(lon - prior[0], lat - prior[1]) < 0.035) return path;
         }
@@ -3607,14 +3616,8 @@
           if (!vec) continue;
           const sp = Math.sqrt(vec.u * vec.u + vec.v * vec.v);
           const t = Math.min(1, sp / maxSpeed);
-          const alpha = vectorField === 'current' ? 0.30 + 0.46 * t : 0.22 + 0.40 * t;
-          // Currents inherit the SST palette so the static transport field
-          // and moving particles read as one oceanographic visualization.
-          // Wind retains its neutral blue streamline treatment.
-          streamlineCtx.strokeStyle = vectorField === 'current'
-            ? currentParticleColor(mid[0], mid[1])
-            : `rgba(${Math.round(180 + 60 * t)},${Math.round(215 + 30 * t)},230,${alpha})`;
-          streamlineCtx.lineWidth = vectorField === 'current' ? 1.0 + 0.7 * t : 0.9;
+          const alpha = vectorField === 'current' ? 0.38 + 0.30 * t : 0.22 + 0.40 * t;
+          streamlineCtx.lineWidth = vectorField === 'current' ? 0.55 + 0.30 * t : 0.9;
           streamlineCtx.lineCap = 'round';
           streamlineCtx.lineJoin = 'round';
           // Fade alpha along the last 25% of the path so streamlines ending
@@ -3624,7 +3627,8 @@
           const faded = fadeTailAlpha(path, flowCanvas.width, flowCanvas.height);
           const baseAlpha = alpha;
           let prevPx = null;
-          for (const seg of faded) {
+          for (let segIdx = 0; segIdx < faded.length; segIdx++) {
+            const seg = faded[segIdx];
             const proj = ol.proj.fromLonLat([seg.pt[0], seg.pt[1]], mapProjection);
             const px = map.getPixelFromCoordinate(proj);
             if (!px) { prevPx = null; continue; }
@@ -3634,6 +3638,14 @@
               continue;
             }
             streamlineCtx.globalAlpha = baseAlpha * seg.alpha;
+            // Sample SST at each segment midpoint. This preserves the
+            // temperature structure along a long filament instead of
+            // painting an entire curve with its seed/head color.
+            if (vectorField === 'current') {
+              const next = faded[Math.min(faded.length - 1, segIdx + 1)];
+              const midpoint = next?.pt ? [(seg.pt[0] + next.pt[0]) / 2, (seg.pt[1] + next.pt[1]) / 2] : seg.pt;
+              streamlineCtx.strokeStyle = currentParticleColor(midpoint[0], midpoint[1]);
+            }
             streamlineCtx.beginPath();
             streamlineCtx.moveTo(prevPx[0], prevPx[1]);
             streamlineCtx.lineTo(px[0], px[1]);
@@ -4116,11 +4128,10 @@
         // Current particles use the same animated language as wind, but move
         // more slowly and inherit a subtle SST tint from their origin point.
         if (layerVisibility.current) {
-          // Additive blending makes intersecting SST-colored tracks glow like
-          // the reference visualization while preserving the underlying SST
-          // raster and avoiding a second expensive canvas.
+          // Keep source-over blending so overlapping warm/cool tracks retain
+          // their SST colors instead of washing out to white.
           flowCtx.save();
-          flowCtx.globalCompositeOperation = 'lighter';
+          flowCtx.globalCompositeOperation = 'source-over';
           for (let i = 0; i < currentParticles.length; i++) {
             const p = currentParticles[i];
             const vec = bilinearVec(currentFrame, p.lon, p.lat, 'current');
@@ -4149,25 +4160,27 @@
             if (trailPoints.length < 2 || !afterPx) continue;
             const speedT = Math.min(1, vec.speed / 2.0);
             const fadeOut = Math.max(0.25, 1 - p.age / p.maxAge);
-            flowCtx.strokeStyle = currentParticleColor(oldLon, oldLat);
-            flowCtx.globalAlpha = Math.min(0.82, (0.42 + 0.32 * speedT) * fadeOut);
-            flowCtx.lineWidth = 0.65 + 0.55 * speedT;
             flowCtx.lineCap = 'round';
             flowCtx.lineJoin = 'round';
-            flowCtx.beginPath();
-            flowCtx.moveTo(trailPoints[0][0], trailPoints[0][1]);
-            for (const point of trailPoints.slice(1)) flowCtx.lineTo(point[0], point[1]);
-            flowCtx.lineTo(afterPx[0], afterPx[1]);
-            flowCtx.stroke();
-            // A brighter head keeps direction legible within the long,
-            // temperature-colored trail.
-            flowCtx.globalAlpha = Math.min(0.96, (0.58 + 0.30 * speedT) * fadeOut);
-            flowCtx.lineWidth = 1.0 + 0.75 * speedT;
-            flowCtx.beginPath();
-            const head = trailPoints[trailPoints.length - 1];
-            flowCtx.moveTo(head[0], head[1]);
-            flowCtx.lineTo(afterPx[0], afterPx[1]);
-            flowCtx.stroke();
+            const allPoints = trailPoints.concat([afterPx]);
+            // Three color bands are a bounded approximation of a continuous
+            // per-segment gradient: old tail, middle trail, and live head.
+            const bands = Math.min(3, allPoints.length - 1);
+            for (let band = 0; band < bands; band++) {
+              const start = Math.floor(band * (allPoints.length - 1) / bands);
+              const end = Math.floor((band + 1) * (allPoints.length - 1) / bands);
+              const geoStart = p.trail[Math.min(p.trail.length - 1, start)] || [oldLon, oldLat];
+              const geoEnd = p.trail[Math.min(p.trail.length - 1, end)] || [p.lon, p.lat];
+              const progress = (band + 1) / bands;
+              flowCtx.strokeStyle = currentParticleColor((geoStart[0] + geoEnd[0]) / 2, (geoStart[1] + geoEnd[1]) / 2);
+              flowCtx.globalAlpha = Math.min(0.82, (0.26 + 0.32 * progress + 0.18 * speedT) * fadeOut);
+              flowCtx.lineWidth = 0.55 + 0.35 * speedT;
+              flowCtx.beginPath();
+              flowCtx.moveTo(allPoints[start][0], allPoints[start][1]);
+              for (let pointIdx = start + 1; pointIdx <= end; pointIdx++) flowCtx.lineTo(allPoints[pointIdx][0], allPoints[pointIdx][1]);
+              if (end === allPoints.length - 1) flowCtx.lineTo(afterPx[0], afterPx[1]);
+              flowCtx.stroke();
+            }
           }
           flowCtx.restore();
         }
