@@ -3985,6 +3985,10 @@
       return null;
     }
 
+    function makeCurrentParticle(lon, lat, age = 0) {
+      return { lon, lat, age, maxAge: 220 + Math.random() * 240, trail: [] };
+    }
+
     function seedCurrentParticles() {
       currentParticles.length = 0;
       if (!forecastData || !mapEl) return;
@@ -4007,13 +4011,21 @@
         const seed = currentWaterSeeds[Math.floor(Math.random() * currentWaterSeeds.length)];
         const lon = seed[0] + (Math.random() - 0.5) * 0.05;
         const lat = seed[1] + (Math.random() - 0.5) * 0.05;
-        currentParticles.push({lon, lat, age: Math.random() * 180, maxAge: 220 + Math.random() * 240});
+        const particle = makeCurrentParticle(lon, lat, Math.random() * 180);
+        // Staggered short histories prevent the first stationary frame from
+        // looking like a field of isolated dots while keeping all history
+        // geographically tied to the live velocity field.
+        particle.trail.push([lon, lat]);
+        currentParticles.push(particle);
       }
     }
 
     function randomCurrentParticle() {
-      if (currentWaterSeeds.length) { const seed = currentWaterSeeds[Math.floor(Math.random() * currentWaterSeeds.length)]; return {lon: seed[0] + (Math.random() - 0.5) * 0.05, lat: seed[1] + (Math.random() - 0.5) * 0.05, age: 0, maxAge: 220 + Math.random() * 240}; }
-      return {lon: bbox[0], lat: bbox[1], age: 0, maxAge: 1};
+      if (currentWaterSeeds.length) {
+        const seed = currentWaterSeeds[Math.floor(Math.random() * currentWaterSeeds.length)];
+        return makeCurrentParticle(seed[0] + (Math.random() - 0.5) * 0.05, seed[1] + (Math.random() - 0.5) * 0.05);
+      }
+      return makeCurrentParticle(bbox[0], bbox[1]);
     }
 
     function currentParticleColor(lon, lat) {
@@ -4126,16 +4138,34 @@
             p.lon += (vec.u / vec.speed) * dt / cosLat;
             p.lat += (vec.v / vec.speed) * dt;
             p.age += 1;
-            const beforePx = map.getPixelFromCoordinate(ol.proj.fromLonLat([oldLon, oldLat], mapProjection));
+            p.trail = Array.isArray(p.trail) ? p.trail : [];
+            p.trail.push([oldLon, oldLat]);
+            const maxTrailPoints = mapEl.clientWidth < 600 ? 10 : 16;
+            if (p.trail.length > maxTrailPoints) p.trail.splice(0, p.trail.length - maxTrailPoints);
+            const trailPoints = p.trail.map(([lon, lat]) =>
+              map.getPixelFromCoordinate(ol.proj.fromLonLat([lon, lat], mapProjection))
+            ).filter(Boolean);
             const afterPx = map.getPixelFromCoordinate(ol.proj.fromLonLat([p.lon, p.lat], mapProjection));
-            if (!beforePx || !afterPx) continue;
+            if (trailPoints.length < 2 || !afterPx) continue;
             const speedT = Math.min(1, vec.speed / 2.0);
-            flowCtx.globalAlpha = Math.max(0.30, Math.min(0.92, (0.56 + 0.30 * speedT) * (1 - p.age / p.maxAge)));
+            const fadeOut = Math.max(0.25, 1 - p.age / p.maxAge);
             flowCtx.strokeStyle = currentParticleColor(oldLon, oldLat);
-            flowCtx.lineWidth = 1.05 + 0.85 * speedT;
+            flowCtx.globalAlpha = Math.min(0.82, (0.42 + 0.32 * speedT) * fadeOut);
+            flowCtx.lineWidth = 0.65 + 0.55 * speedT;
             flowCtx.lineCap = 'round';
+            flowCtx.lineJoin = 'round';
             flowCtx.beginPath();
-            flowCtx.moveTo(beforePx[0], beforePx[1]);
+            flowCtx.moveTo(trailPoints[0][0], trailPoints[0][1]);
+            for (const point of trailPoints.slice(1)) flowCtx.lineTo(point[0], point[1]);
+            flowCtx.lineTo(afterPx[0], afterPx[1]);
+            flowCtx.stroke();
+            // A brighter head keeps direction legible within the long,
+            // temperature-colored trail.
+            flowCtx.globalAlpha = Math.min(0.96, (0.58 + 0.30 * speedT) * fadeOut);
+            flowCtx.lineWidth = 1.0 + 0.75 * speedT;
+            flowCtx.beginPath();
+            const head = trailPoints[trailPoints.length - 1];
+            flowCtx.moveTo(head[0], head[1]);
             flowCtx.lineTo(afterPx[0], afterPx[1]);
             flowCtx.stroke();
           }
