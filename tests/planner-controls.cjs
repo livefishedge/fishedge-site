@@ -72,7 +72,8 @@ const url = process.env.PLANNER_URL || 'http://127.0.0.1:8766/trip-planner/brief
     const desktopSelectorRow = await page.locator('.bv-layer-selector-row').boundingBox();
     assert(desktopRanges.x >= desktopSelectorRow.x && desktopRanges.x + desktopRanges.width <= 1200,'desktop colorbar is contained in selector row');
     await page.locator('[data-preset=tides]').click();
-    assert.equal(await select().inputValue(),'','Tides opens station-first');
+    assert.equal(await select().inputValue(),'astronomical_tide_ft','Tides defaults to Tidal Stage color map');
+    assert(await page.locator('input[data-layer=tide_range]').first().isChecked(),'Tides defaults to Tidal Range enabled');
     await page.waitForTimeout(250);
     assert(await page.locator('#bv-station-popup').isVisible());
     for(const marker of await page.locator('.bv-station-marker').all()){

@@ -1598,7 +1598,7 @@
         detailGroups:{},
         layers:['tide_level','tide_range'],
         mapFields:[['astronomical_tide_ft','Tidal stage']],
-        defaults:[], heat:null
+        defaults:['tide_level','tide_range'], heat:'astronomical_tide_ft'
       },
     };
     function applyPlannerPreset(name, reset = false) {
