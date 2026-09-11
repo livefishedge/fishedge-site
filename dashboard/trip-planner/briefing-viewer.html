@@ -470,7 +470,11 @@
 
     // viridis-like 7-stop palette (matches captain's UV_SCALE / CHL_ALGAE feel)
     const SCALES = {
-      SST: [[0.0,'#2166ac'],[0.18,'#4393c3'],[0.36,'#92c5de'],[0.5,'#f7f7f7'],[0.64,'#fddbc7'],[0.82,'#f4a582'],[1.0,'#b2182b']],
+      // Continuous ocean-temperature ramp. Do not use a white midpoint:
+      // Mid-Atlantic SST commonly sits near the middle of 65–85°F, and a
+      // white midpoint makes correctly sampled current filaments look like
+      // uncolored wind streaks.
+      SST: [[0.0,'#173f8a'],[0.16,'#176fb3'],[0.32,'#16a6b7'],[0.48,'#54c878'],[0.62,'#d8d447'],[0.78,'#f29f32'],[1.0,'#d94732']],
       UV:  [[0.0,'#440154'],[0.17,'#443983'],[0.34,'#31688e'],[0.5,'#35b779'],[0.67,'#90d743'],[0.83,'#fde725'],[1.0,'#fff7bc']],
       CHL: [[0.0,'#001f3f'],[0.2,'#0074d9'],[0.4,'#39cccc'],[0.5,'#2ecc40'],[0.7,'#ffdc00'],[0.85,'#ff851b'],[1.0,'#ff4136']],
       ALERT: [[0.0,'#2e7d32'],[0.35,'#8bc34a'],[0.55,'#f6c343'],[0.70,'#f57c00'],[0.86,'#e53935'],[1.0,'#8b0000']],
@@ -4070,7 +4074,10 @@
     }
 
     function currentParticleColor(lon, lat) {
-      const temp = sampleGridAtPoint(currentFrame?.sea_surface_temperature_f, lat, lon, true);
+      // Allow the nearby finite-water fallback at coastal/missing corners;
+      // returning a neutral color for every partial cell was visually
+      // indistinguishable from an uncolored wind layer.
+      const temp = sampleGridAtPoint(currentFrame?.sea_surface_temperature_f, lat, lon, false);
       if (!Number.isFinite(temp)) return '#70d6ff';
       return sampleScale('SST', Math.max(0, Math.min(1, (temp - 65) / 20)));
     }
