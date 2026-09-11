@@ -3744,10 +3744,30 @@
         slaCtx.stroke();
         const lineNo = Math.round((rounded - vmin) / contourStep);
         if (lineNo % 5 === 0) {
-          const first = paths[0][0];
+          // Put the label on a substantial section of the contour itself,
+          // rather than at the first arbitrary cell crossing. This keeps the
+          // label attached to the line as the map is panned/zoomed and
+          // matches the Captain's Dashboard contour treatment.
+          const labelSegment = paths.reduce((best, segment) => {
+            const length = Math.hypot(segment[1][0] - segment[0][0], segment[1][1] - segment[0][1]);
+            return !best || length > best.length ? { segment, length } : best;
+          }, null)?.segment;
+          if (!labelSegment) continue;
+          const first = labelSegment[0], last = labelSegment[1];
+          const labelX = (first[0] + last[0]) / 2;
+          const labelY = (first[1] + last[1]) / 2;
           slaCtx.fillStyle = 'rgba(255,245,190,0.95)';
           const shown = convertDisplayValue('surface_height_m', rounded);
-          slaCtx.fillText(`${shown.toFixed(2)} ${displayUnit('surface_height_m', 'm')}`, first[0] + 3, first[1] - 3);
+          const text = `${shown.toFixed(2)} ${displayUnit('surface_height_m', 'm')}`;
+          slaCtx.textAlign = 'center';
+          slaCtx.textBaseline = 'middle';
+          slaCtx.lineWidth = 3;
+          slaCtx.strokeStyle = 'rgba(5,11,16,0.9)';
+          slaCtx.strokeText(text, labelX, labelY);
+          slaCtx.fillStyle = 'rgba(255,245,190,0.98)';
+          slaCtx.fillText(text, labelX, labelY);
+          slaCtx.textAlign = 'start';
+          slaCtx.textBaseline = 'alphabetic';
         }
       }
       const status = document.getElementById('bv-menu-status');
@@ -4245,24 +4265,40 @@
     map.getView().on('change:resolution', deferViewportRedraw);
     map.getView().on('change:rotation', deferViewportRedraw);
     let mapPointerDragging = false;
+    let mapGestureOriginCenter = null;
+    const mapGestureCanvases = [flowCanvas, streamlineCanvas, tideCanvas, slaCanvas];
+    function syncMapGestureOverlayPosition() {
+      if (!mapPointerDragging || !mapGestureOriginCenter) return;
+      const oldCenterPx = map.getPixelFromCoordinate(mapGestureOriginCenter);
+      if (!oldCenterPx) return;
+      const dx = oldCenterPx[0] - mapEl.clientWidth / 2;
+      const dy = oldCenterPx[1] - mapEl.clientHeight / 2;
+      const transform = `translate3d(${dx.toFixed(2)}px,${dy.toFixed(2)}px,0)`;
+      mapGestureCanvases.forEach(canvas => { if (canvas) canvas.style.transform = transform; });
+    }
+    function beginMapGesture() {
+      if (mapPointerDragging) return;
+      mapPointerDragging = true;
+      mapGestureOriginCenter = map.getView().getCenter()?.slice() || null;
+      pauseParticleAnimationForMapGesture();
+      stopWavePacketAnimation();
+      syncMapGestureOverlayPosition();
+    }
     map.on('movestart', () => {
       // movestart fires before the first pointerdrag frame, which prevents
       // one expensive particle pass from racing the start of a pan.
-      if (mapPointerDragging) return;
-      mapPointerDragging = true;
-      pauseParticleAnimationForMapGesture();
-      stopWavePacketAnimation();
+      beginMapGesture();
     });
     map.on('pointerdrag', () => {
-      if (mapPointerDragging) return;
-      mapPointerDragging = true;
-      pauseParticleAnimationForMapGesture();
-      stopWavePacketAnimation();
+      beginMapGesture();
+      syncMapGestureOverlayPosition();
     });
     map.on('moveend', scheduleOverlayRedraw);
     map.on('moveend', () => {
       if (!mapPointerDragging) return;
       mapPointerDragging = false;
+      mapGestureCanvases.forEach(canvas => { if (canvas) canvas.style.transform = ''; });
+      mapGestureOriginCenter = null;
       // drawOverlaysForProduct() is debounced by scheduleOverlayRedraw above;
       // it will restart the particle RAF once the map has settled.
     });
