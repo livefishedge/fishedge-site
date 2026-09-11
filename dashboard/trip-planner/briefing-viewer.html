@@ -200,10 +200,12 @@
 
     .bv-map { position: absolute; top: 195px; left: 0; right: 0; bottom: 0; touch-action: none; }
     body.bv-moon-active .bv-map{ top:113px !important; }
-    .bv-flow-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 4; mix-blend-mode: screen; transform-origin: center center; }
-    .bv-streamlines-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3; transform-origin: center center; }
-    .bv-tide-overlay-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 6; mix-blend-mode: normal; transform-origin: center center; }
-    .bv-sla-overlay-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 7; mix-blend-mode: normal; transform-origin: center center; }
+    /* Gesture matrices are already expressed in viewport coordinates. An
+       origin at 0,0 prevents CSS from applying a second center correction. */
+    .bv-flow-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 4; mix-blend-mode: screen; transform-origin: 0 0; }
+    .bv-streamlines-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3; transform-origin: 0 0; }
+    .bv-tide-overlay-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 6; mix-blend-mode: normal; transform-origin: 0 0; }
+    .bv-sla-overlay-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 7; mix-blend-mode: normal; transform-origin: 0 0; }
     #bv-map > canvas.bv-tide-overlay-canvas { position: absolute !important; inset: 0 !important; z-index: 6 !important; pointer-events: none !important; }
 
     .ol-attribution { color: #6b7d92 !important; background: rgba(5, 11, 16, 0.8) !important; font-size: 10px !important; pointer-events: none; }
@@ -4274,7 +4276,6 @@
     // one redraw after the gesture settles instead of rebuilding all overlay
     // canvases repeatedly in the same burst.
     let overlayRedrawTimer = 0;
-    let viewportTransitionTimer = 0;
     let viewportTransitioning = false;
     let overlayPaintedView = null;
     function captureMapView() {
@@ -4298,7 +4299,6 @@
     function settleMapGesture() {
       if (!mapPointerDragging) { scheduleOverlayRedraw(); return; }
       if (overlayRedrawTimer) { clearTimeout(overlayRedrawTimer); overlayRedrawTimer = 0; }
-      if (viewportTransitionTimer) { clearTimeout(viewportTransitionTimer); viewportTransitionTimer = 0; }
       viewportTransitioning = false;
       // Keep the translated frame in place until the geographic redraw has
       // completed. Clearing the transform first exposes a stale frame.
@@ -4309,21 +4309,10 @@
     }
     function deferViewportRedraw() {
       viewportTransitioning = true;
-      if (viewportTransitionTimer) clearTimeout(viewportTransitionTimer);
-      // Keep the last completed frame visible while the map is zooming. This
-      // prevents repeated full-canvas/grid/contour work from accumulating in
-      // the browser compositor during a pinch or wheel gesture.
+      // Keep the last completed frame visible while OpenLayers owns the
+      // gesture. moveend is the sole settle/redraw boundary.
       beginMapGesture();
       stopWavePacketAnimation();
-      viewportTransitionTimer = setTimeout(() => {
-        viewportTransitionTimer = 0;
-        if (mapPointerDragging) return;
-        viewportTransitioning = false;
-        // Redraw directly after the transition. Going through the debounced
-        // scheduler here can be skipped by the final moveend callback, which
-        // would leave the cleared wind-particle canvas permanently blank.
-        drawOverlaysForProduct();
-      }, 180);
     }
     map.getView().on('change:resolution', deferViewportRedraw);
     map.getView().on('change:rotation', deferViewportRedraw);
