@@ -458,7 +458,7 @@
       // rendered as the swell and wind-wave overlays below.
       wave_composite:{name: 'Significant Wave Height', unit: 'ft', scale: 'UV', viz: 'composite', dataKey: 'wave_height_ft', dynamicRange: false, fixedRange: [0, 5] },
       wind_wave_height_ft:{name: 'Wave Height (Chop)', unit: 'ft', scale: 'UV', viz: 'heat', dataKey: 'wind_wave_height_ft', dynamicRange: false, fixedRange: [0, 5] },
-      sea_surface_temperature_f: { name: 'Sea-surface temperature', unit: '°F', scale: 'SST', viz: 'heat', dataKey: 'sea_surface_temperature_f', dynamicRange: false, fixedRange: [65, 85] },
+      sea_surface_temperature_f: { name: 'Sea-surface temperature', unit: '°F', scale: 'SST', viz: 'heat', dataKey: 'sea_surface_temperature_f', dynamicRange: false, fixedRange: [70, 80] },
       wave_steepness: { name: 'Surface Steepness', unit: 'Sₛ', scale: 'ALERT', viz: 'heat', dataKey: 'wave_steepness', dynamicRange: false, fixedRange: [0, 0.10] },
       ride_harshness_index: { name: 'Ride Harshness', unit: '0 smooth · 3 severe', scale: 'RIDE', viz: 'heat', dataKey: 'ride_harshness_index', dynamicRange: false, fixedRange: [0, 3] },
       surface_height_m: { name: 'Sea Level Anomaly', unit: 'm', scale: 'SLA', viz: 'contours', dataKey: 'surface_height_m', dynamicRange: false, fixedRange: [-1, 1] },
@@ -471,7 +471,7 @@
     // viridis-like 7-stop palette (matches captain's UV_SCALE / CHL_ALGAE feel)
     const SCALES = {
       // Continuous ocean-temperature ramp. Do not use a white midpoint:
-      // Mid-Atlantic SST commonly sits near the middle of 65–85°F, and a
+      // Mid-Atlantic SST commonly sits near the middle of 70–80°F, and a
       // white midpoint makes correctly sampled current filaments look like
       // uncolored wind streaks.
       SST: [[0.0,'#173f8a'],[0.16,'#176fb3'],[0.32,'#16a6b7'],[0.48,'#54c878'],[0.62,'#d8d447'],[0.78,'#f29f32'],[1.0,'#d94732']],
@@ -1512,7 +1512,7 @@
     const currentWaterSeeds = [];
     // Display multiplier only: forecast current values/readouts remain in
     // physical units, while slow modeled currents remain visually legible.
-    const CURRENT_VISUAL_SPEED_MULTIPLIER = 5;
+    const CURRENT_VISUAL_SPEED_MULTIPLIER = 2.5;
     const gustParticles = [];
 
     function hasVisibleRasterVariable() {
@@ -4031,7 +4031,7 @@
     }
 
     function makeCurrentParticle(lon, lat, age = 0) {
-      return { lon, lat, age, maxAge: 420 + Math.random() * 300, trail: [] };
+      return { lon, lat, age, maxAge: 840 + Math.random() * 600, trail: [] };
     }
 
     function seedCurrentParticles() {
@@ -4079,7 +4079,7 @@
       // indistinguishable from an uncolored wind layer.
       const temp = sampleGridAtPoint(currentFrame?.sea_surface_temperature_f, lat, lon, false);
       if (!Number.isFinite(temp)) return '#70d6ff';
-      return sampleScale('SST', Math.max(0, Math.min(1, (temp - 65) / 20)));
+      return sampleScale('SST', Math.max(0, Math.min(1, (temp - 70) / 10)));
     }
 
     function startParticleAnimation() {
