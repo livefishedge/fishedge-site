@@ -871,7 +871,7 @@
     // instead of reusing an older cached JSON response.
     // Bump whenever the JSON artifact changes; otherwise a Pages/browser
     // cache can keep serving a pre-calibration tide field after HTML deploy.
-    const FORECAST_DATA_BUILD = 'planner-controls-audit-v29';
+    const FORECAST_DATA_BUILD = 'planner-controls-audit-v30';
     const DEV_FORECAST_URL = `/trip-planner/data/${region}/briefing/forecast.json?v=${FORECAST_DATA_BUILD}`;
     const WAVE_MASK_URL = `/trip-planner/data/${region}/briefing/native_wave_mask.png?v=${FORECAST_DATA_BUILD}`;
     const CORS_PROXY = 'https://corsproxy.io/?';
@@ -886,6 +886,27 @@
       const r = await fetch(proxied, { cache: 'no-store' });
       if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
       return r.json();
+    }
+
+    // Forecast manifests keep the HTML/bootstrap artifact below static-host
+    // single-file limits. Frame chunks are independent and can be fetched in
+    // parallel; the viewer still exposes one normalized payload to renderers.
+    async function loadForecastPayload(url) {
+      const payload = await fetchJson(url);
+      const manifest = payload?.frames_manifest;
+      if (!manifest?.chunks?.length) return payload;
+      const manifestUrl = new URL(url, window.location.href);
+      const base = new URL(manifest.dir || './frames/', manifestUrl);
+      const chunks = await Promise.all(manifest.chunks.map(name => {
+        const chunkUrl = new URL(String(name), base);
+        chunkUrl.searchParams.set('v', FORECAST_DATA_BUILD);
+        return fetchJson(chunkUrl.toString());
+      }));
+      const frames = chunks.flatMap(chunk => Array.isArray(chunk?.frames) ? chunk.frames : []);
+      if (frames.length !== Number(manifest.frame_count)) {
+        throw new Error(`forecast frame chunks incomplete: ${frames.length}/${manifest.frame_count}`);
+      }
+      return { ...payload, frames };
     }
 
     // The source contract is the same one used by dashboard/index.html. The
@@ -2405,7 +2426,13 @@
     const scalarBackdrop = document.createElement('canvas');
     function drawScalarAndWaves(heatKey) {
       const marine = ['wave_height_ft','swell_height_ft','wind_wave_height_ft','sea_surface_temperature_f','wave_steepness','ride_harshness_index','surface_height_m'].includes(heatKey);
-      if (heatKey) drawWaveHeatOverlay();
+      // clearOverlays() resets the context to backing-pixel identity. Restore
+      // CSS-pixel coordinates before every scalar draw so high-DPR devices do
+      // not compress the field into the upper-left corner.
+      resizeOverlayCanvases();
+      const dpr = streamlineCanvas.width / Math.max(1, mapEl.clientWidth);
+      streamlineCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      if (heatKey) drawWaveHeatOverlay(heatKey);
       const waves = layerVisibility.swell || layerVisibility.wind_wave;
       if (waves && heatKey && !marine) {
         scalarBackdrop.width = streamlineCanvas.width; scalarBackdrop.height = streamlineCanvas.height;
@@ -2421,8 +2448,8 @@
       }
     }
 
-    function drawWaveHeatOverlay() {
-      const scalarKey = activeHeatKey();
+    function drawWaveHeatOverlay(heatKey = activeHeatKey()) {
+      const scalarKey = heatKey;
       // Tidal stage is rendered from native-mesh tiles generated from the
       // same HTP nodes/elements as co-range. Fall back to the legacy grid only
       // for older payloads without phase tiles.
@@ -4347,8 +4374,8 @@
                            window.location.hostname === 'localhost' ||
                            window.location.hostname === '127.0.0.1';
         forecastData = isStaging
-          ? await fetchJson(DEV_FORECAST_URL)
-          : await fetchJson(FORECAST_URL);
+          ? await loadForecastPayload(DEV_FORECAST_URL)
+          : await loadForecastPayload(FORECAST_URL);
         forecastData = normalizeForecastPayload(forecastData);
         const tideSourceEl = document.querySelector('#bv-station-popup .bv-briefing-source');
         if (tideSourceEl) tideSourceEl.textContent = 'NOAA CO-OPS · predictions / measurements · ft MLLW';

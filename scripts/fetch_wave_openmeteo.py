@@ -44,6 +44,7 @@ DISPLAY_STEP_DEG = 0.5
 N = 23  # square NxN fetch -> 11° span, covers the full 11°x10° domain
 OUT_PATH = Path(__file__).resolve().parents[1] / "data" / "usec_md" / "briefing" / "forecast.json"
 DASHBOARD_OUT_PATH = Path(__file__).resolve().parents[1] / "dashboard" / "trip-planner" / "data" / "usec_md" / "briefing" / "forecast.json"
+FRAME_CHUNK_SIZE = 24
 
 
 # ---- CO-OPS tide stations (curators: NJ/DE/MD/VA inshore + outer banks) ----
@@ -834,8 +835,8 @@ def main():
             "notes": (
                 "The Open-Meteo Marine API combines several marine models and does not expose "
                 "the selected model in this response. The API requires equal-length "
-                "lat/lon arrays; we fetch a 17x17 square over the display bbox and "
-                "bilinearly interpolate to the 17x21 display grid. Atmospheric 10-m wind "
+                "lat/lon arrays; we fetch a 23x23 square over the full operational bbox and "
+                "bilinearly interpolate to the full display grid. Atmospheric 10-m wind "
                 "is pulled from api.open-meteo.com/v1/forecast on the same grid+timeline."
             ),
         },
@@ -849,14 +850,64 @@ def main():
                     'wave_component_contract'):
             if key in prior_payload:
                 payload[key] = prior_payload[key]
-    encoded = json.dumps(payload, allow_nan=False, separators=(",", ":"))
+    # Keep the manifest below Cloudflare Pages' per-file limit. The frame data
+    # dominates the payload; static metadata (including masks and native tide
+    # mesh) remains in forecast.json and frame chunks are listed explicitly.
+    chunk_names = [f"forecast-frames-{start // FRAME_CHUNK_SIZE:03d}.json"
+                   for start in range(0, len(frames), FRAME_CHUNK_SIZE)]
+    manifest_payload = {k: v for k, v in payload.items() if k != "frames"}
+    manifest_payload["frames_manifest"] = {
+        "version": 1,
+        "dir": "frames/",
+        "chunks": chunk_names,
+        "frame_count": len(frames),
+        "chunk_size": FRAME_CHUNK_SIZE,
+    }
+    encoded = json.dumps(manifest_payload, allow_nan=False, separators=(",", ":"))
     for output_path in (OUT_PATH, DASHBOARD_OUT_PATH):
         output_path.parent.mkdir(parents=True, exist_ok=True)
         tmp = output_path.with_suffix(output_path.suffix + ".tmp")
         tmp.write_text(encoded)
         tmp.replace(output_path)
-        print(f"wrote {output_path} ({output_path.stat().st_size} bytes, {len(frames)} frames)")
+        frames_dir = output_path.parent / "frames"
+        frames_dir.mkdir(parents=True, exist_ok=True)
+        for start, name in zip(range(0, len(frames), FRAME_CHUNK_SIZE), chunk_names):
+            chunk = {"schema_version": payload["schema_version"],
+                     "start": start, "frames": frames[start:start + FRAME_CHUNK_SIZE]}
+            chunk_tmp = (frames_dir / name).with_suffix(".json.tmp")
+            chunk_tmp.write_text(json.dumps(chunk, allow_nan=False, separators=(",", ":")))
+            chunk_tmp.replace(frames_dir / name)
+        print(f"wrote {output_path} ({output_path.stat().st_size} bytes manifest, {len(frames)} frames in {len(chunk_names)} chunks)")
+
+
+def split_existing_artifact():
+    """Split the current artifact without re-fetching rate-limited APIs."""
+    for output_path in (OUT_PATH, DASHBOARD_OUT_PATH):
+        payload = json.loads(output_path.read_text())
+        frames = payload.pop("frames")
+        chunk_names = [f"forecast-frames-{start // FRAME_CHUNK_SIZE:03d}.json"
+                       for start in range(0, len(frames), FRAME_CHUNK_SIZE)]
+        payload["frames_manifest"] = {
+            "version": 1, "dir": "frames/", "chunks": chunk_names,
+            "frame_count": len(frames), "chunk_size": FRAME_CHUNK_SIZE,
+        }
+        tmp = output_path.with_suffix(output_path.suffix + ".tmp")
+        tmp.write_text(json.dumps(payload, allow_nan=False, separators=(",", ":")))
+        tmp.replace(output_path)
+        frames_dir = output_path.parent / "frames"
+        frames_dir.mkdir(parents=True, exist_ok=True)
+        for start, name in zip(range(0, len(frames), FRAME_CHUNK_SIZE), chunk_names):
+            chunk_tmp = (frames_dir / name).with_suffix(".json.tmp")
+            chunk_tmp.write_text(json.dumps({"schema_version": payload["schema_version"],
+                                              "start": start,
+                                              "frames": frames[start:start + FRAME_CHUNK_SIZE]},
+                                             allow_nan=False, separators=(",", ":")))
+            chunk_tmp.replace(frames_dir / name)
+        print(f"split {output_path}: {output_path.stat().st_size} byte manifest, {len(chunk_names)} chunks")
 
 
 if __name__ == "__main__":
-    main()
+    if "--split-existing" in __import__("sys").argv:
+        split_existing_artifact()
+    else:
+        main()
