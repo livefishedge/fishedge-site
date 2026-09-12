@@ -2440,7 +2440,8 @@
       drawScalarAndWaves(heatKey);
       if (layerVisibility.pressure) drawIsobars(true);
       if (layerVisibility.wind || layerVisibility.wind_gust || layerVisibility.current) {
-        if (layerVisibility.current) drawStreamlines(true, 'current');
+        // Currents are rendered exclusively as semipermanent particle
+        // histories; wave motion must not reintroduce static streamlines.
         startParticleAnimation();
       } else {
         stopParticleAnimation();
@@ -3121,7 +3122,7 @@
     }
 
     function startWavePacketAnimation() {
-      if (wavePacketRaf || activePlannerPreset === 'fishing') return;
+      if (wavePacketRaf) return;
       wavePacketLastTs = 0;
       const tick = ts => {
         wavePacketRaf = 0;
@@ -3991,6 +3992,7 @@
     // speed × 0.0009 deg/frame for both wind (kn) and currents.
     let particleRaf = 0;
     let particleLast = 0;
+    let currentCoverageTick = 0;
 
     function seedWindParticles() {
       particles.length = 0;
@@ -4085,6 +4087,43 @@
         return makeCurrentParticle(seed[0] + (Math.random() - 0.5) * 0.05, seed[1] + (Math.random() - 0.5) * 0.05);
       }
       return makeCurrentParticle(bbox[0], bbox[1]);
+    }
+
+    function replenishVisibleCurrentParticles() {
+      if (!forecastData || !mapEl || !layerVisibility.current) return;
+      const rect = mapEl.getBoundingClientRect();
+      const corners = [[0, 0], [rect.width, 0], [0, rect.height], [rect.width, rect.height]]
+        .map(pixel => map.getCoordinateFromPixel(pixel)).filter(Boolean)
+        .map(coord => ol.proj.toLonLat(coord, mapProjection));
+      if (corners.length < 4) return;
+      const viewBox = [
+        Math.max(bbox[0], Math.min(...corners.map(p => p[0]))), Math.max(bbox[1], Math.min(...corners.map(p => p[1]))),
+        Math.min(bbox[2], Math.max(...corners.map(p => p[0]))), Math.min(bbox[3], Math.max(...corners.map(p => p[1])))
+      ];
+      if (viewBox[2] <= viewBox[0] || viewBox[3] <= viewBox[1]) return;
+      let visible = 0;
+      const offscreen = [];
+      for (const p of currentParticles) {
+        if (p.lon >= viewBox[0] && p.lon <= viewBox[2] && p.lat >= viewBox[1] && p.lat <= viewBox[3] && isCurrentWaterPoint(p.lon, p.lat) && bilinearVec(currentFrame, p.lon, p.lat, 'current')) visible++;
+        else offscreen.push(p);
+      }
+      const target = Math.max(1200, Math.min(2600, Math.round(rect.width * rect.height / 170)));
+      let attempts = 0;
+      while (visible < target && attempts++ < 2500) {
+        const lon = viewBox[0] + Math.random() * (viewBox[2] - viewBox[0]);
+        const lat = viewBox[1] + Math.random() * (viewBox[3] - viewBox[1]);
+        if (!isCurrentWaterPoint(lon, lat) || !bilinearVec(currentFrame, lon, lat, 'current')) continue;
+        const particle = makeCurrentParticle(lon, lat, Math.random() * 180);
+        particle.trail.push([lon, lat]);
+        if (currentParticles.length < 6000) currentParticles.push(particle);
+        else if (offscreen.length) {
+          const old = offscreen.pop();
+          const index = currentParticles.indexOf(old);
+          if (index >= 0) currentParticles[index] = particle;
+          else continue;
+        } else continue;
+        visible++;
+      }
     }
 
     function currentParticleColor(lon, lat) {
@@ -4249,6 +4288,9 @@
             }
           }
           flowCtx.restore();
+          // Refill only after a short interval; this keeps visible valid-water
+          // coverage stable without resetting existing geographic histories.
+          if (++currentCoverageTick % 60 === 0) replenishVisibleCurrentParticles();
         }
         // Gusts use the forecast wind direction and peak-speed field. Render
         // only meaningful excess over sustained wind as sparse red bursts, so
@@ -4427,12 +4469,13 @@
       }, 80);
     }
     function settleMapGesture() {
-      if (!mapPointerDragging) { scheduleOverlayRedraw(); return; }
+      if (!mapPointerDragging) { scheduleOverlayRedraw(); setTimeout(replenishVisibleCurrentParticles, 120); return; }
       if (overlayRedrawTimer) { clearTimeout(overlayRedrawTimer); overlayRedrawTimer = 0; }
       viewportTransitioning = false;
       // Keep the translated frame in place until the geographic redraw has
       // completed. Clearing the transform first exposes a stale frame.
       drawOverlaysForProduct();
+      replenishVisibleCurrentParticles();
       mapGestureCanvases.forEach(canvas => { if (canvas) canvas.style.transform = ''; });
       mapGestureOriginCenter = null;
       mapPointerDragging = false;
@@ -4491,6 +4534,7 @@
     map.on('change:size', () => {
       // re-seed particles to new viewport area, redraw
       seedWindParticles();
+      replenishVisibleCurrentParticles();
       scheduleOverlayRedraw();
     });
 
