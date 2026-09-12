@@ -1370,12 +1370,15 @@
     function waveMotionEnabled(kind) {
       return kind === 'swell' ? !!layerVisibility.swell_motion : !!layerVisibility.wave_motion;
     }
+    function anyWaveMotionRequested() {
+      return !!(layerVisibility.wave_motion || layerVisibility.swell_motion);
+    }
     function waveKindVisible(kind) {
       // In Currents, the hamburger motion controls are the explicit request
       // to show that motion layer even though the Sea State height layers are
       // not part of the Currents preset. In Sea State, retain independent
       // height-layer visibility semantics.
-      return !!layerVisibility[kind] || (activePlannerPreset === 'fishing' && waveMotionEnabled(kind));
+      return !!layerVisibility[kind] || waveMotionEnabled(kind);
     }
     let activePlannerPreset = 'sea';
     function syncStationVisibility() {
@@ -2119,6 +2122,8 @@
       if (layerVisibility.surface_height) drawIsobars(true, 'surface_height_m');
       if (layerVisibility.current || layerVisibility.wind || layerVisibility.wind_gust) startParticleAnimation();
       else stopParticleAnimation();
+      if (anyWaveMotionRequested()) startWavePacketAnimation();
+      else stopWavePacketAnimation();
       drawSteepnessWarnings();
       // Co-range overlay is independent of the selected base product.
       drawTidalContours();
@@ -2370,7 +2375,15 @@
       // rejecting an entire ~0.25° cell creates false offshore gaps.  Swell
       // still requires the cell's water component to be connected to open
       // boundary water, while the packet anchor and crest path must be wet.
-      return packet.water === true && (packet.kind !== 'swell' || packet.openWater === true);
+      // Do not freeze the packet's initial mask result. ensureWavePackets()
+      // can run before the async coastline mask has loaded; caching that
+      // false value made motion disappear permanently in Weather/Currents and
+      // after a zoom rebuild. Resolve the anchor against the current mask on
+      // every draw, with the forecast water-cell contract as the fallback.
+      const exactWater = waveMaskImage?.complete && waveMaskImage.naturalWidth > 0
+        ? isCoastWaterPoint(packet.lon, packet.lat)
+        : (packet.water === true || forecastData?.tide_water_cells?.[yi]?.[xi] === true);
+      return exactWater && (packet.kind !== 'swell' || packet.openWater === true);
     }
 
     let waveMaskCanvas = null;
@@ -3128,7 +3141,7 @@
       wavePacketLastTs = 0;
       const tick = ts => {
         wavePacketRaf = 0;
-        if ((!['fishing'].includes(activePlannerPreset) && currentProduct !== 'wave_composite') || !currentFrame || !forecastData) return;
+        if (!anyWaveMotionRequested() || !currentFrame || !forecastData) return;
         // Packet rendering integrates many map-coordinate lookups and canvas
         // strokes. Keep it at a steady ~25 fps instead of competing with the
         // browser's 60 fps compositor on mobile.
@@ -3151,7 +3164,7 @@
           // schematic phase in that case; Sea State still requires real period
           // metadata for its physically scaled crest spacing.
           const metrics = wavePhaseMetrics(vec?.period) ||
-            (activePlannerPreset === 'fishing' ? { intervalS: 4 } : null);
+            (anyWaveMotionRequested() ? { intervalS: 4 } : null);
           if (metrics) packet.phase = (packet.phase + dt / 1000 / metrics.intervalS) % 1;
         }
         // The wind particle animator owns flowCtx and its trail decay.  The
