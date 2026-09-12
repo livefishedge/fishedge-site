@@ -3144,7 +3144,12 @@
             if (!swellSupportedAt(packet.lon, packet.lat) || !swellExposureAt(packet.lon, packet.lat, exposureVec)) continue;
           }
           const vec = bilinearPartitionVec(currentFrame, packet.kind, packet.lon, packet.lat);
-          const metrics = wavePhaseMetrics(vec?.period);
+          // Some Currents forecast frames carry wave height/direction but no
+          // period. Keep the checked motion visibly animated with a bounded
+          // schematic phase in that case; Sea State still requires real period
+          // metadata for its physically scaled crest spacing.
+          const metrics = wavePhaseMetrics(vec?.period) ||
+            (activePlannerPreset === 'fishing' ? { intervalS: 4 } : null);
           if (metrics) packet.phase = (packet.phase + dt / 1000 / metrics.intervalS) % 1;
         }
         // The wind particle animator owns flowCtx and its trail decay.  The
@@ -4103,8 +4108,11 @@
       if (viewBox[2] <= viewBox[0] || viewBox[3] <= viewBox[1]) return;
       let visible = 0;
       const offscreen = [];
+      // This accounting runs during playback. Use cheap geographic/vector
+      // checks here; the expensive coastline mask is reserved for candidate
+      // spawn validation below so wind and current RAFs are not starved.
       for (const p of currentParticles) {
-        if (p.lon >= viewBox[0] && p.lon <= viewBox[2] && p.lat >= viewBox[1] && p.lat <= viewBox[3] && isCurrentWaterPoint(p.lon, p.lat) && bilinearVec(currentFrame, p.lon, p.lat, 'current')) visible++;
+        if (p.lon >= viewBox[0] && p.lon <= viewBox[2] && p.lat >= viewBox[1] && p.lat <= viewBox[3] && bilinearVec(currentFrame, p.lon, p.lat, 'current')) visible++;
         else offscreen.push(p);
       }
       const target = Math.max(1200, Math.min(2600, Math.round(rect.width * rect.height / 170)));
@@ -4290,7 +4298,7 @@
           flowCtx.restore();
           // Refill only after a short interval; this keeps visible valid-water
           // coverage stable without resetting existing geographic histories.
-          if (++currentCoverageTick % 60 === 0) replenishVisibleCurrentParticles();
+          if (++currentCoverageTick % 180 === 0) replenishVisibleCurrentParticles();
         }
         // Gusts use the forecast wind direction and peak-speed field. Render
         // only meaningful excess over sustained wind as sparse red bursts, so
