@@ -265,7 +265,7 @@
       <button class="bv-preset" type="button" data-preset="weather" title="Weather: visibility, precipitation, crew exposure, clouds, and pressure" aria-label="Weather">Weather</button>
       <button class="bv-preset active" type="button" data-preset="sea" title="Sea state: wave height, swell, chop, steepness, and ride harshness" aria-label="Sea State">Sea State</button>
       <button class="bv-preset" type="button" data-preset="tides" title="Tides: tidal stage and tidal range" aria-label="Tides">Tides</button>
-      <button class="bv-preset" type="button" data-preset="fishing" title="Currents: SST, forecast current, and surface height when available" aria-label="Currents">Currents</button>
+      <button class="bv-preset" type="button" data-preset="fishing" title="Currents: SST, surface current, and surface height when available" aria-label="Currents">Currents</button>
       <button class="bv-preset" type="button" data-preset="moon" title="Moon and sun: phase, illumination, sunrise, and sunset" aria-label="Moon">Moon</button>
     </div>
     <div class="bv-time" id="bv-time" hidden aria-hidden="true"></div>
@@ -301,7 +301,6 @@
           <label><input type="checkbox" data-layer="rain"><span class="bv-dot dot-tide"></span>Rain <button class="bv-unit-toggle" type="button" data-unit-key="rain_in">in</button></label>
           <label><input type="checkbox" data-layer="showers"><span class="bv-dot dot-tide"></span>Showers <button class="bv-unit-toggle" type="button" data-unit-key="showers_in">in</button></label>
           <label><input type="checkbox" data-layer="snowfall"><span class="bv-dot dot-tide"></span>Snowfall <button class="bv-unit-toggle" type="button" data-unit-key="snowfall_in">in</button></label>
-          <label title="Sustained wind particles plus sparse red gust bursts"><input type="checkbox" data-layer="wind" checked><span class="bv-dot dot-wind"></span>Wind + Gust <button class="bv-unit-toggle" type="button" data-unit-key="wind_speed_kn">kn</button></label>
         </div>
         <div class="bv-layer-group">
           <div class="bv-layer-group-title">Ocean &amp; Tides</div>
@@ -309,10 +308,7 @@
           <label title="Tidal Range contour overlay"><input type="checkbox" data-layer="tide_range"><span class="bv-dot dot-tide"></span>Tidal Range <button class="bv-unit-toggle" type="button" data-unit-key="tide_range_ft">ft</button></label>
           <label title="Wind-wave height is the locally wind-generated chop; crest speed and spacing use its period"><input type="checkbox" data-layer="wind_wave"><span class="bv-dot dot-composite"></span>Wave Height (Chop) <button class="bv-unit-toggle" type="button" data-unit-key="wind_wave_height_ft">ft</button></label>
           <label title="Swell height is the remotely generated wave component; only exposed water is shown as locally resolved"><input type="checkbox" data-layer="swell"><span class="bv-dot dot-swell"></span>Swell Height <button class="bv-unit-toggle" type="button" data-unit-key="swell_height_ft">ft</button></label>
-          <label title="Animate the locally generated wind-wave crests"><input type="checkbox" data-layer="wave_motion" checked><span class="bv-dot dot-composite"></span>Wave Motion</label>
-          <label title="Animate the remotely generated swell crests"><input type="checkbox" data-layer="swell_motion" checked><span class="bv-dot dot-swell"></span>Swell Motion</label>
           <label title="Significant wave height combines wind waves and swell"><input type="checkbox" data-layer="wave_height" checked><span class="bv-dot dot-wave"></span>Significant Wave Height <button class="bv-unit-toggle" type="button" data-unit-key="wave_height_ft">ft</button></label>
-          <label title="Forecast surface current speed and direction"><input type="checkbox" data-layer="current"><span class="bv-dot dot-wind"></span>Forecast Current <button class="bv-unit-toggle" type="button" data-unit-key="current_speed_kn">kn</button></label>
           <label title="Sea-surface temperature from the marine forecast"><input type="checkbox" data-layer="sst"><span class="bv-dot dot-temp"></span>Sea-Surface Temp <button class="bv-unit-toggle" type="button" data-unit-key="sea_surface_temperature_f">°F</button></label>
           <label title="CMEMS DUACS daily altimetry sea-level anomaly contours; source date shown in the status line"><input type="checkbox" data-layer="surface_height"><span class="bv-dot dot-tide"></span>Sea Level Anomaly <button class="bv-unit-toggle" type="button" data-unit-key="surface_height_m">m</button></label>
           <label title="Wave height relative to wavelength; orange and red indicate increasingly uncomfortable or dangerous steepness"><input type="checkbox" data-layer="wave_steepness" checked><span class="bv-dot dot-wave"></span>Surface Steepness</label>
@@ -464,7 +460,7 @@
       wave_steepness: { name: 'Surface Steepness', unit: 'Sₛ', scale: 'ALERT', viz: 'heat', dataKey: 'wave_steepness', dynamicRange: false, fixedRange: [0, 0.10] },
       ride_harshness_index: { name: 'Ride Harshness', unit: '0 smooth · 3 severe', scale: 'RIDE', viz: 'heat', dataKey: 'ride_harshness_index', dynamicRange: false, fixedRange: [0, 3] },
       surface_height_m: { name: 'Sea Level Anomaly', unit: 'm', scale: 'SLA', viz: 'contours', dataKey: 'surface_height_m', dynamicRange: false, fixedRange: [-1, 1] },
-      current_speed_kn: { name: 'Forecast current', unit: 'kn', scale: 'CHL', viz: 'streamlines', dataKey: 'current_speed_kn', dynamicRange: false, fixedRange: [0, 4], dirKey: 'current_direction_deg' },
+      current_speed_kn: { name: 'Currents', unit: 'kn', scale: 'CHL', viz: 'streamlines', dataKey: 'current_speed_kn', dynamicRange: false, fixedRange: [0, 4], dirKey: 'current_direction_deg' },
       wind_speed_kn: { name: 'Wind flow',   unit: 'kn',  scale: 'CHL', viz: 'streamlines', dynamicRange: false },
       pressure_hpa:  { name: 'Pressure',    unit: 'hPa', scale: 'SLA', viz: 'contours',    dynamicRange: false, fixedRange: [980, 1040]  },
       astronomical_tide_ft: { name: 'Tidal Stage', unit: 'high → falling → low → rising', scale: 'TIDE', viz: 'heat', dataKey: 'astronomical_tide_ft', dynamicRange: false },
@@ -1168,7 +1164,7 @@
         if (!checked(vectorLayer)) continue;
         const vectorField = vectorLayer === 'current' ? 'current' : (vectorLayer === 'wind_gust' ? 'gust' : 'wind');
         const v = bilinearVec(currentFrame, lon, lat, vectorField);
-        const label = vectorLayer === 'current' ? 'Forecast Current' : (vectorLayer === 'wind_gust' ? 'Gust' : 'Wind');
+        const label = vectorLayer === 'current' ? 'Currents' : (vectorLayer === 'wind_gust' ? 'Gust' : 'Wind');
         const unitKey = vectorLayer === 'current' ? 'current_speed_kn' : (vectorLayer === 'wind_gust' ? 'wind_gust_kn' : 'wind_speed_kn');
         if (!v) { rows.push(`<div><b>${label}</b> · missing source data</div>`); continue; }
         const dir = v.speed > 1e-6 ? (Math.atan2(v.u, v.v) * 180 / Math.PI + 360) % 360 : null;
@@ -1401,7 +1397,7 @@
       visibility:'Visibility', precipitation:'Precipitation', rain:'Rain', showers:'Showers', snowfall:'Snowfall',
       precipitation_probability:'Precip. Chance', uv_index:'UV Index', pressure:'Pressure', wind:'Wind + Gust', wind_gust:'Gust',
       tide_level:'Tidal Stage', tide_range:'Tidal Range', wind_wave:'Wave Height (Chop)', swell:'Swell Height', wave_height:'Significant Wave Height',
-      current:'Forecast Current',
+      current:'Currents',
       sst:'Sea-Surface Temp', wave_steepness:'Surface Steepness', ride_harshness:'Ride Harshness', surface_height:'Sea Level Anomaly'
     };
     const SCALAR_LAYERS = {
@@ -1461,15 +1457,33 @@
         input.disabled = menu?.disabled || false; label.title = menu?.closest('label')?.title || '';
         label.append(input, LAYER_LABELS[key] || key); parent.append(label);
       }
-      if (activePlannerPreset === 'sea') {
-        for (const [key, text] of [['wave_motion', 'Wave motion'], ['swell_motion', 'Swell motion']]) {
-          const label = document.createElement('label'), input = document.createElement('input');
-          input.type = 'checkbox'; input.dataset.layer = key; input.checked = !!layerVisibility[key];
-          if (key === 'wave_motion') input.dataset.waveMotion = 'true';
-          label.append(input, text); checkboxRow.append(label);
-        }
+      // These are the four presentation-level animation controls. They stay
+      // in the active strip below the colormap in every map mode; scalar and
+      // diagnostic layers remain mode-specific in the hamburger menu.
+      const animationControls = [
+        ['wind', 'Wind+Gust', 'Sustained wind and gust particles'],
+        ['wave_motion', 'Wave', 'Animate wind-wave crests'],
+        ['swell_motion', 'Swell', 'Animate swell crests'],
+        ['current', 'Currents', 'Surface current particles'],
+      ];
+      for (const [key, text, title] of animationControls) {
+        const label = document.createElement('label'); label.title = title;
+        const input = document.createElement('input'); input.type = 'checkbox';
+        input.dataset.layer = key; input.checked = !!layerVisibility[key];
+        if (key === 'wave_motion') input.dataset.waveMotion = 'true';
+        const fieldAvailable = key === 'wind'
+          ? gridAvailable('wind_speed_kn') && gridAvailable('wind_direction_deg')
+          : key === 'current'
+            ? gridAvailable('current_speed_kn') && gridAvailable('current_direction_deg')
+            : key === 'wave_motion'
+              ? gridAvailable('wind_wave_height_ft') && gridAvailable('wind_wave_direction_deg')
+              : gridAvailable('swell_height_ft') && gridAvailable('swell_direction_deg');
+        input.disabled = !!currentFrame && !fieldAvailable;
+        label.append(input, text); checkboxRow.append(label);
       }
-      preset.primary.filter(k => activePlannerPreset !== 'sea' || !['swell','wind_wave'].includes(k)).forEach(k => control(k, checkboxRow));
+      preset.primary.filter(k => !['wind','wind_gust','current','wave_motion','swell_motion'].includes(k))
+        .filter(k => activePlannerPreset !== 'sea' || !['swell','wind_wave'].includes(k))
+        .forEach(k => control(k, checkboxRow));
       const details = document.createElement('details'); details.className = 'bv-layer-details'; details.open = detailsOpen;
       const summary = document.createElement('summary'); summary.textContent = 'Details'; details.append(summary);
       const panel = document.createElement('div'); panel.className = 'bv-details-panel';
@@ -1489,7 +1503,7 @@
       if (activePlannerPreset === 'tides') {
         const button = document.createElement('button'); button.type='button'; button.dataset.station='true'; button.textContent='Open station chart'; panel.append(button);
       }
-      const note = document.createElement('p'); note.textContent = 'Map choices replace the fill. Current is a regional surface forecast, not inlet-resolving flow.';
+      const note = document.createElement('p'); note.textContent = 'Map choices replace the fill. Currents are regional surface flow, not inlet-resolving flow.';
       panel.append(note); details.append(panel); selectorRow.append(details);
       details.addEventListener('toggle', () => { if(details.isConnected) detailsOpen=details.open; });
       if (activePlannerPreset === 'tides') {
