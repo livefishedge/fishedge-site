@@ -2073,10 +2073,8 @@
         // in this presentation.
         drawScalarAndWaves(activeHeatKey());
       } else if (def.viz === 'streamlines') {
-        drawStreamlines();
-        // Particles use the same weak-wind guard as streamlines. A coastline
-        // mask is still a future refinement, but disabling the layer leaves
-        // the diagnostic map visibly empty in broad low-wind areas.
+        // Wind playback is particle-only; its screen trails decay as the
+        // particles pass rather than leaving a permanent streamline field.
         startParticleAnimation();
       } else if (def.viz === 'arrows') {
         // Wave products must use the coastline-clipped canvas path. The
@@ -2424,7 +2422,6 @@
       drawScalarAndWaves(heatKey);
       if (layerVisibility.pressure) drawIsobars(true);
       if (layerVisibility.wind || layerVisibility.wind_gust || layerVisibility.current) {
-        if (layerVisibility.wind) drawStreamlines(true);
         if (layerVisibility.current) drawStreamlines(true, 'current');
         startParticleAnimation();
       } else {
@@ -3145,7 +3142,6 @@
         const partitionCount = Number(!!layerVisibility.wind_wave) + Number(!!layerVisibility.swell);
         drawScalarAndWaves(heatKey);
         if (layerVisibility.pressure) drawIsobars(true);
-        if (layerVisibility.wind) drawStreamlines(true);
         if (layerVisibility.current) drawStreamlines(true, 'current');
         // SLA owns a separate persistent canvas. Static contours are rendered
         // on source/view changes, never rebuilt by this animation tick.
@@ -4113,7 +4109,11 @@
         // trail decay (hint.fm recipe)
         flowCtx.globalCompositeOperation = 'source-over';
         flowCtx.globalAlpha = 1;
-        flowCtx.fillStyle = 'rgba(7, 17, 29, 0.06)';
+        // Wind trails are intentionally transient. Current trails are
+        // redrawn from geographic histories, so they receive the slower
+        // decay while wind-only playback clears passed particles quickly.
+        const windOnly = layerVisibility.wind && !layerVisibility.current;
+        flowCtx.fillStyle = windOnly ? 'rgba(7, 17, 29, 0.24)' : 'rgba(7, 17, 29, 0.06)';
         flowCtx.fillRect(0, 0, rect.width, rect.height);
         // Advect sustained-wind particles only when the Wind + Gust layer is
         // enabled. Currents owns a separate, slower particle field and must
