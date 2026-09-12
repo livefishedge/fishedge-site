@@ -1481,7 +1481,7 @@
         input.disabled = !!currentFrame && !fieldAvailable;
         label.append(input, text); checkboxRow.append(label);
       }
-      preset.primary.filter(k => !['wind','wind_gust','current','wave_motion','swell_motion'].includes(k))
+      preset.primary.filter(k => !['wind','wind_gust','current','wave_motion','swell_motion','tide_range'].includes(k))
         .filter(k => activePlannerPreset !== 'sea' || !['swell','wind_wave'].includes(k))
         .forEach(k => control(k, checkboxRow));
       const details = document.createElement('details'); details.className = 'bv-layer-details'; details.open = detailsOpen;
@@ -1501,14 +1501,11 @@
         panel.append(group);
       }
       if (activePlannerPreset === 'tides') {
-        const button = document.createElement('button'); button.type='button'; button.dataset.station='true'; button.textContent='Open station chart'; panel.append(button);
+        const button = document.createElement('button'); button.type='button'; button.dataset.station='true'; button.textContent='Station'; panel.append(button);
       }
       const note = document.createElement('p'); note.textContent = 'Map choices replace the fill. Currents are regional surface flow, not inlet-resolving flow.';
       panel.append(note); details.append(panel); selectorRow.append(details);
       details.addEventListener('toggle', () => { if(details.isConnected) detailsOpen=details.open; });
-      if (activePlannerPreset === 'tides') {
-        const button=document.createElement('button');button.type='button';button.dataset.station='true';button.textContent='Station chart';checkboxRow.append(button);
-      }
       // Reset view was removed per 12:41 ET request.
       for (const key of preset.layers.filter(k => !SCALAR_LAYERS[k] && layerVisibility[k] && !preset.primary.includes(k))) {
         const chip=document.createElement('button');chip.type='button';chip.dataset.removeLayer=key;chip.textContent=(LAYER_LABELS[key]||key)+' ×';checkboxRow.append(chip);
@@ -1608,14 +1605,14 @@
         detailGroups:{},
         layers:['wave_height','swell','wind_wave','wave_steepness','ride_harshness','wind'],
         mapFields:[['wave_height_ft','Significant Wave Height'],['swell_height_ft','Swell Height'],['wind_wave_height_ft','Wave Height (Chop)']],
-        defaults:['wave_height','swell','wind_wave','wave_motion','swell_motion'], heat:'wave_height_ft'
+        defaults:['wave_height','swell','wind_wave','wave_motion','swell_motion','wind','current'], heat:'wave_height_ft'
       },
       weather: {
         primary:['visibility','precipitation_probability'],
         detailGroups:{'Crew exposure':['temperature','apparent_temperature','humidity','uv_index'],'Fog & clouds':['dew_point','cloud_cover','cloud_low','cloud_mid','cloud_high'],'Weather detail':['pressure','precipitation','precipitation_probability','rain','showers','snowfall']},
         layers:['visibility','temperature','apparent_temperature','humidity','uv_index','dew_point','cloud_cover','cloud_low','cloud_mid','cloud_high','pressure','precipitation','precipitation_probability','rain','showers','snowfall'],
         mapFields:[['visibility_mi','Visibility'],['precipitation_probability_pct','Precipitation chance'],['temperature_f','Air temperature'],['apparent_temperature_f','Feels Like'],['relative_humidity_pct','Humidity'],['cloud_cover_pct','Cloud cover'],['pressure_hpa','Pressure']],
-        defaults:['visibility'], heat:'visibility_mi'
+        defaults:['precipitation_probability','wind'], heat:'precipitation_probability_pct'
       },
       moon: {
         primary:[], detailGroups:{}, layers:[], mapFields:[], defaults:[], heat:null
@@ -1625,14 +1622,14 @@
         detailGroups:{},
         layers:['sst','current','surface_height'],
         mapFields:[['sea_surface_temperature_f','Sea-surface temperature']],
-        defaults:['sst','current'], heat:'sea_surface_temperature_f'
+        defaults:['sst','current','wave_motion','swell_motion'], heat:'sea_surface_temperature_f'
       },
       tides: {
         primary:['tide_level','tide_range'],
         detailGroups:{},
         layers:['tide_level','tide_range'],
         mapFields:[['astronomical_tide_ft','Tidal stage']],
-        defaults:['tide_level','tide_range'], heat:'astronomical_tide_ft'
+        defaults:['tide_range'], heat:'astronomical_tide_ft'
       },
     };
     function applyPlannerPreset(name, reset = false) {
@@ -1660,6 +1657,11 @@
         input.checked = on;
         layerVisibility[input.dataset.layer] = on;
       });
+      // The four presentation controls live in the active strip rather than
+      // the hamburger menu, so reset them from the preset explicitly.
+      for (const key of ['wind', 'wave_motion', 'swell_motion', 'current']) {
+        layerVisibility[key] = active.has(key);
+      }
       // Wind and gust are one captain-facing control. Keep the internal gust
       // animation state coupled to the visible Wind + Gust checkbox.
       layerVisibility.wind_gust = !!layerVisibility.wind;
