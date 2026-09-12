@@ -2067,11 +2067,11 @@
         map.render();
       }
       if (currentsMode) {
-        // Currents is an SST raster plus ocean-current motion. It must not
-        // enter the wave-composite lifecycle: that lifecycle retraces static
-        // fields and starts a second RAF on every mode switch.
+        // Currents is an SST raster plus semipermanent particle histories.
+        // Do not paint the permanent coarse-grid streamline layer here:
+        // independently advected geographic tracks are the only motion layer
+        // in this presentation.
         drawScalarAndWaves(activeHeatKey());
-        if (layerVisibility.current) drawStreamlines(true, 'current');
       } else if (def.viz === 'streamlines') {
         drawStreamlines();
         // Particles use the same weak-wind guard as streamlines. A coastline

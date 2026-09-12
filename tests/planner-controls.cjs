@@ -85,8 +85,8 @@ const url = process.env.PLANNER_URL || 'http://127.0.0.1:8766/trip-planner/brief
     await page.waitForTimeout(500);
     assert(await page.locator('input[data-layer=current]').first().isChecked(),'Fishing keeps Forecast Current checked');
     assert(!(await page.locator('input[data-layer=current]').first().isDisabled()),'Forecast Current has source data');
-    const currentPixels = await page.locator('.bv-streamlines-canvas').evaluate(c=>{const d=c.getContext('2d').getImageData(0,0,c.width,c.height).data;let n=0;for(let i=3;i<d.length;i+=4)if(d[i]>30)n++;return n});
-    assert(currentPixels>100,'Forecast Current renders streamlines');
+    const currentPixels = await page.locator('.bv-flow-canvas').evaluate(c=>{const d=c.getContext('2d').getImageData(0,0,c.width,c.height).data;let n=0;for(let i=3;i<d.length;i+=4)if(d[i]>30)n++;return n});
+    assert(currentPixels>100,'Forecast Current renders semipermanent particle tracks');
     await page.setViewportSize({width:390,height:844});
     await page.locator('[data-preset=weather]').click();
     await page.locator('.bv-layer-details summary').click();
