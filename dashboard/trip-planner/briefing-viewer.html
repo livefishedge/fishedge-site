@@ -2113,7 +2113,9 @@
       else stopParticleAnimation();
       // Current arrows/streamlines are independent of the selected scalar
       // field, so Fuel and Inlet can show them over wave/tide backgrounds.
-      if (!currentsMode && layerVisibility.current) drawStreamlines(!!layerVisibility.wind, 'current');
+      // Current visualization is particle-history only in every preset;
+      // never reintroduce a permanent streamline field from a hamburger
+      // toggle or a mode-specific redraw.
       if (layerVisibility.surface_height) drawIsobars(true, 'surface_height_m');
       if (layerVisibility.current || layerVisibility.wind || layerVisibility.wind_gust) startParticleAnimation();
       else stopParticleAnimation();
@@ -3166,7 +3168,7 @@
         const partitionCount = Number(!!layerVisibility.wind_wave) + Number(!!layerVisibility.swell);
         drawScalarAndWaves(heatKey);
         if (layerVisibility.pressure) drawIsobars(true);
-        if (layerVisibility.current) drawStreamlines(true, 'current');
+        // Current visualization is owned by the particle-history RAF below.
         // SLA owns a separate persistent canvas. Static contours are rendered
         // on source/view changes, never rebuilt by this animation tick.
         wavePacketRaf = requestAnimationFrame(tick);
@@ -3997,7 +3999,6 @@
     // speed × 0.0009 deg/frame for both wind (kn) and currents.
     let particleRaf = 0;
     let particleLast = 0;
-    let currentCoverageTick = 0;
 
     function seedWindParticles() {
       particles.length = 0;
@@ -4158,6 +4159,7 @@
           return;
         }
         if (ts - particleLast < 32) return; // ~30fps cap
+        const elapsedS = particleLast ? Math.min(0.08, Math.max(0.016, (ts - particleLast) / 1000)) : 0.032;
         particleLast = ts;
         // resize if viewport changed
         const rect = mapEl.getBoundingClientRect();
@@ -4202,7 +4204,7 @@
             continue;
           }
           const cosLat = Math.cos(p.lat * Math.PI / 180);
-          const dt = vec.speed * 0.0009;
+          const dt = vec.speed * 0.0009 * (elapsedS / 0.032);
           const oldLon = p.lon, oldLat = p.lat;
           p.lon += (vec.u / vec.speed) * dt / cosLat;
           p.lat += (vec.v / vec.speed) * dt;
@@ -4247,7 +4249,7 @@
               currentParticles[i] = randomCurrentParticle();
               continue;
             }
-            const dt = vec.speed * 0.00035 * CURRENT_VISUAL_SPEED_MULTIPLIER;
+            const dt = vec.speed * 0.00035 * CURRENT_VISUAL_SPEED_MULTIPLIER * (elapsedS / 0.032);
             const oldLon = p.lon, oldLat = p.lat;
             // Midpoint (RK2) advection keeps long geographic trails smooth
             // through the coarse field instead of producing angular, wind-like
@@ -4278,7 +4280,7 @@
             // Use multiple short geographic bands so SST changes remain
             // visible along a long filament instead of collapsing the whole
             // trail to its head temperature.
-            const bands = Math.min(10, allPoints.length - 1);
+            const bands = Math.min(6, allPoints.length - 1);
             for (let band = 0; band < bands; band++) {
               const start = Math.floor(band * (allPoints.length - 1) / bands);
               const end = Math.floor((band + 1) * (allPoints.length - 1) / bands);
@@ -4296,9 +4298,6 @@
             }
           }
           flowCtx.restore();
-          // Refill only after a short interval; this keeps visible valid-water
-          // coverage stable without resetting existing geographic histories.
-          if (++currentCoverageTick % 180 === 0) replenishVisibleCurrentParticles();
         }
         // Gusts use the forecast wind direction and peak-speed field. Render
         // only meaningful excess over sustained wind as sparse red bursts, so
