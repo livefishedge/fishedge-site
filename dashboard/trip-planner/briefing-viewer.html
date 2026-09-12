@@ -309,6 +309,8 @@
           <label title="Tidal Range contour overlay"><input type="checkbox" data-layer="tide_range"><span class="bv-dot dot-tide"></span>Tidal Range <button class="bv-unit-toggle" type="button" data-unit-key="tide_range_ft">ft</button></label>
           <label title="Wind-wave height is the locally wind-generated chop; crest speed and spacing use its period"><input type="checkbox" data-layer="wind_wave"><span class="bv-dot dot-composite"></span>Wave Height (Chop) <button class="bv-unit-toggle" type="button" data-unit-key="wind_wave_height_ft">ft</button></label>
           <label title="Swell height is the remotely generated wave component; only exposed water is shown as locally resolved"><input type="checkbox" data-layer="swell"><span class="bv-dot dot-swell"></span>Swell Height <button class="bv-unit-toggle" type="button" data-unit-key="swell_height_ft">ft</button></label>
+          <label title="Animate the locally generated wind-wave crests"><input type="checkbox" data-layer="wave_motion" checked><span class="bv-dot dot-composite"></span>Wave Motion</label>
+          <label title="Animate the remotely generated swell crests"><input type="checkbox" data-layer="swell_motion" checked><span class="bv-dot dot-swell"></span>Swell Motion</label>
           <label title="Significant wave height combines wind waves and swell"><input type="checkbox" data-layer="wave_height" checked><span class="bv-dot dot-wave"></span>Significant Wave Height <button class="bv-unit-toggle" type="button" data-unit-key="wave_height_ft">ft</button></label>
           <label title="Forecast surface current speed and direction"><input type="checkbox" data-layer="current"><span class="bv-dot dot-wind"></span>Forecast Current <button class="bv-unit-toggle" type="button" data-unit-key="current_speed_kn">kn</button></label>
           <label title="Sea-surface temperature from the marine forecast"><input type="checkbox" data-layer="sst"><span class="bv-dot dot-temp"></span>Sea-Surface Temp <button class="bv-unit-toggle" type="button" data-unit-key="sea_surface_temperature_f">°F</button></label>
@@ -1364,7 +1366,10 @@
     }
     // Sea is the calm default: one wave map plus coordinated partition
     // motion. Other scalar diagnostics stay off until explicitly selected.
-    const layerVisibility = { wave_height: true, temperature: false, apparent_temperature: false, dew_point: false, humidity: false, cloud_cover: false, cloud_low: false, cloud_mid: false, cloud_high: false, visibility: false, precipitation: false, rain: false, showers: false, snowfall: false, precipitation_probability: false, pressure: false, wind_gust: true, tide_level: false, tide_range: false, swell: true, wind_wave: true, wind: true, current: false, sst: false, wave_steepness: false, ride_harshness: false, surface_height: false };
+    const layerVisibility = { wave_height: true, temperature: false, apparent_temperature: false, dew_point: false, humidity: false, cloud_cover: false, cloud_low: false, cloud_mid: false, cloud_high: false, visibility: false, precipitation: false, rain: false, showers: false, snowfall: false, precipitation_probability: false, pressure: false, wind_gust: true, tide_level: false, tide_range: false, swell: true, wind_wave: true, wave_motion: true, swell_motion: true, wind: true, current: false, sst: false, wave_steepness: false, ride_harshness: false, surface_height: false };
+    function waveMotionEnabled(kind) {
+      return kind === 'swell' ? !!layerVisibility.swell_motion : !!layerVisibility.wave_motion;
+    }
     let activePlannerPreset = 'sea';
     function syncStationVisibility() {
       const showStations = activePlannerPreset === 'tides' || !!(layerVisibility.tide_level || layerVisibility.tide_range);
@@ -1447,10 +1452,12 @@
         label.append(input, LAYER_LABELS[key] || key); parent.append(label);
       }
       if (activePlannerPreset === 'sea') {
-        const label = document.createElement('label'), input = document.createElement('input');
-        input.type = 'checkbox'; input.dataset.waveMotion = 'true'; input.checked = layerVisibility.swell && layerVisibility.wind_wave;
-        input.indeterminate = !!layerVisibility.swell !== !!layerVisibility.wind_wave;
-        label.append(input, 'Wave motion'); checkboxRow.append(label);
+        for (const [key, text] of [['wave_motion', 'Wave motion'], ['swell_motion', 'Swell motion']]) {
+          const label = document.createElement('label'), input = document.createElement('input');
+          input.type = 'checkbox'; input.dataset.layer = key; input.checked = !!layerVisibility[key];
+          if (key === 'wave_motion') input.dataset.waveMotion = 'true';
+          label.append(input, text); checkboxRow.append(label);
+        }
       }
       preset.primary.filter(k => activePlannerPreset !== 'sea' || !['swell','wind_wave'].includes(k)).forEach(k => control(k, checkboxRow));
       const details = document.createElement('details'); details.className = 'bv-layer-details'; details.open = detailsOpen;
@@ -1487,8 +1494,11 @@
       const strip=document.getElementById('bv-active-layer-strip');
       strip.addEventListener('change', event => {
         if(event.target.matches('select[data-map-field]')) selectedHeatKey=event.target.value || null;
-        else if(event.target.matches('[data-wave-motion]')) layerVisibility.swell=layerVisibility.wind_wave=event.target.checked;
-        else if(event.target.matches('input[data-layer]')) layerVisibility[event.target.dataset.layer]=event.target.checked;
+        else if(event.target.matches('input[data-layer]')) {
+          const key = event.target.dataset.layer;
+          layerVisibility[key] = event.target.checked;
+          if (key === 'wind' || key === 'wind_gust') clearWindScreenTrails();
+        }
         else return;
         refreshPlanner();
       });
@@ -1574,7 +1584,7 @@
         detailGroups:{},
         layers:['wave_height','swell','wind_wave','wave_steepness','ride_harshness','wind'],
         mapFields:[['wave_height_ft','Significant Wave Height'],['swell_height_ft','Swell Height'],['wind_wave_height_ft','Wave Height (Chop)']],
-        defaults:['wave_height','swell','wind_wave'], heat:'wave_height_ft'
+        defaults:['wave_height','swell','wind_wave','wave_motion','swell_motion'], heat:'wave_height_ft'
       },
       weather: {
         primary:['visibility','precipitation_probability'],
@@ -1977,6 +1987,7 @@
         wind: hasGrid('wind_speed_kn') && hasGrid('wind_direction_deg'),
         wind_wave: hasGrid('wind_wave_height_ft') && hasGrid('wind_wave_direction_deg'),
         swell: hasGrid('swell_height_ft') && hasGrid('swell_direction_deg'),
+        wave_motion: true, swell_motion: true,
       };
       for (const key of Object.keys(available)) {
         const input = document.querySelector(`#bv-layers input[data-layer="${key}"]`);
@@ -3021,7 +3032,7 @@
           const exposureVec = bilinearPartitionVec(currentFrame, 'swell', packet.lon, packet.lat);
           if (!swellSupportedAt(packet.lon, packet.lat) || !swellExposureAt(packet.lon, packet.lat, exposureVec)) continue;
         }
-        if (!layerVisibility[packet.kind] || !sourceCellWaterValid(packet) || !isOceanPoint(packet.lon, packet.lat, packet.kind)) continue;
+        if (!layerVisibility[packet.kind] || !waveMotionEnabled(packet.kind) || !sourceCellWaterValid(packet) || !isOceanPoint(packet.lon, packet.lat, packet.kind)) continue;
         const vec = bilinearPartitionVec(currentFrame, packet.kind, packet.lon, packet.lat);
         // Height gates visibility, not phase velocity. Missing periods do not
         // silently acquire an invented eight-second animation.
@@ -3119,7 +3130,7 @@
         wavePacketLastTs = ts;
         ensureWavePackets();
         for (const packet of wavePackets) {
-          if (!layerVisibility[packet.kind]) continue;
+          if (!layerVisibility[packet.kind] || !waveMotionEnabled(packet.kind)) continue;
           if (packet.kind === 'swell') {
             const exposureVec = bilinearPartitionVec(currentFrame, 'swell', packet.lon, packet.lat);
             if (!swellSupportedAt(packet.lon, packet.lat) || !swellExposureAt(packet.lon, packet.lat, exposureVec)) continue;
@@ -4112,8 +4123,11 @@
         // Wind trails are intentionally transient. Current trails are
         // redrawn from geographic histories, so they receive the slower
         // decay while wind-only playback clears passed particles quickly.
-        const windOnly = layerVisibility.wind && !layerVisibility.current;
-        flowCtx.fillStyle = windOnly ? 'rgba(7, 17, 29, 0.24)' : 'rgba(7, 17, 29, 0.06)';
+        // Wind is a transient screen trail even when Currents is enabled.
+        // Current histories are redrawn from geographic state below, so the
+        // faster wash removes passed wind marks without shortening currents.
+        const windActive = layerVisibility.wind || layerVisibility.wind_gust;
+        flowCtx.fillStyle = windActive ? 'rgba(7, 17, 29, 0.24)' : 'rgba(7, 17, 29, 0.06)';
         flowCtx.fillRect(0, 0, rect.width, rect.height);
         // Advect sustained-wind particles only when the Wind + Gust layer is
         // enabled. Currents owns a separate, slower particle field and must
@@ -4303,6 +4317,17 @@
       if (particleRaf) { cancelAnimationFrame(particleRaf); particleRaf = 0; }
     }
 
+    function clearWindScreenTrails() {
+      // Wind has no geographic history by design. Clearing on a visibility
+      // toggle prevents pixels from a prior Wind+Gust state surviving on the
+      // shared flow canvas; current histories are redrawn on the next frame.
+      if (!flowCtx || !flowCanvas) return;
+      flowCtx.save();
+      flowCtx.setTransform(1, 0, 0, 1, 0, 0);
+      flowCtx.clearRect(0, 0, flowCanvas.width, flowCanvas.height);
+      flowCtx.restore();
+    }
+
     // ---- UI wiring ----
     function setProduct(key) {
       currentProduct = key;
@@ -4324,6 +4349,7 @@
         const key=input.dataset.layer;
         if(SCALAR_LAYERS[key]) selectedHeatKey=input.checked ? SCALAR_LAYERS[key] : (selectedHeatKey===SCALAR_LAYERS[key] ? null : selectedHeatKey);
         else layerVisibility[key]=input.checked;
+        if (key === 'wind' || key === 'wind_gust') clearWindScreenTrails();
         refreshPlanner();
       });
     });

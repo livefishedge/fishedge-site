@@ -15,6 +15,7 @@ const url = process.env.PLANNER_URL || 'http://127.0.0.1:8766/trip-planner/brief
       let n=0;for(let i=3;i<d.length;i+=4)if(d[i]>100)n++;return n;
     });
     await page.locator('[data-wave-motion]').uncheck();
+    await page.locator('.bv-layer-checkbox-row input[data-layer="swell_motion"]').uncheck();
     for(const key of ['wave_height_ft','swell_height_ft','wind_wave_height_ft']){
       await select().selectOption(key);await page.waitForTimeout(150);
       assert(await pixels()>1000, key+' must paint pixels, not merely a legend');
@@ -33,6 +34,7 @@ const url = process.env.PLANNER_URL || 'http://127.0.0.1:8766/trip-planner/brief
     await page.locator('[data-preset=sea]').click();
     await select().selectOption('wave_height_ft');
     await page.locator('[data-wave-motion]').check();
+    await page.locator('.bv-layer-checkbox-row input[data-layer="swell_motion"]').check();
     const waveKey = page.locator('#bv-wave-key');
     const waveKeyBefore = await waveKey.boundingBox();
     await page.mouse.move(waveKeyBefore.x + 60, waveKeyBefore.y + 10);
