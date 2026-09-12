@@ -1370,6 +1370,13 @@
     function waveMotionEnabled(kind) {
       return kind === 'swell' ? !!layerVisibility.swell_motion : !!layerVisibility.wave_motion;
     }
+    function waveKindVisible(kind) {
+      // In Currents, the hamburger motion controls are the explicit request
+      // to show that motion layer even though the Sea State height layers are
+      // not part of the Currents preset. In Sea State, retain independent
+      // height-layer visibility semantics.
+      return !!layerVisibility[kind] || (activePlannerPreset === 'fishing' && waveMotionEnabled(kind));
+    }
     let activePlannerPreset = 'sea';
     function syncStationVisibility() {
       const showStations = activePlannerPreset === 'tides' || !!(layerVisibility.tide_level || layerVisibility.tide_range);
@@ -1425,7 +1432,7 @@
       const selectorRow = document.createElement('div'); selectorRow.className = 'bv-layer-selector-row';
       const checkboxRow = document.createElement('div'); checkboxRow.className = 'bv-layer-checkbox-row';
       strip.append(selectorRow, checkboxRow);
-      document.getElementById('bv-wave-key').hidden = !(layerVisibility.swell || layerVisibility.wind_wave);
+      document.getElementById('bv-wave-key').hidden = !(waveKindVisible('swell') || waveKindVisible('wind_wave'));
       const preset = PLANNER_PRESETS[activePlannerPreset];
       const label = document.createElement('label'); label.className = 'bv-map-field bv-map-field-shell'; label.append('Color map: ');
       const select = document.createElement('select'); select.dataset.mapField = 'true';
@@ -2451,7 +2458,7 @@
       const dpr = streamlineCanvas.width / Math.max(1, mapEl.clientWidth);
       streamlineCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
       if (heatKey) drawWaveHeatOverlay(heatKey);
-      const waves = layerVisibility.swell || layerVisibility.wind_wave;
+      const waves = waveKindVisible('swell') || waveKindVisible('wind_wave');
       if (waves && heatKey && !marine) {
         scalarBackdrop.width = streamlineCanvas.width; scalarBackdrop.height = streamlineCanvas.height;
         scalarBackdrop.getContext('2d').drawImage(streamlineCanvas, 0, 0);
@@ -3032,7 +3039,7 @@
           const exposureVec = bilinearPartitionVec(currentFrame, 'swell', packet.lon, packet.lat);
           if (!swellSupportedAt(packet.lon, packet.lat) || !swellExposureAt(packet.lon, packet.lat, exposureVec)) continue;
         }
-        if (!layerVisibility[packet.kind] || !waveMotionEnabled(packet.kind) || !sourceCellWaterValid(packet) || !isOceanPoint(packet.lon, packet.lat, packet.kind)) continue;
+        if (!waveKindVisible(packet.kind) || !waveMotionEnabled(packet.kind) || !sourceCellWaterValid(packet) || !isOceanPoint(packet.lon, packet.lat, packet.kind)) continue;
         const vec = bilinearPartitionVec(currentFrame, packet.kind, packet.lon, packet.lat);
         // Height gates visibility, not phase velocity. Missing periods do not
         // silently acquire an invented eight-second animation.
@@ -3118,7 +3125,7 @@
       wavePacketLastTs = 0;
       const tick = ts => {
         wavePacketRaf = 0;
-        if (activePlannerPreset === 'fishing' || currentProduct !== 'wave_composite' || !currentFrame || !forecastData) return;
+        if ((!['fishing'].includes(activePlannerPreset) && currentProduct !== 'wave_composite') || !currentFrame || !forecastData) return;
         // Packet rendering integrates many map-coordinate lookups and canvas
         // strokes. Keep it at a steady ~25 fps instead of competing with the
         // browser's 60 fps compositor on mobile.
@@ -3130,7 +3137,7 @@
         wavePacketLastTs = ts;
         ensureWavePackets();
         for (const packet of wavePackets) {
-          if (!layerVisibility[packet.kind] || !waveMotionEnabled(packet.kind)) continue;
+          if (!waveKindVisible(packet.kind) || !waveMotionEnabled(packet.kind)) continue;
           if (packet.kind === 'swell') {
             const exposureVec = bilinearPartitionVec(currentFrame, 'swell', packet.lon, packet.lat);
             if (!swellSupportedAt(packet.lon, packet.lat) || !swellExposureAt(packet.lon, packet.lat, exposureVec)) continue;
@@ -3149,7 +3156,7 @@
         flowCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
         const heatKey = activeHeatKey();
         if (['wave_height_ft', 'swell_height_ft', 'wind_wave_height_ft'].includes(heatKey) ||
-            layerVisibility.swell || layerVisibility.wind_wave) ensureWaveMaskImage();
+            waveKindVisible('swell') || waveKindVisible('wind_wave')) ensureWaveMaskImage();
         const partitionCount = Number(!!layerVisibility.wind_wave) + Number(!!layerVisibility.swell);
         drawScalarAndWaves(heatKey);
         if (layerVisibility.pressure) drawIsobars(true);
