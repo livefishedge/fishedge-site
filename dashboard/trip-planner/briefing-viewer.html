@@ -2468,6 +2468,7 @@
       const north = merc(b[3]), south = merc(b[1]);
       const y = Math.max(0, Math.min(waveMaskCanvas.height - 1, Math.round(
         (north - merc(lat)) / (north - south) * (waveMaskCanvas.height - 1))));
+      if (waveMaskData) return waveMaskData[(y * waveMaskCanvas.width + x) * 4 + 3] >= 128;
       return waveMaskCtx.getImageData(x, y, 1, 1).data[3] >= 128;
     }
 
@@ -2780,25 +2781,22 @@
       waveMaskImage.onload = () => {
         waveMaskCanvas = null;
         waveMaskCtx = null;
-        // The source is an 8-bit grayscale PNG already rasterized in
+        // The source is a bounded 8-bit grayscale PNG already rasterized in
         // EPSG:3857-normalized rows. Canvas compositing uses alpha, not
         // luminance, so build an explicit alpha canvas from the contract.
         waveMaskAlphaCanvas = document.createElement('canvas');
         waveMaskAlphaCanvas.width = waveMaskImage.naturalWidth;
         waveMaskAlphaCanvas.height = waveMaskImage.naturalHeight;
-        const sourceCanvas = document.createElement('canvas');
-        sourceCanvas.width = waveMaskImage.naturalWidth;
-        sourceCanvas.height = waveMaskImage.naturalHeight;
-        const sourceCtx = sourceCanvas.getContext('2d', { willReadFrequently: true });
-        sourceCtx.drawImage(waveMaskImage, 0, 0);
-        const source = sourceCtx.getImageData(0, 0, sourceCanvas.width, sourceCanvas.height).data;
         const alphaCtx = waveMaskAlphaCanvas.getContext('2d', { willReadFrequently: true });
-        const projected = alphaCtx.createImageData(sourceCanvas.width, sourceCanvas.height);
+        alphaCtx.drawImage(waveMaskImage, 0, 0);
+        const projected = alphaCtx.getImageData(0, 0, waveMaskAlphaCanvas.width, waveMaskAlphaCanvas.height);
+        const source = projected.data;
         // Water is 255 and land is 0 in the mask contract. Preserve the
         // projected geometry exactly; do not warp it a second time.
         for (let i = 0; i < source.length; i += 4) {
+          const maskValue = source[i];
           projected.data[i] = 255; projected.data[i + 1] = 255; projected.data[i + 2] = 255;
-          projected.data[i + 3] = source[i];
+          projected.data[i + 3] = maskValue;
         }
         alphaCtx.putImageData(projected, 0, 0);
         waveMaskCanvas = waveMaskAlphaCanvas;
@@ -4165,7 +4163,8 @@
       if (!currentWaterSeeds.length) return;
       const rect = mapEl.getBoundingClientRect();
       const area = Math.max(1, rect.width * rect.height);
-      const target = Math.max(1500, Math.min(3000, Math.round(area / 150)));
+      const compact = rect.width < 600;
+      const target = Math.max(compact ? 900 : 1400, Math.min(compact ? 1800 : 2400, Math.round(area / (compact ? 240 : 180))));
       let attempts = 0;
       while (currentParticles.length < target && attempts++ < target * 3) {
         const seed = currentWaterSeeds[Math.floor(Math.random() * currentWaterSeeds.length)];
@@ -4209,7 +4208,8 @@
         if (p.lon >= viewBox[0] && p.lon <= viewBox[2] && p.lat >= viewBox[1] && p.lat <= viewBox[3] && bilinearVec(currentFrame, p.lon, p.lat, 'current')) visible++;
         else offscreen.push(p);
       }
-      const target = Math.max(1200, Math.min(2600, Math.round(rect.width * rect.height / 170)));
+      const compact = rect.width < 600;
+      const target = Math.max(compact ? 900 : 1200, Math.min(compact ? 1800 : 2400, Math.round(rect.width * rect.height / (compact ? 240 : 190))));
       let attempts = 0;
       while (visible < target && attempts++ < 2500) {
         const lon = viewBox[0] + Math.random() * (viewBox[2] - viewBox[0]);

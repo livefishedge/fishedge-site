@@ -32,7 +32,7 @@ assert(html.includes('maxTrailPoints = mapEl.clientWidth < 600 ? 72 : 112'), 'cu
 assert(html.includes('traceCurrentDirection(lon0, lat0, direction, maxSteps = 96)'), 'current streamlines must use bounded bidirectional geographic tracing');
 assert(html.includes('Midpoint (RK2) advection'), 'current particles must use midpoint advection');
 assert(html.includes('currentParticleColor'), 'current particles must use SST-origin tinting');
-assert(html.includes('Math.max(1500, Math.min(3000'), 'current particles must be substantially denser');
+assert(html.includes('Math.min(compact ? 1800 : 2400'), 'current particles must use bounded mobile/desktop caps');
 assert(html.includes("fixedRange: [70, 80]"), 'SST range must be 70–80°F');
 assert(html.includes("input.addEventListener('change'"), 'hamburger layer toggles must redraw data layers');
 console.log('PASS: planner scale, labels, gust behavior, and progressive-detail contracts');
