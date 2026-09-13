@@ -1519,6 +1519,13 @@
           const key = event.target.dataset.layer;
           layerVisibility[key] = event.target.checked;
           if (key === 'wind' || key === 'wind_gust') clearWindScreenTrails();
+          if (key === 'current') {
+            // Current histories may have been seeded before the async exact
+            // coastline mask arrived. Never retain those pixels when the
+            // layer is toggled; the next RAF reseeds from validated water.
+            currentParticles.length = 0;
+            currentWaterSeeds.length = 0;
+          }
         }
         else return;
         refreshPlanner();
@@ -2759,6 +2766,10 @@
         waveMaskCanvas = waveMaskAlphaCanvas;
         waveMaskCtx = alphaCtx;
         waveMaskData = projected.data;
+        // Invalidate current seeds/histories created against the coarse
+        // fallback mask. They must be rebuilt against this exact shoreline.
+        currentWaterSeeds.length = 0;
+        currentParticles.length = 0;
         // Rebuild packet anchors now that the projected mask is available.
         // Center-water cells use one packet; only land-centered coastal cells
         // get quarter anchors for valid water coverage.
