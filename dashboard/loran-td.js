@@ -13,19 +13,26 @@
  *      positioned on the line just inside the current viewport edges
  *      (top / bottom / left / right).
  *
- * Rotation rule (Mike, #32126, #32139, #32142):
- *   - Rotation source: the actual rendered LineString segment that holds
- *     the label. NOT the centroid angle baked into the GeoJSON, and NOT
- *     an analytic tangent that can differ from the simplified polyline.
- *   - 9960-Y (horizontal lines, edge tangent ~0° or ~π): readability
- *     flip applied → text always reads east consistently regardless of
- *     which way matplotlib ordered the LineString vertices. Without
- *     the flip (b6daa83), some Y labels read east, others read west.
- *   - 9960-X (vertical lines, edge tangent ~±90°): NO flip → text
- *     reads along the line's actual direction. NNE branch reads NNE,
- *     SSW branch reads SSW, each parallel to its own branch — which
- *     is what "all labels have to be in parallel with and on the line
- *     of the line they're labeling" requires.
+ * Rotation rule (Mike, #32126, #32139, #32142, #32262):
+ *   - Labels follow the analytic local tangent of the TD hyperbola at the
+ *     label point. TD isolines curve continuously, so a single segment
+ *     chord is not sufficient where the line bends.
+ *   - The rendered LineString segment is used only to choose the tangent's
+ *     sign, preserving the actual branch direction. The label coordinate
+ *     remains on the rendered line just inside the viewport edge.
+ *   - No fixed per-pair rotation offset is applied. Adding +15° X / +9° Y
+ *     drifts labels away from the local curve direction.
+ *   - Readability flip (separate concern from parallelism — this is about
+ *     text reading direction east vs west, not about parallelism):
+ *       9960-Y (horizontal lines, edge tangent ~0° or ~π): flip applied
+ *       → text always reads east regardless of which way matplotlib
+ *       ordered the LineString vertices. Without the flip (b6daa83),
+ *       some Y labels read east, others read west.
+ *       9960-X (vertical lines, edge tangent ~±90°): NO flip → NNE
+ *       branch reads NNE, SSW branch reads SSW, each parallel to its
+ *       own branch. Flipping vertical lines (be7396b) makes both
+ *       branches read in the same compass direction — Mike called
+ *       this "tilt reversed".
  *
  * Single global: window.LoranTdController
  *
@@ -48,11 +55,43 @@
       LINE_WIDTH:    0.8,
       LINE_OPACITY:  0.65,
       EDGE_PAD_PX:   32,
-      LABEL_ROTATION_CLOCKWISE_RAD: {
-        "9960-X": 15 * Math.PI / 180,
-        "9960-Y": 9 * Math.PI / 180,
-      },
     };
+
+  // These must match generate_td_grid.py exactly. A TD isoline is a level
+  // set of (distance(P, secondary) - distance(P, master)). Its tangent is
+  // perpendicular to that function's gradient; this gives the real curve
+  // direction at the label point, including the bend between GeoJSON
+  // vertices.
+  const STATIONS_3857 = {
+    M: ol.proj.fromLonLat([-76.82591889, 42.71408778]),
+    X: ol.proj.fromLonLat([-69.97737111, 41.25334611]),
+    Y: ol.proj.fromLonLat([-77.91280556, 34.06283556]),
+  };
+
+  function trueTangentAt(px, py, secKey, segmentAngle) {
+    const master = STATIONS_3857.M;
+    const secondary = STATIONS_3857[secKey];
+    const dm = Math.hypot(master[0] - px, master[1] - py);
+    const ds = Math.hypot(secondary[0] - px, secondary[1] - py);
+    if (dm < 1 || ds < 1) return segmentAngle;
+
+    // Gradient of distance-to-secondary minus distance-to-master.
+    const gx = (secondary[0] - px) / ds - (master[0] - px) / dm;
+    const gy = (secondary[1] - py) / ds - (master[1] - py) / dm;
+    const tangent = Math.atan2(gx, -gy);
+    const opposite = tangent + Math.PI;
+
+    // Preserve the LineString's direction so the readability rule below
+    // remains deterministic for the two branches.
+    const angularDistance = (a, b) => {
+      let d = a - b;
+      while (d > Math.PI) d -= 2 * Math.PI;
+      while (d < -Math.PI) d += 2 * Math.PI;
+      return Math.abs(d);
+    };
+    return angularDistance(tangent, segmentAngle) <=
+      angularDistance(opposite, segmentAngle) ? tangent : opposite;
+  }
 
   // ── State ───────────────────────────────────────────────────────────
   const state = {
@@ -152,7 +191,14 @@
 
       const intersections = computeEdgeIntersects(coords, map);
       for (const intersection of intersections) {
-        let rotation = intersection.rotation;
+        const secKey = pair === "9960-X" ? "X" : "Y";
+        // trueTangentAt is expressed in EPSG:3857 (east-right,
+        // north-up). Canvas/OpenLayers text rotation is screen-space
+        // (east-right, down-positive), so negate the map angle here.
+        let rotation = -trueTangentAt(
+          intersection.coord[0], intersection.coord[1], secKey,
+          intersection.rotation,
+        );
 
         // Conditional readability flip — the key part of Mike's feedback.
         //   - 9960-Y (horizontal lines, edge tangent ~0° or ~π): apply
@@ -173,6 +219,13 @@
           else if (rotation <= -Math.PI / 2) rotation += Math.PI;
         }
 
+        // DEBUG: log both the rendered chord and analytic curve tangent.
+        console.log(
+          `[loran-td:label] pair=${pair} TD=${Math.round(td)} edge=${intersection.edge} ` +
+          `segAngle=${(intersection.rotation * 180 / Math.PI).toFixed(1)}° → ` +
+          `labelAngle=${(rotation * 180 / Math.PI).toFixed(1)}°`
+        );
+
         labels.push(new ol.Feature({
           geometry: new ol.geom.Point(intersection.coord),
           pair:        pair,
@@ -182,6 +235,13 @@
           kind:        "td-label",
         }));
       }
+    }
+    if (labels.length === 0) {
+      console.warn(
+        `[loran-td] No labels placed. ` +
+        `lineSource has ${lineSource.getFeatures().length} features. ` +
+        `Viewport: ${map.getView().calculateExtent(map.getSize()).join(", ")}`
+      );
     }
     return labels;
   }
@@ -205,8 +265,12 @@
     const props = feature.getProperties();
     const cfg = CONFIG.STYLES[props.pair] || { color: "#888" };
     const td = Number(props.td || 0);
-    const rotationOffset = CONFIG.LABEL_ROTATION_CLOCKWISE_RAD[props.pair] || 0;
-    const rotation = Number(props.rotation || 0) + rotationOffset;
+    // Labels are parallel to the local segment tangent at the edge
+    // intersection (set in buildEdgeIntersectionLabels as feature.rotation).
+    // TD isolines are hyperbolic curves — tangent varies continuously
+    // along the curve, so NO fixed per-pair rotation offset is applied.
+    // (Mike, 2026-08-18 #32262)
+    const rotation = Number(props.rotation || 0);
     return new ol.style.Style({
       text: new ol.style.Text({
         text: String(Math.round(td)),
