@@ -712,11 +712,10 @@
       // Keep the x-axis tied to actual wall-clock time. Observations are
       // validation data and must never be shifted to make them overlap.
       const now = Date.now();
-      // Keep NOW exactly centered on the real wall clock. Use a 72-hour
-      // viewport so the latest 24-hour CO-OPS validation series remains
-      // visible at the forecast boundary without translating its timestamps.
-      const t0 = now - 36 * 3600000;
-      const tN = now + 36 * 3600000;
+      // Show the current context plus the complete seven-day prediction
+      // horizon. Do not compress a week into the old 72-hour station chart.
+      const t0 = now - 12 * 3600000;
+      const tN = now + 7 * 24 * 3600000;
       const allValues = [...(curve || []), ...(observed || [])].map(p => p.v).filter(Number.isFinite);
       const predictedValues = (curve || []).map(p => p.v).filter(Number.isFinite);
       // The curve shows +/-24 hours, but the reported/co-range is the full
@@ -733,7 +732,7 @@
       const measured = visible(observed);
       const pts = points => points.map(p => `${x(p.t).toFixed(2)},${y(p.v).toFixed(2)}`).join(' ');
       const ticks = [];
-      for (let h = -36; h <= 36; h += 6) {
+      for (let h = -12; h <= 168; h += 24) {
         const tt = now + h * 3600000;
         ticks.push(`<line x1="${x(tt)}" y1="${padT+innerH}" x2="${x(tt)}" y2="${padT+innerH+3}" stroke="#5a6b7d"/>`);
         ticks.push(`<text x="${x(tt)}" y="${H-2}" text-anchor="middle" font-size="8" fill="#7a8fa8" font-family="ui-monospace,Menlo,Consolas,monospace">${h === 0 ? 'now' : (h > 0 ? '+' : '') + h + 'h'}</text>`);
@@ -828,6 +827,14 @@
       }).filter(Boolean);
     }
 
+    function modelTideCurveAtCoordinate(lon, lat) {
+      return (forecastData?.frames || []).map(frame => {
+        const v = sampleGridAtPoint(frame.astronomical_tide_ft, lat, lon);
+        const t = parseForecastTime(frame.time);
+        return Number.isFinite(v) && Number.isFinite(t) ? { t, v } : null;
+      }).filter(Boolean);
+    }
+
     function nextModelTideEvent(curve) {
       for (let i = 1; i < curve.length - 1; i++) {
         if(curve[i].t <= Date.now()) continue;
@@ -848,12 +855,26 @@
         renderTideChart(null, null, null);
         return;
       }
-      // Popup prediction and co-range use the same stored series. CO-OPS
-      // observations remain a separate validation line.
-      const curve = (tides.curves?.[activeTideStation.id] || []).filter(p => Number.isFinite(p.t) && Number.isFinite(p.v));
+      // Prefer the current regional seven-day prediction field. CO-OPS curves
+      // remain the measured/validated line and are not allowed to truncate the
+      // prediction horizon.
+      const curve = modelTideCurve(activeTideStation);
       const observed = (tides.observed || {})[activeTideStation.id] || [];
       const range = tides.range?.[activeTideStation.id] || null;
       renderTideChart(curve, range, nextModelTideEvent(curve), observed);
+    }
+
+    function renderClickedTideChart(coordinate) {
+      if (!forecastData || !coordinate || !stationPopup) return;
+      const [lon, lat] = ol.proj.toLonLat(coordinate, mapProjection);
+      const curve = modelTideCurveAtCoordinate(lon, lat);
+      if (!curve.length) return;
+      const values = curve.map(p => p.v).filter(Number.isFinite);
+      activeTideStation = { id: 'map-point', name: `Map point ${lat.toFixed(2)}°, ${lon.toFixed(2)}°`, lat, lon };
+      document.getElementById('bv-station-name').textContent = activeTideStation.name;
+      renderTideChart(curve, values.length ? {vmin: Math.min(...values), vmax: Math.max(...values)} : null, nextModelTideEvent(curve), []);
+      stationPopup.style.display = 'block';
+      stationOverlay.setPosition(coordinate);
     }
 
     function nativeRangeAtPoint(lon, lat) {
@@ -1212,7 +1233,12 @@
         layerFilter: layer => layer === stationLayer,
         hitTolerance: 12,
       });
-      if (!feature) { stationPopup.style.display = 'none'; stationOverlay.setPosition(undefined); renderWaveReadout(event.coordinate); return; }
+      if (!feature) {
+        stationPopup.style.display = 'none'; stationOverlay.setPosition(undefined);
+        renderWaveReadout(event.coordinate);
+        renderClickedTideChart(event.coordinate);
+        return;
+      }
       activeTideStation = TIDE_STATIONS.find(station => station.id === feature.get('stationId')) || TIDE_STATIONS[0];
       document.getElementById('bv-station-name').textContent = activeTideStation.name;
       renderActiveTide();
@@ -4640,6 +4666,16 @@
           ? await loadForecastPayload(DEV_FORECAST_URL)
           : await loadForecastPayload(FORECAST_URL);
         forecastData = normalizeForecastPayload(forecastData);
+        // The viewer is a rolling operational product: never expose stale
+        // frames before today or beyond the next seven days, even if a
+        // backend artifact contains a longer history.
+        const windowStart = new Date(); windowStart.setHours(0, 0, 0, 0);
+        const windowEnd = windowStart.getTime() + 7 * 24 * 3600000;
+        const windowFrames = forecastData.frames.filter(frame => {
+          const t = parseForecastTime(frame.time);
+          return Number.isFinite(t) && t >= windowStart.getTime() && t <= windowEnd;
+        });
+        if (windowFrames.length) forecastData = { ...forecastData, frames: windowFrames };
         const tideSourceEl = document.querySelector('#bv-station-popup .bv-briefing-source');
         if (tideSourceEl) tideSourceEl.textContent = 'NOAA CO-OPS · predictions / measurements · ft MLLW';
         // Dev carries a NOAA GFS diagnostic payload while the shared feed is
