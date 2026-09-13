@@ -1419,6 +1419,13 @@
       updateLayerAvailability();
       document.querySelectorAll('#bv-layers input[data-layer]').forEach(input => { input.checked = !!layerVisibility[input.dataset.layer]; });
       computeActiveRange(); drawColorbar(); drawOverlaysForProduct(); renderActiveLayerStrip();
+      // A redraw can race an already-running shared RAF. Reconcile the
+      // desired layer state after the DOM and canvases are rebuilt so a
+      // checkbox always has an immediate animation owner.
+      if (layerVisibility.wind || layerVisibility.current || layerVisibility.wind_gust) startParticleAnimation();
+      else stopParticleAnimation();
+      if (anyWaveMotionRequested()) startWavePacketAnimation();
+      else stopWavePacketAnimation();
       if (lastWaveReadoutCoordinate) renderWaveReadout(lastWaveReadoutCoordinate);
     }
     function renderActiveLayerStrip() {
@@ -4200,10 +4207,13 @@
     }
 
     function startParticleAnimation() {
-      if (particleRaf) return;
+      // Seed newly enabled layers even when another particle layer already
+      // owns the shared RAF. The old early return left Currents empty when it
+      // was checked while Wind was already playing.
       if (layerVisibility.wind && !particles.length) seedWindParticles();
       if (layerVisibility.current && !currentParticles.length) seedCurrentParticles();
       if (layerVisibility.wind_gust && !gustParticles.length) seedGustParticles();
+      if (particleRaf) return;
       const loop = (ts) => {
         particleRaf = requestAnimationFrame(loop);
         if (!currentFrame || !forecastData) {
