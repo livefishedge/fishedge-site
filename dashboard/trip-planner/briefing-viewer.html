@@ -154,6 +154,8 @@
     #bv-wave-readout .bv-readout-body{ display:grid; gap:4px; margin-top:5px; }
     #bv-wave-readout .bv-readout-time{ color:#9fb0c3; font-size:9px; padding-bottom:2px; border-bottom:1px solid rgba(255,255,255,.12); }
     #bv-wave-readout .bv-readout-body > div:not(.bv-readout-time){ padding:5px 6px; border:1px solid rgba(255,255,255,.1); border-radius:5px; background:rgba(19,35,51,.65); }
+    #bv-wave-readout .bv-readout-tide{ margin-top:6px; overflow-x:auto; }
+    #bv-wave-readout .bv-readout-tide svg{ display:block; width:280px; height:112px; }
     #bv-click-marker{width:8px;height:8px;border:1px solid #fff;border-radius:50%;box-shadow:0 0 0 1px #e91e63,0 0 6px #000;transform:translate(-50%,-50%);pointer-events:none;display:none}
     #bv-wave-readout b{ color:#fff; }
     .dot-temp { background: #ff8c00; }
@@ -340,7 +342,7 @@
   </details>
 
   <div id="bv-map" class="bv-map"></div>
-  <div id="bv-wave-readout" role="status" aria-live="polite"><div class="bv-readout-head"><span data-readout-title>Forecast sample</span><button class="bv-readout-toggle" type="button" aria-expanded="true" aria-label="Shrink readout">−</button></div><div data-readout-body></div></div>
+  <div id="bv-wave-readout" role="status" aria-live="polite"><div class="bv-readout-head"><span data-readout-title>Forecast sample</span><button class="bv-readout-toggle" type="button" aria-expanded="true" aria-label="Shrink readout">−</button></div><div data-readout-body></div><div class="bv-readout-tide" data-tide-chart hidden><svg id="bv-tide-readout-svg" viewBox="0 0 280 112" role="img" aria-label="Predicted tidal level at this location"></svg></div></div>
   <div id="bv-click-marker" aria-hidden="true"></div>
   <div id="bv-station-popup" style="display:none">
     <h3 id="bv-station-name">Tide station</h3>
@@ -698,13 +700,13 @@
         ];
     let activeTideStation = TIDE_STATIONS[0];
 
-    function renderTideChart(curve, range, nextEvent, observed) {
-      const svg = document.getElementById('bv-tide-svg');
+    function renderTideChart(curve, range, nextEvent, observed, targetId = 'bv-tide-svg') {
+      const svg = document.getElementById(targetId);
       if (!svg) return;
       const W = 280, H = 112, padL = 38, padR = 6, padT = 12, padB = 18;
       const innerW = W - padL - padR, innerH = H - padT - padB;
       if ((!curve || !curve.length) && !(observed || []).length) {
-        for(const id of ['bv-tide-range','bv-tide-latest','bv-tide-measured','bv-tide-next']) document.getElementById(id).textContent='unavailable';
+        if (targetId === 'bv-tide-svg') for(const id of ['bv-tide-range','bv-tide-latest','bv-tide-measured','bv-tide-next']) document.getElementById(id).textContent='unavailable';
         svg.innerHTML = `<text x="${W/2}" y="${H/2}" text-anchor="middle" fill="#7a8fa8" font-size="10" font-family="ui-monospace,Menlo,Consolas,monospace">tide unavailable</text>`;
         return;
       }
@@ -741,7 +743,7 @@
       const yLabels = [vmin, (vmin + vmax) / 2, vmax].map(value => `<text x="16" y="${y(value)+3}" fill="#9fb0c3" font-size="8" font-family="monospace">${value.toFixed(1)}</text>`).join('');
       const yAxisLabel = `<text x="7" y="${padT + innerH / 2}" transform="rotate(-90 7 ${padT + innerH / 2})" text-anchor="middle" fill="#9fb0c3" font-size="8" font-family="monospace">ft MLLW</text>`;
       const legend = `<line x1="150" y1="7" x2="165" y2="7" stroke="#4fc3f7" stroke-width="1.6" stroke-dasharray="4 2"/><text x="168" y="10" fill="#9fb0c3" font-size="8">Predicted</text>`
-        + `<line x1="220" y1="7" x2="235" y2="7" stroke="#ffd166" stroke-width="1.8"/><text x="238" y="10" fill="#9fb0c3" font-size="8">Measured</text>`;
+        + (measured.length ? `<line x1="220" y1="7" x2="235" y2="7" stroke="#ffd166" stroke-width="1.8"/><text x="238" y="10" fill="#9fb0c3" font-size="8">Measured</text>` : '');
       svg.innerHTML = `
         <rect x="${padL}" y="${padT}" width="${innerW}" height="${innerH}" fill="rgba(79,195,247,0.04)" stroke="#273649" stroke-width="0.5"/>
         ${mlwLine}
@@ -757,6 +759,7 @@
       const predictedRange = Number.isFinite(range?.vmin) && Number.isFinite(range?.vmax)
         ? range.vmax - range.vmin
         : (predictedValues.length ? Math.max(...predictedValues) - Math.min(...predictedValues) : 0);
+      if (targetId !== 'bv-tide-svg') return;
       set('bv-tide-range', `${predictedRange.toFixed(1)} ft`);
       const measuredValues = (observed || []).map(p => p.v).filter(Number.isFinite);
       const latest = (observed || []).filter(p => Number.isFinite(p?.t) && Number.isFinite(p?.v))
@@ -866,16 +869,15 @@
     }
 
     function renderClickedTideChart(coordinate) {
-      if (!forecastData || !coordinate || !stationPopup) return;
+      if (!forecastData || !coordinate || !waveReadout) return;
       const [lon, lat] = ol.proj.toLonLat(coordinate, mapProjection);
       const curve = modelTideCurveAtCoordinate(lon, lat);
       if (!curve.length) return;
       const values = curve.map(p => p.v).filter(Number.isFinite);
-      activeTideStation = { id: 'map-point', name: `Map point ${lat.toFixed(2)}°, ${lon.toFixed(2)}°`, lat, lon };
-      document.getElementById('bv-station-name').textContent = activeTideStation.name;
-      renderTideChart(curve, values.length ? {vmin: Math.min(...values), vmax: Math.max(...values)} : null, nextModelTideEvent(curve), []);
-      stationPopup.style.display = 'block';
-      stationOverlay.setPosition(coordinate);
+      const tidePanel = waveReadout.querySelector('[data-tide-chart]');
+      if (tidePanel) tidePanel.hidden = false;
+      waveReadout.querySelector('[data-readout-title]').textContent = `${Math.abs(lat).toFixed(2)}°${lat >= 0 ? 'N' : 'S'}, ${Math.abs(lon).toFixed(2)}°${lon >= 0 ? 'E' : 'W'}`;
+      renderTideChart(curve, values.length ? {vmin: Math.min(...values), vmax: Math.max(...values)} : null, nextModelTideEvent(curve), [], 'bv-tide-readout-svg');
     }
 
     function nativeRangeAtPoint(lon, lat) {
@@ -1145,6 +1147,8 @@
     function renderWaveReadout(coordinate) {
       if (!forecastData || !currentFrame || !waveReadout) return;
       lastWaveReadoutCoordinate = coordinate;
+      const tidePanel = waveReadout.querySelector('[data-tide-chart]');
+      if (tidePanel) tidePanel.hidden = true;
       clickMarkerOverlay.setPosition(coordinate);
       clickMarker.style.display = 'block';
       const [lon, lat] = ol.proj.toLonLat(coordinate, mapProjection);
