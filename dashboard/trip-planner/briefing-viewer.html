@@ -2435,6 +2435,21 @@
       return forecastData?.tide_water_cells?.[yi]?.[xi] === true;
     }
 
+    function isCurrentWaterSegment(lon1, lat1, lon2, lat2) {
+      // Endpoint-only masking lets a long current step jump across a narrow
+      // peninsula or barrier island. Validate the swept segment before it is
+      // added to a particle history or painted.
+      // Current steps are small (sub-kilometre at the configured visual
+      // speed), so endpoint + midpoint checks are sufficient and keep the
+      // exact-mask work bounded on mobile.
+      const samples = 2;
+      for (let i = 0; i <= samples; i++) {
+        const t = i / samples;
+        if (!isCurrentWaterPoint(lon1 + (lon2 - lon1) * t, lat1 + (lat2 - lat1) * t)) return false;
+      }
+      return true;
+    }
+
     function isOceanPoint(lon, lat, kind = 'wave') {
       const lons = forecastData?.lons, lats = forecastData?.lats;
       if (!lons || !lats || lons.length < 2 || lats.length < 2) return false;
@@ -4273,7 +4288,7 @@
             // Mask at spawn and periodically while advecting; sampling the
             // image for every particle on every frame is prohibitively costly
             // at the requested 10x density.
-            if (!vec || ((p.age % 30) === 0 && !isCurrentWaterPoint(p.lon, p.lat)) || vec.speed < 0.05 || p.age >= p.maxAge ||
+            if (!vec || !isCurrentWaterPoint(p.lon, p.lat) || vec.speed < 0.05 || p.age >= p.maxAge ||
                 p.lon < bbox[0] || p.lon > bbox[2] || p.lat < bbox[1] || p.lat > bbox[3]) {
               currentParticles[i] = randomCurrentParticle();
               continue;
@@ -4289,8 +4304,15 @@
             const midVec = bilinearVec(currentFrame, midLon, midLat, 'current');
             const adv = midVec && midVec.speed >= 0.01 ? midVec : vec;
             const midCos = Math.max(0.35, Math.cos(midLat * Math.PI / 180));
-            p.lon += (adv.u / adv.speed) * dt / midCos;
-            p.lat += (adv.v / adv.speed) * dt;
+            const nextLon = p.lon + (adv.u / adv.speed) * dt / midCos;
+            const nextLat = p.lat + (adv.v / adv.speed) * dt;
+            if (!isCurrentWaterSegment(oldLon, oldLat, midLon, midLat) ||
+                !isCurrentWaterSegment(midLon, midLat, nextLon, nextLat)) {
+              currentParticles[i] = randomCurrentParticle();
+              continue;
+            }
+            p.lon = nextLon;
+            p.lat = nextLat;
             p.age += 1;
             p.trail = Array.isArray(p.trail) ? p.trail : [];
             p.trail.push([oldLon, oldLat]);
