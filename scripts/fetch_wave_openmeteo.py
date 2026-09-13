@@ -45,6 +45,9 @@ N = 11  # square NxN fetch -> 5° span, matches Captain's Dashboard usec_md
 OUT_PATH = Path(__file__).resolve().parents[1] / "data" / "usec_md" / "briefing" / "forecast.json"
 DASHBOARD_OUT_PATH = Path(__file__).resolve().parents[1] / "dashboard" / "trip-planner" / "data" / "usec_md" / "briefing" / "forecast.json"
 FRAME_CHUNK_SIZE = 24
+# Request one extra calendar day so a rolling today→+7-day viewer window has
+# a full 168 hours even when the refresh runs after local midnight.
+FORECAST_DAYS = 8
 
 
 # ---- CO-OPS tide stations (curators: NJ/DE/MD/VA inshore + outer banks) ----
@@ -724,14 +727,14 @@ def main():
     npts = nrows * ncols
     print(f"fetch grid: {nrows}x{ncols} ({npts} pts)")
 
-    resp = fetch_grid(fetch_lats, fetch_lons)
+    resp = fetch_grid(fetch_lats, fetch_lons, forecast_days=FORECAST_DAYS)
     source_grid = source_grid_metadata(resp, fetch_lats, fetch_lons)
     nhours = len(resp[0]["hourly"]["time"])
     print(f"fetched {nhours} hours from open-meteo marine ({len(resp)} points)")
 
     # Atmospheric fields are required by briefing-forecast-v2. Never publish
     # a marine-only artifact after the weather request fails.
-    wind_resp = fetch_atmospheric_wind(fetch_lats, fetch_lons)
+    wind_resp = fetch_atmospheric_wind(fetch_lats, fetch_lons, forecast_days=FORECAST_DAYS)
     print(f"fetched atmospheric fields from open-meteo forecast ({len(wind_resp)} points)")
 
     frames = reshape_grid(resp, nrows, ncols)
