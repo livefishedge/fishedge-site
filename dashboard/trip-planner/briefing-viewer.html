@@ -344,7 +344,6 @@
   <div id="bv-click-marker" aria-hidden="true"></div>
   <div id="bv-station-popup" style="display:none">
     <h3 id="bv-station-name">Tide station</h3>
-    <div class="bv-briefing-source">NOAA CO-OPS · predictions / measurements · ft MLLW</div>
     <svg id="bv-tide-svg" viewBox="0 0 280 112" role="img" aria-label="Station tide predictions and measured water levels"></svg>
     <div class="bv-row"><span>Next event</span><b id="bv-tide-next">—</b></div>
     <div class="bv-row"><span>Predicted range</span><b id="bv-tide-range">—</b></div>
@@ -739,7 +738,8 @@
       }
       const mlwLine = `<line x1="${padL}" y1="${y(0)}" x2="${padL+innerW}" y2="${y(0)}" stroke="#4fc3f7" stroke-width="0.5" stroke-dasharray="3 3" opacity="0.6"/>`;
       const nowLine = `<line x1="${x(now)}" y1="${padT}" x2="${x(now)}" y2="${padT+innerH}" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="3 2"/><text x="${x(now)+3}" y="${padT+10}" fill="#ffd166" font-size="9" font-family="monospace">NOW</text>`;
-      const yLabels = [vmin, (vmin + vmax) / 2, vmax].map(value => `<text x="1" y="${y(value)+3}" fill="#9fb0c3" font-size="8" font-family="monospace">${value.toFixed(1)}</text>`).join('');
+      const yLabels = [vmin, (vmin + vmax) / 2, vmax].map(value => `<text x="16" y="${y(value)+3}" fill="#9fb0c3" font-size="8" font-family="monospace">${value.toFixed(1)}</text>`).join('');
+      const yAxisLabel = `<text x="7" y="${padT + innerH / 2}" transform="rotate(-90 7 ${padT + innerH / 2})" text-anchor="middle" fill="#9fb0c3" font-size="8" font-family="monospace">ft MLLW</text>`;
       const legend = `<line x1="150" y1="7" x2="165" y2="7" stroke="#4fc3f7" stroke-width="1.6" stroke-dasharray="4 2"/><text x="168" y="10" fill="#9fb0c3" font-size="8">Predicted</text>`
         + `<line x1="220" y1="7" x2="235" y2="7" stroke="#ffd166" stroke-width="1.8"/><text x="238" y="10" fill="#9fb0c3" font-size="8">Measured</text>`;
       svg.innerHTML = `
@@ -748,6 +748,7 @@
         <polyline points="${pts(predicted)}" fill="none" stroke="#4fc3f7" stroke-width="1.6" stroke-dasharray="4 2"/>
         <polyline points="${pts(measured)}" fill="none" stroke="#ffd166" stroke-width="1.8"/>
         ${nowLine}
+        ${yAxisLabel}
         ${yLabels}
         ${ticks.join('')}
         ${legend}
@@ -1191,6 +1192,10 @@
         const dir = v.speed > 1e-6 ? (Math.atan2(v.u, v.v) * 180 / Math.PI + 360) % 360 : null;
         rows.push(`<div><b>${label}</b> · ${convertDisplayValue(unitKey, v.speed).toFixed(1)} ${displayUnit(unitKey, 'kn')} · travel ${Number.isFinite(dir) ? `${compass(dir)} (${Math.round(dir)}°)` : '—'}</div>`);
       }
+      if (activePlannerPreset === 'tides') {
+        const tide = sampleGridAtPoint(currentFrame.astronomical_tide_ft, lat, lon, true);
+        rows.push(`<div><b>Tidal level</b> · ${Number.isFinite(tide) ? `${tide.toFixed(2)} ft MLLW` : 'missing field data'}</div>`);
+      }
       if (!rows.length) rows.push('<div>No checked layer data at this location</div>');
       waveReadout.querySelector('[data-readout-title]').textContent = `${formatCoordinate(lon, 'E', 'W')}, ${formatCoordinate(lat, 'N', 'S')}`;
       readoutBody.innerHTML = `<div class="bv-readout-time">${timeLabel} · forecast</div>${rows.join('')}`;
@@ -1199,7 +1204,7 @@
     const stationMarkerOverlays = [];
     function openTideStation(station) {
       activeTideStation = station;
-      document.getElementById('bv-station-name').textContent = station.name;
+      document.getElementById('bv-station-name').textContent = `${station.name} · ${Math.abs(station.lat).toFixed(2)}°${station.lat >= 0 ? 'N' : 'S'}, ${Math.abs(station.lon).toFixed(2)}°${station.lon >= 0 ? 'E' : 'W'}`;
       renderActiveTide();
       stationPopup.style.display = 'block';
       const coordinate = ol.proj.fromLonLat([station.lon, station.lat], mapProjection);
@@ -4676,8 +4681,6 @@
           return Number.isFinite(t) && t >= windowStart.getTime() && t <= windowEnd;
         });
         if (windowFrames.length) forecastData = { ...forecastData, frames: windowFrames };
-        const tideSourceEl = document.querySelector('#bv-station-popup .bv-briefing-source');
-        if (tideSourceEl) tideSourceEl.textContent = 'NOAA CO-OPS · predictions / measurements · ft MLLW';
         // Dev carries a NOAA GFS diagnostic payload while the shared feed is
         // migrated off Open-Meteo. Fall back to local if the prod CDN still
         // serves the legacy schema.
