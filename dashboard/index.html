@@ -8005,6 +8005,18 @@ async function buildThermalFrontDensityCanvas(frontData, grid) {
   return canvas;
 }
 
+function showBathyUnavailable(error) {
+  console.warn("[bathy] unavailable", error);
+  const old = document.getElementById("bathy-unavailable-toast");
+  if (old) old.remove();
+  const toast = document.createElement("div");
+  toast.id = "bathy-unavailable-toast";
+  toast.textContent = "Bathymetry temporarily unavailable — map and locations remain available. Tap refresh to retry.";
+  toast.style.cssText = "position:fixed;top:40px;left:10px;right:10px;z-index:998;color:#fff;background:rgba(120,70,0,0.94);padding:10px 14px;border-radius:6px;font-size:13px;text-align:center;";
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 6000);
+}
+
 async function renderMobileFrame(frameMeta) {
   if (currentVar === "chl_front" || currentVar === "sst_front" || currentVar === "thermal_fronts" || currentVar === "combined") {
     document.body.classList.remove("mobile-map-ready");
@@ -8027,7 +8039,15 @@ async function renderMobileFrame(frameMeta) {
 
   let dataObj, gridInfo;
   if (currentVar === "bathy") {
-    dataObj = await loadBathymetryJson(BATHY_JSON_URL);
+    try {
+      dataObj = await loadBathymetryJson(BATHY_JSON_URL);
+    } catch (e) {
+      showBathyUnavailable(e);
+      document.body.classList.add("mobile-map-ready");
+      ensureMobilePlaceLayer(map);
+      map.updateSize();
+      return true;
+    }
     gridInfo = { xAxis: dataObj.xAxis, yAxis: dataObj.yAxis, nx: dataObj.xAxis.length, ny: dataObj.yAxis.length };
   } else {
     dataObj = await fetchFrameData(currentVar, frameMeta);
@@ -8110,7 +8130,14 @@ async function renderMobileFrame(frameMeta) {
     mobileMapState.slaContourLabelOverlays = mobileMapState.slaContourLayer?.__slaLabelOverlays || [];
     if (mobileMapState.slaContourLayer) map.addLayer(mobileMapState.slaContourLayer);
   }
-  await ensureMobileLandLayer(map);
+  try {
+    await ensureMobileLandLayer(map);
+  } catch (e) {
+    // Bathymetry is an enhancement; a missing asset must not take down the
+    // basemap, locations, and non-bathy products.
+    console.warn("[bathy] land layer unavailable; continuing without it", e);
+    showBathyUnavailable(e);
+  }
   ensureMobilePlaceLayer(map);
   if (currentVar === "bathy") {
     await ensureMobileBathyContourLayer(map, dataObj, gridInfo);
