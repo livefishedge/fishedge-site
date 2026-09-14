@@ -1168,14 +1168,16 @@
       const marineKeys = new Set(['wave_height','sst','wave_steepness','ride_harshness','surface_height','tide_level']);
       for (const layer of Object.keys(SCALAR_LAYERS)) {
         if (layer === 'tide_level' && activePlannerPreset !== 'tides') continue;
+        if (!checked(layer)) continue;
         const dataKey = SCALAR_LAYERS[layer];
         const value = sampleGridAtPoint(currentFrame[dataKey], lat, lon, true);
-        if (!Number.isFinite(value) && !marineKeys.has(layer)) continue;
         const label = layer === 'wave_height' ? 'Significant Wave Height' : (LAYER_LABELS[layer] || PRODUCTS[dataKey]?.name || layer);
         const unavailable = marineKeys.has(layer) && onLand;
         rows.push(`<div><b>${label}</b> · ${unavailable ? 'outside marine coverage' : (Number.isFinite(value) ? `${convertDisplayValue(dataKey, value).toFixed(2)} ${displayUnit(dataKey, PRODUCTS[dataKey]?.unit || '')}` : 'missing source data')}</div>`);
       }
       for (const kind of ['swell', 'wind_wave']) {
+        const motionKey = kind === 'swell' ? 'swell_motion' : 'wave_motion';
+        if (!checked(kind) && !checked(motionKey)) continue;
         const label = kind === 'swell' ? 'Swell' : 'Waves (Chop)';
         if (onLand) { rows.push(`<div><b>${label}</b> · outside marine coverage</div>`); continue; }
         if (kind === 'swell' && !swellSupportedAt(lon, lat)) {
@@ -1194,6 +1196,7 @@
         rows.push(`<div><b>${label}</b> · ${height.toFixed(2)} ${unit} · ${Number.isFinite(v.period) ? v.period.toFixed(1) + ' s' : 'period missing'} · travel ${Number.isFinite(dir) ? `${compass(dir)} (${Math.round(dir)}°)` : '—'}${unresolved ? ' · texture' : ''}</div>`);
       }
       for (const vectorLayer of ['wind', 'wind_gust', 'current']) {
+        if (!checked(vectorLayer)) continue;
         const vectorField = vectorLayer === 'current' ? 'current' : (vectorLayer === 'wind_gust' ? 'gust' : 'wind');
         const v = bilinearVec(currentFrame, lon, lat, vectorField);
         const label = vectorLayer === 'current' ? 'Currents' : (vectorLayer === 'wind_gust' ? 'Gust' : 'Wind');
