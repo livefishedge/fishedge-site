@@ -294,6 +294,7 @@
     <button id="bv-hamburger-btn" aria-label="Open layer menu">☰</button>
     <div id="bv-captain-tools" aria-label="Captain tools">
       <span class="bv-tools-drag" title="Drag map tools" aria-label="Drag map tools">⠿</span>
+      <button id="bv-distance-tool" type="button" title="Measure distance" aria-label="Measure distance" aria-pressed="false"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true"><line x1="3" y1="10" x2="17" y2="10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><polyline points="7,6 3,10 7,14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><polyline points="13,6 17,10 13,14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><line x1="7" y1="7" x2="7" y2="13" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><line x1="13" y1="7" x2="13" y2="13" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></button>
       <button id="bv-locate-me" type="button" title="Locate me" aria-label="Locate me"><svg width="18" height="18" viewBox="0 0 22 22" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="1.8"/><circle cx="11" cy="11" r="1.8" fill="currentColor"/><path d="M11 1.5v4M11 16.5v4M1.5 11h4M16.5 11h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
       <button id="bv-waypoint-tool" type="button" title="Add waypoint" aria-label="Add waypoint" aria-pressed="false"><svg width="18" height="18" viewBox="0 0 22 22" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><circle cx="11" cy="11" r="2" fill="currentColor"/><path d="M11 2v4M11 16v4M2 11h4M16 11h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
       <button id="bv-td-grid" type="button" title="Loran-C TD Grid" aria-label="Loran-C TD Grid" aria-pressed="false"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true"><circle cx="10" cy="2" r="1.1" fill="currentColor"/><path d="M10 3.5v5M7 8.5h6M6 7Q4 5 6 3M14 7q2-2 0-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><text x="10" y="16.8" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="6.5" font-weight="700" text-anchor="middle" fill="currentColor">TD</text></svg></button>
@@ -1412,6 +1413,12 @@
     const plannerWaypoints = [];
     const plannerWaypointOverlays = [];
     let waypointMode = false;
+    const distancePoints = [];
+    let distanceMode = false;
+    const distanceSource = new ol.source.Vector();
+    const distanceLayer = new ol.layer.Vector({ source: distanceSource, zIndex: 2200, style: new ol.style.Style({ stroke: new ol.style.Stroke({ color: '#4fc3f7', width: 3 }), image: new ol.style.Circle({ radius: 5, fill: new ol.style.Fill({ color: '#4fc3f7' }), stroke: new ol.style.Stroke({ color: '#071017', width: 2 }) }) }) });
+    map.addLayer(distanceLayer);
+    const distanceNm = (a,b) => { const r=3440.065, p=Math.PI/180, dlat=(b[1]-a[1])*p, dlon=(b[0]-a[0])*p; const h=Math.sin(dlat/2)**2+Math.cos(a[1]*p)*Math.cos(b[1]*p)*Math.sin(dlon/2)**2; return r*2*Math.atan2(Math.sqrt(h),Math.sqrt(1-h)); };
     document.getElementById('bv-locate-me')?.addEventListener('click', () => {
       if (!navigator.geolocation) return;
       navigator.geolocation.getCurrentPosition(pos => {
@@ -1422,6 +1429,10 @@
       event.preventDefault(); event.stopPropagation();
       waypointMode = false;
       document.getElementById('bv-waypoint-tool')?.setAttribute('aria-pressed', 'false');
+      distanceMode = false;
+      distancePoints.splice(0);
+      distanceSource.clear();
+      document.getElementById('bv-distance-tool')?.setAttribute('aria-pressed', 'false');
       document.getElementById('bv-mode-context').textContent = '';
       map.getView().cancelAnimations?.();
       if (initialMapCenter) map.getView().setCenter(initialMapCenter);
@@ -1438,6 +1449,13 @@
       waypointMode = !waypointMode;
       event.currentTarget.setAttribute('aria-pressed', String(waypointMode));
       document.getElementById('bv-mode-context').textContent = waypointMode ? 'Waypoint mode · click map to add' : '';
+    });
+    document.getElementById('bv-distance-tool')?.addEventListener('click', event => {
+      distanceMode = !distanceMode;
+      distancePoints.splice(0); distanceSource.clear();
+      event.currentTarget.setAttribute('aria-pressed', String(distanceMode));
+      const status = document.getElementById('bv-mode-context');
+      if (status) { status.textContent = distanceMode ? 'Distance mode · tap two points' : ''; status.classList.toggle('visible', distanceMode); }
     });
     document.getElementById('bv-td-grid')?.addEventListener('click', async event => {
       const button = event.currentTarget;
@@ -1460,6 +1478,17 @@
     });
     drawTideStations();
     map.on('singleclick', event => {
+      if (distanceMode) {
+        const [lon, lat] = ol.proj.toLonLat(event.coordinate, mapProjection);
+        distancePoints.push([lon, lat]);
+        if (distancePoints.length > 2) distancePoints.splice(0, distancePoints.length - 2);
+        const features = [new ol.Feature(new ol.geom.MultiPoint(distancePoints.map(p => ol.proj.fromLonLat(p, mapProjection))))];
+        if (distancePoints.length === 2) features.push(new ol.Feature(new ol.geom.LineString(distancePoints.map(p => ol.proj.fromLonLat(p, mapProjection)))));
+        distanceSource.clear(); distanceSource.addFeatures(features);
+        const status = document.getElementById('bv-mode-context');
+        if (status) status.textContent = distancePoints.length === 2 ? `Distance · ${distanceNm(distancePoints[0], distancePoints[1]).toFixed(2)} nm` : 'Distance mode · tap one more point';
+        return;
+      }
       if (waypointMode) {
         const [lon, lat] = ol.proj.toLonLat(event.coordinate, mapProjection);
         plannerWaypoints.push({ lon, lat });
