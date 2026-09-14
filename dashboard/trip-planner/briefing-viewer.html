@@ -342,7 +342,7 @@
   </details>
 
   <div id="bv-map" class="bv-map"></div>
-  <div id="bv-wave-readout" role="status" aria-live="polite"><div class="bv-readout-head"><span data-readout-title>Forecast sample</span><button class="bv-readout-toggle" type="button" aria-expanded="true" aria-label="Shrink readout">−</button></div><div data-readout-body></div><div class="bv-readout-tide" data-tide-chart hidden><svg id="bv-tide-readout-svg" viewBox="0 0 280 112" role="img" aria-label="Predicted tidal level at this location"></svg></div></div>
+  <div id="bv-wave-readout" role="status" aria-live="polite"><div class="bv-readout-head"><span data-readout-title>Forecast sample</span><button class="bv-readout-toggle" type="button" aria-expanded="true" aria-label="Shrink readout">−</button></div><div data-readout-body></div><div class="bv-readout-tide" data-tide-chart hidden><svg id="bv-tide-readout-svg" viewBox="0 0 280 112" role="img" aria-label="Predicted tidal level at this location"></svg><div data-tide-summary></div></div></div>
   <div id="bv-click-marker" aria-hidden="true"></div>
   <div id="bv-station-popup" style="display:none">
     <h3 id="bv-station-name">Tide station</h3>
@@ -876,8 +876,11 @@
       const values = curve.map(p => p.v).filter(Number.isFinite);
       const tidePanel = waveReadout.querySelector('[data-tide-chart]');
       if (tidePanel) tidePanel.hidden = false;
+      if (tidePanel) tidePanel.dataset.active = '1';
       waveReadout.querySelector('[data-readout-title]').textContent = `${Math.abs(lat).toFixed(2)}°${lat >= 0 ? 'N' : 'S'}, ${Math.abs(lon).toFixed(2)}°${lon >= 0 ? 'E' : 'W'}`;
       renderTideChart(curve, values.length ? {vmin: Math.min(...values), vmax: Math.max(...values)} : null, nextModelTideEvent(curve), [], 'bv-tide-readout-svg');
+      const summary = waveReadout.querySelector('[data-tide-summary]');
+      if (summary) summary.textContent = `Predicted · ${values.length ? `${Math.min(...values).toFixed(1)}–${Math.max(...values).toFixed(1)} ft MLLW` : 'missing field data'}`;
     }
 
     function nativeRangeAtPoint(lon, lat) {
@@ -1094,12 +1097,16 @@
       readoutToggle.setAttribute('aria-expanded', String(!collapsed));
       readoutToggle.setAttribute('aria-label', collapsed ? 'Expand readout' : 'Shrink readout');
       if (readoutBody) readoutBody.hidden = collapsed;
+      const tidePanel = waveReadout.querySelector('[data-tide-chart]');
+      if (tidePanel) tidePanel.hidden = collapsed || tidePanel.dataset.active !== '1';
     });
     waveReadout?.addEventListener('click', event => {
       if (!waveReadout.classList.contains('is-collapsed') || event.target.closest('.bv-readout-toggle')) return;
       if (waveReadout.dataset.dragMoved === '1') { delete waveReadout.dataset.dragMoved; return; }
       waveReadout.classList.remove('is-collapsed');
       if (readoutBody) readoutBody.hidden = false;
+      const tidePanel = waveReadout.querySelector('[data-tide-chart]');
+      if (tidePanel && tidePanel.dataset.active === '1') tidePanel.hidden = false;
       if (readoutToggle) readoutToggle.setAttribute('aria-expanded', 'true');
     });
     function makeDraggable(element) {
@@ -1148,7 +1155,7 @@
       if (!forecastData || !currentFrame || !waveReadout) return;
       lastWaveReadoutCoordinate = coordinate;
       const tidePanel = waveReadout.querySelector('[data-tide-chart]');
-      if (tidePanel) tidePanel.hidden = true;
+      if (tidePanel) { tidePanel.hidden = true; tidePanel.dataset.active = '0'; }
       clickMarkerOverlay.setPosition(coordinate);
       clickMarker.style.display = 'block';
       const [lon, lat] = ol.proj.toLonLat(coordinate, mapProjection);
@@ -1160,15 +1167,15 @@
       const onLand = waveMaskImage && waveMaskImage.complete && !isCoastWaterPoint(lon, lat);
       const marineKeys = new Set(['wave_height','sst','wave_steepness','ride_harshness','surface_height','tide_level']);
       for (const layer of Object.keys(SCALAR_LAYERS)) {
-        if (!checked(layer)) continue;
+        if (layer === 'tide_level' && activePlannerPreset !== 'tides') continue;
         const dataKey = SCALAR_LAYERS[layer];
         const value = sampleGridAtPoint(currentFrame[dataKey], lat, lon, true);
+        if (!Number.isFinite(value) && !marineKeys.has(layer)) continue;
         const label = layer === 'wave_height' ? 'Significant Wave Height' : (LAYER_LABELS[layer] || PRODUCTS[dataKey]?.name || layer);
         const unavailable = marineKeys.has(layer) && onLand;
         rows.push(`<div><b>${label}</b> · ${unavailable ? 'outside marine coverage' : (Number.isFinite(value) ? `${convertDisplayValue(dataKey, value).toFixed(2)} ${displayUnit(dataKey, PRODUCTS[dataKey]?.unit || '')}` : 'missing source data')}</div>`);
       }
       for (const kind of ['swell', 'wind_wave']) {
-        if (!checked(kind)) continue;
         const label = kind === 'swell' ? 'Swell' : 'Waves (Chop)';
         if (onLand) { rows.push(`<div><b>${label}</b> · outside marine coverage</div>`); continue; }
         if (kind === 'swell' && !swellSupportedAt(lon, lat)) {
@@ -1187,7 +1194,6 @@
         rows.push(`<div><b>${label}</b> · ${height.toFixed(2)} ${unit} · ${Number.isFinite(v.period) ? v.period.toFixed(1) + ' s' : 'period missing'} · travel ${Number.isFinite(dir) ? `${compass(dir)} (${Math.round(dir)}°)` : '—'}${unresolved ? ' · texture' : ''}</div>`);
       }
       for (const vectorLayer of ['wind', 'wind_gust', 'current']) {
-        if (!checked(vectorLayer)) continue;
         const vectorField = vectorLayer === 'current' ? 'current' : (vectorLayer === 'wind_gust' ? 'gust' : 'wind');
         const v = bilinearVec(currentFrame, lon, lat, vectorField);
         const label = vectorLayer === 'current' ? 'Currents' : (vectorLayer === 'wind_gust' ? 'Gust' : 'Wind');
@@ -1200,7 +1206,7 @@
         const tide = sampleGridAtPoint(currentFrame.astronomical_tide_ft, lat, lon, true);
         rows.push(`<div><b>Tidal level</b> · ${Number.isFinite(tide) ? `${tide.toFixed(2)} ft MLLW` : 'missing field data'}</div>`);
       }
-      if (!rows.length) rows.push('<div>No checked layer data at this location</div>');
+      if (!rows.length) rows.push('<div>No data available at this location</div>');
       waveReadout.querySelector('[data-readout-title]').textContent = `${formatCoordinate(lon, 'E', 'W')}, ${formatCoordinate(lat, 'N', 'S')}`;
       readoutBody.innerHTML = `<div class="bv-readout-time">${timeLabel} · forecast</div>${rows.join('')}`;
       waveReadout.style.display = 'block';
@@ -1208,11 +1214,19 @@
     const stationMarkerOverlays = [];
     function openTideStation(station) {
       activeTideStation = station;
-      document.getElementById('bv-station-name').textContent = `${station.name} · ${Math.abs(station.lat).toFixed(2)}°${station.lat >= 0 ? 'N' : 'S'}, ${Math.abs(station.lon).toFixed(2)}°${station.lon >= 0 ? 'E' : 'W'}`;
-      renderActiveTide();
-      stationPopup.style.display = 'block';
       const coordinate = ol.proj.fromLonLat([station.lon, station.lat], mapProjection);
-      stationOverlay.setPosition(coordinate);
+      renderWaveReadout(coordinate);
+      const tidePanel = waveReadout?.querySelector('[data-tide-chart]');
+      if (!waveReadout || !tidePanel) return;
+      const curve = modelTideCurve(station);
+      const observed = (forecastData?.tides?.observed || {})[station.id] || [];
+      const range = forecastData?.tides?.range?.[station.id] || null;
+      tidePanel.hidden = false; tidePanel.dataset.active = '1';
+      waveReadout.querySelector('[data-readout-title]').textContent = `${station.name} · ${Math.abs(station.lat).toFixed(2)}°${station.lat >= 0 ? 'N' : 'S'}, ${Math.abs(station.lon).toFixed(2)}°${station.lon >= 0 ? 'E' : 'W'}`;
+      renderTideChart(curve, range, nextModelTideEvent(curve), observed, 'bv-tide-readout-svg');
+      const summary = waveReadout.querySelector('[data-tide-summary]');
+      if (summary) summary.textContent = `${observed.length ? 'Predicted + measured' : 'Predicted'} · ${range ? `${(range.vmax - range.vmin).toFixed(1)} ft MLLW range` : 'range unavailable'}`;
+      waveReadout.style.display = 'block';
     }
     function drawTideStations() {
       stationSource.clear();
@@ -1245,14 +1259,10 @@
       if (!feature) {
         stationPopup.style.display = 'none'; stationOverlay.setPosition(undefined);
         renderWaveReadout(event.coordinate);
-        renderClickedTideChart(event.coordinate);
+        if (activePlannerPreset === 'tides') renderClickedTideChart(event.coordinate);
         return;
       }
-      activeTideStation = TIDE_STATIONS.find(station => station.id === feature.get('stationId')) || TIDE_STATIONS[0];
-      document.getElementById('bv-station-name').textContent = activeTideStation.name;
-      renderActiveTide();
-      stationPopup.style.display = 'block';
-      stationOverlay.setPosition(feature.getGeometry().getCoordinates());
+      openTideStation(TIDE_STATIONS.find(station => station.id === feature.get('stationId')) || TIDE_STATIONS[0]);
     });
     // Keep the readout reliable across OpenLayers versions and overlay layers:
     // the native viewport click still supplies the exact map coordinate even
