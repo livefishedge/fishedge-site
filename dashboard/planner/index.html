@@ -210,6 +210,8 @@
         <option value="sandy-hook-nj">Sandy Hook, NJ</option>
         <option value="montauk-ny">Montauk, NY</option>
       </select>
+      <button id="save-plan" type="button" style="margin-top:4px;padding:9px 12px;border:1px solid #67d9ff;border-radius:6px;background:#15324a;color:#edfaff;font-weight:700;cursor:pointer">Save trip</button>
+      <span id="save-plan-status" role="status" style="font-size:11px;color:#7898aa;min-height:1em"></span>
       </section><section class="planner-choice-card"><h2>Target fishing grounds</h2>
       <label for="target">Offshore ground:</label>
       <select id="target"><option value="baltimore_canyon_line">Baltimore Canyon</option><option value="hudson_canyon">Hudson Canyon</option><option value="wilmington_canyon">Wilmington Canyon</option><option value="norfolk_canyon">Norfolk Canyon</option><option value="toms_canyon">Toms Canyon</option><option value="carteret_canyon">Carteret Canyon</option><option value="lindenkohl_canyon">Lindenkohl Canyon</option><option value="spencer_canyon">Spencer Canyon</option><option value="poor_mans_canyon">Poor Man's Canyon</option><option value="hudson_shelf_edge">Hudson Shelf Edge</option><option value="delaware_offshore">Delaware Offshore Grounds</option><option value="new_jersey_reef">New Jersey Offshore Reef</option><option value="virginia_offshore">Virginia Offshore Grounds</option><option value="baltimore_trough">Baltimore Trough</option><option value="sausages">Sausages</option></select></section>
@@ -245,7 +247,7 @@
         <h3>Briefing</h3>
         <p class="briefing-summary" style="color:#7898aa">Loading…</p>
       </section>
-      <aside class="my-trips"><h2 style="margin:0 0 10px">Trip plan</h2><div class="my-trips-empty">Save this plan from the Home Inlet section.</div></aside>
+      <aside class="my-trips"><h2 style="margin:0 0 10px">Trip plan</h2><div class="my-trips-empty">Save the current plan with the Save trip button in Home inlet.</div></aside>
     </div>
   </main>
 
@@ -627,6 +629,14 @@
   targetSelect.addEventListener('change', () => {
     try { localStorage.setItem(TARGET_STORAGE_KEY, targetSelect.value); } catch (_) {}
     if (forecast && forecast.frames) { selectedDayIdx = 0; currentFrameIdx = []; dayAggregates = aggregateByDay(); currentFrameIdx = dayAggregates.map(() => 0); renderDayStrip(); renderBriefing(); }
+  });
+  document.getElementById('save-plan')?.addEventListener('click', () => {
+    const now = new Date();
+    const targetName = targetSelect.selectedOptions?.[0]?.textContent || 'selected grounds';
+    const trip = { id: 't_' + Date.now().toString(36), name: `${inletSelect.selectedOptions?.[0]?.textContent || 'Home inlet'} → ${targetName}`, inlet_key: inletSelect.value, target_id: targetSelect.value, departure_iso: now.toISOString(), return_iso: null, status: 'planned', created_iso: now.toISOString(), last_opened_iso: now.toISOString(), notes: 'Saved from Planner.' };
+    let trips = []; try { trips = JSON.parse(localStorage.getItem(TRIPS_STORAGE_KEY) || '[]'); } catch (_) {}
+    trips.push(trip); localStorage.setItem(TRIPS_STORAGE_KEY, JSON.stringify(trips));
+    document.getElementById('save-plan-status').textContent = 'Trip saved to Upcoming Trips.'; renderUpcomingTrips();
   });
   const scoreKeys = ['wave','steepness','harshness','wind','gust','visibility','inletWave','current'];
   const scoreDomKey = k => k.replace(/[A-Z]/g, m => '-' + m.toLowerCase());
