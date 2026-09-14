@@ -4669,11 +4669,21 @@
       viewportTransitioning = false;
       // Keep the translated frame in place until the geographic redraw has
       // completed. Clearing the transform first exposes a stale frame.
-      drawOverlaysForProduct();
-      replenishVisibleCurrentParticles();
-      mapGestureCanvases.forEach(canvas => { if (canvas) canvas.style.transform = ''; });
-      mapGestureOriginCenter = null;
-      mapPointerDragging = false;
+      try {
+        drawOverlaysForProduct();
+        replenishVisibleCurrentParticles();
+      } catch (error) {
+        // A transient overlay failure must never strand the map in gesture
+        // mode. OpenLayers still owns the real view, so release our canvas
+        // transform and retry once after the view has settled.
+        console.warn('overlay redraw after map gesture failed', error);
+        scheduleOverlayRedraw();
+      } finally {
+        mapGestureCanvases.forEach(canvas => { if (canvas) canvas.style.transform = ''; });
+        mapGestureOriginCenter = null;
+        mapPointerDragging = false;
+        viewportTransitioning = false;
+      }
     }
     function deferViewportRedraw() {
       viewportTransitioning = true;
