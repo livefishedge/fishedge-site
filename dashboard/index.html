@@ -1263,7 +1263,7 @@
       // then listen for changes (handles magic link redirect with new session).
       const { data: { session } } = await sb.auth.getSession();
       // No session -> redirect to the actual login form on first visit. This
-      // replaces the legacy full-screen "Sign in / My Account" gate so the
+      // replaces the legacy full-screen sign-in/account gate so the
       // first page a visitor sees is the real login/signup form, not an
       // intermediate click-through.
       if (!session) {
@@ -1577,7 +1577,7 @@
       </div>
     </div>
     <div id="combined-account-link" style="margin-top:auto;padding-top:12px;border-top:1px solid var(--border);text-align:center;">
-      <a href="account.html" style="text-decoration:none;">MY ACCOUNT</a>
+      <a href="account.html" style="text-decoration:none;">ACCOUNT</a>
     </div>
     <div id="combined-home-link"><a href="/">HOME</a></div>
   </div>
@@ -1654,7 +1654,7 @@
       </div>
       <div id="hamburger-cbar"></div>
       <div style="text-align:center;margin-top:14px;" id="account-link-wrap" hidden>
-        <a href="account.html" style="color:var(--accent2);font-size:12px;font-weight:700;text-decoration:none;letter-spacing:0.05em;">MY ACCOUNT</a>
+        <a href="account.html" style="color:var(--accent2);font-size:12px;font-weight:700;text-decoration:none;letter-spacing:0.05em;">ACCOUNT</a>
       </div>
       <div id="home-link-wrap"><a href="/">HOME</a></div>
     </div>

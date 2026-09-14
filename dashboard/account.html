@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>FishEdge — My Account</title>
+  <title>FishEdge — Account</title>
   <link rel="icon" href="data:,">
   <style>
     :root { --bg: #050b10; --fg: #e0e6ee; --accent: #1a7f7a; --accent2: #2dd4bf; --panel: rgba(5,11,16,0.97); --border: #1b2836; --err: #ff6b6b; --success: #2dd4bf; }
@@ -71,7 +71,7 @@
     var emailVerified = user.email_confirmed_at ? true : false;
 
     card.innerHTML =
-      '<h1>My Account</h1>' +
+      '<h1>Account</h1>' +
       '<p class="subtitle">Manage your profile and sign out.</p>' +
       '<div class="info-row"><div><div class="info-label">Name</div><div class="info-value">' + name + '</div></div></div>' +
       '<div class="info-row"><div><div class="info-label">Email</div><div class="info-value">' + user.email + '</div></div></div>' +
@@ -84,7 +84,7 @@
       '</div></div></div>' +
       '<button id="logout-btn" type="button">Sign out</button>' +
       '<button id="edit-profile-btn" type="button" style="width:100%;padding:12px;background:transparent;border:1px solid var(--accent2);color:var(--accent2);border-radius:8px;font-size:0.95rem;font-weight:700;cursor:pointer;transition:background 0.15s;margin-top:10px;">Edit Profile</button>' +
-      '<a href="https://fishedge.live/" style="display:block;text-align:center;padding:13px;background:var(--accent2);color:#050b10;border-radius:8px;font-size:1rem;font-weight:700;text-decoration:none;margin-top:16px;">Home</a>';
+      '<a href="/" style="display:block;text-align:center;padding:13px;background:var(--accent2);color:#050b10;border-radius:8px;font-size:1rem;font-weight:700;text-decoration:none;margin-top:16px;">Home</a>';
   }
 
   function renderNotAuth() {
