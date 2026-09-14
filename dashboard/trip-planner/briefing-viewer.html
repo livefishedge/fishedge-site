@@ -134,7 +134,10 @@
     #bv-trip-recorder{ position:fixed; top:8px; right:54px; z-index:2200; display:flex; align-items:center; gap:6px; padding:4px 6px; background:rgba(5,11,16,.9); border:1px solid rgba(255,255,255,.15); border-radius:5px; font-size:10px; }
     #bv-trip-recorder label{ padding:0; font-size:10px; }
     #bv-trip-recorder button{ padding:5px 7px; border:1px solid #466078; border-radius:4px; background:#132333; color:#d6e5f2; font-size:10px; font-weight:700; }
-    @media(max-width:640px){#bv-trip-recorder{top:40px;right:8px;left:8px;justify-content:space-between}}
+    #bv-captain-tools{ position:fixed; top:8px; right:54px; z-index:2201; display:flex; gap:4px; }
+    #bv-captain-tools button{ width:30px; height:30px; padding:0; border:1px solid #466078; border-radius:5px; background:rgba(5,11,16,.9); color:#d6e5f2; font:700 11px monospace; cursor:pointer; }
+    #bv-captain-tools button[aria-pressed="true"]{ border-color:#67d9ff; color:#67d9ff; background:#15324a; }
+    @media(max-width:640px){#bv-trip-recorder{top:40px;right:8px;left:8px;justify-content:space-between}#bv-captain-tools{right:48px;top:6px}}
 
     /* Moon and sun details live in their own mode dropdown. */
     #bv-side-panel h3{ margin:0 0 4px 0; font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:#7a8fa8; font-weight:800; }
@@ -282,6 +285,11 @@
     </div>
     <div class="bv-time" id="bv-time" hidden aria-hidden="true"></div>
     <button id="bv-hamburger-btn" aria-label="Open layer menu">☰</button>
+    <div id="bv-captain-tools" aria-label="Captain tools">
+      <button id="bv-locate-me" type="button" title="Locate me" aria-label="Locate me">◎</button>
+      <button id="bv-waypoint-tool" type="button" title="Add waypoint" aria-label="Add waypoint" aria-pressed="false">✚</button>
+      <button id="bv-td-grid" type="button" title="Loran-C TD Grid" aria-label="Loran-C TD Grid" aria-pressed="false">TD</button>
+    </div>
   </div>
   <div id="bv-active-layer-strip" class="bv-active-layer-strip" aria-label="Active map layers"></div>
   <details id="bv-wave-key" hidden style="position:fixed;bottom:8px;left:12px;z-index:19;max-width:min(330px,85vw);padding:7px 10px;border-radius:5px;background:rgba(255,255,255,.94);color:#101820;font:12px/1.5 sans-serif">
@@ -391,6 +399,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/ol@10.2.1/dist/ol.js"></script>
   <script src="/dashboard/trip-planner/storage.js?v=20260914a"></script>
+  <script src="/dashboard/loran-td.js?v=20260818-3"></script>
   <script src="/dashboard/trip-planner/trip-recorder.js?v=20260914a"></script>
   <script>
   (function () {
@@ -1285,8 +1294,35 @@
         return feature;
       }));
     }
+    const plannerWaypoints = [];
+    const plannerWaypointOverlays = [];
+    let waypointMode = false;
+    document.getElementById('bv-locate-me')?.addEventListener('click', () => {
+      if (!navigator.geolocation) return;
+      navigator.geolocation.getCurrentPosition(pos => {
+        map.getView().animate({ center: ol.proj.fromLonLat([pos.coords.longitude, pos.coords.latitude], mapProjection), zoom: Math.max(map.getView().getZoom() || 6, 9), duration: 500 });
+      }, () => { document.getElementById('bv-mode-context').textContent = 'Location unavailable'; });
+    });
+    document.getElementById('bv-waypoint-tool')?.addEventListener('click', event => {
+      waypointMode = !waypointMode;
+      event.currentTarget.setAttribute('aria-pressed', String(waypointMode));
+      document.getElementById('bv-mode-context').textContent = waypointMode ? 'Waypoint mode · click map to add' : '';
+    });
+    document.getElementById('bv-td-grid')?.addEventListener('click', async event => {
+      const controller = globalThis.LoranTdController;
+      if (!controller) { document.getElementById('bv-mode-context').textContent = 'TD grid unavailable'; return; }
+      const enabled = !controller.isEnabled(map);
+      if (await controller.toggle(enabled, map)) event.currentTarget.setAttribute('aria-pressed', String(enabled));
+    });
     drawTideStations();
     map.on('singleclick', event => {
+      if (waypointMode) {
+        const [lon, lat] = ol.proj.toLonLat(event.coordinate, mapProjection);
+        plannerWaypoints.push({ lon, lat });
+        const marker = document.createElement('button'); marker.type = 'button'; marker.textContent = String(plannerWaypoints.length); marker.title = `Waypoint ${plannerWaypoints.length}`; marker.style.cssText = 'width:22px;height:22px;border-radius:50%;border:1px solid #fff;background:#15324a;color:#fff;font:700 11px monospace;cursor:pointer;';
+        const overlay = new ol.Overlay({ element: marker, positioning: 'center-center', stopEvent: true }); overlay.setPosition(event.coordinate); map.addOverlay(overlay); plannerWaypointOverlays.push(overlay);
+        return;
+      }
       const openDetails = document.querySelector('.bv-layer-details[open]');
       if (openDetails) { openDetails.open = false; detailsOpen = false; }
       const feature = activePlannerPreset === 'tides' && map.forEachFeatureAtPixel(event.pixel, value => value, {
