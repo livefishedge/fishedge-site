@@ -54,6 +54,7 @@
     new_jersey_reef: Object.freeze({ id:'new-jersey-reef', label:'New Jersey Offshore Reef', kind:'area', lookup_points:Object.freeze([[-74.2,39.2],[-73.7,38.9]]), description:'New Jersey offshore reef complex.' }),
     virginia_offshore: Object.freeze({ id:'virginia-offshore', label:'Virginia Offshore Grounds', kind:'area', lookup_points:Object.freeze([[-75.5,37.0],[-74.9,36.5]]), description:'General offshore grounds east of Virginia.' }),
     baltimore_trough: Object.freeze({ id:'baltimore-trough', label:'Baltimore Trough', kind:'area', lookup_points:Object.freeze([[-74.5,37.7],[-73.8,37.5]]), description:'Baltimore Trough offshore grounds.' }),
+    sausages: Object.freeze({ id:'sausages', label:'Sausages', kind:'area', lookup_points:Object.freeze([[-74.0,37.4],[-73.4,37.2]]), description:'Sausages offshore fishing grounds.' }),
   });
 
   function todayIso() {
@@ -73,6 +74,7 @@
     ).join('');
     return `
       <div class="ip-row">
+        <section class="ip-card"><h3>Home inlet</h3><div class="ip-card-fields">
         <div class="ip-field">
           <label for="ip-inlet">Home inlet</label>
           <select id="ip-inlet">${opts}</select>
@@ -83,14 +85,17 @@
         </div>
         <div class="ip-field">
           <label for="ip-return">Return (local)</label>
-          <input id="ip-return" type="datetime-local" value="${state.return}" />
+        <input id="ip-return" type="datetime-local" value="${state.return}" />
         </div>
+        </div></section>
+        <section class="ip-card"><h3>Target fishing grounds</h3>
         <div class="ip-field">
-          <label for="ip-target">Target area</label>
+          <label for="ip-target">Offshore ground</label>
           <select id="ip-target">${Object.entries(CANYON_TARGETS).map(([k, v]) =>
             `<option value="${k}"${k === state.target ? ' selected' : ''}>${v.label}</option>`
           ).join('')}</select>
         </div>
+        </section>
         <button class="ip-save" id="ip-save">Save trip</button>
         <button class="ip-cta" id="ip-cta">Update</button>
       </div>

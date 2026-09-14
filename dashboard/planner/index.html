@@ -61,6 +61,8 @@
       background: #15324a; color: #edfaff; border: 1px solid #31546b;
       padding: 6px 10px; border-radius: 4px; font: inherit; min-width: 240px;
     }
+    .planner-choice-card { flex: 1 1 360px; display:flex; flex-direction:column; gap:8px; padding:14px 16px; background:#0a1929; border:1px solid #31546b; border-radius:8px; }
+    .planner-choice-card h2 { margin:0; }
 
     .day-strip {
       display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px;
@@ -153,8 +155,8 @@
   </header>
 
   <main>
-    <h2>Where from?</h2>
     <div class="inlet-picker">
+      <section class="planner-choice-card"><h2>Home inlet</h2>
       <label for="inlet">Home inlet:</label>
       <select id="inlet">
         <option value="ocean-city-md">Ocean City Inlet, MD</option>
@@ -167,8 +169,9 @@
         <option value="sandy-hook-nj">Sandy Hook, NJ</option>
         <option value="montauk-ny">Montauk, NY</option>
       </select>
-      <label for="target">Offshore grounds:</label>
-      <select id="target"><option value="baltimore_canyon_line">Baltimore Canyon</option><option value="hudson_canyon">Hudson Canyon</option><option value="wilmington_canyon">Wilmington Canyon</option><option value="norfolk_canyon">Norfolk Canyon</option><option value="toms_canyon">Toms Canyon</option><option value="carteret_canyon">Carteret Canyon</option><option value="lindenkohl_canyon">Lindenkohl Canyon</option><option value="spencer_canyon">Spencer Canyon</option><option value="poor_mans_canyon">Poor Man's Canyon</option><option value="hudson_shelf_edge">Hudson Shelf Edge</option><option value="delaware_offshore">Delaware Offshore Grounds</option><option value="new_jersey_reef">New Jersey Offshore Reef</option><option value="virginia_offshore">Virginia Offshore Grounds</option><option value="baltimore_trough">Baltimore Trough</option></select>
+      </section><section class="planner-choice-card"><h2>Target fishing grounds</h2>
+      <label for="target">Offshore ground:</label>
+      <select id="target"><option value="baltimore_canyon_line">Baltimore Canyon</option><option value="hudson_canyon">Hudson Canyon</option><option value="wilmington_canyon">Wilmington Canyon</option><option value="norfolk_canyon">Norfolk Canyon</option><option value="toms_canyon">Toms Canyon</option><option value="carteret_canyon">Carteret Canyon</option><option value="lindenkohl_canyon">Lindenkohl Canyon</option><option value="spencer_canyon">Spencer Canyon</option><option value="poor_mans_canyon">Poor Man's Canyon</option><option value="hudson_shelf_edge">Hudson Shelf Edge</option><option value="delaware_offshore">Delaware Offshore Grounds</option><option value="new_jersey_reef">New Jersey Offshore Reef</option><option value="virginia_offshore">Virginia Offshore Grounds</option><option value="baltimore_trough">Baltimore Trough</option><option value="sausages">Sausages</option></select></section>
     </div>
 
     <h2>Five-day outlook — click a card to drill down, ▶ Next to step frames</h2>
