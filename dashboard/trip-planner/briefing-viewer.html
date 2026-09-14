@@ -4340,15 +4340,13 @@
           const beforePx = map.getPixelFromCoordinate(before);
           const afterPx  = map.getPixelFromCoordinate(after);
           if (!beforePx || !afterPx) continue;
-          // Speed → opacity + warm-yellow tint (matches static streamlines)
+          // Sustained wind is white; gust particles retain their red warning
+          // treatment below so the two signals remain visually distinct.
           const t = Math.min(1, vec.speed / 30);
           const fadeOut = Math.min(1, (1 - p.age / p.maxAge) * 1.5);
           const a = Math.max(0.18, Math.min(0.80, (0.35 + 0.45 * t) * fadeOut));
-          const r = 255;
-          const g = Math.round(220 + 20 * t);
-          const b = Math.round(60 + 30 * t);
           flowCtx.globalAlpha = a;
-          flowCtx.strokeStyle = `rgba(${r},${g},${b},1)`;
+          flowCtx.strokeStyle = 'rgba(255,255,255,1)';
           flowCtx.lineWidth = 0.8 + 1.0 * t;
           flowCtx.lineCap = 'round';
           flowCtx.beginPath();
