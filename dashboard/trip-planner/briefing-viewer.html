@@ -384,6 +384,21 @@
         </svg>
       </button>
     </div>
+    <div id="captain-pts-panel" style="display:none;position:fixed;top:96px;left:8px;z-index:1150;background:var(--panel,#0a1929);border:1px solid var(--border,#31546b);border-radius:10px;padding:12px 14px;width:280px;max-height:320px;overflow-y:auto;font-size:12px;color:var(--fg,#edfaff);">
+      <div id="captain-pts-drag-handle" style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;cursor:grab;touch-action:none;user-select:none;">
+        <div id="captain-pts-title" style="font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:0.6px;color:#7a8fa8;">My Waypoints</div>
+        <button id="captain-save-btn" title="Save waypoints" style="border:1px solid #4d7dff;border-radius:5px;background:#1d4f91;color:#fff;padding:3px 7px;font-size:11px;font-weight:700;cursor:pointer;">Save Waypoints</button>
+      </div>
+      <div id="captain-pts-list"></div>
+    </div>
+    <div id="captain-dist-panel" style="display:none;position:fixed;top:96px;left:8px;z-index:1150;background:var(--panel,#0a1929);border:1px solid var(--border,#31546b);border-radius:10px;padding:12px 14px;font-size:12px;color:var(--fg,#edfaff);min-width:280px;width:280px;max-height:320px;overflow-y:auto;">
+      <div id="captain-dist-drag-handle" style="display:flex;align-items:center;justify-content:space-between;gap:16px;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:0.6px;color:#7a8fa8;margin-bottom:8px;cursor:grab;touch-action:none;user-select:none;">
+        <span>Distance</span>
+        <button id="captain-dist-exit" type="button" title="Save distance measurements" style="border:1px solid #4d7dff;border-radius:5px;background:#1d4f91;color:#fff;padding:3px 7px;font-size:11px;font-weight:700;cursor:pointer;">Save</button>
+      </div>
+      <div id="captain-dist-list"></div>
+      <div id="captain-dist-total" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border,#31546b);font-weight:700;color:var(--fg,#edfaff);"></div>
+    </div>
     <div id="captain-pts-panel">
       <div id="captain-pts-drag-handle">
         <div>My Waypoints</div>
@@ -1517,7 +1532,8 @@
       const panel = document.getElementById('captain-pts-list');
       if (!panel) return;
       panel.replaceChildren();
-      if (!plannerWaypoints.length) { panel.parentElement?.classList.remove('visible'); return; }
+      const wrapper = panel.parentElement;
+      if (!plannerWaypoints.length) { wrapper?.style.setProperty('display', 'none'); wrapper?.classList.remove('visible'); return; }
       plannerWaypoints.forEach((point, index) => {
         const row = document.createElement('div'); row.className = 'cp-row';
         const label = document.createElement('span'); label.textContent = `${index + 1}  ${point.lat.toFixed(4)}°, ${point.lon.toFixed(4)}°`;
@@ -1528,7 +1544,8 @@
         });
         row.append(label, remove); panel.appendChild(row);
       });
-      panel.parentElement?.classList.add('visible');
+      wrapper?.classList.add('visible');
+      wrapper?.style.setProperty('display', 'block');
     }
     function renderPlannerDistances() {
       const list = document.getElementById('captain-dist-list');
