@@ -134,18 +134,65 @@
     #bv-trip-recorder{ position:fixed; top:8px; right:54px; z-index:2200; display:flex; align-items:center; gap:6px; padding:4px 6px; background:rgba(5,11,16,.9); border:1px solid rgba(255,255,255,.15); border-radius:5px; font-size:10px; }
     #bv-trip-recorder label{ padding:0; font-size:10px; }
     #bv-trip-recorder button{ padding:5px 7px; border:1px solid #466078; border-radius:4px; background:#132333; color:#d6e5f2; font-size:10px; font-weight:700; }
-    #bv-captain-tools{ position:fixed; top:var(--bv-header-bottom,112px); left:12px; right:auto; z-index:2201; display:flex; align-items:center; gap:4px; padding:3px; border:1px solid rgba(70,96,120,.8); border-radius:6px; background:rgba(5,11,16,.9); touch-action:none; }
-    #bv-captain-tools .bv-tools-drag{ width:14px; color:#8fa6bb; font:700 14px/1 monospace; cursor:grab; user-select:none; text-align:center; }
-    #bv-captain-tools button{ width:30px; height:30px; padding:0; border:1px solid #466078; border-radius:5px; background:rgba(5,11,16,.9); color:#d6e5f2; font:700 11px monospace; cursor:pointer; }
-    #bv-captain-tools button[data-action="reset-map"] svg{ display:block; }
-    #bv-captain-tools button:disabled{ opacity:.55; cursor:wait; }
-    #bv-waypoint-list{ position:fixed; left:12px; top:var(--bv-tools-bottom,220px); z-index:2201; display:none; width:min(260px,calc(100vw - 24px)); max-height:180px; overflow:auto; padding:7px 9px; box-sizing:border-box; border:1px solid rgba(70,96,120,.8); border-radius:6px; background:rgba(5,11,16,.94); color:#d6e5f2; font:11px monospace; }
-    #bv-waypoint-list.visible{ display:block; }
-    #bv-waypoint-list .bv-wp-row{ display:flex; align-items:center; justify-content:space-between; gap:8px; padding:4px 0; border-bottom:1px solid rgba(255,255,255,.1); }
-    #bv-waypoint-list .bv-wp-row:last-child{ border-bottom:0; }
-    #bv-waypoint-list button{ width:auto; height:auto; padding:2px 5px; color:#ffb4a8; border:1px solid rgba(255,120,100,.5); background:transparent; font:700 10px monospace; }
-    #bv-captain-tools button[aria-pressed="true"]{ border-color:#67d9ff; color:#67d9ff; background:#15324a; }
-    @media(max-width:640px){#bv-trip-recorder{top:40px;right:8px;left:8px;justify-content:space-between}#bv-captain-tools{left:8px;right:auto}}
+    #captain-tools{
+      display:flex; position:fixed;
+      top:calc(var(--bv-header-bottom,46px) + env(safe-area-inset-top, 0px));
+      left:8px; z-index:1150;
+      background:var(--panel,#0a1929); border:1px solid var(--border,#31546b);
+      border-radius:10px; padding:5px 6px; gap:4px;
+      flex-direction:row; box-shadow:0 4px 16px rgba(0,0,0,0.4);
+      align-items:center; touch-action:none; user-select:none; -webkit-user-select:none;
+    }
+    .captain-drag-handle{
+      width:18px; height:30px; flex:0 0 18px; cursor:grab;
+      display:flex; align-items:center; justify-content:center;
+      border-radius:5px; color:#8fa3b8; opacity:.8; touch-action:none;
+    }
+    .captain-drag-handle:active{ cursor:grabbing; }
+    .captain-drag-handle::before{ content:"\22EE"; font-size:22px; line-height:1; font-weight:900; }
+    .captain-tool-btn{
+      width:30px; height:30px; min-width:30px;
+      background:transparent; border:1px solid transparent;
+      border-radius:6px; color:var(--fg,#edfaff);
+      cursor:pointer; display:flex; align-items:center; justify-content:center;
+      padding:0; transition:background 0.15s, border-color 0.15s;
+    }
+    .captain-tool-btn:hover{ background:rgba(255,255,255,0.08); border-color:rgba(255,255,255,0.2); }
+    .captain-tool-btn.active{ background:rgba(29,79,145,0.7); border-color:#4d7dff; }
+    #captain-pts-panel,#captain-dist-panel{
+      display:none; position:fixed; top:96px; left:8px; z-index:1150;
+      background:var(--panel,#0a1929); border:1px solid var(--border,#31546b);
+      border-radius:10px; padding:12px 14px; width:280px;
+      max-height:320px; overflow-y:auto; font-size:12px; color:var(--fg,#edfaff);
+    }
+    #captain-pts-panel.visible,#captain-dist-panel.visible{ display:block; }
+    #captain-pts-drag-handle,#captain-dist-drag-handle{
+      display:flex; justify-content:space-between; align-items:center; gap:8px;
+      margin-bottom:8px; cursor:grab; touch-action:none; user-select:none;
+      font-weight:700; font-size:11px; text-transform:uppercase; letter-spacing:0.6px; color:#7a8fa8;
+    }
+    #captain-save-btn{
+      border:1px solid #4d7dff; border-radius:5px; background:#1d4f91; color:#fff;
+      padding:3px 7px; font-size:11px; font-weight:700; cursor:pointer;
+    }
+    #captain-dist-exit{
+      border:1px solid #4d7dff; border-radius:5px; background:#1d4f91; color:#fff;
+      padding:3px 7px; font-size:11px; font-weight:700; cursor:pointer;
+    }
+    #captain-pts-list .cp-row,#captain-dist-list .cd-row{
+      display:flex; align-items:center; justify-content:space-between; gap:8px;
+      padding:5px 0; border-bottom:1px solid rgba(255,255,255,0.08); font-family:ui-monospace,monospace;
+    }
+    #captain-pts-list .cp-row:last-child,#captain-dist-list .cd-row:last-child{ border-bottom:0; }
+    #captain-pts-list button,#captain-dist-list button{
+      background:transparent; border:1px solid rgba(255,120,100,0.5); color:#ffb4a8;
+      padding:2px 6px; font:700 10px ui-monospace,monospace; cursor:pointer; border-radius:3px;
+    }
+    #captain-dist-total{
+      margin-top:8px; padding-top:8px; border-top:1px solid var(--border,#31546b);
+      font-weight:700; color:var(--fg,#edfaff);
+    }
+    @media(max-width:640px){#bv-trip-recorder{top:40px;right:8px;left:8px;justify-content:space-between}}
 
     /* Moon and sun details live in their own mode dropdown. */
     #bv-side-panel h3{ margin:0 0 4px 0; font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:#7a8fa8; font-weight:800; }
@@ -297,15 +344,63 @@
     </div>
     <div class="bv-time" id="bv-time" hidden aria-hidden="true"></div>
     <button id="bv-hamburger-btn" aria-label="Open layer menu">☰</button>
-    <div id="bv-captain-tools" aria-label="Captain tools">
-      <span class="bv-tools-drag" title="Drag map tools" aria-label="Drag map tools">⠿</span>
-      <button id="bv-distance-tool" type="button" title="Measure distance" aria-label="Measure distance" aria-pressed="false"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true"><line x1="3" y1="10" x2="17" y2="10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><polyline points="7,6 3,10 7,14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><polyline points="13,6 17,10 13,14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><line x1="7" y1="7" x2="7" y2="13" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><line x1="13" y1="7" x2="13" y2="13" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></button>
-      <button id="bv-locate-me" type="button" title="Locate me" aria-label="Locate me"><svg width="18" height="18" viewBox="0 0 22 22" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="1.7"/><path d="M14.8 7.2 12.9 12.9 7.2 14.8 9.1 9.1 14.8 7.2Z" fill="currentColor" stroke="currentColor" stroke-width="1" stroke-linejoin="round"/><circle cx="11" cy="11" r="1.2" fill="#071017"/></svg></button>
-      <button id="bv-waypoint-tool" type="button" title="Add waypoint" aria-label="Add waypoint" aria-pressed="false"><svg width="18" height="18" viewBox="0 0 22 22" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><circle cx="11" cy="11" r="2" fill="currentColor"/><path d="M11 2v4M11 16v4M2 11h4M16 11h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
-      <button id="bv-td-grid" type="button" title="Loran-C TD Grid" aria-label="Loran-C TD Grid" aria-pressed="false"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true"><circle cx="10" cy="2" r="1.1" fill="currentColor"/><path d="M10 3.5v5M7 8.5h6M6 7Q4 5 6 3M14 7q2-2 0-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><text x="10" y="16.8" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="6.5" font-weight="700" text-anchor="middle" fill="currentColor">TD</text></svg></button>
+    <div id="captain-tools" role="toolbar" aria-label="Captain tools">
+      <span class="captain-drag-handle" title="Drag Captain tools" aria-label="Drag Captain tools"></span>
+      <button id="captain-dist-tool" class="captain-tool-btn" title="Measure distance (M)" data-tool="dist" aria-label="Measure distance" aria-pressed="false">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <line x1="3" y1="10" x2="17" y2="10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <polyline points="7,6 3,10 7,14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          <polyline points="13,6 17,10 13,14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          <line x1="7" y1="7" x2="7" y2="13" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          <line x1="13" y1="7" x2="13" y2="13" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+        </svg>
+      </button>
+      <button id="captain-locate-btn" class="captain-tool-btn" title="Locate me" aria-label="Locate me">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6" fill="none"/>
+          <path d="M12 4 L13.6 12 12 20 L10.4 12 Z" fill="currentColor"/>
+          <path d="M4 12 L12 10.4 20 12 L12 13.6 Z" fill="currentColor"/>
+          <circle cx="12" cy="12" r="1.6" fill="#07111d"/>
+        </svg>
+      </button>
+      <button id="captain-add-tool" class="captain-tool-btn" title="Add waypoint (A)" data-tool="add" aria-pressed="false">
+        <svg width="20" height="20" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2" fill="none"/>
+          <circle cx="11" cy="11" r="2" fill="currentColor"/>
+          <line x1="11" y1="2" x2="11" y2="6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <line x1="11" y1="16" x2="11" y2="20" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <line x1="2" y1="11" x2="6" y2="11" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <line x1="16" y1="11" x2="20" y2="11" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </button>
+      <button id="captain-loran-td-tool" class="captain-tool-btn" title="Loran-C TD Grid (GRI 9960)" aria-label="Loran-C TD Grid (GRI 9960)" aria-pressed="false">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <circle cx="10" cy="2" r="1.1" fill="currentColor"/>
+          <line x1="10" y1="3.5" x2="10" y2="8.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <line x1="7" y1="8.5" x2="13" y2="8.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M6 7 Q4 5 6 3" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linecap="round" opacity="0.7"/>
+          <path d="M14 7 Q16 5 14 3" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linecap="round" opacity="0.7"/>
+          <text x="10" y="16.8" font-family="ui-monospace, 'SF Mono', Menlo, Consolas, monospace" font-size="6.5" font-weight="700" text-anchor="middle" fill="currentColor" letter-spacing="0.4">TD</text>
+        </svg>
+      </button>
+    </div>
+    <div id="captain-pts-panel">
+      <div id="captain-pts-drag-handle">
+        <div>My Waypoints</div>
+        <button id="captain-save-btn" title="Save waypoints">Save Waypoints</button>
+      </div>
+      <div id="captain-pts-list"></div>
+    </div>
+    <div id="captain-dist-panel">
+      <div id="captain-dist-drag-handle">
+        <span>Distance</span>
+        <button id="captain-dist-exit" type="button" title="Save distance measurements">Save</button>
+      </div>
+      <div id="captain-dist-list"></div>
+      <div id="captain-dist-total"></div>
     </div>
   </div>
-  <div id="bv-waypoint-list" aria-live="polite" aria-label="Waypoints"></div>
+  <div id="bv-waypoint-list" aria-live="polite" aria-label="Waypoints" hidden></div>
   <div id="bv-active-layer-strip" class="bv-active-layer-strip" aria-label="Active map layers"></div>
   <details id="bv-wave-key" hidden style="position:fixed;bottom:8px;left:12px;z-index:19;max-width:min(330px,85vw);padding:7px 10px;border-radius:5px;background:rgba(255,255,255,.94);color:#101820;font:12px/1.5 sans-serif">
     <summary>Wave motion · schematic · 2× time</summary>
@@ -1419,13 +1514,12 @@
     const plannerWaypointOverlays = [];
     let waypointMode = false;
     function renderPlannerWaypoints() {
-      const panel = document.getElementById('bv-waypoint-list');
+      const panel = document.getElementById('captain-pts-list');
       if (!panel) return;
       panel.replaceChildren();
-      if (!plannerWaypoints.length) { panel.classList.remove('visible'); return; }
-      const title = document.createElement('div'); title.textContent = 'WAYPOINTS'; title.style.cssText = 'font-weight:800;color:#fff;margin-bottom:3px;'; panel.appendChild(title);
+      if (!plannerWaypoints.length) { panel.parentElement?.classList.remove('visible'); return; }
       plannerWaypoints.forEach((point, index) => {
-        const row = document.createElement('div'); row.className = 'bv-wp-row';
+        const row = document.createElement('div'); row.className = 'cp-row';
         const label = document.createElement('span'); label.textContent = `${index + 1}  ${point.lat.toFixed(4)}°, ${point.lon.toFixed(4)}°`;
         const remove = document.createElement('button'); remove.type = 'button'; remove.textContent = 'Remove'; remove.addEventListener('click', () => {
           const overlay = plannerWaypointOverlays[index]; if (overlay) map.removeOverlay(overlay);
@@ -1434,7 +1528,31 @@
         });
         row.append(label, remove); panel.appendChild(row);
       });
-      panel.classList.add('visible');
+      panel.parentElement?.classList.add('visible');
+    }
+    function renderPlannerDistances() {
+      const list = document.getElementById('captain-dist-list');
+      const total = document.getElementById('captain-dist-total');
+      const panel = document.getElementById('captain-dist-panel');
+      if (!list || !total || !panel) return;
+      list.replaceChildren();
+      const pairs = Math.floor(distancePoints.length / 2);
+      let totalNm = 0;
+      for (let i = 0; i < pairs; i++) {
+        const a = distancePoints[i * 2], b = distancePoints[i * 2 + 1];
+        const d = distanceNm(a, b);
+        totalNm += d;
+        const row = document.createElement('div'); row.className = 'cd-row';
+        const label = document.createElement('span'); label.textContent = `${i + 1}  ${a[1].toFixed(4)}°, ${a[0].toFixed(4)}° → ${b[1].toFixed(4)}°, ${b[0].toFixed(4)}°  ·  ${d.toFixed(2)} nm`;
+        const remove = document.createElement('button'); remove.type = 'button'; remove.textContent = '×'; remove.addEventListener('click', () => {
+          distancePoints.splice(i * 2, 2);
+          distanceSource.clear();
+          renderPlannerDistances();
+        });
+        row.append(label, remove); list.appendChild(row);
+      }
+      total.textContent = pairs ? `Total · ${totalNm.toFixed(2)} nm` : '';
+      panel.classList.toggle('visible', pairs > 0);
     }
     const distancePoints = [];
     let distanceMode = false;
@@ -1442,54 +1560,39 @@
     const distanceLayer = new ol.layer.Vector({ source: distanceSource, zIndex: 2200, style: new ol.style.Style({ stroke: new ol.style.Stroke({ color: '#4fc3f7', width: 3 }), image: new ol.style.Circle({ radius: 5, fill: new ol.style.Fill({ color: '#4fc3f7' }), stroke: new ol.style.Stroke({ color: '#071017', width: 2 }) }) }) });
     map.addLayer(distanceLayer);
     const distanceNm = (a,b) => { const r=3440.065, p=Math.PI/180, dlat=(b[1]-a[1])*p, dlon=(b[0]-a[0])*p; const h=Math.sin(dlat/2)**2+Math.cos(a[1]*p)*Math.cos(b[1]*p)*Math.sin(dlon/2)**2; return r*2*Math.atan2(Math.sqrt(h),Math.sqrt(1-h)); };
-    document.getElementById('bv-locate-me')?.addEventListener('click', () => {
-      if (!navigator.geolocation) return;
+    document.getElementById('captain-locate-btn')?.addEventListener('click', () => {
+      if (!navigator.geolocation) { document.getElementById('bv-mode-context').textContent = 'Location unavailable on this device'; return; }
       navigator.geolocation.getCurrentPosition(pos => {
         map.getView().animate({ center: ol.proj.fromLonLat([pos.coords.longitude, pos.coords.latitude], mapProjection), zoom: Math.max(map.getView().getZoom() || 6, 9), duration: 500 });
-      }, () => { document.getElementById('bv-mode-context').textContent = 'Location unavailable'; });
+      }, () => { document.getElementById('bv-mode-context').textContent = 'Location permission denied'; });
     });
-    document.getElementById('bv-reset-map')?.addEventListener('click', event => {
-      event.preventDefault(); event.stopPropagation();
-      waypointMode = false;
-      document.getElementById('bv-waypoint-tool')?.setAttribute('aria-pressed', 'false');
-      distanceMode = false;
-      distancePoints.splice(0);
-      distanceSource.clear();
-      document.getElementById('bv-distance-tool')?.setAttribute('aria-pressed', 'false');
-      document.getElementById('bv-mode-context').textContent = '';
-      map.getView().cancelAnimations?.();
-      if (initialMapCenter) map.getView().setCenter(initialMapCenter);
-      if (Number.isFinite(initialMapZoom)) map.getView().setZoom(initialMapZoom);
-      plannerWaypointOverlays?.splice(0).forEach(overlay => map.removeOverlay(overlay));
-      plannerWaypoints?.splice(0);
-      mapGestureCanvases?.forEach(canvas => { if (canvas) canvas.style.transform = ''; });
-      mapPointerDragging = false;
-      viewportTransitioning = false;
-      mapGestureOriginCenter = null;
-      scheduleOverlayRedraw();
-    });
-    document.getElementById('bv-waypoint-tool')?.addEventListener('click', event => {
+    document.getElementById('captain-add-tool')?.addEventListener('click', event => {
       waypointMode = !waypointMode;
       event.currentTarget.setAttribute('aria-pressed', String(waypointMode));
+      event.currentTarget.classList.toggle('active', waypointMode);
       document.getElementById('bv-mode-context').textContent = waypointMode ? 'Waypoint mode · click map to add' : '';
     });
-    document.getElementById('bv-distance-tool')?.addEventListener('click', event => {
+    document.getElementById('captain-dist-tool')?.addEventListener('click', event => {
       distanceMode = !distanceMode;
       distancePoints.splice(0); distanceSource.clear();
       event.currentTarget.setAttribute('aria-pressed', String(distanceMode));
+      event.currentTarget.classList.toggle('active', distanceMode);
       const status = document.getElementById('bv-mode-context');
       if (status) { status.textContent = distanceMode ? 'Distance mode · tap two points' : ''; status.classList.toggle('visible', distanceMode); }
+      renderPlannerDistances();
     });
-    document.getElementById('bv-td-grid')?.addEventListener('click', async event => {
+    document.getElementById('captain-loran-td-tool')?.addEventListener('click', async event => {
       const button = event.currentTarget;
-      const controller = globalThis.LoranTdController;
+      const controller = window.LoranTdController || globalThis.LoranTdController;
       const status = document.getElementById('bv-mode-context');
       if (!controller) { if (status) { status.textContent = 'TD grid unavailable'; status.classList.add('visible'); } return; }
       const enabled = !controller.isEnabled(map);
       button.disabled = true;
+      button.classList.toggle('active', enabled);
       if (status) { status.textContent = enabled ? 'Loading Loran-C TD grid…' : 'Hiding Loran-C TD grid'; status.classList.add('visible'); }
       try {
         const ok = await controller.toggle(enabled, map);
+        if (!button.isConnected) return;
         if (ok) {
           button.setAttribute('aria-pressed', String(enabled));
           if (status) status.textContent = enabled ? 'Loran-C TD grid on' : 'Loran-C TD grid off';
@@ -1510,6 +1613,7 @@
         distanceSource.clear(); distanceSource.addFeatures(features);
         const status = document.getElementById('bv-mode-context');
         if (status) status.textContent = distancePoints.length === 2 ? `Distance · ${distanceNm(distancePoints[0], distancePoints[1]).toFixed(2)} nm` : 'Distance mode · tap one more point';
+        renderPlannerDistances();
         return;
       }
       if (waypointMode) {
