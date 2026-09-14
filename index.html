@@ -27,6 +27,7 @@
     <nav class="nav" id="primary-nav">
       <a href="/#about">About</a>
       <a href="/planner/" data-app-href="planner/" class="nav-secondary" id="nav-planner" data-when-no-auth="hide" data-cta-surface="header-planner" style="display:none;">Planner</a>
+      <a href="https://app.fishedge.live/dashboard/login.html" data-app-href="dashboard/login.html" class="nav-secondary" data-when-auth="hide" data-cta-surface="header-account" id="nav-login">Login</a>
       <a href="https://app.fishedge.live/dashboard/" data-app-href="dashboard/" class="nav-secondary" id="nav-dashboard" data-when-no-auth="hide" style="display:none;">Dashboard</a>
       <a href="https://app.fishedge.live/dashboard/account.html" data-app-href="dashboard/account.html" class="nav-secondary" data-when-no-auth="hide" id="nav-account" style="display:none;">My Account</a>
       <a href="https://app.fishedge.live/dashboard/register.html" data-app-href="dashboard/register.html" class="nav-cta" data-when-auth="hide" data-cta-surface="header-primary" id="nav-join">Join</a>
@@ -182,7 +183,7 @@
 
     if (isAuthed) {
       document.body.classList.add('is-authenticated');
-      ['nav-join'].forEach(function (id) {
+      ['nav-login', 'nav-join'].forEach(function (id) {
         var el = document.getElementById(id);
         if (el) el.style.display = 'none';
       });
