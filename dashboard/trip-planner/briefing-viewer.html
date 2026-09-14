@@ -8,9 +8,7 @@
   <link rel="stylesheet" href="../assets/css/captain-tools.css">
   <script src="../locate-me.js" defer></script>
   <style>
-    /* Planner-specific: captain-tools sits below the top toolbar bar */
-    #captain-tools { top: calc(40px + env(safe-area-inset-top, 0px)) !important; }
-    #captain-pts-panel, #captain-dist-panel { top: 96px !important; }
+    /* Shared toolbar placement is calculated from the complete header stack. */
     :root { color-scheme: dark; }
     html, body { margin: 0; height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #050b10; color: #b3e5fc; overflow: hidden; }
 
@@ -1212,6 +1210,9 @@
       // schematic and its marks are explicitly not map-scale distances.
       controls: ol.control.defaults.defaults({ attribution: true, rotate: false }),
     });
+    // Register the Planner map with the shared Dashboard Locate controller.
+    globalThis.__fishedgeMaps = Array.isArray(globalThis.__fishedgeMaps) ? globalThis.__fishedgeMaps : [];
+    if (!globalThis.__fishedgeMaps.includes(map)) globalThis.__fishedgeMaps.push(map);
     const initialMapCenter = map.getView().getCenter()?.slice() || null;
     const initialMapZoom = map.getView().getZoom();
     function positionCaptainTools() {
@@ -1528,6 +1529,7 @@
       });
       wrapper?.classList.add('visible');
       wrapper?.style.setProperty('display', 'block');
+      document.getElementById('captain-save-btn')?.style.setProperty('display', 'inline-block');
     }
     function renderPlannerDistances() {
       const list = document.getElementById('captain-dist-list');
@@ -1572,7 +1574,15 @@
       event.currentTarget.classList.toggle('active', waypointMode);
       const panel = document.getElementById('captain-pts-panel');
       panel?.classList.toggle('visible', waypointMode || plannerWaypoints.length > 0);
+      document.getElementById('captain-save-btn')?.style.setProperty('display', plannerWaypoints.length ? 'inline-block' : 'none');
       document.getElementById('bv-mode-context').textContent = waypointMode ? 'Waypoint mode · click map to add' : '';
+    });
+    document.getElementById('captain-save-btn')?.addEventListener('click', () => {
+      try {
+        localStorage.setItem('fishedge:planner:waypoints', JSON.stringify(plannerWaypoints));
+        const status = document.getElementById('bv-mode-context');
+        if (status) { status.textContent = 'Waypoints saved'; status.classList.add('visible'); }
+      } catch (error) { console.error('[planner] waypoint save failed', error); }
     });
     document.getElementById('captain-dist-tool')?.addEventListener('click', event => {
       distanceMode = !distanceMode;
