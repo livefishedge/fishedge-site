@@ -12,16 +12,17 @@
     if (!navigator.geolocation) { status('Location is unavailable on this device'); return; }
     state.active=true; state.paused=false; state.started=new Date().toISOString(); state.points=[]; status('Requesting GPS…');
     state.watch=navigator.geolocation.watchPosition(pos => { if (state.paused) return; const point=[pos.coords.longitude,pos.coords.latitude]; state.lastFix={at:new Date(pos.timestamp||Date.now()).toISOString(),accuracy_m:Number(pos.coords.accuracy)||null}; const prev=state.points[state.points.length-1]; if (!prev || distance(prev,point) >= .02) state.points.push(point); persistPending(); status(`Recording · ${state.points.length} fixes · GPS ±${Math.round(pos.coords.accuracy||0)} m`); }, () => status('Recording · GPS unavailable (gap recorded)'), {enableHighAccuracy:true, maximumAge:30000, timeout:20000});
-    el('bv-trip-start').textContent='Pause recording';
+    const startButton = el('bv-trip-start');
+    if (startButton) startButton.textContent='Pause recording';
   }
-  function pause() { state.paused=!state.paused; el('bv-trip-start').textContent=state.paused?'Resume recording':'Pause recording'; status(state.paused?'Paused · location is not being recorded':'Recording resumed'); }
+  function pause() { state.paused=!state.paused; const startButton = el('bv-trip-start'); if (startButton) startButton.textContent=state.paused?'Resume recording':'Pause recording'; status(state.paused?'Paused · location is not being recorded':'Recording resumed'); }
   function end() {
     if (!state.active) return;
     if (state.watch != null) navigator.geolocation.clearWatch(state.watch);
     const points=compact(state.points), store=global.FishEdgeTripStorage;
     const trip={name:`Recorded trip · ${new Date(state.started).toLocaleDateString('en-US',{month:'short',day:'numeric'})}`, status:'completed', departure_iso:state.started, return_iso:new Date().toISOString(), route_polyline:store?.encodePolyline(points)||null, route_distance_nm:store?.routeDistanceNm(points)||0, route_approximate:true, notes:'Foreground GPS recording; route simplified for storage.', recorded_fix_count:state.points.length, gps_quality:state.lastFix};
     try { store?.saveTrip(trip); localStorage.removeItem(KEY); } catch (_) {}
-    state.active=false; state.paused=false; state.points=[]; status('Trip saved to My Trips'); el('bv-trip-start').textContent='Start trip recording';
+    state.active=false; state.paused=false; state.points=[]; status('Trip saved to My Trips'); const startButton = el('bv-trip-start'); if (startButton) startButton.textContent='Start trip recording';
   }
   function wire() { const button=el('bv-trip-start'); if (!button) return; button.addEventListener('click', () => !state.active ? start() : pause()); const endButton=document.createElement('button'); endButton.type='button'; endButton.textContent='End and save trip'; endButton.addEventListener('click', end); button.parentNode.insertBefore(endButton, button.nextSibling); }
   function autoStart() { if (localStorage.getItem('fishedge:trip-recording-default') === 'false') return; start(); }
