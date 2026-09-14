@@ -22,6 +22,12 @@
         <div class="mts-empty">
           No saved trips yet.<br/>
           <small>Set a trip above and tap "Save trip".</small>
+          <div class="mts-trip mts-example" aria-label="Example trip (not saved)">
+            <div class="mts-name">Example: Ocean City → Baltimore Canyon</div>
+            <div class="mts-meta">Ocean City Inlet · Sep 20, 6:00 AM</div>
+            <div class="mts-meta">42.8 nm planned route · planned · Score 78/100</div>
+            <small>Example only — not saved to your account</small>
+          </div>
         </div>`;
     }
     const items = trips.map(t => `
@@ -53,7 +59,7 @@
     return host;
 
     function bind() {
-      host.querySelectorAll('.mts-trip').forEach(el => {
+      host.querySelectorAll('.mts-trip:not(.mts-example)').forEach(el => {
         const handler = () => opts.onLoad && opts.onLoad(opts.trips.find(t => t.id === el.getAttribute('data-trip-id')));
         el.addEventListener('click', handler);
         el.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handler(); } });
