@@ -67,6 +67,14 @@
     .planner-choice-card select, .planner-choice-card input { max-width:100%; box-sizing:border-box; }
     .planner-choice-card label[for="inlet"], .planner-choice-card label[for="target"] { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); }
     .planner-choice-card h2 { margin:0; }
+    .scoring-preferences { margin-top:14px; padding:14px 16px; background:#0a1929; border:1px solid #31546b; border-radius:8px; }
+    .scoring-preferences summary { cursor:pointer; color:#b9eaff; font-weight:700; }
+    .score-settings { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px 18px; margin-top:12px; }
+    .score-setting { display:grid; grid-template-columns:1fr auto; gap:6px; align-items:center; font-size:12px; color:#a9dbea; }
+    .score-setting input[type=range] { grid-column:1 / -1; width:100%; accent-color:#67d9ff; }
+    .score-actions { display:flex; gap:8px; margin-top:12px; }
+    .score-actions button { padding:6px 10px; border:1px solid #31546b; border-radius:5px; background:#15324a; color:#edfaff; cursor:pointer; }
+    @media (max-width: 600px) { .score-settings { grid-template-columns:1fr; } }
 
     .day-strip {
       display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px;
@@ -185,6 +193,17 @@
       <label for="target">Offshore ground:</label>
       <select id="target"><option value="baltimore_canyon_line">Baltimore Canyon</option><option value="hudson_canyon">Hudson Canyon</option><option value="wilmington_canyon">Wilmington Canyon</option><option value="norfolk_canyon">Norfolk Canyon</option><option value="toms_canyon">Toms Canyon</option><option value="carteret_canyon">Carteret Canyon</option><option value="lindenkohl_canyon">Lindenkohl Canyon</option><option value="spencer_canyon">Spencer Canyon</option><option value="poor_mans_canyon">Poor Man's Canyon</option><option value="hudson_shelf_edge">Hudson Shelf Edge</option><option value="delaware_offshore">Delaware Offshore Grounds</option><option value="new_jersey_reef">New Jersey Offshore Reef</option><option value="virginia_offshore">Virginia Offshore Grounds</option><option value="baltimore_trough">Baltimore Trough</option><option value="sausages">Sausages</option></select></section>
     </div>
+    <details class="scoring-preferences" id="scoring-preferences">
+      <summary>Trip &amp; Scoring Preferences</summary>
+      <div class="score-settings">
+        <label class="score-setting">Sea state / steepness <output id="weight-sea-out">40%</output><input id="weight-sea" type="range" min="0" max="100" value="40"></label>
+        <label class="score-setting">Wind / gusts <output id="weight-wind-out">20%</output><input id="weight-wind" type="range" min="0" max="100" value="20"></label>
+        <label class="score-setting">Inlet / current <output id="weight-inlet-out">20%</output><input id="weight-inlet" type="range" min="0" max="100" value="20"></label>
+        <label class="score-setting">Visibility / weather <output id="weight-weather-out">15%</output><input id="weight-weather" type="range" min="0" max="100" value="15"></label>
+        <label class="score-setting">Operational comfort <output id="weight-ops-out">5%</output><input id="weight-ops" type="range" min="0" max="100" value="5"></label>
+      </div>
+      <div class="score-actions"><button type="button" id="score-apply">Apply</button><button type="button" id="score-reset">Restore defaults</button><span id="score-weight-note" style="font-size:11px;color:#7898aa;align-self:center">Weights normalize to 100%.</span></div>
+    </details>
 
     <h2>Seven-day outlook</h2>
     <div class="day-strip" id="dayStrip">
@@ -228,6 +247,9 @@
   let currentFrameIdx = [0, 0, 0, 0, 0];
   let dayAggregates = [];
   let outsideDismissBound = false;
+  const SCORE_DEFAULTS = Object.freeze({ sea:40, wind:20, inlet:20, weather:15, ops:5 });
+  let scorePrefs = Object.assign({}, SCORE_DEFAULTS);
+  try { scorePrefs = Object.assign(scorePrefs, JSON.parse(localStorage.getItem('fishedge:planner:score-prefs') || '{}')); } catch (_) {}
 
   function decision(maxWindKt, maxWaveFt) {
     if (maxWindKt > 25 || maxWaveFt > 6) return 'NO-GO';
@@ -321,18 +343,20 @@
     const wind = scalar(f.wind_speed_kn, tp), gust = scalar(f.wind_gust_kn, tp);
     const wave = scalar(f.wave_height_ft, tp), swell = scalar(f.swell_height_ft, tp);
     const period = scalar(f.wave_period_s, tp), vis = scalar(f.visibility_mi, tp);
+    const steepness = scalar(f.wave_steepness, tp), harshness = scalar(f.ride_harshness_index, tp);
     const inletWave = scalar(f.wave_height_ft, ip), inletCurrent = scalar(f.current_speed_kn, ip);
     if (![wind, gust, wave, swell, period].every(Number.isFinite)) return { score:null, decision:'UNKNOWN', reason:'Required target forecast data unavailable', components:[] };
     const hard = gust > 30 || wave > 6 || (inletWave != null && inletWave > 5);
+    const totalWeight = Math.max(1, Object.values(scorePrefs).reduce((a, v) => a + Math.max(0, Number(v) || 0), 0));
+    const w = key => Math.max(0, Number(scorePrefs[key]) || 0) / totalWeight;
     const penalties = [
-      [boundedPenalty(wave + 0.35 * swell, 2.0, 6.0), .35],
-      [boundedPenalty(Math.max(wind, gust * .8), 12, 30), .25],
-      [boundedPenalty(6 - period, 1, 4), .15],
-      [vis == null ? 0 : boundedPenalty(10 - vis, 0, 8), .10],
-      [inletWave == null ? 0 : boundedPenalty(inletWave, 1.5, 5), .10],
-      [inletCurrent == null ? 0 : boundedPenalty(inletCurrent, 1.5, 4), .05],
+      [Math.max(boundedPenalty(wave, 2.0, 6.0) || 0, boundedPenalty(steepness, .025, .08) || 0, boundedPenalty(harshness, 1, 3) || 0), w('sea')],
+      [boundedPenalty(Math.max(wind, gust * .8), 12, 30), w('wind')],
+      [vis == null ? 1 : boundedPenalty(10 - vis, 0, 8), w('weather')],
+      [inletWave == null ? 1 : boundedPenalty(inletWave, 1.5, 5), w('inlet')],
+      [inletCurrent == null ? 1 : boundedPenalty(inletCurrent, 1.5, 4), w('ops')],
     ];
-    const labels = ['Sea state / swell', 'Wind / gust', 'Wave period', 'Visibility', 'Inlet waves', 'Inlet current'];
+    const labels = ['Sea state / steepness / harshness', 'Wind / gusts', 'Visibility / weather', 'Inlet waves / current', 'Operational factors'];
     const components = penalties.map((p, i) => ({ label: labels[i], weight: p[1], penalty: p[0] == null ? 0 : p[0], contribution: p[0] == null ? 0 : p[0] * p[1] }));
     const penalty = components.reduce((sum, p) => sum + p.contribution, 0);
     const score = Math.round(100 * (1 - penalty));
@@ -549,6 +573,18 @@
     try { localStorage.setItem(TARGET_STORAGE_KEY, targetSelect.value); } catch (_) {}
     if (forecast && forecast.frames) { selectedDayIdx = 0; currentFrameIdx = []; dayAggregates = aggregateByDay(); currentFrameIdx = dayAggregates.map(() => 0); renderDayStrip(); renderBriefing(); }
   });
+  const scoreKeys = ['sea','wind','inlet','weather','ops'];
+  function syncScoreControls() {
+    scoreKeys.forEach(k => { const el = document.getElementById(`weight-${k}`); const out = document.getElementById(`weight-${k}-out`); if (el) el.value = scorePrefs[k]; if (out) out.value = `${scorePrefs[k]}%`; });
+  }
+  syncScoreControls();
+  scoreKeys.forEach(k => document.getElementById(`weight-${k}`)?.addEventListener('input', e => { document.getElementById(`weight-${k}-out`).value = `${e.target.value}%`; }));
+  document.getElementById('score-apply')?.addEventListener('click', () => {
+    scoreKeys.forEach(k => { scorePrefs[k] = Number(document.getElementById(`weight-${k}`).value); });
+    try { localStorage.setItem('fishedge:planner:score-prefs', JSON.stringify(scorePrefs)); } catch (_) {}
+    if (forecast && forecast.frames) { dayAggregates = aggregateByDay(); currentFrameIdx = dayAggregates.map(() => 0); renderDayStrip(); renderBriefing(); }
+  });
+  document.getElementById('score-reset')?.addEventListener('click', () => { scorePrefs = Object.assign({}, SCORE_DEFAULTS); syncScoreControls(); document.getElementById('score-apply').click(); });
 
   // Keep the standalone Planner on the same authoritative regional catalog as
   // the dashboard picker. The compact option list is hydrated after first
