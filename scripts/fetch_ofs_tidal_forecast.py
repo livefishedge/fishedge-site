@@ -239,8 +239,20 @@ def merge_forecast(path, tidal):
     import json
     payload = json.loads(Path(path).read_text())
     by_time = {frame["time"].replace("Z", ""): frame for frame in tidal["frames"]}
+    frame_sets = [(payload, payload.get("frames", []), None)]
+    manifest = payload.get("frames_manifest") or {}
+    if not frame_sets[0][1] and manifest.get("chunks"):
+        base = Path(path).parent / str(manifest.get("dir", "frames"))
+        frame_sets = []
+        for name in manifest["chunks"]:
+            chunk_path = base / str(name)
+            chunk = json.loads(chunk_path.read_text())
+            frame_sets.append((chunk, chunk.get("frames", []), chunk_path))
     merged = 0
-    for frame in payload.get("frames", []):
+    total = 0
+    for container, frames, chunk_path in frame_sets:
+      total += len(frames)
+      for frame in frames:
         key = frame.get("time", "")
         if key.endswith("Z"):
             key = key[:-1]
@@ -254,13 +266,15 @@ def merge_forecast(path, tidal):
             for key in ("current_u_ms", "current_v_ms", "current_speed_kn"):
                 frame[key] = ofs[key]
             merged += 1
+      if chunk_path is not None:
+          chunk_path.write_text(json.dumps(container, allow_nan=False, separators=(",", ":")))
     payload.setdefault("quality", {})["ofs_tidal_source"] = tidal["source"]
     payload["ofs_tidal_forecast"] = {k: tidal[k] for k in ("schema_version", "generated_at", "models", "quality")}
     encoded = json.dumps(payload, allow_nan=False, separators=(",", ":"))
     tmp = Path(path).with_suffix(Path(path).suffix + ".tmp")
     tmp.write_text(encoded)
     tmp.replace(path)
-    print(f"merged OFS zeta into {merged}/{len(payload.get('frames', []))} forecast frames: {path}")
+    print(f"merged OFS zeta into {merged}/{total} forecast frames: {path}")
 
 
 def main():

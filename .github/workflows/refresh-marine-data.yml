@@ -29,7 +29,7 @@ jobs:
         continue-on-error: true
         run: |
           python scripts/fetch_ofs_tidal_forecast.py \
-            --date "$(date -u +%Y%m%d)" --hours 24 \
+            --date "$(date -u +%Y%m%d)" --hours 72 \
             --merge-forecast data/usec_md/briefing/forecast.json \
             --merge-forecast dashboard/trip-planner/data/usec_md/briefing/forecast.json
       - name: Commit refreshed artifacts
