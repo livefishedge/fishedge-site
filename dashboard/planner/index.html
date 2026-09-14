@@ -70,7 +70,11 @@
     .scoring-preferences { margin-top:14px; padding:14px 16px; background:#0a1929; border:1px solid #31546b; border-radius:8px; }
     .scoring-preferences summary { cursor:pointer; color:#b9eaff; font-weight:700; }
     .score-settings { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px 18px; margin-top:12px; }
-    .score-setting { display:grid; grid-template-columns:1fr auto; gap:6px; align-items:center; font-size:12px; color:#a9dbea; }
+    .score-setting { display:grid; grid-template-columns:auto 1fr auto; gap:6px; align-items:center; font-size:12px; color:#a9dbea; }
+    .score-setting input[type=checkbox] { accent-color:#67d9ff; }
+    .score-setting summary { cursor:pointer; color:#a9dbea; }
+    .score-formula { display:none; grid-column:1 / -1; color:#7898aa; font-size:10px; line-height:1.35; padding-left:22px; }
+    .score-formula.is-open { display:block; }
     .score-setting input[type=range] { grid-column:1 / -1; width:100%; accent-color:#67d9ff; }
     .score-actions { display:flex; gap:8px; margin-top:12px; }
     .score-actions button { padding:6px 10px; border:1px solid #31546b; border-radius:5px; background:#15324a; color:#edfaff; cursor:pointer; }
@@ -168,9 +172,9 @@
   <header class="top">
     <h1>⚓ Trip Planner</h1>
     <nav class="tabs">
-      <a href="/">Home</a>
       <a href="/dashboard/trip-planner/briefing-viewer?region=usec_md&from=planner">Map</a>
       <a href="/dashboard/account.html">Account</a>
+      <a href="/">Home</a>
     </nav>
   </header>
 
@@ -196,11 +200,14 @@
     <details class="scoring-preferences" id="scoring-preferences">
       <summary>Trip &amp; Scoring Preferences</summary>
       <div class="score-settings">
-        <label class="score-setting">Sea state / steepness <output id="weight-sea-out">40%</output><input id="weight-sea" type="range" min="0" max="100" value="40"></label>
-        <label class="score-setting">Wind / gusts <output id="weight-wind-out">20%</output><input id="weight-wind" type="range" min="0" max="100" value="20"></label>
-        <label class="score-setting">Inlet / current <output id="weight-inlet-out">20%</output><input id="weight-inlet" type="range" min="0" max="100" value="20"></label>
-        <label class="score-setting">Visibility / weather <output id="weight-weather-out">15%</output><input id="weight-weather" type="range" min="0" max="100" value="15"></label>
-        <label class="score-setting">Operational comfort <output id="weight-ops-out">5%</output><input id="weight-ops" type="range" min="0" max="100" value="5"></label>
+        <label class="score-setting"><input id="param-wave" type="checkbox" checked><span>Wave height</span><output id="weight-wave-out">25%</output><input id="weight-wave" type="range" min="0" max="100" value="25"></label><div class="score-formula">Penalty = clamp((wave height − 2 ft) ÷ 4 ft, 0–1); sea-state risk contribution = penalty × normalized weight.</div>
+        <label class="score-setting"><input id="param-steepness" type="checkbox" checked><span>Surface steepness</span><output id="weight-steepness-out">15%</output><input id="weight-steepness" type="range" min="0" max="100" value="15"></label><div class="score-formula">Penalty = clamp((steepness − 0.025) ÷ 0.055, 0–1); steep short-period seas are penalized.</div>
+        <label class="score-setting"><input id="param-harshness" type="checkbox" checked><span>Ride harshness</span><output id="weight-harshness-out">10%</output><input id="weight-harshness" type="range" min="0" max="100" value="10"></label><div class="score-formula">Penalty = clamp((harshness index − 1) ÷ 2, 0–1); this is combined with sea-state penalties by the worst value.</div>
+        <label class="score-setting"><input id="param-wind" type="checkbox" checked><span>Wind speed</span><output id="weight-wind-out">12%</output><input id="weight-wind" type="range" min="0" max="100" value="12"></label><div class="score-formula">Penalty = clamp((max sustained/gust-adjusted wind − 12 kt) ÷ 18 kt, 0–1).</div>
+        <label class="score-setting"><input id="param-gust" type="checkbox" checked><span>Wind gusts</span><output id="weight-gust-out">8%</output><input id="weight-gust" type="range" min="0" max="100" value="8"></label><div class="score-formula">Penalty = clamp((gust − 18 kt) ÷ 12 kt, 0–1); gust &gt;30 kt remains a hard NO-GO.</div>
+        <label class="score-setting"><input id="param-visibility" type="checkbox" checked><span>Visibility</span><output id="weight-visibility-out">10%</output><input id="weight-visibility" type="range" min="0" max="100" value="10"></label><div class="score-formula">Penalty = clamp((10 mi − visibility) ÷ 8 mi, 0–1); missing visibility is unknown/fully penalized.</div>
+        <label class="score-setting"><input id="param-inlet-wave" type="checkbox" checked><span>Inlet wave exposure</span><output id="weight-inlet-wave-out">12%</output><input id="weight-inlet-wave" type="range" min="0" max="100" value="12"></label><div class="score-formula">Penalty = clamp((inlet wave − 1.5 ft) ÷ 3.5 ft, 0–1); inlet wave &gt;5 ft remains a hard NO-GO.</div>
+        <label class="score-setting"><input id="param-current" type="checkbox" checked><span>Inlet current</span><output id="weight-current-out">8%</output><input id="weight-current" type="range" min="0" max="100" value="8"></label><div class="score-formula">Penalty = clamp((inlet current − 1.5 kt) ÷ 2.5 kt, 0–1); missing inlet data is fully penalized.</div>
       </div>
       <div class="score-actions"><button type="button" id="score-apply">Apply</button><button type="button" id="score-reset">Restore defaults</button><span id="score-weight-note" style="font-size:11px;color:#7898aa;align-self:center">Weights normalize to 100%.</span></div>
     </details>
@@ -247,7 +254,7 @@
   let currentFrameIdx = [0, 0, 0, 0, 0];
   let dayAggregates = [];
   let outsideDismissBound = false;
-  const SCORE_DEFAULTS = Object.freeze({ sea:40, wind:20, inlet:20, weather:15, ops:5 });
+  const SCORE_DEFAULTS = Object.freeze({ wave:25, steepness:15, harshness:10, wind:12, gust:8, visibility:10, inletWave:12, current:8 });
   let scorePrefs = Object.assign({}, SCORE_DEFAULTS);
   try { scorePrefs = Object.assign(scorePrefs, JSON.parse(localStorage.getItem('fishedge:planner:score-prefs') || '{}')); } catch (_) {}
 
@@ -347,17 +354,14 @@
     const inletWave = scalar(f.wave_height_ft, ip), inletCurrent = scalar(f.current_speed_kn, ip);
     if (![wind, gust, wave, swell, period].every(Number.isFinite)) return { score:null, decision:'UNKNOWN', reason:'Required target forecast data unavailable', components:[] };
     const hard = gust > 30 || wave > 6 || (inletWave != null && inletWave > 5);
-    const totalWeight = Math.max(1, Object.values(scorePrefs).reduce((a, v) => a + Math.max(0, Number(v) || 0), 0));
-    const w = key => Math.max(0, Number(scorePrefs[key]) || 0) / totalWeight;
-    const penalties = [
-      [Math.max(boundedPenalty(wave, 2.0, 6.0) || 0, boundedPenalty(steepness, .025, .08) || 0, boundedPenalty(harshness, 1, 3) || 0), w('sea')],
-      [boundedPenalty(Math.max(wind, gust * .8), 12, 30), w('wind')],
-      [vis == null ? 1 : boundedPenalty(10 - vis, 0, 8), w('weather')],
-      [inletWave == null ? 1 : boundedPenalty(inletWave, 1.5, 5), w('inlet')],
-      [inletCurrent == null ? 1 : boundedPenalty(inletCurrent, 1.5, 4), w('ops')],
+    const paramDefs = [
+      ['wave','Wave height',boundedPenalty(wave,2,6)], ['steepness','Surface steepness',boundedPenalty(steepness,.025,.08)], ['harshness','Ride harshness',boundedPenalty(harshness,1,3)],
+      ['wind','Wind speed',boundedPenalty(wind,12,30)], ['gust','Wind gusts',boundedPenalty(gust,18,30)], ['visibility','Visibility',vis == null ? 1 : boundedPenalty(10-vis,0,8)],
+      ['inletWave','Inlet wave exposure',inletWave == null ? 1 : boundedPenalty(inletWave,1.5,5)], ['current','Inlet current',inletCurrent == null ? 1 : boundedPenalty(inletCurrent,1.5,4)]
     ];
-    const labels = ['Sea state / steepness / harshness', 'Wind / gusts', 'Visibility / weather', 'Inlet waves / current', 'Operational factors'];
-    const components = penalties.map((p, i) => ({ label: labels[i], weight: p[1], penalty: p[0] == null ? 0 : p[0], contribution: p[0] == null ? 0 : p[0] * p[1] }));
+    const enabled = key => document.getElementById(`param-${key.replace(/[A-Z]/g, m => '-' + m.toLowerCase())}`)?.checked !== false;
+    const totalWeight = Math.max(1, paramDefs.reduce((a, p) => a + (enabled(p[0]) ? Math.max(0, Number(scorePrefs[p[0]]) || 0) : 0), 0));
+    const components = paramDefs.filter(p => enabled(p[0])).map(p => { const weight = Math.max(0, Number(scorePrefs[p[0]]) || 0) / totalWeight; const penalty = p[2] == null ? 1 : p[2]; return { label:p[1], weight, penalty, contribution:penalty * weight }; });
     const penalty = components.reduce((sum, p) => sum + p.contribution, 0);
     const score = Math.round(100 * (1 - penalty));
     return { score, decision: hard || score < 45 ? 'NO-GO' : score < 70 ? 'CAUTION' : 'GO', reason: hard ? 'Operating limit exceeded' : score < 70 ? 'Conditions near configured limits' : 'Within configured limits', components };
@@ -573,14 +577,20 @@
     try { localStorage.setItem(TARGET_STORAGE_KEY, targetSelect.value); } catch (_) {}
     if (forecast && forecast.frames) { selectedDayIdx = 0; currentFrameIdx = []; dayAggregates = aggregateByDay(); currentFrameIdx = dayAggregates.map(() => 0); renderDayStrip(); renderBriefing(); }
   });
-  const scoreKeys = ['sea','wind','inlet','weather','ops'];
+  const scoreKeys = ['wave','steepness','harshness','wind','gust','visibility','inletWave','current'];
+  const scoreDomKey = k => k.replace(/[A-Z]/g, m => '-' + m.toLowerCase());
   function syncScoreControls() {
-    scoreKeys.forEach(k => { const el = document.getElementById(`weight-${k}`); const out = document.getElementById(`weight-${k}-out`); if (el) el.value = scorePrefs[k]; if (out) out.value = `${scorePrefs[k]}%`; });
+    scoreKeys.forEach(k => { const dom = scoreDomKey(k); const el = document.getElementById(`weight-${dom}`); const out = document.getElementById(`weight-${dom}-out`); const check = document.getElementById(`param-${dom}`); if (el) el.value = scorePrefs[k]; if (out) out.value = `${scorePrefs[k]}%`; if (check) check.checked = scorePrefs[`${k}Enabled`] !== false; });
   }
   syncScoreControls();
-  scoreKeys.forEach(k => document.getElementById(`weight-${k}`)?.addEventListener('input', e => { document.getElementById(`weight-${k}-out`).value = `${e.target.value}%`; }));
+  document.querySelectorAll('.score-setting span').forEach(span => span.addEventListener('click', e => {
+    e.preventDefault();
+    const formula = span.parentElement.nextElementSibling;
+    formula?.classList.toggle('is-open');
+  }));
+  scoreKeys.forEach(k => { const dom = scoreDomKey(k); document.getElementById(`weight-${dom}`)?.addEventListener('input', e => { document.getElementById(`weight-${dom}-out`).value = `${e.target.value}%`; }); });
   document.getElementById('score-apply')?.addEventListener('click', () => {
-    scoreKeys.forEach(k => { scorePrefs[k] = Number(document.getElementById(`weight-${k}`).value); });
+    scoreKeys.forEach(k => { const dom = scoreDomKey(k); scorePrefs[k] = Number(document.getElementById(`weight-${dom}`).value); scorePrefs[`${k}Enabled`] = document.getElementById(`param-${dom}`).checked; });
     try { localStorage.setItem('fishedge:planner:score-prefs', JSON.stringify(scorePrefs)); } catch (_) {}
     if (forecast && forecast.frames) { dayAggregates = aggregateByDay(); currentFrameIdx = dayAggregates.map(() => 0); renderDayStrip(); renderBriefing(); }
   });
