@@ -5,6 +5,14 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>FishEdge Trip Planner</title>
   <link rel="icon" href="data:,">
+  <script>
+    (function () {
+      var cookie = /(?:^|;\s*)fishedge_logged_in=1(?:;|$)/.test(document.cookie);
+      var local = false;
+      try { var s = JSON.parse(localStorage.getItem('ocean-mvp-auth') || 'null'); local = !!(s && (s.access_token || s.session)); } catch (_) {}
+      if (!cookie && !local) location.replace('/dashboard/login.html?next=%2Fplanner%2F');
+    })();
+  </script>
   <style>
     :root { color-scheme: dark; }
     * { box-sizing: border-box; }
@@ -160,7 +168,7 @@
         <option value="montauk-ny">Montauk, NY</option>
       </select>
       <label for="target">Offshore grounds:</label>
-      <select id="target"><option value="baltimore_canyon_line">Baltimore Canyon</option><option value="hudson_canyon">Hudson Canyon</option><option value="wilmington_canyon">Wilmington Canyon</option><option value="norfolk_canyon">Norfolk Canyon</option></select>
+      <select id="target"><option value="baltimore_canyon_line">Baltimore Canyon</option><option value="hudson_canyon">Hudson Canyon</option><option value="wilmington_canyon">Wilmington Canyon</option><option value="norfolk_canyon">Norfolk Canyon</option><option value="toms_canyon">Toms Canyon</option><option value="carteret_canyon">Carteret Canyon</option><option value="lindenkohl_canyon">Lindenkohl Canyon</option><option value="spencer_canyon">Spencer Canyon</option><option value="poor_mans_canyon">Poor Man's Canyon</option></select>
     </div>
 
     <h2>Five-day outlook — click a card to drill down, ▶ Next to step frames</h2>

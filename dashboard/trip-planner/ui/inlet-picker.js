@@ -44,6 +44,11 @@
     hudson_canyon: Object.freeze({ id:'hudson-canyon', label:'Hudson Canyon', kind:'corridor', lookup_points:Object.freeze([[-73.2,39.7],[-72.6,39.4]]), description:'Hudson Canyon offshore fishing grounds.' }),
     wilmington_canyon: Object.freeze({ id:'wilmington-canyon', label:'Wilmington Canyon', kind:'corridor', lookup_points:Object.freeze([[-73.8,38.4],[-73.2,38.1]]), description:'Wilmington Canyon offshore fishing grounds.' }),
     norfolk_canyon: Object.freeze({ id:'norfolk-canyon', label:'Norfolk Canyon', kind:'corridor', lookup_points:Object.freeze([[-74.8,37.2],[-74.2,36.9]]), description:'Norfolk Canyon offshore fishing grounds.' }),
+    toms_canyon: Object.freeze({ id:'toms-canyon', label:'Toms Canyon', kind:'corridor', lookup_points:Object.freeze([[-73.8,39.4],[-73.2,39.2]]), description:'Toms Canyon offshore fishing grounds.' }),
+    carteret_canyon: Object.freeze({ id:'carteret-canyon', label:'Carteret Canyon', kind:'corridor', lookup_points:Object.freeze([[-73.4,38.9],[-72.9,38.7]]), description:'Carteret Canyon offshore fishing grounds.' }),
+    lindenkohl_canyon: Object.freeze({ id:'lindenkohl-canyon', label:'Lindenkohl Canyon', kind:'corridor', lookup_points:Object.freeze([[-73.0,38.5],[-72.6,38.3]]), description:'Lindenkohl Canyon offshore fishing grounds.' }),
+    spencer_canyon: Object.freeze({ id:'spencer-canyon', label:'Spencer Canyon', kind:'corridor', lookup_points:Object.freeze([[-72.8,38.1],[-72.4,37.9]]), description:'Spencer Canyon offshore fishing grounds.' }),
+    poor_mans_canyon: Object.freeze({ id:'poor-mans-canyon', label:"Poor Man's Canyon", kind:'corridor', lookup_points:Object.freeze([[-72.7,37.8],[-72.3,37.6]]), description:"Poor Man's Canyon offshore fishing grounds." }),
   });
 
   function todayIso() {
