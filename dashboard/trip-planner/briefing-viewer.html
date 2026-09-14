@@ -745,6 +745,10 @@
       const predicted = visible(curve);
       const measured = visible(observed);
       const pts = points => points.map(p => `${x(p.t).toFixed(2)},${y(p.v).toFixed(2)}`).join(' ');
+      const latestMeasured = measured.length ? measured[measured.length - 1] : null;
+      const measuredMarker = latestMeasured
+        ? `<circle cx="${x(latestMeasured.t).toFixed(2)}" cy="${y(latestMeasured.v).toFixed(2)}" r="3" fill="#ffd166" stroke="#101820" stroke-width="1"/><text x="${Math.min(padL + innerW - 42, x(latestMeasured.t) + 5).toFixed(2)}" y="${Math.max(padT + 10, y(latestMeasured.v) - 5).toFixed(2)}" fill="#ffd166" font-size="8">MEASURED</text>`
+        : '';
       const ticks = [];
       for (let h = -12; h <= 168; h += 24) {
         const tt = now + h * 3600000;
@@ -761,7 +765,8 @@
         <rect x="${padL}" y="${padT}" width="${innerW}" height="${innerH}" fill="rgba(79,195,247,0.04)" stroke="#273649" stroke-width="0.5"/>
         ${mlwLine}
         <polyline points="${pts(predicted)}" fill="none" stroke="#4fc3f7" stroke-width="1.6" stroke-dasharray="4 2"/>
-        <polyline points="${pts(measured)}" fill="none" stroke="#ffd166" stroke-width="1.8"/>
+        <polyline points="${pts(measured)}" fill="none" stroke="#ffd166" stroke-width="2.8"/>
+        ${measuredMarker}
         ${nowLine}
         ${yAxisLabel}
         ${yLabels}
@@ -772,7 +777,13 @@
       const predictedRange = Number.isFinite(range?.vmin) && Number.isFinite(range?.vmax)
         ? range.vmax - range.vmin
         : (predictedValues.length ? Math.max(...predictedValues) - Math.min(...predictedValues) : 0);
-      if (targetId !== 'bv-tide-svg') return;
+      if (targetId !== 'bv-tide-svg') {
+        const summary = document.querySelector('[data-tide-summary]');
+        if (summary) summary.textContent = measured.length
+          ? `Predicted + measured · latest measured ${latestMeasured.v.toFixed(2)} ft at ${new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' }).format(new Date(latestMeasured.t))} ET`
+          : 'Predicted · measured observations unavailable';
+        return;
+      }
       set('bv-tide-range', `${predictedRange.toFixed(1)} ft`);
       const measuredValues = (observed || []).map(p => p.v).filter(Number.isFinite);
       const latest = (observed || []).filter(p => Number.isFinite(p?.t) && Number.isFinite(p?.v))
@@ -1248,7 +1259,10 @@
       waveReadout.querySelector('[data-readout-title]').textContent = `${station.name} · ${Math.abs(station.lat).toFixed(2)}°${station.lat >= 0 ? 'N' : 'S'}, ${Math.abs(station.lon).toFixed(2)}°${station.lon >= 0 ? 'E' : 'W'}`;
       renderTideChart(curve, range, nextModelTideEvent(curve), observed, 'bv-tide-readout-svg');
       const summary = waveReadout.querySelector('[data-tide-summary]');
-      if (summary) summary.textContent = `${observed.length ? 'Predicted + measured' : 'Predicted'} · ${range ? `${(range.vmax - range.vmin).toFixed(1)} ft MLLW range` : 'range unavailable'}`;
+      const latest = observed.filter(p => Number.isFinite(p?.t) && Number.isFinite(p?.v)).at(-1);
+      if (summary) summary.textContent = latest
+        ? `Predicted + measured · latest measured ${latest.v.toFixed(2)} ft at ${new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' }).format(new Date(latest.t))} ET`
+        : 'Predicted · measured observations unavailable';
       waveReadout.style.display = 'block';
     }
     function drawTideStations() {
@@ -2069,7 +2083,7 @@
       map.render();
       drawOverlaysForProduct();
       renderActiveLayerStrip();
-      if (lastWaveReadoutCoordinate) renderWaveReadout(lastWaveReadoutCoordinate);
+      if (lastWaveReadoutCoordinate) renderWaveReadout(lastWaveReadoutCoordinate, { preserveTideChart: waveReadout?.querySelector('[data-tide-chart]')?.dataset.active === '1' });
       if (stationPopup.style.display === 'block') renderActiveTide();
     }
 
