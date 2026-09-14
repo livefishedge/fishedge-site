@@ -1151,11 +1151,11 @@
       if (!Number.isFinite(deg)) return '—';
       return ['N','NE','E','SE','S','SW','W','NW'][Math.round(deg / 45) % 8];
     }
-    function renderWaveReadout(coordinate) {
+    function renderWaveReadout(coordinate, options = {}) {
       if (!forecastData || !currentFrame || !waveReadout) return;
       lastWaveReadoutCoordinate = coordinate;
       const tidePanel = waveReadout.querySelector('[data-tide-chart]');
-      if (tidePanel) { tidePanel.hidden = true; tidePanel.dataset.active = '0'; }
+      if (tidePanel && !options.preserveTideChart) { tidePanel.hidden = true; tidePanel.dataset.active = '0'; }
       clickMarkerOverlay.setPosition(coordinate);
       clickMarker.style.display = 'block';
       const [lon, lat] = ol.proj.toLonLat(coordinate, mapProjection);
@@ -1462,7 +1462,8 @@
       return Array.isArray(currentFrame?.[key]) && currentFrame[key].some(row => Array.isArray(row) && row.some(Number.isFinite));
     }
     function refreshPlanner() {
-      for (const [layer, field] of Object.entries(SCALAR_LAYERS)) layerVisibility[layer] = selectedHeatKey === field;
+      // Colormap selection is independent from overlay/readout visibility.
+      // Preserve explicit checkbox choices across redraws and frame changes.
       layerVisibility.wind_gust = !!layerVisibility.wind;
       updateLayerAvailability();
       document.querySelectorAll('#bv-layers input[data-layer]').forEach(input => { input.checked = !!layerVisibility[input.dataset.layer]; });
@@ -1474,7 +1475,7 @@
       else stopParticleAnimation();
       if (anyWaveMotionRequested()) startWavePacketAnimation();
       else stopWavePacketAnimation();
-      if (lastWaveReadoutCoordinate) renderWaveReadout(lastWaveReadoutCoordinate);
+      if (lastWaveReadoutCoordinate) renderWaveReadout(lastWaveReadoutCoordinate, {preserveTideChart:true});
     }
     function renderActiveLayerStrip() {
       const strip = document.getElementById('bv-active-layer-strip');
@@ -1710,9 +1711,7 @@
       if (name !== 'tides') { stationPopup.style.display = 'none'; stationOverlay.setPosition(undefined); }
       const saved = reset ? null : viewSettings[name];
       const active = new Set(saved ? Object.keys(saved.layers).filter(k => saved.layers[k]) : preset.defaults);
-      // Currents is isolated from atmospheric wind. A saved Sea State
-      // selection must not leak wind particles into the current view.
-      if (name === 'fishing') { active.delete('wind'); active.delete('wind_gust'); active.add('current'); }
+      // Saved layer choices are authoritative after first entry/reset.
       if (name === 'fishing') { particles.length = 0; gustParticles.length = 0; }
       document.querySelectorAll('#bv-layers input[data-layer]').forEach(input => {
         const on = active.has(input.dataset.layer);
@@ -1738,7 +1737,7 @@
       drawOverlaysForProduct();
       refreshPlanner();
       if (name === 'tides') openTideStation(activeTideStation);
-      if (lastWaveReadoutCoordinate) renderWaveReadout(lastWaveReadoutCoordinate);
+      if (lastWaveReadoutCoordinate) renderWaveReadout(lastWaveReadoutCoordinate, {preserveTideChart:true});
     }
     function setupPlannerPresets() {
       document.querySelectorAll('.bv-preset').forEach(button => {
@@ -4234,7 +4233,8 @@
         if (!isCurrentWaterPoint(lon, lat) || !bilinearVec(currentFrame, lon, lat, 'current')) continue;
         const particle = makeCurrentParticle(lon, lat, Math.random() * 180);
         particle.trail.push([lon, lat]);
-        if (currentParticles.length < 6000) currentParticles.push(particle);
+        const hardCap = compact ? 1800 : 2400;
+        if (currentParticles.length < hardCap) currentParticles.push(particle);
         else if (offscreen.length) {
           const old = offscreen.pop();
           const index = currentParticles.indexOf(old);
@@ -4691,13 +4691,16 @@
         // The viewer is a rolling operational product: never expose stale
         // frames before today or beyond the next seven days, even if a
         // backend artifact contains a longer history.
-        const windowStart = new Date(); windowStart.setHours(0, 0, 0, 0);
-        const windowEnd = windowStart.getTime() + 7 * 24 * 3600000;
+        // Keep the rolling operational window anchored to the current instant,
+        // not device-local midnight, so the UI always has a complete +168h.
+        const windowStart = Date.now();
+        const windowEnd = windowStart + 7 * 24 * 3600000;
         const windowFrames = forecastData.frames.filter(frame => {
           const t = parseForecastTime(frame.time);
-          return Number.isFinite(t) && t >= windowStart.getTime() && t <= windowEnd;
+          return Number.isFinite(t) && t >= windowStart && t <= windowEnd;
         });
         if (windowFrames.length) forecastData = { ...forecastData, frames: windowFrames };
+        else throw new Error('forecast has no frames in the rolling +168h window');
         // Dev carries a NOAA GFS diagnostic payload while the shared feed is
         // migrated off Open-Meteo. Fall back to local if the prod CDN still
         // serves the legacy schema.

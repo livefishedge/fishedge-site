@@ -37,6 +37,7 @@ jobs:
           git config user.name 'FishEdge data refresh'
           git config user.email 'actions@users.noreply.github.com'
           git add data/usec_md/briefing/forecast.json dashboard/trip-planner/data/usec_md/briefing/forecast.json
+          git add data/usec_md/briefing/frames/forecast-frames-*.json dashboard/trip-planner/data/usec_md/briefing/frames/forecast-frames-*.json
           if [ -f data/usec_md/briefing/tidal_forecast.json ]; then git add data/usec_md/briefing/tidal_forecast.json; fi
           git diff --cached --quiet || git commit -m "chore: refresh marine and CO-OPS data"
           git push
