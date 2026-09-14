@@ -622,7 +622,7 @@
     let trips = []; try { trips = JSON.parse(localStorage.getItem(TRIPS_STORAGE_KEY) || '[]'); } catch (_) {}
     trips = trips.filter(t => t.status !== 'completed' && t.status !== 'cancelled').sort((a,b) => String(a.departure_iso||'').localeCompare(String(b.departure_iso||'')));
     if (!trips.length) { host.innerHTML = '<div class="my-trips-empty">No upcoming trips yet. Prepare a new trip to get started.</div>'; return; }
-    host.innerHTML = trips.map(t => `<div class="upcoming-item"><div><strong>${String(t.name || 'Untitled trip').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}</strong><div style="color:#91afc0;font-size:11px">${t.departure_iso ? new Date(t.departure_iso).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric'}) : 'No departure set'} · ${t.status || 'draft'}</div></div><span><a href="?new=1&trip_id=${encodeURIComponent(t.id)}">Edit</a> <button type="button" data-remove-trip="${encodeURIComponent(t.id)}" style="margin-left:8px;background:transparent;border:0;color:#ff9b9b;cursor:pointer">Remove</button></span></div>`).join('');
+    host.innerHTML = trips.map(t => `<div class="upcoming-item"><div><strong>${String(t.name || 'Untitled trip').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}</strong><div style="color:#91afc0;font-size:11px">${t.trip_ref || t.id || 'No trip ID'} · ${t.departure_iso ? new Date(t.departure_iso).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric'}) : 'No departure set'} · ${t.status || 'draft'}</div></div><span><a href="?new=1&trip_id=${encodeURIComponent(t.id)}">Edit</a> <button type="button" data-remove-trip="${encodeURIComponent(t.id)}" style="margin-left:8px;background:transparent;border:0;color:#ff9b9b;cursor:pointer">Remove</button></span></div>`).join('');
     host.querySelectorAll('[data-remove-trip]').forEach(btn => btn.addEventListener('click', () => { const id = decodeURIComponent(btn.dataset.removeTrip); trips = trips.filter(t => t.id !== id); localStorage.setItem(TRIPS_STORAGE_KEY, JSON.stringify(trips)); renderUpcomingTrips(); }));
   }
 
@@ -666,13 +666,20 @@
     if (forecast && forecast.frames) { selectedDayIdx = 0; currentFrameIdx = []; dayAggregates = aggregateByDay(); currentFrameIdx = dayAggregates.map(() => 0); renderDayStrip(); renderBriefing(); }
     renderTripPlan();
   });
+  function createTripIdentity() {
+    const now = new Date();
+    const date = now.toISOString().slice(0, 10).replace(/-/g, '');
+    const suffix = (globalThis.crypto?.randomUUID?.() || Math.random().toString(36).slice(2)).replace(/[^a-z0-9]/gi, '').slice(0, 8).toUpperCase();
+    return { id: `trip_${date}_${suffix.toLowerCase()}`, trip_ref: `FE-${date}-${suffix}` };
+  }
   document.getElementById('save-plan')?.addEventListener('click', () => {
     const now = new Date();
     const targetName = targetSelect.selectedOptions?.[0]?.textContent || 'selected grounds';
-    const trip = { id: 't_' + Date.now().toString(36), name: `${inletSelect.selectedOptions?.[0]?.textContent || 'Home inlet'} → ${targetName}`, inlet_key: inletSelect.value, target_id: targetSelect.value, fishing_days: [...selectedFishingDays].sort(), departure_iso: now.toISOString(), return_iso: null, status: 'planned', created_iso: now.toISOString(), last_opened_iso: now.toISOString(), notes: 'Saved from Planner.' };
+    const identity = createTripIdentity();
+    const trip = { ...identity, name: `${inletSelect.selectedOptions?.[0]?.textContent || 'Home inlet'} → ${targetName}`, inlet_key: inletSelect.value, target_id: targetSelect.value, fishing_days: [...selectedFishingDays].sort(), departure_iso: now.toISOString(), return_iso: null, status: 'planned', created_iso: now.toISOString(), last_opened_iso: now.toISOString(), notes: 'Saved from Planner.' };
     let trips = []; try { trips = JSON.parse(localStorage.getItem(TRIPS_STORAGE_KEY) || '[]'); } catch (_) {}
     trips.push(trip); localStorage.setItem(TRIPS_STORAGE_KEY, JSON.stringify(trips));
-    document.getElementById('save-plan-status').textContent = 'Trip saved to Upcoming Trips.'; renderUpcomingTrips();
+    document.getElementById('save-plan-status').textContent = `Trip ${trip.trip_ref} saved to Upcoming Trips.`; renderUpcomingTrips();
   });
   const scoreKeys = ['wave','steepness','harshness','wind','gust','visibility','inletWave','current'];
   const scoreDomKey = k => k.replace(/[A-Z]/g, m => '-' + m.toLowerCase());
