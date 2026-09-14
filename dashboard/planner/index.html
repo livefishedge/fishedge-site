@@ -155,6 +155,13 @@
       padding: 16px;
     }
     .my-trips-empty { color: #7898aa; font-size: 12px; }
+    #planner-landing { max-width:1100px; margin:auto; padding:48px 18px 60px; }
+    #planner-landing[hidden], #planner-workspace[hidden] { display:none; }
+    .landing-hero { padding:24px; background:#0a1929; border:1px solid #31546b; border-radius:10px; }
+    .landing-hero button { padding:12px 16px; border:1px solid #67d9ff; border-radius:6px; background:#15324a; color:#edfaff; font-weight:700; cursor:pointer; }
+    .upcoming-list { display:grid; gap:8px; margin-top:18px; }
+    .upcoming-item { display:flex; justify-content:space-between; gap:10px; align-items:center; padding:12px; background:#0a1929; border:1px solid #24465d; border-radius:7px; }
+    .upcoming-item a { color:#67d9ff; text-decoration:none; font-size:12px; }
     .my-trip-item {
       padding: 10px 12px; background: #07111d; border: 1px solid #24465d;
       border-radius: 4px; margin-top: 8px; font-size: 12px;
@@ -178,12 +185,17 @@
     <h1>⚓ Trip Planner</h1>
     <nav class="tabs">
       <a href="/dashboard/trip-planner/briefing-viewer?region=usec_md&from=planner">Map</a>
-      <a href="/dashboard/account.html">Account</a>
+      <a href="/planner/trips.html">Trips</a>
       <a href="/">Home</a>
     </nav>
   </header>
 
-  <main>
+  <section id="planner-landing">
+    <div class="landing-hero"><h2 style="margin-top:0">Trip Planner</h2><p style="color:#91afc0;line-height:1.5">Plan a new outing or reopen one of your upcoming trips.</p><button id="prepare-trip" type="button">Prepare for a New Trip</button></div>
+    <h2>Upcoming Trips</h2><div id="upcoming-list" class="upcoming-list"><div class="my-trips-empty">No upcoming trips yet.</div></div>
+  </section>
+
+  <main id="planner-workspace" hidden>
     <div class="inlet-picker">
       <section class="planner-choice-card"><h2>Home inlet</h2>
       <label for="inlet">Home inlet:</label>
@@ -233,12 +245,7 @@
         <h3>Briefing</h3>
         <p class="briefing-summary" style="color:#7898aa">Loading…</p>
       </section>
-      <aside class="my-trips">
-        <h2 style="margin:0 0 10px">My Trips</h2>
-        <div id="tripsList" class="my-trips-empty">
-          No saved trips yet. Saved trips will show up here.
-        </div>
-      </aside>
+      <aside class="my-trips"><h2 style="margin:0 0 10px">Trip plan</h2><div class="my-trips-empty">Save this plan from the Home Inlet section.</div></aside>
     </div>
   </main>
 
@@ -551,6 +558,7 @@
     try {
       const trips = JSON.parse(localStorage.getItem(TRIPS_STORAGE_KEY) || '[]');
       const el = document.getElementById('tripsList');
+      if (!el) return;
       if (!trips.length) {
         el.className = 'my-trips-empty';
         el.innerHTML = `No saved trips yet. Saved trips will show up here.
@@ -572,6 +580,15 @@
         </div>
       `).join('');
     } catch (_) { /* ignore */ }
+  }
+
+  function renderUpcomingTrips() {
+    const host = document.getElementById('upcoming-list'); if (!host) return;
+    let trips = []; try { trips = JSON.parse(localStorage.getItem(TRIPS_STORAGE_KEY) || '[]'); } catch (_) {}
+    trips = trips.filter(t => t.status !== 'completed' && t.status !== 'cancelled').sort((a,b) => String(a.departure_iso||'').localeCompare(String(b.departure_iso||'')));
+    if (!trips.length) { host.innerHTML = '<div class="my-trips-empty">No upcoming trips yet. Prepare a new trip to get started.</div>'; return; }
+    host.innerHTML = trips.map(t => `<div class="upcoming-item"><div><strong>${String(t.name || 'Untitled trip').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}</strong><div style="color:#91afc0;font-size:11px">${t.departure_iso ? new Date(t.departure_iso).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric'}) : 'No departure set'} · ${t.status || 'draft'}</div></div><span><a href="?new=1&trip_id=${encodeURIComponent(t.id)}">Edit</a> <button type="button" data-remove-trip="${encodeURIComponent(t.id)}" style="margin-left:8px;background:transparent;border:0;color:#ff9b9b;cursor:pointer">Remove</button></span></div>`).join('');
+    host.querySelectorAll('[data-remove-trip]').forEach(btn => btn.addEventListener('click', () => { const id = decodeURIComponent(btn.dataset.removeTrip); trips = trips.filter(t => t.id !== id); localStorage.setItem(TRIPS_STORAGE_KEY, JSON.stringify(trips)); renderUpcomingTrips(); }));
   }
 
   async function loadForecast() {
@@ -663,6 +680,12 @@
     if (group.children.length) targetSelect.appendChild(group);
   }).catch(() => { /* the curated options remain available offline */ });
 
+  const landing = document.getElementById('planner-landing');
+  const workspace = document.getElementById('planner-workspace');
+  const isNewTrip = new URLSearchParams(location.search).get('new') === '1';
+  if (isNewTrip) { landing.hidden = true; workspace.hidden = false; }
+  document.getElementById('prepare-trip')?.addEventListener('click', () => { landing.hidden = true; workspace.hidden = false; history.replaceState(null, '', '?new=1'); window.scrollTo(0, 0); });
+  renderUpcomingTrips();
   renderMyTrips();
   loadForecast();
   </script>
