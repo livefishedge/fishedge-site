@@ -78,10 +78,10 @@
     .score-setting input[type=range] { grid-column:1 / -1; width:100%; accent-color:#67d9ff; }
     .score-actions { display:flex; gap:8px; margin-top:12px; }
     .score-actions button { padding:6px 10px; border:1px solid #31546b; border-radius:5px; background:#15324a; color:#edfaff; cursor:pointer; }
-    .score-thresholds { display:grid; grid-template-columns:auto 1fr; gap:6px 14px; margin-top:14px; padding-top:10px; border-top:1px solid #24465d; font-size:11px; color:#a9dbea; }
+    .score-thresholds { display:grid; grid-template-columns:minmax(0,1fr); gap:6px; margin-top:14px; padding-top:10px; border-top:1px solid #24465d; font-size:11px; color:#a9dbea; min-width:0; max-width:100%; }
     .score-thresholds strong, .score-thresholds small { grid-column:1 / -1; }
-    .score-thresholds label { display:grid; grid-template-columns:auto auto minmax(0,1fr); gap:6px; align-items:center; min-width:0; }
-    .score-thresholds input { accent-color:#67d9ff; max-width:100%; min-width:0; width:100%; }
+    .score-thresholds label { display:grid; grid-template-columns:auto auto; gap:6px; align-items:center; min-width:0; width:100%; }
+    .score-thresholds input { grid-column:1 / -1; accent-color:#67d9ff; max-width:100%; min-width:0; width:100%; }
     .score-thresholds small { color:#7898aa; }
     @media (max-width: 600px) { .score-settings { grid-template-columns:1fr; } }
 
@@ -220,7 +220,7 @@
         <label>CAUTION <output id="threshold-caution-out">45</output><input id="threshold-caution" type="range" min="1" max="98" value="45"></label>
         <label>NO-GO <output id="threshold-nogo-out">30</output><input id="threshold-nogo" type="range" min="0" max="97" value="30"></label>
       </div>
-      <div class="score-actions"><button type="button" id="score-apply">Apply</button><button type="button" id="score-reset">Restore defaults</button><span id="score-weight-note" style="font-size:11px;color:#7898aa;align-self:center">Weights normalize to 100%.</span></div>
+      <div class="score-actions"><button type="button" id="score-apply">Apply</button><button type="button" id="score-save">Save settings</button><button type="button" id="score-reset">Restore defaults</button><span id="score-weight-note" style="font-size:11px;color:#7898aa;align-self:center">Weights normalize to 100%.</span></div>
     </details>
 
     <h2>Seven-day outlook</h2>
@@ -633,6 +633,7 @@
     saveAccountScorePrefs();
     if (forecast && forecast.frames) { dayAggregates = aggregateByDay(); currentFrameIdx = dayAggregates.map(() => 0); renderDayStrip(); renderBriefing(); }
   });
+  document.getElementById('score-save')?.addEventListener('click', () => document.getElementById('score-apply')?.click());
   document.getElementById('score-reset')?.addEventListener('click', () => { scorePrefs = Object.assign({}, SCORE_DEFAULTS); syncScoreControls(); document.getElementById('score-apply').click(); });
 
   // Keep the standalone Planner on the same authoritative regional catalog as
