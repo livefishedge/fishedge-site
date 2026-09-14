@@ -125,6 +125,12 @@
     #bv-menu-panel .bv-condition span{ display:block; color:#8fa6bb; font-size:9px; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     #bv-menu-panel .bv-home{ display:block; margin-top:auto; padding:8px 10px; border-top:1px solid rgba(255,255,255,.12); color:#4fc3f7; text-decoration:none; font-size:12px; font-weight:800; text-align:center; }
     #bv-menu-panel .bv-home:hover{ background:rgba(77,125,255,.12); color:#fff; }
+    #bv-menu-panel .bv-trip-recorder{ margin-top:8px; padding:8px; border-top:1px solid rgba(255,255,255,.12); display:grid; gap:6px; font-size:11px; color:#b9d6e5; }
+    #bv-menu-panel .bv-trip-recorder label{ padding:0; font-size:11px; }
+    #bv-menu-panel .bv-trip-recorder label:hover{ background:none; }
+    #bv-menu-panel .bv-trip-recorder button{ padding:7px 8px; border:1px solid #466078; border-radius:5px; background:#132333; color:#d6e5f2; font-weight:700; cursor:pointer; }
+    #bv-menu-panel .bv-trip-recorder button:disabled{ opacity:.55; cursor:not-allowed; }
+    #bv-trip-recording-status{ color:#8fa6bb; }
 
     /* Moon and sun details live in their own mode dropdown. */
     #bv-side-panel h3{ margin:0 0 4px 0; font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:#7a8fa8; font-weight:800; }
@@ -319,6 +325,11 @@
       </div>
     </div>
     <div class="bv-status" id="bv-menu-status"></div>
+    <div id="bv-trip-recorder" class="bv-trip-recorder">
+      <label><input id="bv-trip-consent" type="checkbox"> Record this trip’s location</label>
+      <button id="bv-trip-start" type="button">Start trip recording</button>
+      <span id="bv-trip-recording-status" aria-live="polite">Not recording</span>
+    </div>
     <a class="bv-home" href="/planner/">Planner</a>
     <a class="bv-home" href="/">Home</a>
   </div>
@@ -380,6 +391,8 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/ol@10.2.1/dist/ol.js"></script>
+  <script src="/dashboard/trip-planner/storage.js?v=20260914a"></script>
+  <script src="/dashboard/trip-planner/trip-recorder.js?v=20260914a"></script>
   <script>
   (function () {
     'use strict';
