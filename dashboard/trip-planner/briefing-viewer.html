@@ -5,7 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Briefing Viewer</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@10.2.1/ol.css">
+  <link rel="stylesheet" href="../assets/css/captain-tools.css">
+  <script src="../locate-me.js" defer></script>
   <style>
+    /* Planner-specific: captain-tools sits below the top toolbar bar */
+    #captain-tools { top: calc(40px + env(safe-area-inset-top, 0px)) !important; }
+    #captain-pts-panel, #captain-dist-panel { top: 96px !important; }
     :root { color-scheme: dark; }
     html, body { margin: 0; height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #050b10; color: #b3e5fc; overflow: hidden; }
 
@@ -346,7 +351,7 @@
     <button id="bv-hamburger-btn" aria-label="Open layer menu">☰</button>
     <div id="captain-tools" role="toolbar" aria-label="Captain tools">
       <span class="captain-drag-handle" title="Drag Captain tools" aria-label="Drag Captain tools"></span>
-      <button id="captain-dist-tool" class="captain-tool-btn" title="Measure distance (M)" data-tool="dist" aria-label="Measure distance" aria-pressed="false">
+      <button id="captain-dist-tool" class="captain-tool-btn" title="Measure distance (M)" data-tool="dist" aria-label="Measure distance">
         <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
           <line x1="3" y1="10" x2="17" y2="10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
           <polyline points="7,6 3,10 7,14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
@@ -355,16 +360,8 @@
           <line x1="13" y1="7" x2="13" y2="13" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
         </svg>
       </button>
-      <button id="captain-locate-btn" class="captain-tool-btn" title="Locate me" aria-label="Locate me">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-          <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6" fill="none"/>
-          <path d="M12 4 L13.6 12 12 20 L10.4 12 Z" fill="currentColor"/>
-          <path d="M4 12 L12 10.4 20 12 L12 13.6 Z" fill="currentColor"/>
-          <circle cx="12" cy="12" r="1.6" fill="#07111d"/>
-        </svg>
-      </button>
-      <button id="captain-add-tool" class="captain-tool-btn" title="Add waypoint (A)" data-tool="add" aria-pressed="false">
-        <svg width="20" height="20" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <button id="captain-add-tool" class="captain-tool-btn" title="Add waypoint (A)" data-tool="add">
+        <svg width="18" height="18" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
           <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2" fill="none"/>
           <circle cx="11" cy="11" r="2" fill="currentColor"/>
           <line x1="11" y1="2" x2="11" y2="6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
@@ -384,24 +381,9 @@
         </svg>
       </button>
     </div>
-    <div id="captain-pts-panel" style="display:none;position:fixed;top:96px;left:8px;z-index:1150;background:var(--panel,#0a1929);border:1px solid var(--border,#31546b);border-radius:10px;padding:12px 14px;width:280px;max-height:320px;overflow-y:auto;font-size:12px;color:var(--fg,#edfaff);">
-      <div id="captain-pts-drag-handle" style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;cursor:grab;touch-action:none;user-select:none;">
-        <div id="captain-pts-title" style="font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:0.6px;color:#7a8fa8;">My Waypoints</div>
-        <button id="captain-save-btn" title="Save waypoints" style="border:1px solid #4d7dff;border-radius:5px;background:#1d4f91;color:#fff;padding:3px 7px;font-size:11px;font-weight:700;cursor:pointer;">Save Waypoints</button>
-      </div>
-      <div id="captain-pts-list"></div>
-    </div>
-    <div id="captain-dist-panel" style="display:none;position:fixed;top:96px;left:8px;z-index:1150;background:var(--panel,#0a1929);border:1px solid var(--border,#31546b);border-radius:10px;padding:12px 14px;font-size:12px;color:var(--fg,#edfaff);min-width:280px;width:280px;max-height:320px;overflow-y:auto;">
-      <div id="captain-dist-drag-handle" style="display:flex;align-items:center;justify-content:space-between;gap:16px;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:0.6px;color:#7a8fa8;margin-bottom:8px;cursor:grab;touch-action:none;user-select:none;">
-        <span>Distance</span>
-        <button id="captain-dist-exit" type="button" title="Save distance measurements" style="border:1px solid #4d7dff;border-radius:5px;background:#1d4f91;color:#fff;padding:3px 7px;font-size:11px;font-weight:700;cursor:pointer;">Save</button>
-      </div>
-      <div id="captain-dist-list"></div>
-      <div id="captain-dist-total" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border,#31546b);font-weight:700;color:var(--fg,#edfaff);"></div>
-    </div>
     <div id="captain-pts-panel">
       <div id="captain-pts-drag-handle">
-        <div>My Waypoints</div>
+        <div id="captain-pts-title">My Waypoints</div>
         <button id="captain-save-btn" title="Save waypoints">Save Waypoints</button>
       </div>
       <div id="captain-pts-list"></div>
