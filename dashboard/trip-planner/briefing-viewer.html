@@ -4706,7 +4706,7 @@
         // backend artifact contains a longer history.
         // Keep the rolling operational window anchored to the current instant,
         // not device-local midnight, so the UI always has a complete +168h.
-        const windowStart = Date.now();
+        const windowStart = Date.now() - 24 * 3600000;
         const windowEnd = windowStart + 7 * 24 * 3600000;
         const windowFrames = forecastData.frames.filter(frame => {
           const t = parseForecastTime(frame.time);
