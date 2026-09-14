@@ -1223,6 +1223,16 @@
         .filter(Boolean);
       const bottom = headers.reduce((max, node) => Math.max(max, node.getBoundingClientRect().bottom), 0);
       document.documentElement.style.setProperty('--bv-header-bottom', `${Math.ceil(bottom + 6)}px`);
+      // Panels belong below the toolbar, never over it. Use the live toolbar
+      // rectangle so this remains true after dragging, rotation, or resize.
+      const rect = tools.getBoundingClientRect();
+      const panelTop = Math.ceil(rect.bottom + 6);
+      ['captain-pts-panel', 'captain-dist-panel'].forEach(id => {
+        const panel = document.getElementById(id);
+        if (!panel) return;
+        panel.style.top = `${Math.min(panelTop, Math.max(8, window.innerHeight - 80))}px`;
+        panel.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - panel.offsetWidth - 8))}px`;
+      });
     }
     positionCaptainTools();
     if (typeof ResizeObserver === 'function') {
@@ -1253,6 +1263,7 @@
         captainTools.style.left = `${Math.max(0, Math.min(maxLeft, event.clientX-drag.dx))}px`;
         captainTools.style.top = `${Math.max(0, Math.min(maxTop, event.clientY-drag.dy))}px`;
         captainTools.style.right = 'auto';
+        positionCaptainTools();
         event.preventDefault(); event.stopPropagation();
       });
       for (const type of ['pointerup','pointercancel','lostpointercapture']) captainTools.addEventListener(type, finishToolDrag);
