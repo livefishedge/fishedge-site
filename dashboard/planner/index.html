@@ -114,6 +114,8 @@
       background: #0a1929; border: 1px solid #24465d; border-radius: 8px;
       padding: 18px 20px;
     }
+    #briefing { display:none; }
+    #briefing.is-floating { display:block; position:fixed; right:18px; bottom:18px; z-index:20; width:min(520px, calc(100vw - 36px)); max-height:min(70vh, 520px); overflow:auto; box-shadow:0 14px 42px rgba(0,0,0,.55); }
     .briefing h3 { margin: 0 0 10px; font-size: 16px; color: #edfaff; }
     .briefing .briefing-summary { font-size: 14px; line-height: 1.55; margin: 0 0 12px; }
     .briefing .briefing-detail {
@@ -146,6 +148,7 @@
       .row-2col { grid-template-columns: 1fr; }
       .top h1 { font-size: 14px; }
       .tabs a { font-size: 11px; padding: 5px 8px; }
+      #briefing.is-floating { right:10px; bottom:10px; width:calc(100vw - 20px); }
     }
   </style>
 </head>
@@ -154,6 +157,7 @@
     <h1>⚓ Trip Planner</h1>
     <nav class="tabs">
       <a href="/">⌂ Home</a>
+      <a href="/dashboard/trip-planner/briefing-viewer?region=usec_md&from=planner">▣ Map</a>
       <a href="/dashboard/account.html">◉ Account</a>
     </nav>
   </header>
@@ -178,7 +182,7 @@
       <select id="target"><option value="baltimore_canyon_line">Baltimore Canyon</option><option value="hudson_canyon">Hudson Canyon</option><option value="wilmington_canyon">Wilmington Canyon</option><option value="norfolk_canyon">Norfolk Canyon</option><option value="toms_canyon">Toms Canyon</option><option value="carteret_canyon">Carteret Canyon</option><option value="lindenkohl_canyon">Lindenkohl Canyon</option><option value="spencer_canyon">Spencer Canyon</option><option value="poor_mans_canyon">Poor Man's Canyon</option><option value="hudson_shelf_edge">Hudson Shelf Edge</option><option value="delaware_offshore">Delaware Offshore Grounds</option><option value="new_jersey_reef">New Jersey Offshore Reef</option><option value="virginia_offshore">Virginia Offshore Grounds</option><option value="baltimore_trough">Baltimore Trough</option><option value="sausages">Sausages</option></select></section>
     </div>
 
-    <h2>Seven-day outlook — click a card to drill down, ▶ Next to step frames</h2>
+    <h2>Seven-day outlook</h2>
     <div class="day-strip" id="dayStrip">
       <div class="day-card" style="color:#7898aa">Loading forecast…</div>
     </div>
@@ -364,7 +368,11 @@
     document.querySelectorAll('.day-card').forEach(card => {
       card.addEventListener('click', (e) => {
         if (e.target.closest('.frame-next')) return;
-        selectedDayIdx = +card.dataset.dayIdx;
+        const nextDay = +card.dataset.dayIdx;
+        const briefing = document.getElementById('briefing');
+        if (nextDay === selectedDayIdx) briefing.classList.toggle('is-floating');
+        else briefing.classList.add('is-floating');
+        selectedDayIdx = nextDay;
         renderDayStrip();
         renderBriefing();
       });
