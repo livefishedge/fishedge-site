@@ -98,7 +98,8 @@
     .day-badge.caution { background: #a36d10; color: #fff; }
     .day-badge.no-go   { background: #9b1c1c; color: #fff; }
     .day-badge.unknown { background: #4b5563; color: #fff; }
-    .day-score { font-size:11px; color:#b9eaff; font-weight:700; margin-top:2px; }
+    .day-score { display:block; border:0; background:transparent; padding:0; font-size:11px; font-family:inherit; font-weight:700; color:#b9eaff; margin-top:2px; cursor:pointer; text-align:left; }
+    .day-score:hover { color:#67d9ff; text-decoration:underline; }
     .day-card .day-summary {
       font-size: 11px; color: #a9dbea; line-height: 1.5;
     }
@@ -124,6 +125,7 @@
       font-size: 12px; color: #91afc0; margin: 0;
       display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
     }
+    .score-breakdown { margin:12px 0 0; padding:10px 12px 10px 26px; background:#07111d; border:1px solid #24465d; border-radius:5px; color:#a9dbea; font-size:11px; line-height:1.6; }
     .briefing .map-link {
       display: inline-block; margin-top: 14px; padding: 8px 14px;
       background: #15324a; border: 1px solid #67d9ff; color: #edfaff;
@@ -319,7 +321,7 @@
     const wave = scalar(f.wave_height_ft, tp), swell = scalar(f.swell_height_ft, tp);
     const period = scalar(f.wave_period_s, tp), vis = scalar(f.visibility_mi, tp);
     const inletWave = scalar(f.wave_height_ft, ip), inletCurrent = scalar(f.current_speed_kn, ip);
-    if (![wind, gust, wave, swell, period].every(Number.isFinite)) return { score:null, decision:'UNKNOWN', reason:'Required target forecast data unavailable' };
+    if (![wind, gust, wave, swell, period].every(Number.isFinite)) return { score:null, decision:'UNKNOWN', reason:'Required target forecast data unavailable', components:[] };
     const hard = gust > 30 || wave > 6 || (inletWave != null && inletWave > 5);
     const penalties = [
       [boundedPenalty(wave + 0.35 * swell, 2.0, 6.0), .35],
@@ -329,9 +331,11 @@
       [inletWave == null ? 0 : boundedPenalty(inletWave, 1.5, 5), .10],
       [inletCurrent == null ? 0 : boundedPenalty(inletCurrent, 1.5, 4), .05],
     ];
-    const penalty = penalties.reduce((sum, p) => sum + (p[0] == null ? 0 : p[0] * p[1]), 0);
+    const labels = ['Sea state / swell', 'Wind / gust', 'Wave period', 'Visibility', 'Inlet waves', 'Inlet current'];
+    const components = penalties.map((p, i) => ({ label: labels[i], weight: p[1], penalty: p[0] == null ? 0 : p[0], contribution: p[0] == null ? 0 : p[0] * p[1] }));
+    const penalty = components.reduce((sum, p) => sum + p.contribution, 0);
     const score = Math.round(100 * (1 - penalty));
-    return { score, decision: hard || score < 45 ? 'NO-GO' : score < 70 ? 'CAUTION' : 'GO', reason: hard ? 'Operating limit exceeded' : score < 70 ? 'Conditions near configured limits' : 'Within configured limits' };
+    return { score, decision: hard || score < 45 ? 'NO-GO' : score < 70 ? 'CAUTION' : 'GO', reason: hard ? 'Operating limit exceeded' : score < 70 ? 'Conditions near configured limits' : 'Within configured limits', components };
   }
 
   function aggregateByDay() {
@@ -354,7 +358,7 @@
         maxWind: Math.round(frameWind),
         maxWave: +frameWave.toFixed(1),
         maxSwell: +frameSwell.toFixed(1),
-        score: scored.score, decision: scored.decision, scoreReason: scored.reason,
+        score: scored.score, decision: scored.decision, scoreReason: scored.reason, scoreComponents: scored.components,
       });
     }
 
@@ -367,12 +371,14 @@
       const maxSwell = Math.max(...frames.map(f => f.maxSwell));
       const validScores = frames.map(f => f.score).filter(Number.isFinite);
       const score = validScores.length ? Math.min(...validScores) : null;
+      const scoreFrame = validScores.length ? frames.find(f => f.score === score) : null;
       const dayDecision = frames.some(f => f.decision === 'NO-GO') ? 'NO-GO' : frames.some(f => f.decision === 'UNKNOWN') ? 'UNKNOWN' : frames.some(f => f.decision === 'CAUTION') ? 'CAUTION' : 'GO';
       return {
         date,
         decision: dayDecision,
         score,
         scoreReason: frames.find(f => f.decision === dayDecision)?.scoreReason || 'No complete score',
+        scoreComponents: scoreFrame ? scoreFrame.scoreComponents : [],
         maxWind: Math.round(maxWind),
         maxWave: +maxWave.toFixed(1),
         maxSwell: +maxSwell.toFixed(1),
@@ -396,7 +402,7 @@
           <div class="day-date">${d.date}</div>
           <div class="day-time">${frameLabel(frame.time)} <span class="frame-counter">frame ${idx + 1} / ${frameCount}</span></div>
           <div class="day-badge ${badgeClass(d.decision)}">${d.decision}</div>
-          <div class="day-score">${d.score == null ? 'Score unavailable' : `Suitability ${d.score}/100`}</div>
+          <button class="day-score" type="button" aria-label="Show score breakdown">${d.score == null ? 'Score unavailable' : `Score ${d.score}/100`}</button>
           <div class="day-summary">
             Wind ${frame.maxWind}kt · Seas ${frame.maxWave}ft${frame.maxSwell > 0.5 ? ` · Swell ${frame.maxSwell}ft` : ''}
           </div>
@@ -444,6 +450,7 @@
     const advice = d.decision === 'GO' ? 'Good day to fish — go.' :
                    d.decision === 'CAUTION' ? 'Workable, but watch conditions.' :
                    'Stay in — conditions exceed safe limits.';
+    const breakdown = (d.scoreComponents || []).map(c => `<li>${c.label}: ${(c.contribution * 100).toFixed(0)} points deducted (${(c.weight * 100).toFixed(0)}% weight)</li>`).join('');
     document.getElementById('briefing').innerHTML = `
       <h3>${when}</h3>
       <p class="briefing-summary">
@@ -456,6 +463,7 @@
         ${d.score == null ? 'Suitability unavailable' : `Suitability ${d.score}/100`} · ${d.scoreReason}
         Frame ${idx + 1}/${d.frames.length} · Wind ${frame.maxWind}kt · Seas ${frame.maxWave}ft${frame.maxSwell > 0.5 ? ` · Swell ${frame.maxSwell}ft` : ''}
       </p>
+      ${breakdown ? `<ul class="score-breakdown"><li><strong>Score breakdown</strong></li>${breakdown}</ul>` : '<p class="score-breakdown">Score breakdown unavailable: required data are missing.</p>'}
       <a class="map-link" href="/dashboard/trip-planner/briefing-viewer?date=${d.date}&region=usec_md&target=${encodeURIComponent(targetSelect?.value || 'baltimore_canyon_line')}&from=planner">View on full map →</a>
     `;
   }
