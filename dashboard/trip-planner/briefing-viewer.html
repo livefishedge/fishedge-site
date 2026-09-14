@@ -136,6 +136,7 @@
     #bv-trip-recorder button{ padding:5px 7px; border:1px solid #466078; border-radius:4px; background:#132333; color:#d6e5f2; font-size:10px; font-weight:700; }
     #bv-captain-tools{ position:fixed; top:8px; right:54px; z-index:2201; display:flex; gap:4px; }
     #bv-captain-tools button{ width:30px; height:30px; padding:0; border:1px solid #466078; border-radius:5px; background:rgba(5,11,16,.9); color:#d6e5f2; font:700 11px monospace; cursor:pointer; }
+    #bv-captain-tools button[data-action="reset-map"]{ font-size:16px; }
     #bv-captain-tools button[aria-pressed="true"]{ border-color:#67d9ff; color:#67d9ff; background:#15324a; }
     @media(max-width:640px){#bv-trip-recorder{top:40px;right:8px;left:8px;justify-content:space-between}#bv-captain-tools{right:48px;top:6px}}
 
@@ -289,6 +290,7 @@
       <button id="bv-locate-me" type="button" title="Locate me" aria-label="Locate me">◎</button>
       <button id="bv-waypoint-tool" type="button" title="Add waypoint" aria-label="Add waypoint" aria-pressed="false">✚</button>
       <button id="bv-td-grid" type="button" title="Loran-C TD Grid" aria-label="Loran-C TD Grid" aria-pressed="false">TD</button>
+      <button id="bv-reset-map" type="button" data-action="reset-map" title="Reset map view" aria-label="Reset map view">↺</button>
     </div>
   </div>
   <div id="bv-active-layer-strip" class="bv-active-layer-strip" aria-label="Active map layers"></div>
@@ -1103,6 +1105,8 @@
       // schematic and its marks are explicitly not map-scale distances.
       controls: ol.control.defaults.defaults({ attribution: true, rotate: false }),
     });
+    const initialMapCenter = map.getView().getCenter()?.slice() || null;
+    const initialMapZoom = map.getView().getZoom();
 
     // CO-OPS stations are map features, not hidden briefing controls. Click a
     // marker to open its hourly prediction curve at the map location.
@@ -1130,6 +1134,9 @@
     let lastWaveReadoutCoordinate = null;
     const clickMarkerOverlay = new ol.Overlay({ element: clickMarker, positioning: 'center-center', stopEvent: false });
     map.addOverlay(clickMarkerOverlay);
+    // The tide chart/readout is an overlay above the map. Wheel gestures on
+    // it must not leak into OpenLayers and accidentally zoom the whole map.
+    waveReadout?.addEventListener('wheel', event => event.stopPropagation(), { passive: true });
     readoutToggle?.addEventListener('click', event => {
       event.preventDefault(); event.stopPropagation();
       const collapsed = waveReadout.classList.toggle('is-collapsed');
@@ -1302,6 +1309,20 @@
       navigator.geolocation.getCurrentPosition(pos => {
         map.getView().animate({ center: ol.proj.fromLonLat([pos.coords.longitude, pos.coords.latitude], mapProjection), zoom: Math.max(map.getView().getZoom() || 6, 9), duration: 500 });
       }, () => { document.getElementById('bv-mode-context').textContent = 'Location unavailable'; });
+    });
+    document.getElementById('bv-reset-map')?.addEventListener('click', event => {
+      event.preventDefault(); event.stopPropagation();
+      waypointMode = false;
+      document.getElementById('bv-waypoint-tool')?.setAttribute('aria-pressed', 'false');
+      document.getElementById('bv-mode-context').textContent = '';
+      map.getView().cancelAnimations?.();
+      if (initialMapCenter) map.getView().setCenter(initialMapCenter);
+      if (Number.isFinite(initialMapZoom)) map.getView().setZoom(initialMapZoom);
+      mapGestureCanvases?.forEach(canvas => { if (canvas) canvas.style.transform = ''; });
+      mapPointerDragging = false;
+      viewportTransitioning = false;
+      mapGestureOriginCenter = null;
+      scheduleOverlayRedraw();
     });
     document.getElementById('bv-waypoint-tool')?.addEventListener('click', event => {
       waypointMode = !waypointMode;
