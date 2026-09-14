@@ -97,6 +97,8 @@
     .day-badge.go      { background: #1e6e3a; color: #fff; }
     .day-badge.caution { background: #a36d10; color: #fff; }
     .day-badge.no-go   { background: #9b1c1c; color: #fff; }
+    .day-badge.unknown { background: #4b5563; color: #fff; }
+    .day-score { font-size:11px; color:#b9eaff; font-weight:700; margin-top:2px; }
     .day-card .day-summary {
       font-size: 11px; color: #a9dbea; line-height: 1.5;
     }
@@ -230,7 +232,7 @@
     return 'GO';
   }
   function badgeClass(d) {
-    return { GO: 'go', CAUTION: 'caution', 'NO-GO': 'no-go' }[d] || 'caution';
+    return { GO: 'go', CAUTION: 'caution', 'NO-GO': 'no-go', UNKNOWN: 'unknown' }[d] || 'unknown';
   }
   function dayLabel(dateStr, idx) {
     const d = new Date(dateStr + 'T12:00:00Z');
@@ -285,10 +287,17 @@
     virginia_offshore:[-75.2,36.75], baltimore_trough:[-74.1,37.6],
     sausages:[-73.95,38.0]
   };
+  const INLET_POINTS = {
+    'ocean-city-md':[-75.0919,38.3286], 'indian-river-inlet-de':[-75.0589,38.61],
+    'cape-may-nj':[-74.9594,38.9686], 'lewes-de':[-75.1197,38.7817],
+    'chesapeake-bay-bt':[-76.1133,36.9667], 'solomons-island-md':[-76.4511,38.3172],
+    'atlantic-city-nj':[-74.4184,39.3554], 'sandy-hook-nj':[-74.0094,40.4669], 'montauk-ny':[-71.9597,41.0482]
+  };
   function targetPoint() {
     const option = targetSelect && targetSelect.selectedOptions && targetSelect.selectedOptions[0];
     return option && option.dataset.lon ? [+option.dataset.lon, +option.dataset.lat] : TARGET_POINTS[targetSelect?.value];
   }
+  function inletPoint() { return INLET_POINTS[inletSelect?.value]; }
   function nearestIndex(values, value) {
     if (!Array.isArray(values) || !values.length || !Number.isFinite(value)) return -1;
     let best = 0, delta = Infinity; values.forEach((v, i) => { const d = Math.abs(Number(v) - value); if (d < delta) { delta = d; best = i; } }); return best;
@@ -298,6 +307,31 @@
     const row = nearestIndex(forecast.lats, point[1]); const col = nearestIndex(forecast.lons, point[0]);
     const value = row >= 0 && col >= 0 && grid && grid[row] ? grid[row][col] : null;
     return Number.isFinite(value) ? [value] : [];
+  }
+  function scalar(grid, point) { const values = targetGridValue(grid, point); return values.length ? Number(values[0]) : null; }
+  function boundedPenalty(value, comfort, limit) {
+    if (!Number.isFinite(value)) return null;
+    return Math.max(0, Math.min(1, (value - comfort) / (limit - comfort)));
+  }
+  function scoreFrame(f) {
+    const tp = targetPoint(), ip = inletPoint();
+    const wind = scalar(f.wind_speed_kn, tp), gust = scalar(f.wind_gust_kn, tp);
+    const wave = scalar(f.wave_height_ft, tp), swell = scalar(f.swell_height_ft, tp);
+    const period = scalar(f.wave_period_s, tp), vis = scalar(f.visibility_mi, tp);
+    const inletWave = scalar(f.wave_height_ft, ip), inletCurrent = scalar(f.current_speed_kn, ip);
+    if (![wind, gust, wave, swell, period].every(Number.isFinite)) return { score:null, decision:'UNKNOWN', reason:'Required target forecast data unavailable' };
+    const hard = gust > 30 || wave > 6 || (inletWave != null && inletWave > 5);
+    const penalties = [
+      [boundedPenalty(wave + 0.35 * swell, 2.0, 6.0), .35],
+      [boundedPenalty(Math.max(wind, gust * .8), 12, 30), .25],
+      [boundedPenalty(6 - period, 1, 4), .15],
+      [vis == null ? 0 : boundedPenalty(10 - vis, 0, 8), .10],
+      [inletWave == null ? 0 : boundedPenalty(inletWave, 1.5, 5), .10],
+      [inletCurrent == null ? 0 : boundedPenalty(inletCurrent, 1.5, 4), .05],
+    ];
+    const penalty = penalties.reduce((sum, p) => sum + (p[0] == null ? 0 : p[0] * p[1]), 0);
+    const score = Math.round(100 * (1 - penalty));
+    return { score, decision: hard || score < 45 ? 'NO-GO' : score < 70 ? 'CAUTION' : 'GO', reason: hard ? 'Operating limit exceeded' : score < 70 ? 'Conditions near configured limits' : 'Within configured limits' };
   }
 
   function aggregateByDay() {
@@ -314,11 +348,13 @@
       const frameWind = winds.length ? Math.max(...winds) : 0;
       const frameWave = waves.length ? Math.max(...waves) : 0;
       const frameSwell = swells.length ? Math.max(...swells) : 0;
+      const scored = scoreFrame(f);
       days[d].frames.push({
         time: f.time,
         maxWind: Math.round(frameWind),
         maxWave: +frameWave.toFixed(1),
         maxSwell: +frameSwell.toFixed(1),
+        score: scored.score, decision: scored.decision, scoreReason: scored.reason,
       });
     }
 
@@ -329,9 +365,14 @@
       const maxWind = Math.max(...frames.map(f => f.maxWind));
       const maxWave = Math.max(...frames.map(f => f.maxWave));
       const maxSwell = Math.max(...frames.map(f => f.maxSwell));
+      const validScores = frames.map(f => f.score).filter(Number.isFinite);
+      const score = validScores.length ? Math.min(...validScores) : null;
+      const dayDecision = frames.some(f => f.decision === 'NO-GO') ? 'NO-GO' : frames.some(f => f.decision === 'UNKNOWN') ? 'UNKNOWN' : frames.some(f => f.decision === 'CAUTION') ? 'CAUTION' : 'GO';
       return {
         date,
-        decision: decision(maxWind, maxWave),
+        decision: dayDecision,
+        score,
+        scoreReason: frames.find(f => f.decision === dayDecision)?.scoreReason || 'No complete score',
         maxWind: Math.round(maxWind),
         maxWave: +maxWave.toFixed(1),
         maxSwell: +maxSwell.toFixed(1),
@@ -355,6 +396,7 @@
           <div class="day-date">${d.date}</div>
           <div class="day-time">${frameLabel(frame.time)} <span class="frame-counter">frame ${idx + 1} / ${frameCount}</span></div>
           <div class="day-badge ${badgeClass(d.decision)}">${d.decision}</div>
+          <div class="day-score">${d.score == null ? 'Score unavailable' : `Suitability ${d.score}/100`}</div>
           <div class="day-summary">
             Wind ${frame.maxWind}kt · Seas ${frame.maxWave}ft${frame.maxSwell > 0.5 ? ` · Swell ${frame.maxSwell}ft` : ''}
           </div>
@@ -411,6 +453,7 @@
       </p>
       <p class="briefing-detail">
         <span class="day-badge ${badgeClass(d.decision)}">${d.decision}</span>
+        ${d.score == null ? 'Suitability unavailable' : `Suitability ${d.score}/100`} · ${d.scoreReason}
         Frame ${idx + 1}/${d.frames.length} · Wind ${frame.maxWind}kt · Seas ${frame.maxWave}ft${frame.maxSwell > 0.5 ? ` · Swell ${frame.maxSwell}ft` : ''}
       </p>
       <a class="map-link" href="/dashboard/trip-planner/briefing-viewer?date=${d.date}&region=usec_md&target=${encodeURIComponent(targetSelect?.value || 'baltimore_canyon_line')}&from=planner">View on full map →</a>

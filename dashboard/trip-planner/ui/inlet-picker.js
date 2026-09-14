@@ -179,6 +179,8 @@
     host.innerHTML = render(state); bind();
 
     function snapshot() {
+      const dep = host.querySelector('#ip-departure');
+      const ret = host.querySelector('#ip-return');
       const depIso = dep.value ? new Date(dep.value).toISOString() : null;
       const retIso = ret.value ? new Date(ret.value).toISOString() : null;
       return {
