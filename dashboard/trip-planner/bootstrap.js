@@ -29,7 +29,7 @@
     },
     target: {
       id: 'baltimore-canyon-line',
-      label: 'Baltimore Canyon line',
+      label: 'Baltimore Canyon',
       kind: 'corridor',
       geometry: { type: 'LineString', coordinates: [[-74.78, 38.08], [-74.48, 38.18], [-74.17, 38.30]] },
       lookup_points: [[-74.78, 38.08], [-74.17, 38.30]],

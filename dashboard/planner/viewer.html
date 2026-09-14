@@ -165,7 +165,7 @@
   //     (continuous field, not dot heatmap)
   //   - Currents: kept streamlines + particles from previous version
   //     (was already good)
-  //   - Static context: Baltimore Canyon line + 6 inlets as OL vector
+  //   - Static context: Baltimore Canyon + 6 inlets as OL vector
   //     layers (anchors the visualization to the captain's world)
   // ============================================================
   const qs = new URLSearchParams(location.search);
@@ -195,7 +195,7 @@
   const canyonSource = new ol.source.Vector({
     features: [new ol.Feature({
       geometry: new ol.geom.LineString(CANYON_LINE_COORDS),
-      name: 'Baltimore Canyon line',
+      name: 'Baltimore Canyon',
     })],
   });
   const canyonLayer = new ol.layer.Vector({
@@ -203,7 +203,7 @@
     style: new ol.style.Style({
       stroke: new ol.style.Stroke({ color: '#7d8aff', width: 2.5, lineDash: [6, 4] }),
       text: new ol.style.Text({
-        text: 'Baltimore Canyon line',
+        text: 'Baltimore Canyon',
         font: 'bold 12px ui-monospace, monospace',
         fill: new ol.style.Fill({ color: '#7d8aff' }),
         stroke: new ol.style.Stroke({ color: '#07111d', width: 3 }),

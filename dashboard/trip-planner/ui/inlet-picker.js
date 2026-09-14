@@ -28,7 +28,7 @@
   const CANYON_TARGETS = Object.freeze({
     baltimore_canyon_line: Object.freeze({
       id: 'baltimore-canyon-line',
-      label: 'Baltimore Canyon line',
+      label: 'Baltimore Canyon',
       kind: 'corridor',
       geometry: Object.freeze({
         type: 'LineString',
