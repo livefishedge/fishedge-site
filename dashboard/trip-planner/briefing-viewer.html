@@ -163,7 +163,8 @@
     #bv-wave-readout{ position:fixed; right:12px; bottom:8px; z-index:10000; display:none; min-width:220px; max-width:min(300px,calc(100vw - 24px)); padding:8px 10px; background:rgba(5,11,16,.96); border:1px solid #8bd7ff; border-radius:6px; color:#d6e5f2; box-shadow:0 8px 24px rgba(0,0,0,.45); font:11px/1.45 monospace; cursor:grab; touch-action:none; }
     #bv-wave-readout.is-collapsed{min-width:0;max-width:190px;padding:5px 8px;font-size:10px;line-height:1.25}
     #bv-wave-readout.is-collapsed .bv-readout-toggle{display:none}
-    #bv-wave-readout .bv-readout-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+    #bv-wave-readout .bv-readout-head{display:flex;align-items:center;justify-content:space-between;gap:8px;touch-action:none;cursor:grab}
+    #bv-wave-readout{touch-action:auto;cursor:auto}
     #bv-wave-readout .bv-readout-toggle{border:1px solid #55758c;border-radius:3px;background:#132333;color:#d6e5f2;cursor:pointer;font:700 12px monospace;padding:0 4px}
     #bv-wave-readout .bv-readout-body{ display:grid; gap:4px; margin-top:5px; }
     #bv-wave-readout .bv-readout-time{ color:#9fb0c3; font-size:9px; padding-bottom:2px; border-bottom:1px solid rgba(255,255,255,.12); }
@@ -1159,18 +1160,30 @@
     function makeDraggable(element) {
       if (!element) return;
       let startX = 0, startY = 0, originLeft = 0, originTop = 0, moved = false;
+      let dragPointer = null;
+      const endDrag = () => {
+        const pointer = dragPointer;
+        dragPointer = null;
+        if (pointer !== null && element.hasPointerCapture?.(pointer)) element.releasePointerCapture(pointer);
+        element.style.cursor = '';
+      };
       element.addEventListener('pointerdown', event => {
+        if (!event.isPrimary) { endDrag(); return; }
         if (event.button !== undefined && event.button !== 0) return;
+        // Only the header moves the readout. Chart pinches must not capture
+        // two pointers into a single shared drag origin.
+        if (element === waveReadout && !event.target.closest?.('.bv-readout-head')) return;
         const interactive = event.target.closest?.('.bv-readout-toggle, button, input, select');
         if (interactive || (element.id !== 'bv-wave-key' && event.target.closest?.('summary'))) return;
         const rect = element.getBoundingClientRect();
         startX = event.clientX; startY = event.clientY;
         originLeft = rect.left; originTop = rect.top; moved = false;
+        dragPointer = event.pointerId;
         element.setPointerCapture?.(event.pointerId);
         element.style.cursor = 'grabbing';
       });
       element.addEventListener('pointermove', event => {
-        if (!element.hasPointerCapture?.(event.pointerId)) return;
+        if (dragPointer !== event.pointerId || !element.hasPointerCapture?.(event.pointerId)) return;
         const dx = event.clientX - startX, dy = event.clientY - startY;
         if (!moved && Math.hypot(dx, dy) < 4) return;
         moved = true;
@@ -1181,14 +1194,13 @@
         element.style.right = 'auto'; element.style.bottom = 'auto';
       });
       element.addEventListener('pointerup', event => {
+        if (dragPointer !== event.pointerId) return;
         if (moved) element.dataset.dragMoved = '1';
-        element.releasePointerCapture?.(event.pointerId);
-        element.style.cursor = 'grab';
+        endDrag();
       });
-      element.addEventListener('pointercancel', event => {
-        element.releasePointerCapture?.(event.pointerId);
-        element.style.cursor = 'grab';
-      });
+      element.addEventListener('pointercancel', endDrag);
+      element.addEventListener('lostpointercapture', endDrag);
+      window.addEventListener('blur', endDrag);
     }
     makeDraggable(waveReadout);
     makeDraggable(document.getElementById('bv-wave-key'));
@@ -2877,7 +2889,9 @@
       nativePhaseRedrawQueued = true;
       requestAnimationFrame(() => {
         nativePhaseRedrawQueued = false;
-        drawOverlaysForProduct();
+        // Do not repaint tiles against a moving view while its canvases
+        // still carry a transform from the previous rendered view.
+        scheduleOverlayRedraw();
       });
     }
     let waveMaskImage = null;
