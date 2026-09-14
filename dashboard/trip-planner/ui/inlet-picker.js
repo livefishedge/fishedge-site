@@ -189,6 +189,16 @@
         target_area: CANYON_TARGETS[state.target],
         departure_iso: depIso,
         return_iso: retIso,
+        status: 'planned',
+        route_polyline: global.FishEdgeTripStorage?.encodePolyline([
+          [INLETS[state.inlet].lon, INLETS[state.inlet].lat],
+          ...((CANYON_TARGETS[state.target] && CANYON_TARGETS[state.target].lookup_points) || []),
+        ]),
+        route_distance_nm: global.FishEdgeTripStorage?.routeDistanceNm([
+          [INLETS[state.inlet].lon, INLETS[state.inlet].lat],
+          ...((CANYON_TARGETS[state.target] && CANYON_TARGETS[state.target].lookup_points) || []),
+        ]),
+        route_approximate: true,
       };
     }
     loadGroundCatalog(() => {
