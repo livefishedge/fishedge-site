@@ -1215,7 +1215,7 @@
     const initialMapCenter = map.getView().getCenter()?.slice() || null;
     const initialMapZoom = map.getView().getZoom();
     function positionCaptainTools() {
-      const tools = document.getElementById('bv-captain-tools');
+      const tools = document.getElementById('captain-tools');
       if (!tools) return;
       const headers = ['.bv-toolbar', '.bv-framebar', '#bv-active-layer-strip', '.bv-map-field-shell']
         .map(selector => document.querySelector(selector))
@@ -1230,8 +1230,8 @@
         .map(selector => document.querySelector(selector)).filter(Boolean).forEach(node => headerObserver.observe(node));
     }
     window.addEventListener('resize', positionCaptainTools, { passive: true });
-    const captainTools = document.getElementById('bv-captain-tools');
-    const captainDrag = captainTools?.querySelector('.bv-tools-drag');
+    const captainTools = document.getElementById('captain-tools');
+    const captainDrag = captainTools?.querySelector('.captain-drag-handle');
     if (captainTools && captainDrag) {
       let drag = null;
       const finishToolDrag = () => {
@@ -1559,16 +1559,19 @@
     const distanceLayer = new ol.layer.Vector({ source: distanceSource, zIndex: 2200, style: new ol.style.Style({ stroke: new ol.style.Stroke({ color: '#4fc3f7', width: 3 }), image: new ol.style.Circle({ radius: 5, fill: new ol.style.Fill({ color: '#4fc3f7' }), stroke: new ol.style.Stroke({ color: '#071017', width: 2 }) }) }) });
     map.addLayer(distanceLayer);
     const distanceNm = (a,b) => { const r=3440.065, p=Math.PI/180, dlat=(b[1]-a[1])*p, dlon=(b[0]-a[0])*p; const h=Math.sin(dlat/2)**2+Math.cos(a[1]*p)*Math.cos(b[1]*p)*Math.sin(dlon/2)**2; return r*2*Math.atan2(Math.sqrt(h),Math.sqrt(1-h)); };
-    document.getElementById('captain-locate-btn')?.addEventListener('click', () => {
+    document.addEventListener('click', event => {
+      if (!event.target.closest('#captain-locate-btn, #captain-locate-btn-combined')) return;
       if (!navigator.geolocation) { document.getElementById('bv-mode-context').textContent = 'Location unavailable on this device'; return; }
       navigator.geolocation.getCurrentPosition(pos => {
         map.getView().animate({ center: ol.proj.fromLonLat([pos.coords.longitude, pos.coords.latitude], mapProjection), zoom: Math.max(map.getView().getZoom() || 6, 9), duration: 500 });
       }, () => { document.getElementById('bv-mode-context').textContent = 'Location permission denied'; });
-    });
+    }, { passive: false });
     document.getElementById('captain-add-tool')?.addEventListener('click', event => {
       waypointMode = !waypointMode;
       event.currentTarget.setAttribute('aria-pressed', String(waypointMode));
       event.currentTarget.classList.toggle('active', waypointMode);
+      const panel = document.getElementById('captain-pts-panel');
+      panel?.classList.toggle('visible', waypointMode || plannerWaypoints.length > 0);
       document.getElementById('bv-mode-context').textContent = waypointMode ? 'Waypoint mode · click map to add' : '';
     });
     document.getElementById('captain-dist-tool')?.addEventListener('click', event => {
