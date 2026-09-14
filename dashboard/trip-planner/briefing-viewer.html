@@ -1423,6 +1423,8 @@
       map.getView().cancelAnimations?.();
       if (initialMapCenter) map.getView().setCenter(initialMapCenter);
       if (Number.isFinite(initialMapZoom)) map.getView().setZoom(initialMapZoom);
+      plannerWaypointOverlays?.splice(0).forEach(overlay => map.removeOverlay(overlay));
+      plannerWaypoints?.splice(0);
       mapGestureCanvases?.forEach(canvas => { if (canvas) canvas.style.transform = ''; });
       mapPointerDragging = false;
       viewportTransitioning = false;
