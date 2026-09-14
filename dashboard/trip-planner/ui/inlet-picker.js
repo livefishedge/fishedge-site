@@ -60,6 +60,23 @@
   };
 
   const GROUND_DATA_URL = '/dashboard/data/fishing-grounds.json';
+  // Operational target list for usec_md. The source layer contains hundreds
+  // of survey labels (buoys, access zones, and duplicate polygons); these are
+  // the named offshore grounds exposed as trip targets. usec_south gets its
+  // own catalog when that region is enabled.
+  const CURATED_GROUND_NAMES = new Set([
+    '17 Fathoms', '17 Fathoms Bank', 'Axel Carlson Reef', 'Barnegat Light Reef',
+    'Manasquan Inlet Reef', 'Sandy Hook Ground', 'Sea Bright Ground',
+    'Shrewsbury Rock', 'Klondike (Shark River)', 'Mussel Bed', 'Mussel Bank',
+    'Oil Wreck', 'Romer Shoal', 'The Cigar', '21 Mile Hill', '3 Mile Hill',
+    '26 Mile (Big) Hill or Lump', 'Barnegat, South End Ridge', 'Barnegat, North End Ridge',
+    'Manasquan (Southeast) Ridge', 'Ambrose Ridge', 'Lightship Ridge',
+    'Scotland Ridge', 'Lindenkohl Canyon', 'Spencer Canyon', 'Toms Canyon',
+    'Carteret Canyon', 'Hudson Canyon', 'Baltimore Canyon', 'Wilmington Canyon',
+    'Norfolk Canyon', "Poor Man's Canyon", 'Sausages', 'Miah Maull Shoal',
+    'Chincoteague Shoal', 'Winter Quarter Shoal', 'Ocean City Shoal',
+    'Offshore Southeast', 'Cartwright Area', 'Acid Water or Stain', 'Mako',
+  ]);
   function groundId(name) {
     const slug = String(name).toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
     return `ground-${slug || 'unnamed'}`;
@@ -77,6 +94,7 @@
       const lon = Number(point && point[0]); const lat = Number(point && point[1]);
       if (!name || !Number.isFinite(lon) || !Number.isFinite(lat) || lon < -77 || lon > -71 || lat < 35 || lat > 41) continue;
       const key = name.toLowerCase(); if (seen.has(key)) continue;
+      if (!CURATED_GROUND_NAMES.has(name)) continue;
       let id = groundId(name); let suffix = 2;
       while (usedIds.has(id)) id = `${groundId(name)}-${suffix++}`;
       CANYON_TARGETS[id] = Object.freeze({ id, label: name, kind: 'ground', lookup_points: Object.freeze([[lon, lat]]), description: `${name} offshore fishing ground${feature.source ? ` (${feature.source})` : ''}.`, source: feature.source || null });
@@ -110,7 +128,7 @@
       <div class="ip-row">
         <section class="ip-card"><h3>Home inlet</h3><div class="ip-card-fields">
         <div class="ip-field">
-          <label for="ip-inlet">Home inlet</label>
+          <label class="sr-only" for="ip-inlet">Home inlet</label>
           <select id="ip-inlet">${opts}</select>
         </div>
         <div class="ip-field">
@@ -124,7 +142,7 @@
         </div></section>
         <section class="ip-card"><h3>Target fishing grounds</h3>
         <div class="ip-field">
-          <label for="ip-target">Offshore ground</label>
+          <label class="sr-only" for="ip-target">Offshore ground</label>
           <select id="ip-target">${Object.entries(targets).map(([k, v]) =>
             `<option value="${html(k)}"${k === state.target ? ' selected' : ''}>${html(v.label)}</option>`
           ).join('')}</select>

@@ -61,7 +61,9 @@
       background: #15324a; color: #edfaff; border: 1px solid #31546b;
       padding: 6px 10px; border-radius: 4px; font: inherit; min-width: 240px;
     }
-    .planner-choice-card { flex: 1 1 360px; display:flex; flex-direction:column; gap:8px; padding:14px 16px; background:#0a1929; border:1px solid #31546b; border-radius:8px; }
+    .planner-choice-card { flex: 1 1 360px; min-width:0; max-width:100%; box-sizing:border-box; display:flex; flex-direction:column; gap:8px; padding:14px 16px; background:#0a1929; border:1px solid #31546b; border-radius:8px; }
+    .planner-choice-card select, .planner-choice-card input { max-width:100%; box-sizing:border-box; }
+    .planner-choice-card label[for="inlet"], .planner-choice-card label[for="target"] { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); }
     .planner-choice-card h2 { margin:0; }
 
     .day-strip {
@@ -437,13 +439,14 @@
   // the dashboard picker. The compact option list is hydrated after first
   // paint so a slow data request never blocks the page.
   fetch('/dashboard/data/fishing-grounds.json', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(payload => {
+    const curated = new Set(['17 Fathoms','17 Fathoms Bank','Axel Carlson Reef','Barnegat Light Reef','Manasquan Inlet Reef','Sandy Hook Ground','Sea Bright Ground','Shrewsbury Rock','Klondike (Shark River)','Mussel Bed','Mussel Bank','Oil Wreck','Romer Shoal','The Cigar','21 Mile Hill','3 Mile Hill','26 Mile (Big) Hill or Lump','Barnegat, South End Ridge','Barnegat, North End Ridge','Manasquan (Southeast) Ridge','Ambrose Ridge','Lightship Ridge','Scotland Ridge','Lindenkohl Canyon','Spencer Canyon','Toms Canyon','Carteret Canyon','Hudson Canyon','Baltimore Canyon','Wilmington Canyon','Norfolk Canyon',"Poor Man's Canyon",'Sausages','Miah Maull Shoal','Chincoteague Shoal','Winter Quarter Shoal','Ocean City Shoal','Offshore Southeast','Cartwright Area','Acid Water or Stain','Mako']);
     const seen = new Set(Array.from(targetSelect.options).map(o => o.textContent.trim().toLowerCase()));
     const used = new Set(Array.from(targetSelect.options).map(o => o.value));
     const group = document.createElement('optgroup'); group.label = 'Regional offshore grounds';
     for (const feature of (payload && payload.features) || []) {
       const name = String(feature && feature.name || '').trim(); const p = feature && feature.point;
       const lon = Number(p && p[0]); const lat = Number(p && p[1]);
-      if (!name || !Number.isFinite(lon) || !Number.isFinite(lat) || lon < -77 || lon > -71 || lat < 35 || lat > 41 || seen.has(name.toLowerCase())) continue;
+      if (!name || !curated.has(name) || !Number.isFinite(lon) || !Number.isFinite(lat) || lon < -76.5 || lon > -71.5 || lat < 35.5 || lat > 40.5 || seen.has(name.toLowerCase())) continue;
       const slug = 'ground-' + name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
       let id = slug || 'ground-unnamed'; let n = 2; while (used.has(id)) id = `${slug}-${n++}`;
       const option = document.createElement('option'); option.value = id; option.textContent = name; group.appendChild(option); seen.add(name.toLowerCase()); used.add(id);
