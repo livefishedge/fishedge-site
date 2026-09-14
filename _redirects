@@ -1,3 +1,5 @@
+/dashboard /dashboard/ 301
+/planner /planner/ 301
 /planner/viewer.html /dashboard/trip-planner/briefing-viewer 302
 /planner/* /dashboard/planner/:splat 200
 /trip-planner/briefing-viewer /dashboard/trip-planner/briefing-viewer.html 200
