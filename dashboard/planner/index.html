@@ -160,9 +160,9 @@
   <header class="top">
     <h1>⚓ Trip Planner</h1>
     <nav class="tabs">
-      <a href="/">⌂ Home</a>
-      <a href="/dashboard/trip-planner/briefing-viewer?region=usec_md&from=planner">▣ Map</a>
-      <a href="/dashboard/account.html">◉ Account</a>
+      <a href="/">Home</a>
+      <a href="/dashboard/trip-planner/briefing-viewer?region=usec_md&from=planner">Map</a>
+      <a href="/dashboard/account.html">Account</a>
     </nav>
   </header>
 
@@ -418,12 +418,17 @@
         if (e.target.closest('.frame-next')) return;
         const nextDay = +card.dataset.dayIdx;
         const briefing = document.getElementById('briefing');
-        if (nextDay === selectedDayIdx) briefing.classList.toggle('is-floating');
-        else briefing.classList.add('is-floating');
+        briefing.classList.add('is-floating');
         selectedDayIdx = nextDay;
         renderDayStrip();
         renderBriefing();
       });
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.day-card') && !e.target.closest('#briefing')) {
+        document.getElementById('briefing')?.classList.remove('is-floating');
+      }
     });
 
     // Frame-next button click → advance that day's frame
@@ -460,7 +465,7 @@
       </p>
       <p class="briefing-detail">
         <span class="day-badge ${badgeClass(d.decision)}">${d.decision}</span>
-        ${d.score == null ? 'Suitability unavailable' : `Suitability ${d.score}/100`} · ${d.scoreReason}
+        ${d.score == null ? 'Score unavailable' : `Score ${d.score}/100`} · ${d.scoreReason}
         Frame ${idx + 1}/${d.frames.length} · Wind ${frame.maxWind}kt · Seas ${frame.maxWave}ft${frame.maxSwell > 0.5 ? ` · Swell ${frame.maxSwell}ft` : ''}
       </p>
       ${breakdown ? `<ul class="score-breakdown"><li><strong>Score breakdown</strong></li>${breakdown}</ul>` : '<p class="score-breakdown">Score breakdown unavailable: required data are missing.</p>'}
