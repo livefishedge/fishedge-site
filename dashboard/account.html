@@ -96,6 +96,13 @@
         '<button id="save-boat-btn" type="button" style="width:100%;padding:10px;margin-top:10px;background:var(--accent);border:0;border-radius:7px;color:#fff;font-weight:700;cursor:pointer">Save boat information</button>' +
         '<div id="boat-save-status" role="status" style="font-size:.78rem;margin-top:8px;min-height:1em"></div>' +
       '</details>' +
+      '<details id="trip-recording-settings" style="margin-top:18px;border-top:1px solid var(--border);padding-top:14px;text-align:left">' +
+        '<summary style="cursor:pointer;color:var(--accent2);font-weight:700">Trip recording</summary>' +
+        '<label style="display:flex;gap:8px;align-items:flex-start;font-size:.78rem;opacity:.78;line-height:1.4;margin-top:10px"><input id="trip-recording-default" type="checkbox" ' + ((user.user_metadata && user.user_metadata.trip_recording_default !== false) ? 'checked' : '') + ' /> Automatically record location when a trip map opens</label>' +
+        '<p style="font-size:.74rem;opacity:.55;line-height:1.4">Turn this off to require manual recording for each trip. Your browser will still ask for location permission.</p>' +
+        '<button id="save-trip-recording" type="button" style="width:100%;padding:10px;margin-top:8px;background:var(--accent);border:0;border-radius:7px;color:#fff;font-weight:700;cursor:pointer">Save recording setting</button>' +
+        '<div id="trip-recording-status" role="status" style="font-size:.78rem;margin-top:8px;min-height:1em"></div>' +
+      '</details>' +
       '<button id="logout-btn" type="button">Sign out</button>' +
       '<button id="edit-profile-btn" type="button" style="width:100%;padding:12px;background:transparent;border:1px solid var(--accent2);color:var(--accent2);border-radius:8px;font-size:0.95rem;font-weight:700;cursor:pointer;transition:background 0.15s;margin-top:10px;">Edit Profile</button>' +
       '<a href="/" style="display:block;text-align:center;padding:13px;background:var(--accent2);color:#050b10;border-radius:8px;font-size:1rem;font-weight:700;text-decoration:none;margin-top:16px;">Home</a>';
@@ -199,6 +206,7 @@
       attachLogout();
       attachEditProfile();
       attachBoatInfo();
+      attachTripRecording();
     } else {
       // No session. If the URL hash had an expired-link signature we
       // captured at the top of init(), render the Link Expired page.
@@ -475,6 +483,24 @@
         status.textContent = 'Boat information saved.'; status.className = 'ok';
       } catch (e) { status.textContent = 'Could not save boat information. Try again.'; status.className = 'err'; }
       btn.disabled = false; btn.textContent = 'Save boat information';
+    });
+  }
+
+  function attachTripRecording() {
+    var btn = document.getElementById('save-trip-recording');
+    if (!btn) return;
+    var checkbox = document.getElementById('trip-recording-default');
+    btn.addEventListener('click', async function() {
+      var status = document.getElementById('trip-recording-status');
+      btn.disabled = true; btn.textContent = 'Saving…'; status.textContent = '';
+      var enabled = !!checkbox.checked;
+      try {
+        localStorage.setItem('fishedge:trip-recording-default', enabled ? 'true' : 'false');
+        var result = await sb.auth.updateUser({ data: { trip_recording_default: enabled } });
+        if (result.error) throw result.error;
+        status.textContent = 'Trip recording setting saved.'; status.className = 'ok';
+      } catch (e) { status.textContent = 'Could not save recording setting. Try again.'; status.className = 'err'; }
+      btn.disabled = false; btn.textContent = 'Save recording setting';
     });
   }
 

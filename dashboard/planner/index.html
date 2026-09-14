@@ -434,7 +434,12 @@
       });
     }
 
-    const sortedDates = Object.keys(days).sort().slice(0, 7);
+    const today = new Date();
+    const start = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
+    const end = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 7);
+    const startKey = start.toISOString().slice(0, 10);
+    const endKey = end.toISOString().slice(0, 10);
+    const sortedDates = Object.keys(days).sort().filter(date => date >= startKey && date <= endKey).slice(0, 9);
     return sortedDates.map(date => {
       const d = days[date];
       const frames = d.frames.sort((a, b) => a.time.localeCompare(b.time));
