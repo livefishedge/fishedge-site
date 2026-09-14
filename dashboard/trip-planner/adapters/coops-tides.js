@@ -34,6 +34,9 @@
     'chesapeake-bay-bt':       { station_id: '8573364', label: 'Chesapeake Bay Bridge Tunnel, VA', lat: 36.9667, lon: -76.1133 },
     'lewes-de':                { station_id: '8557689', label: 'Lewes, DE (Breakwater Harbor)', lat: 38.7817, lon: -75.1197 },
     'solomons-island-md':      { station_id: '8577330', label: 'Solomons Island, MD',    lat: 38.3172, lon: -76.4511 },
+    'atlantic-city-nj':         { station_id: '8534720', label: 'Atlantic City, NJ', lat: 39.3554, lon: -74.4184 },
+    'sandy-hook-nj':            { station_id: '8531680', label: 'Sandy Hook, NJ', lat: 40.4669, lon: -74.0094 },
+    'montauk-ny':               { station_id: '8510560', label: 'Montauk, NY', lat: 41.0482, lon: -71.9597 },
   };
 
   function pad2(n) { return String(n).padStart(2, '0'); }

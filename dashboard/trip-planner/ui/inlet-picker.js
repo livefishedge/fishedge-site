@@ -16,6 +16,9 @@
     'lewes-de':              { station_id: '8557689', label: 'Lewes, DE',              lat: 38.7817, lon: -75.1197 },
     'chesapeake-bay-bt':     { station_id: '8573364', label: 'Chesapeake Bay Bridge Tunnel, VA', lat: 36.9667, lon: -76.1133 },
     'solomons-island-md':    { station_id: '8577330', label: 'Solomons Island, MD',    lat: 38.3172, lon: -76.4511 },
+    'atlantic-city-nj':      { station_id: '8534720', label: 'Atlantic City, NJ', lat: 39.3554, lon: -74.4184 },
+    'sandy-hook-nj':         { station_id: '8531680', label: 'Sandy Hook, NJ', lat: 40.4669, lon: -74.0094 },
+    'montauk-ny':            { station_id: '8510560', label: 'Montauk, NY', lat: 41.0482, lon: -71.9597 },
   };
 
   // Targets are operational areas, not single fishing points.  The line is
@@ -38,6 +41,9 @@
       lookup_points: Object.freeze([[-74.78, 38.08], [-74.17, 38.30]]),
       description: 'A broad operating corridor along the Baltimore Canyon system.',
     }),
+    hudson_canyon: Object.freeze({ id:'hudson-canyon', label:'Hudson Canyon', kind:'corridor', lookup_points:Object.freeze([[-73.2,39.7],[-72.6,39.4]]), description:'Hudson Canyon offshore fishing grounds.' }),
+    wilmington_canyon: Object.freeze({ id:'wilmington-canyon', label:'Wilmington Canyon', kind:'corridor', lookup_points:Object.freeze([[-73.8,38.4],[-73.2,38.1]]), description:'Wilmington Canyon offshore fishing grounds.' }),
+    norfolk_canyon: Object.freeze({ id:'norfolk-canyon', label:'Norfolk Canyon', kind:'corridor', lookup_points:Object.freeze([[-74.8,37.2],[-74.2,36.9]]), description:'Norfolk Canyon offshore fishing grounds.' }),
   });
 
   function todayIso() {

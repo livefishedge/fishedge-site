@@ -156,8 +156,12 @@
         <option value="lewes-de">Lewes, DE</option>
         <option value="chesapeake-bay-bt">Chesapeake Bay Bridge Tunnel, VA</option>
         <option value="solomons-island-md">Solomons Island, MD</option>
+        <option value="atlantic-city-nj">Atlantic City, NJ</option>
+        <option value="sandy-hook-nj">Sandy Hook, NJ</option>
+        <option value="montauk-ny">Montauk, NY</option>
       </select>
-      <span style="color:#7898aa;font-size:11px;">Target area: <strong style="color:#edfaff">Baltimore Canyon line</strong></span>
+      <label for="target">Offshore grounds:</label>
+      <select id="target"><option value="baltimore_canyon_line">Baltimore Canyon line</option><option value="hudson_canyon">Hudson Canyon</option><option value="wilmington_canyon">Wilmington Canyon</option><option value="norfolk_canyon">Norfolk Canyon</option></select>
     </div>
 
     <h2>Five-day outlook — click a card to drill down, ▶ Next to step frames</h2>
@@ -361,7 +365,7 @@
         <span class="day-badge ${badgeClass(d.decision)}">${d.decision}</span>
         Frame ${idx + 1}/${d.frames.length} · Wind ${frame.maxWind}kt · Seas ${frame.maxWave}ft${frame.maxSwell > 0.5 ? ` · Swell ${frame.maxSwell}ft` : ''}
       </p>
-      <a class="map-link" href="/dashboard/trip-planner/briefing-viewer?date=${d.date}&region=usec_md&from=planner">View on full map →</a>
+      <a class="map-link" href="/dashboard/trip-planner/briefing-viewer?date=${d.date}&region=usec_md&target=${encodeURIComponent(targetSelect?.value || 'baltimore_canyon_line')}&from=planner">View on full map →</a>
     `;
   }
 
@@ -407,6 +411,8 @@
   }
 
   const inletSelect = document.getElementById('inlet');
+  const targetSelect = document.getElementById('target');
+  const TARGET_STORAGE_KEY = 'fishedge:planner:target';
   try {
     const saved = localStorage.getItem(INLET_STORAGE_KEY);
     if (saved) inletSelect.value = saved;
@@ -414,6 +420,8 @@
   inletSelect.addEventListener('change', () => {
     try { localStorage.setItem(INLET_STORAGE_KEY, inletSelect.value); } catch (_) { /* ignore */ }
   });
+  try { const savedTarget = localStorage.getItem(TARGET_STORAGE_KEY); if (savedTarget) targetSelect.value = savedTarget; } catch (_) { /* ignore */ }
+  targetSelect.addEventListener('change', () => { try { localStorage.setItem(TARGET_STORAGE_KEY, targetSelect.value); } catch (_) {} });
 
   renderMyTrips();
   loadForecast();

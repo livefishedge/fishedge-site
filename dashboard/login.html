@@ -190,7 +190,7 @@
       } catch(e) {}
 
       sb.auth.getSession().then(async ({ data: { session } }) => {
-        if (session && await enforceEmailVerification(session)) window.location.replace('index.html');
+        if (session && await enforceEmailVerification(session)) window.location.replace(window.location.hostname.endsWith('.pages.dev') ? '/' : 'https://fishedge.live/');
       });
 
       // ── Google Identity Services ─────────────────────────────────────────────
@@ -199,7 +199,7 @@
           /* GSI gave us a Google-issued id_token; Supabase exchanged it for a
            * session via signInWithIdToken. Redirect to dashboard. */
           showMsg('Signed in! Loading dashboard…', 'success');
-          setTimeout(function () { window.location.replace('index.html'); }, 600);
+          setTimeout(function () { window.location.replace(window.location.hostname.endsWith('.pages.dev') ? '/' : 'https://fishedge.live/'); }, 600);
         },
         onError: function (msg) {
           showMsg(msg || 'Google sign-in failed.', 'error');
@@ -384,7 +384,7 @@
 
         showMsg('Signed in! Loading dashboard…', 'success');
         btn.textContent = 'Done';
-        setTimeout(() => window.location.replace('index.html'), 600);
+        setTimeout(() => window.location.replace(window.location.hostname.endsWith('.pages.dev') ? '/' : 'https://fishedge.live/'), 600);
       });
     })();
   </script>
