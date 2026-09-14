@@ -2244,6 +2244,7 @@
     }
 
     function drawOverlaysForProduct() {
+      if (pageIsMagnified()) return;
       clearOverlays();
       const def = PRODUCTS[currentProduct];
       const waveProduct = ['wave_composite', 'wave_height_ft', 'swell_height_ft', 'wind_wave_height_ft'].includes(currentProduct);
@@ -3336,6 +3337,7 @@
     }
 
     function startWavePacketAnimation() {
+      if (pageIsMagnified()) return;
       if (wavePacketRaf) return;
       wavePacketLastTs = 0;
       const tick = ts => {
@@ -4360,6 +4362,7 @@
     }
 
     function startParticleAnimation() {
+      if (pageIsMagnified()) return;
       // Seed newly enabled layers even when another particle layer already
       // owns the shared RAF. The old early return left Currents empty when it
       // was checked while Wind was already playing.
@@ -4678,6 +4681,26 @@
     // one redraw after the gesture settles instead of rebuilding all overlay
     // canvases repeatedly in the same burst.
     let overlayRedrawTimer = 0;
+    // Browser page magnification is independent of OpenLayers view zoom.
+    // Keep the chart readable without continuously repainting large canvas
+    // layers behind it on mobile WebKit.
+    function pageIsMagnified() {
+      return (window.visualViewport?.scale || 1) > 1.05;
+    }
+    let pageMagnificationActive = pageIsMagnified();
+    function handlePageMagnification() {
+      const active = pageIsMagnified();
+      if (active === pageMagnificationActive) return;
+      pageMagnificationActive = active;
+      if (active) {
+        pauseParticleAnimationForMapGesture();
+        stopWavePacketAnimation();
+        if (overlayRedrawTimer) { clearTimeout(overlayRedrawTimer); overlayRedrawTimer = 0; }
+      } else {
+        scheduleOverlayRedraw();
+      }
+    }
+    window.visualViewport?.addEventListener('resize', handlePageMagnification);
     let viewportTransitioning = false;
     let overlayPaintedView = null;
     function captureMapView() {
@@ -4694,7 +4717,7 @@
       if (overlayRedrawTimer) clearTimeout(overlayRedrawTimer);
       overlayRedrawTimer = setTimeout(() => {
         overlayRedrawTimer = 0;
-        if (viewportTransitioning) return;
+        if (viewportTransitioning || pageIsMagnified()) return;
         drawOverlaysForProduct();
       }, 80);
     }
