@@ -49,6 +49,11 @@
     lindenkohl_canyon: Object.freeze({ id:'lindenkohl-canyon', label:'Lindenkohl Canyon', kind:'corridor', lookup_points:Object.freeze([[-73.0,38.5],[-72.6,38.3]]), description:'Lindenkohl Canyon offshore fishing grounds.' }),
     spencer_canyon: Object.freeze({ id:'spencer-canyon', label:'Spencer Canyon', kind:'corridor', lookup_points:Object.freeze([[-72.8,38.1],[-72.4,37.9]]), description:'Spencer Canyon offshore fishing grounds.' }),
     poor_mans_canyon: Object.freeze({ id:'poor-mans-canyon', label:"Poor Man's Canyon", kind:'corridor', lookup_points:Object.freeze([[-72.7,37.8],[-72.3,37.6]]), description:"Poor Man's Canyon offshore fishing grounds." }),
+    hudson_shelf_edge: Object.freeze({ id:'hudson-shelf-edge', label:'Hudson Shelf Edge', kind:'corridor', lookup_points:Object.freeze([[-73.5,39.9],[-72.5,39.7]]), description:'Offshore shelf-edge grounds east of New Jersey.' }),
+    delaware_offshore: Object.freeze({ id:'delaware-offshore', label:'Delaware Offshore Grounds', kind:'area', lookup_points:Object.freeze([[-74.7,38.0],[-74.0,37.7]]), description:'General offshore grounds east of Delaware.' }),
+    new_jersey_reef: Object.freeze({ id:'new-jersey-reef', label:'New Jersey Offshore Reef', kind:'area', lookup_points:Object.freeze([[-74.2,39.2],[-73.7,38.9]]), description:'New Jersey offshore reef complex.' }),
+    virginia_offshore: Object.freeze({ id:'virginia-offshore', label:'Virginia Offshore Grounds', kind:'area', lookup_points:Object.freeze([[-75.5,37.0],[-74.9,36.5]]), description:'General offshore grounds east of Virginia.' }),
+    baltimore_trough: Object.freeze({ id:'baltimore-trough', label:'Baltimore Trough', kind:'area', lookup_points:Object.freeze([[-74.5,37.7],[-73.8,37.5]]), description:'Baltimore Trough offshore grounds.' }),
   });
 
   function todayIso() {
