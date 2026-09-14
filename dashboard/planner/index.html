@@ -120,6 +120,8 @@
     .day-card .day-summary {
       font-size: 11px; color: #a9dbea; line-height: 1.5;
     }
+    .day-select { display:flex; align-items:center; gap:6px; margin-top:8px; color:#a9dbea; font-size:11px; cursor:pointer; }
+    .day-select input { accent-color:#67d9ff; }
     .day-card .frame-next {
       display: block; width: 100%; margin-top: 10px;
       padding: 6px 8px;
@@ -149,6 +151,8 @@
       border-radius: 4px; text-decoration: none; font-size: 13px;
     }
     .briefing .map-link:hover { background: #1d4666; }
+    .forecast-map-link { display:inline-block; padding:8px 14px; background:#15324a; border:1px solid #67d9ff; color:#edfaff; border-radius:4px; text-decoration:none; font-size:13px; }
+    .forecast-map-link:hover { background:#1d4666; }
 
     .my-trips {
       background: #0a1929; border: 1px solid #24465d; border-radius: 8px;
@@ -239,13 +243,14 @@
     <div class="day-strip" id="dayStrip">
       <div class="day-card" style="color:#7898aa">Loading forecast…</div>
     </div>
+    <div style="margin-top:12px"><a id="full-forecast-maps" class="forecast-map-link" href="/dashboard/trip-planner/briefing-viewer?region=usec_md&from=planner">Full Forecast Maps</a></div>
 
     <div class="row-2col" style="margin-top:24px">
       <section class="briefing" id="briefing">
         <h3>Briefing</h3>
         <p class="briefing-summary" style="color:#7898aa">Loading…</p>
       </section>
-      <aside class="my-trips"><h2 style="margin:0 0 10px">Trip plan</h2><div class="my-trips-empty">Save the current plan with the Save trip button below.</div></aside>
+      <aside class="my-trips"><h2 style="margin:0 0 10px">Trip plan</h2><div id="trip-plan-summary" class="my-trips-empty">Choose your inlet, fishing grounds, and days to build a trip plan.</div></aside>
     </div>
     <div class="planner-save-actions" style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:18px;padding:14px 16px;background:#0a1929;border:1px solid #31546b;border-radius:8px">
       <button id="save-plan" type="button" style="padding:10px 16px;border:1px solid #67d9ff;border-radius:6px;background:#15324a;color:#edfaff;font-weight:700;cursor:pointer">Save trip</button>
@@ -277,6 +282,7 @@
   let selectedDayIdx = 0;
   let currentFrameIdx = [0, 0, 0, 0, 0];
   let dayAggregates = [];
+  let selectedFishingDays = new Set();
   let outsideDismissBound = false;
   const SCORE_DEFAULTS = Object.freeze({ wave:25, steepness:15, harshness:10, wind:12, gust:8, visibility:10, inletWave:12, current:8, goScore:70, cautionScore:45, noGoScore:30 });
   let scorePrefs = Object.assign({}, SCORE_DEFAULTS);
@@ -469,6 +475,7 @@
           <div class="day-time">${frameLabel(frame.time)} <span class="frame-counter">frame ${idx + 1} / ${frameCount}</span></div>
           <div class="day-badge ${badgeClass(d.decision)}">${d.decision}</div>
           <button class="day-score" type="button" aria-label="Show score breakdown">${d.score == null ? 'Score unavailable' : `Score ${d.score}/100`}</button>
+          <label class="day-select"><input type="checkbox" data-fishing-day="${i}" ${selectedFishingDays.has(d.date) ? 'checked' : ''}> Fish this day</label>
           <div class="day-summary">
             Wind ${frame.maxWind}kt · Seas ${frame.maxWave}ft${frame.maxSwell > 0.5 ? ` · Swell ${frame.maxSwell}ft` : ''}
           </div>
@@ -477,6 +484,16 @@
       `;
     }).join('');
     document.getElementById('dayStrip').innerHTML = html;
+
+    document.querySelectorAll('[data-fishing-day]').forEach(input => input.addEventListener('click', e => {
+      e.stopPropagation();
+      const date = dayAggregates[+input.dataset.fishingDay]?.date;
+      if (!date) return;
+      if (input.checked) selectedFishingDays.add(date); else selectedFishingDays.delete(date);
+      try { localStorage.setItem('fishedge:planner:fishing-days', JSON.stringify([...selectedFishingDays])); } catch (_) {}
+      renderTripPlan();
+    }));
+    renderTripPlan();
 
     // Day card click → select day (but not when clicking the frame-next button)
     document.querySelectorAll('.day-card').forEach(card => {
@@ -558,6 +575,20 @@
     `;
   }
 
+  function renderTripPlan() {
+    const host = document.getElementById('trip-plan-summary');
+    if (!host) return;
+    const inlet = inletSelect?.selectedOptions?.[0]?.textContent || 'Home inlet not selected';
+    const target = targetSelect?.selectedOptions?.[0]?.textContent || 'Target grounds not selected';
+    const days = [...selectedFishingDays].sort();
+    const selectedScores = dayAggregates.filter(d => selectedFishingDays.has(d.date)).map(d => d.score).filter(Number.isFinite);
+    const score = selectedScores.length ? Math.min(...selectedScores) : null;
+    const map = document.getElementById('full-forecast-maps');
+    if (map) map.href = `/dashboard/trip-planner/briefing-viewer?region=usec_md&target=${encodeURIComponent(targetSelect?.value || '')}&from=planner`;
+    host.className = '';
+    host.innerHTML = `<div style="line-height:1.7;font-size:12px"><strong style="color:#edfaff">${inlet}</strong><br><span style="color:#91afc0">Target:</span> ${target}<br><span style="color:#91afc0">Fishing days:</span> ${days.length ? days.map(d => new Date(`${d}T12:00:00`).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})).join(', ') : 'None selected'}<br><span style="color:#91afc0">Trip score:</span> ${score == null ? 'Select a fishing day' : `${score}/100`}</div>`;
+  }
+
   function renderMyTrips() {
     try {
       const trips = JSON.parse(localStorage.getItem(TRIPS_STORAGE_KEY) || '[]');
@@ -620,22 +651,25 @@
   const inletSelect = document.getElementById('inlet');
   const targetSelect = document.getElementById('target');
   const TARGET_STORAGE_KEY = 'fishedge:planner:target';
+  try { selectedFishingDays = new Set(JSON.parse(localStorage.getItem('fishedge:planner:fishing-days') || '[]')); } catch (_) {}
   try {
     const saved = localStorage.getItem(INLET_STORAGE_KEY);
     if (saved) inletSelect.value = saved;
   } catch (_) { /* ignore */ }
   inletSelect.addEventListener('change', () => {
     try { localStorage.setItem(INLET_STORAGE_KEY, inletSelect.value); } catch (_) { /* ignore */ }
+    renderTripPlan();
   });
   try { const savedTarget = localStorage.getItem(TARGET_STORAGE_KEY); if (savedTarget) targetSelect.value = savedTarget; } catch (_) { /* ignore */ }
   targetSelect.addEventListener('change', () => {
     try { localStorage.setItem(TARGET_STORAGE_KEY, targetSelect.value); } catch (_) {}
     if (forecast && forecast.frames) { selectedDayIdx = 0; currentFrameIdx = []; dayAggregates = aggregateByDay(); currentFrameIdx = dayAggregates.map(() => 0); renderDayStrip(); renderBriefing(); }
+    renderTripPlan();
   });
   document.getElementById('save-plan')?.addEventListener('click', () => {
     const now = new Date();
     const targetName = targetSelect.selectedOptions?.[0]?.textContent || 'selected grounds';
-    const trip = { id: 't_' + Date.now().toString(36), name: `${inletSelect.selectedOptions?.[0]?.textContent || 'Home inlet'} → ${targetName}`, inlet_key: inletSelect.value, target_id: targetSelect.value, departure_iso: now.toISOString(), return_iso: null, status: 'planned', created_iso: now.toISOString(), last_opened_iso: now.toISOString(), notes: 'Saved from Planner.' };
+    const trip = { id: 't_' + Date.now().toString(36), name: `${inletSelect.selectedOptions?.[0]?.textContent || 'Home inlet'} → ${targetName}`, inlet_key: inletSelect.value, target_id: targetSelect.value, fishing_days: [...selectedFishingDays].sort(), departure_iso: now.toISOString(), return_iso: null, status: 'planned', created_iso: now.toISOString(), last_opened_iso: now.toISOString(), notes: 'Saved from Planner.' };
     let trips = []; try { trips = JSON.parse(localStorage.getItem(TRIPS_STORAGE_KEY) || '[]'); } catch (_) {}
     trips.push(trip); localStorage.setItem(TRIPS_STORAGE_KEY, JSON.stringify(trips));
     document.getElementById('save-plan-status').textContent = 'Trip saved to Upcoming Trips.'; renderUpcomingTrips();
