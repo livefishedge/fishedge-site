@@ -227,6 +227,7 @@
   let selectedDayIdx = 0;
   let currentFrameIdx = [0, 0, 0, 0, 0];
   let dayAggregates = [];
+  let outsideDismissBound = false;
 
   function decision(maxWindKt, maxWaveFt) {
     if (maxWindKt > 25 || maxWaveFt > 6) return 'NO-GO';
@@ -425,11 +426,30 @@
       });
     });
 
-    document.addEventListener('click', (e) => {
-      if (!e.target.closest('.day-card') && !e.target.closest('#briefing')) {
-        document.getElementById('briefing')?.classList.remove('is-floating');
-      }
+    document.querySelectorAll('.day-score').forEach(button => {
+      button.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const day = +button.closest('.day-card').dataset.dayIdx;
+        const briefing = document.getElementById('briefing');
+        if (day === selectedDayIdx && briefing.classList.contains('is-floating')) {
+          briefing.classList.remove('is-floating');
+          return;
+        }
+        selectedDayIdx = day;
+        briefing.classList.add('is-floating');
+        renderDayStrip();
+        renderBriefing();
+      });
     });
+
+    if (!outsideDismissBound) {
+      document.addEventListener('click', (e) => {
+        if (!e.target.closest('.day-card') && !e.target.closest('#briefing')) {
+          document.getElementById('briefing')?.classList.remove('is-floating');
+        }
+      });
+      outsideDismissBound = true;
+    }
 
     // Frame-next button click → advance that day's frame
     document.querySelectorAll('.frame-next').forEach(btn => {
