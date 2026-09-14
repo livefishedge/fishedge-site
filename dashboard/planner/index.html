@@ -33,8 +33,10 @@
     .tabs { display: flex; gap: 6px; margin-left: auto; }
     .tabs a {
       padding: 6px 12px; border: 1px solid #31546b; border-radius: 6px;
-      font-size: 12px; color: #91afc0;
+      font-size: 12px; color: #9fb0c3; background: #0c1723; font-weight:700;
+      transition: color .15s, border-color .15s, background .15s;
     }
+    .tabs a:hover { color:#e0e6ee; border-color:#4d7dff; background:#15324a; }
     .tabs a.active {
       background: #15324a; color: #edfaff; border-color: #67d9ff;
       box-shadow: 0 0 0 1px #67d9ff inset;
@@ -67,7 +69,7 @@
     .planner-choice-card h2 { margin:0; }
 
     .day-strip {
-      display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px;
+      display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px;
     }
     .day-card {
       background: #0a1929; border: 1px solid #24465d; border-radius: 8px;
@@ -140,7 +142,7 @@
     }
 
     @media (max-width: 800px) {
-      .day-strip { grid-template-columns: repeat(5, minmax(180px, 1fr)); overflow-x: auto; padding-bottom: 6px; }
+      .day-strip { grid-template-columns: repeat(7, minmax(180px, 1fr)); overflow-x: auto; padding-bottom: 6px; }
       .row-2col { grid-template-columns: 1fr; }
       .top h1 { font-size: 14px; }
       .tabs a { font-size: 11px; padding: 5px 8px; }
@@ -176,7 +178,7 @@
       <select id="target"><option value="baltimore_canyon_line">Baltimore Canyon</option><option value="hudson_canyon">Hudson Canyon</option><option value="wilmington_canyon">Wilmington Canyon</option><option value="norfolk_canyon">Norfolk Canyon</option><option value="toms_canyon">Toms Canyon</option><option value="carteret_canyon">Carteret Canyon</option><option value="lindenkohl_canyon">Lindenkohl Canyon</option><option value="spencer_canyon">Spencer Canyon</option><option value="poor_mans_canyon">Poor Man's Canyon</option><option value="hudson_shelf_edge">Hudson Shelf Edge</option><option value="delaware_offshore">Delaware Offshore Grounds</option><option value="new_jersey_reef">New Jersey Offshore Reef</option><option value="virginia_offshore">Virginia Offshore Grounds</option><option value="baltimore_trough">Baltimore Trough</option><option value="sausages">Sausages</option></select></section>
     </div>
 
-    <h2>Five-day outlook — click a card to drill down, ▶ Next to step frames</h2>
+    <h2>Seven-day outlook — click a card to drill down, ▶ Next to step frames</h2>
     <div class="day-strip" id="dayStrip">
       <div class="day-card" style="color:#7898aa">Loading forecast…</div>
     </div>
@@ -269,6 +271,31 @@
     return out;
   }
 
+  const TARGET_POINTS = {
+    baltimore_canyon_line:[-74.48,38.18], hudson_canyon:[-72.9,39.55],
+    wilmington_canyon:[-73.5,38.25], norfolk_canyon:[-74.5,37.05],
+    toms_canyon:[-73.5,39.3], carteret_canyon:[-73.15,38.8],
+    lindenkohl_canyon:[-72.8,38.4], spencer_canyon:[-72.6,38.0],
+    poor_mans_canyon:[-72.5,37.7], hudson_shelf_edge:[-73.0,39.8],
+    delaware_offshore:[-74.3,37.85], new_jersey_reef:[-74.0,39.05],
+    virginia_offshore:[-75.2,36.75], baltimore_trough:[-74.1,37.6],
+    sausages:[-73.95,38.0]
+  };
+  function targetPoint() {
+    const option = targetSelect && targetSelect.selectedOptions && targetSelect.selectedOptions[0];
+    return option && option.dataset.lon ? [+option.dataset.lon, +option.dataset.lat] : TARGET_POINTS[targetSelect?.value];
+  }
+  function nearestIndex(values, value) {
+    if (!Array.isArray(values) || !values.length || !Number.isFinite(value)) return -1;
+    let best = 0, delta = Infinity; values.forEach((v, i) => { const d = Math.abs(Number(v) - value); if (d < delta) { delta = d; best = i; } }); return best;
+  }
+  function targetGridValue(grid, point) {
+    if (!point || !forecast || !Array.isArray(forecast.lats) || !Array.isArray(forecast.lons)) return gather(grid);
+    const row = nearestIndex(forecast.lats, point[1]); const col = nearestIndex(forecast.lons, point[0]);
+    const value = row >= 0 && col >= 0 && grid && grid[row] ? grid[row][col] : null;
+    return Number.isFinite(value) ? [value] : [];
+  }
+
   function aggregateByDay() {
     const days = {};
     for (const f of forecast.frames || []) {
@@ -276,9 +303,10 @@
       if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) continue;
       if (!days[d]) days[d] = { frames: [] };
 
-      const winds = gather(f.wind_speed_kn);
-      const waves = gather(f.wave_height_ft);
-      const swells = gather(f.swell_height_ft);
+      const point = targetPoint();
+      const winds = targetGridValue(f.wind_speed_kn, point);
+      const waves = targetGridValue(f.wave_height_ft, point);
+      const swells = targetGridValue(f.swell_height_ft, point);
       const frameWind = winds.length ? Math.max(...winds) : 0;
       const frameWave = waves.length ? Math.max(...waves) : 0;
       const frameSwell = swells.length ? Math.max(...swells) : 0;
@@ -290,7 +318,7 @@
       });
     }
 
-    const sortedDates = Object.keys(days).sort().slice(0, 5);
+    const sortedDates = Object.keys(days).sort().slice(0, 7);
     return sortedDates.map(date => {
       const d = days[date];
       const frames = d.frames.sort((a, b) => a.time.localeCompare(b.time));
@@ -433,7 +461,10 @@
     try { localStorage.setItem(INLET_STORAGE_KEY, inletSelect.value); } catch (_) { /* ignore */ }
   });
   try { const savedTarget = localStorage.getItem(TARGET_STORAGE_KEY); if (savedTarget) targetSelect.value = savedTarget; } catch (_) { /* ignore */ }
-  targetSelect.addEventListener('change', () => { try { localStorage.setItem(TARGET_STORAGE_KEY, targetSelect.value); } catch (_) {} });
+  targetSelect.addEventListener('change', () => {
+    try { localStorage.setItem(TARGET_STORAGE_KEY, targetSelect.value); } catch (_) {}
+    if (forecast && forecast.frames) { selectedDayIdx = 0; currentFrameIdx = []; dayAggregates = aggregateByDay(); currentFrameIdx = dayAggregates.map(() => 0); renderDayStrip(); renderBriefing(); }
+  });
 
   // Keep the standalone Planner on the same authoritative regional catalog as
   // the dashboard picker. The compact option list is hydrated after first
@@ -449,7 +480,7 @@
       if (!name || !curated.has(name) || !Number.isFinite(lon) || !Number.isFinite(lat) || lon < -76.5 || lon > -71.5 || lat < 35.5 || lat > 40.5 || seen.has(name.toLowerCase())) continue;
       const slug = 'ground-' + name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
       let id = slug || 'ground-unnamed'; let n = 2; while (used.has(id)) id = `${slug}-${n++}`;
-      const option = document.createElement('option'); option.value = id; option.textContent = name; group.appendChild(option); seen.add(name.toLowerCase()); used.add(id);
+      const option = document.createElement('option'); option.value = id; option.textContent = name; option.dataset.lon = lon; option.dataset.lat = lat; group.appendChild(option); seen.add(name.toLowerCase()); used.add(id);
     }
     if (group.children.length) targetSelect.appendChild(group);
   }).catch(() => { /* the curated options remain available offline */ });
