@@ -756,7 +756,7 @@
       const pts = points => points.map(p => `${x(p.t).toFixed(2)},${y(p.v).toFixed(2)}`).join(' ');
       const latestMeasured = measured.length ? measured[measured.length - 1] : null;
       const measuredMarker = latestMeasured
-        ? `<circle cx="${x(latestMeasured.t).toFixed(2)}" cy="${y(latestMeasured.v).toFixed(2)}" r="3" fill="#ffd166" stroke="#101820" stroke-width="1"/><text x="${Math.min(padL + innerW - 42, x(latestMeasured.t) + 5).toFixed(2)}" y="${Math.max(padT + 10, y(latestMeasured.v) - 5).toFixed(2)}" fill="#ffd166" font-size="8">MEASURED</text>`
+        ? `<circle cx="${x(latestMeasured.t).toFixed(2)}" cy="${y(latestMeasured.v).toFixed(2)}" r="3" fill="#ffd166" stroke="#101820" stroke-width="1"/>`
         : '';
       const ticks = [];
       for (let h = -12; h <= 168; h += 24) {
@@ -789,8 +789,8 @@
       if (targetId !== 'bv-tide-svg') {
         const summary = document.querySelector('[data-tide-summary]');
         if (summary) summary.textContent = measured.length
-          ? `Predicted + measured · latest measured ${latestMeasured.v.toFixed(2)} ft at ${new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' }).format(new Date(latestMeasured.t))} ET`
-          : 'Predicted · measured observations unavailable';
+          ? `Predicted + observation · latest ${latestMeasured.v.toFixed(2)} ft at ${new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' }).format(new Date(latestMeasured.t))} ET`
+          : 'Predicted · observations unavailable';
         return;
       }
       set('bv-tide-range', `${predictedRange.toFixed(1)} ft`);
@@ -920,7 +920,7 @@
       renderTideChart(curve, values.length ? {vmin: Math.min(...values), vmax: Math.max(...values)} : null, nextModelTideEvent(curve), observed, 'bv-tide-readout-svg');
       const summary = waveReadout.querySelector('[data-tide-summary]');
       const measured = observed.filter(p => Number.isFinite(p?.v));
-      if (summary) summary.textContent = `Predicted · ${values.length ? `${Math.min(...values).toFixed(1)}–${Math.max(...values).toFixed(1)} ft` : 'missing field data'}${measured.length ? ` · Measured at ${nearest.station.name}: ${measured.at(-1).v.toFixed(2)} ft` : ''}`;
+      if (summary) summary.textContent = `Predicted · ${values.length ? `${Math.min(...values).toFixed(1)}–${Math.max(...values).toFixed(1)} ft` : 'missing field data'}${measured.length ? ` · Observation at ${nearest.station.name}: ${measured.at(-1).v.toFixed(2)} ft` : ''}`;
     }
 
     function nativeRangeAtPoint(lon, lat) {
@@ -1270,8 +1270,8 @@
       const summary = waveReadout.querySelector('[data-tide-summary]');
       const latest = observed.filter(p => Number.isFinite(p?.t) && Number.isFinite(p?.v)).at(-1);
       if (summary) summary.textContent = latest
-        ? `Predicted + measured · latest measured ${latest.v.toFixed(2)} ft at ${new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' }).format(new Date(latest.t))} ET`
-        : 'Predicted · measured observations unavailable';
+        ? `Predicted + observation · latest ${latest.v.toFixed(2)} ft at ${new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' }).format(new Date(latest.t))} ET`
+        : 'Predicted · observations unavailable';
       waveReadout.style.display = 'block';
     }
     function drawTideStations() {
