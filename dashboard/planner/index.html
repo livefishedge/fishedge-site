@@ -191,7 +191,9 @@
   // frame's wind/wave/swell. "▶ Next" button cycles through the day's
   // 3-hour frames. Briefing card + map link use the selected frame.
   // ============================================================
-  const DATA_BASE = 'https://data.fishedge.live/usec_md/briefing/';
+  const DATA_BASE = /\.pages\.dev$/.test(location.hostname)
+    ? `${location.origin}/trip-planner/data/usec_md/briefing/`
+    : 'https://data.fishedge.live/usec_md/briefing/';
   const INLET_STORAGE_KEY = 'fished…nlet';
   const TRIPS_STORAGE_KEY = 'fished…rips';
 
@@ -359,7 +361,7 @@
         <span class="day-badge ${badgeClass(d.decision)}">${d.decision}</span>
         Frame ${idx + 1}/${d.frames.length} · Wind ${frame.maxWind}kt · Seas ${frame.maxWave}ft${frame.maxSwell > 0.5 ? ` · Swell ${frame.maxSwell}ft` : ''}
       </p>
-      <a class="map-link" href="/planner/viewer.html?date=${d.date}&region=usec_md">View on full map →</a>
+      <a class="map-link" href="/dashboard/trip-planner/briefing-viewer?date=${d.date}&region=usec_md&from=planner">View on full map →</a>
     `;
   }
 
@@ -384,9 +386,15 @@
 
   async function loadForecast() {
     try {
-      const r = await fetch(DATA_BASE + 'forecast.json');
+      const r = await fetch(DATA_BASE + 'forecast.json', { cache: 'no-store' });
       if (!r.ok) throw new Error('HTTP ' + r.status);
       forecast = await r.json();
+      if (forecast.frames_manifest?.chunks?.length) {
+        const base = new URL(forecast.frames_manifest.dir || './frames/', DATA_BASE);
+        const chunks = await Promise.all(forecast.frames_manifest.chunks.map(name => fetch(new URL(name, base), {cache:'no-store'}).then(x => x.json())));
+        forecast.frames = chunks.flatMap(chunk => Array.isArray(chunk.frames) ? chunk.frames : []);
+        if (forecast.frames.length !== Number(forecast.frames_manifest.frame_count)) throw new Error('Incomplete forecast chunks');
+      }
       dayAggregates = aggregateByDay();
       if (dayAggregates.length === 0) throw new Error('No daily aggregates');
       selectedDayIdx = 0;

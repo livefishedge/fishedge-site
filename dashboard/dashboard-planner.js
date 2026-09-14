@@ -381,9 +381,7 @@
       const realNow = target.now || {};
       const planNow = planTarget.now || {};
       for (const k of Object.keys(realNow)) {
-        if (realNow[k] != null && (planNow[k] == null || (planNow[k].value == null && planNow[k].value !== 0))) {
-          planNow[k] = realNow[k];
-        }
+        if (realNow[k] != null) planNow[k] = realNow[k];
       }
       // Overlay trip_window.hourly if real has it and fixture doesn't.
       if (target.trip_window && target.trip_window.hourly && target.trip_window.hourly.length
@@ -456,7 +454,11 @@
       // MyTripsSidebar API: mount(host, opts)
       UI.MyTripsSidebar.mount(document.getElementById('fishedge-my-trips'), {
         trips: Sto.listTrips(),
-        onLoad: (trip) => console.info('[planner] load trip', trip),
+        onLoad: (trip) => {
+          const date = trip?.departure_iso ? new Date(trip.departure_iso).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10);
+          const params = new URLSearchParams({ date, region: 'usec_md', from: 'saved-trip' });
+          window.location.href = `/dashboard/trip-planner/briefing-viewer?${params}`;
+        },
       });
     }
 
