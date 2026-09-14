@@ -433,6 +433,24 @@
   try { const savedTarget = localStorage.getItem(TARGET_STORAGE_KEY); if (savedTarget) targetSelect.value = savedTarget; } catch (_) { /* ignore */ }
   targetSelect.addEventListener('change', () => { try { localStorage.setItem(TARGET_STORAGE_KEY, targetSelect.value); } catch (_) {} });
 
+  // Keep the standalone Planner on the same authoritative regional catalog as
+  // the dashboard picker. The compact option list is hydrated after first
+  // paint so a slow data request never blocks the page.
+  fetch('/dashboard/data/fishing-grounds.json', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(payload => {
+    const seen = new Set(Array.from(targetSelect.options).map(o => o.textContent.trim().toLowerCase()));
+    const used = new Set(Array.from(targetSelect.options).map(o => o.value));
+    const group = document.createElement('optgroup'); group.label = 'Regional offshore grounds';
+    for (const feature of (payload && payload.features) || []) {
+      const name = String(feature && feature.name || '').trim(); const p = feature && feature.point;
+      const lon = Number(p && p[0]); const lat = Number(p && p[1]);
+      if (!name || !Number.isFinite(lon) || !Number.isFinite(lat) || lon < -77 || lon > -71 || lat < 35 || lat > 41 || seen.has(name.toLowerCase())) continue;
+      const slug = 'ground-' + name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      let id = slug || 'ground-unnamed'; let n = 2; while (used.has(id)) id = `${slug}-${n++}`;
+      const option = document.createElement('option'); option.value = id; option.textContent = name; group.appendChild(option); seen.add(name.toLowerCase()); used.add(id);
+    }
+    if (group.children.length) targetSelect.appendChild(group);
+  }).catch(() => { /* the curated options remain available offline */ });
+
   renderMyTrips();
   loadForecast();
   </script>

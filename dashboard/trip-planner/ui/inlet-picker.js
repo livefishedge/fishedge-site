@@ -1,6 +1,6 @@
 /*!
  * Inlet picker — top-of-planner control for selecting home inlet,
- * default departure/return times, and a named canyon-area corridor.
+ * default departure/return times, and a named offshore fishing ground.
  *
  * Source of truth for inlet metadata: coops-tides.js INLET_STATION_TABLE.
  * If the bootstrap (or any caller) hasn't loaded that table yet, we fall
@@ -25,7 +25,9 @@
   // what the captain sees; lookup_points are only sampling anchors for the
   // weather/observation adapters and are deliberately not exposed as the
   // target identity.
-  const CANYON_TARGETS = Object.freeze({
+  // Legacy export name retained for adapter compatibility; entries are
+  // extended from the authoritative regional fishing-grounds asset below.
+  const CANYON_TARGETS = {
     baltimore_canyon_line: Object.freeze({
       id: 'baltimore-canyon-line',
       label: 'Baltimore Canyon',
@@ -55,7 +57,39 @@
     virginia_offshore: Object.freeze({ id:'virginia-offshore', label:'Virginia Offshore Grounds', kind:'area', lookup_points:Object.freeze([[-75.5,37.0],[-74.9,36.5]]), description:'General offshore grounds east of Virginia.' }),
     baltimore_trough: Object.freeze({ id:'baltimore-trough', label:'Baltimore Trough', kind:'area', lookup_points:Object.freeze([[-74.5,37.7],[-73.8,37.5]]), description:'Baltimore Trough offshore grounds.' }),
     sausages: Object.freeze({ id:'sausages', label:'Sausages', kind:'area', lookup_points:Object.freeze([[-74.0,37.4],[-73.4,37.2]]), description:'Sausages offshore fishing grounds.' }),
-  });
+  };
+
+  const GROUND_DATA_URL = '/dashboard/data/fishing-grounds.json';
+  function groundId(name) {
+    const slug = String(name).toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    return `ground-${slug || 'unnamed'}`;
+  }
+  function html(value) {
+    return String(value == null ? '' : value).replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[ch]));
+  }
+  function mergeGroundCatalog(payload) {
+    const seen = new Set(Object.values(CANYON_TARGETS).map(t => String(t.label || '').trim().toLowerCase()));
+    const usedIds = new Set(Object.keys(CANYON_TARGETS));
+    let added = 0;
+    for (const feature of (payload && payload.features) || []) {
+      const name = String(feature && feature.name || '').trim();
+      const point = feature && feature.point;
+      const lon = Number(point && point[0]); const lat = Number(point && point[1]);
+      if (!name || !Number.isFinite(lon) || !Number.isFinite(lat) || lon < -77 || lon > -71 || lat < 35 || lat > 41) continue;
+      const key = name.toLowerCase(); if (seen.has(key)) continue;
+      let id = groundId(name); let suffix = 2;
+      while (usedIds.has(id)) id = `${groundId(name)}-${suffix++}`;
+      CANYON_TARGETS[id] = Object.freeze({ id, label: name, kind: 'ground', lookup_points: Object.freeze([[lon, lat]]), description: `${name} offshore fishing ground${feature.source ? ` (${feature.source})` : ''}.`, source: feature.source || null });
+      seen.add(key); usedIds.add(id); added++;
+    }
+    return added;
+  }
+  function loadGroundCatalog(onLoaded) {
+    if (typeof fetch !== 'function') return;
+    fetch(GROUND_DATA_URL, { cache: 'no-store' }).then(r => r.ok ? r.json() : null)
+      .then(payload => { const added = mergeGroundCatalog(payload); if (added && onLoaded) onLoaded(); })
+      .catch(() => {});
+  }
 
   function todayIso() {
     const d = new Date();
@@ -68,9 +102,9 @@
     return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
   }
 
-  function render(state) {
+  function render(state, targets = CANYON_TARGETS) {
     const opts = Object.entries(INLETS).map(([k, v]) =>
-      `<option value="${k}"${k === state.inlet ? ' selected' : ''}>${v.label}</option>`
+      `<option value="${html(k)}"${k === state.inlet ? ' selected' : ''}>${html(v.label)}</option>`
     ).join('');
     return `
       <div class="ip-row">
@@ -91,8 +125,8 @@
         <section class="ip-card"><h3>Target fishing grounds</h3>
         <div class="ip-field">
           <label for="ip-target">Offshore ground</label>
-          <select id="ip-target">${Object.entries(CANYON_TARGETS).map(([k, v]) =>
-            `<option value="${k}"${k === state.target ? ' selected' : ''}>${v.label}</option>`
+          <select id="ip-target">${Object.entries(targets).map(([k, v]) =>
+            `<option value="${html(k)}"${k === state.target ? ' selected' : ''}>${html(v.label)}</option>`
           ).join('')}</select>
         </div>
         </section>
@@ -110,40 +144,38 @@
       return: opts.initialReturn || plus10hIso(),
       target: opts.initialTargetId || 'baltimore_canyon_line',
     };
-    host.innerHTML = render(state);
-
-    const inlet = host.querySelector('#ip-inlet');
-    const dep = host.querySelector('#ip-departure');
-    const ret = host.querySelector('#ip-return');
-    const target = host.querySelector('#ip-target');
-    const save = host.querySelector('#ip-save');
-    const cta = host.querySelector('#ip-cta');
-
-    inlet.addEventListener('change', () => {
-      state.inlet = inlet.value;
-      opts.onChange && opts.onChange(state.inlet, snapshot());
-    });
-    [dep, ret, target].forEach(el => el.addEventListener('change', () => opts.onChange && opts.onChange(state.inlet, snapshot())));
-
-    cta.addEventListener('click', () => opts.onChange && opts.onChange(state.inlet, snapshot()));
-
-    save.addEventListener('click', () => {
-      const tripPlan = snapshot();
-      tripPlan.name = `${INLETS[state.inlet].label} · ${state.departure.replace('T', ' ')}`;
-      opts.onSave && opts.onSave(tripPlan);
-    });
+    function bind() {
+      const inlet = host.querySelector('#ip-inlet');
+      const dep = host.querySelector('#ip-departure');
+      const ret = host.querySelector('#ip-return');
+      const target = host.querySelector('#ip-target');
+      const save = host.querySelector('#ip-save');
+      const cta = host.querySelector('#ip-cta');
+      inlet.addEventListener('change', () => { state.inlet = inlet.value; opts.onChange && opts.onChange(state.inlet, snapshot()); });
+      dep.addEventListener('change', () => { state.departure = dep.value; opts.onChange && opts.onChange(state.inlet, snapshot()); });
+      ret.addEventListener('change', () => { state.return = ret.value; opts.onChange && opts.onChange(state.inlet, snapshot()); });
+      target.addEventListener('change', () => { state.target = target.value; opts.onChange && opts.onChange(state.inlet, snapshot()); });
+      cta.addEventListener('click', () => opts.onChange && opts.onChange(state.inlet, snapshot()));
+      save.addEventListener('click', () => { const tripPlan = snapshot(); tripPlan.name = `${INLETS[state.inlet].label} · ${state.departure.replace('T', ' ')}`; opts.onSave && opts.onSave(tripPlan); });
+    }
+    host.innerHTML = render(state); bind();
 
     function snapshot() {
       const depIso = dep.value ? new Date(dep.value).toISOString() : null;
       const retIso = ret.value ? new Date(ret.value).toISOString() : null;
       return {
         inlet_key: state.inlet,
-        target_id: target.value,
-        target_area: CANYON_TARGETS[target.value],
+        target_id: state.target,
+        target_area: CANYON_TARGETS[state.target],
         departure_iso: depIso,
         return_iso: retIso,
       };
     }
+    loadGroundCatalog(() => {
+      const current = snapshot();
+      state.inlet = current.inlet_key; state.target = current.target_id;
+      host.innerHTML = render(state); bind();
+    });
 
     return Object.freeze({
       getInlet: () => state.inlet,
