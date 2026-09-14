@@ -216,9 +216,10 @@
       </div>
       <div class="score-thresholds">
         <strong>Decision thresholds</strong>
-        <label>GO at or above <output id="threshold-go-out">70</output><input id="threshold-go" type="range" min="1" max="99" value="70"></label>
-        <label>CAUTION at or above <output id="threshold-caution-out">45</output><input id="threshold-caution" type="range" min="0" max="98" value="45"></label>
-        <small>Below the CAUTION threshold is NO-GO. Fixed operating-limit gates always override these preferences.</small>
+        <label>GO <output id="threshold-go-out">70</output><input id="threshold-go" type="range" min="2" max="99" value="70"></label>
+        <label>CAUTION <output id="threshold-caution-out">45</output><input id="threshold-caution" type="range" min="1" max="98" value="45"></label>
+        <label>NO-GO <output id="threshold-nogo-out">30</output><input id="threshold-nogo" type="range" min="0" max="97" value="30"></label>
+        <small>GO is at or above its threshold; Caution is between Caution and GO; No-Go is at or below its threshold. Fixed operating-limit gates always override these preferences.</small>
       </div>
       <div class="score-actions"><button type="button" id="score-apply">Apply</button><button type="button" id="score-reset">Restore defaults</button><span id="score-weight-note" style="font-size:11px;color:#7898aa;align-self:center">Weights normalize to 100%.</span></div>
     </details>
@@ -265,7 +266,7 @@
   let currentFrameIdx = [0, 0, 0, 0, 0];
   let dayAggregates = [];
   let outsideDismissBound = false;
-  const SCORE_DEFAULTS = Object.freeze({ wave:25, steepness:15, harshness:10, wind:12, gust:8, visibility:10, inletWave:12, current:8, goScore:70, cautionScore:45 });
+  const SCORE_DEFAULTS = Object.freeze({ wave:25, steepness:15, harshness:10, wind:12, gust:8, visibility:10, inletWave:12, current:8, goScore:70, cautionScore:45, noGoScore:30 });
   let scorePrefs = Object.assign({}, SCORE_DEFAULTS);
   try { scorePrefs = Object.assign(scorePrefs, JSON.parse(localStorage.getItem('fishedge:planner:score-prefs') || '{}')); } catch (_) {}
 
@@ -376,8 +377,9 @@
     const penalty = components.reduce((sum, p) => sum + p.contribution, 0);
     const score = Math.round(100 * (1 - penalty));
     const goScore = Math.max(1, Math.min(99, Number(scorePrefs.goScore) || 70));
-    const cautionScore = Math.max(0, Math.min(goScore - 1, Number(scorePrefs.cautionScore) || 45));
-    return { score, decision: hard || score < cautionScore ? 'NO-GO' : score < goScore ? 'CAUTION' : 'GO', reason: hard ? 'Operating limit exceeded' : score < cautionScore ? 'Below configured caution threshold' : score < goScore ? 'Below configured GO threshold' : 'Within configured thresholds', components };
+    const cautionScore = Math.max(1, Math.min(goScore - 1, Number(scorePrefs.cautionScore) || 45));
+    const noGoScore = Math.max(0, Math.min(cautionScore - 1, Number(scorePrefs.noGoScore) || 30));
+    return { score, decision: hard || score <= noGoScore ? 'NO-GO' : score < goScore ? 'CAUTION' : 'GO', reason: hard ? 'Operating limit exceeded' : score <= noGoScore ? 'At or below configured No-Go threshold' : score < goScore ? 'Below configured GO threshold' : 'Within configured thresholds', components };
   }
 
   function aggregateByDay() {
@@ -595,9 +597,12 @@
   function syncScoreControls() {
     scoreKeys.forEach(k => { const dom = scoreDomKey(k); const el = document.getElementById(`weight-${dom}`); const out = document.getElementById(`weight-${dom}-out`); const check = document.getElementById(`param-${dom}`); if (el) el.value = scorePrefs[k]; if (out) out.value = `${scorePrefs[k]}%`; if (check) check.checked = scorePrefs[`${k}Enabled`] !== false; });
     const go = Math.max(1, Math.min(99, Number(scorePrefs.goScore) || 70));
-    const caution = Math.max(0, Math.min(go - 1, Number(scorePrefs.cautionScore) || 45));
+    const caution = Math.max(1, Math.min(go - 1, Number(scorePrefs.cautionScore) || 45));
+    const noGo = Math.max(0, Math.min(caution - 1, Number(scorePrefs.noGoScore) || 30));
     document.getElementById('threshold-go').value = go; document.getElementById('threshold-go-out').value = go;
     document.getElementById('threshold-caution').value = caution; document.getElementById('threshold-caution-out').value = caution;
+    document.getElementById('threshold-nogo').value = noGo; document.getElementById('threshold-nogo-out').value = noGo;
+    document.getElementById('threshold-caution').max = Math.max(1, go - 1); document.getElementById('threshold-nogo').max = Math.max(0, caution - 1);
   }
   syncScoreControls();
   document.querySelectorAll('.score-setting span').forEach(span => span.addEventListener('click', e => {
@@ -606,11 +611,12 @@
     formula?.classList.toggle('is-open');
   }));
   scoreKeys.forEach(k => { const dom = scoreDomKey(k); document.getElementById(`weight-${dom}`)?.addEventListener('input', e => { document.getElementById(`weight-${dom}-out`).value = `${e.target.value}%`; }); });
-  document.getElementById('threshold-go')?.addEventListener('input', e => { document.getElementById('threshold-go-out').value = e.target.value; const c = document.getElementById('threshold-caution'); c.max = Math.max(0, Number(e.target.value) - 1); if (Number(c.value) >= Number(e.target.value)) { c.value = Math.max(0, Number(e.target.value) - 1); document.getElementById('threshold-caution-out').value = c.value; } });
-  document.getElementById('threshold-caution')?.addEventListener('input', e => { document.getElementById('threshold-caution-out').value = e.target.value; });
+  document.getElementById('threshold-go')?.addEventListener('input', e => { document.getElementById('threshold-go-out').value = e.target.value; const c = document.getElementById('threshold-caution'); c.max = Math.max(1, Number(e.target.value) - 1); if (Number(c.value) >= Number(e.target.value)) { c.value = Math.max(1, Number(e.target.value) - 1); document.getElementById('threshold-caution-out').value = c.value; } const n = document.getElementById('threshold-nogo'); n.max = Math.max(0, Number(c.value) - 1); });
+  document.getElementById('threshold-caution')?.addEventListener('input', e => { document.getElementById('threshold-caution-out').value = e.target.value; const n = document.getElementById('threshold-nogo'); n.max = Math.max(0, Number(e.target.value) - 1); if (Number(n.value) >= Number(e.target.value)) { n.value = Math.max(0, Number(e.target.value) - 1); document.getElementById('threshold-nogo-out').value = n.value; } });
+  document.getElementById('threshold-nogo')?.addEventListener('input', e => { document.getElementById('threshold-nogo-out').value = e.target.value; });
   document.getElementById('score-apply')?.addEventListener('click', () => {
     scoreKeys.forEach(k => { const dom = scoreDomKey(k); scorePrefs[k] = Number(document.getElementById(`weight-${dom}`).value); scorePrefs[`${k}Enabled`] = document.getElementById(`param-${dom}`).checked; });
-    scorePrefs.goScore = Number(document.getElementById('threshold-go').value); scorePrefs.cautionScore = Math.min(Number(document.getElementById('threshold-caution').value), scorePrefs.goScore - 1);
+    scorePrefs.goScore = Number(document.getElementById('threshold-go').value); scorePrefs.cautionScore = Math.min(Number(document.getElementById('threshold-caution').value), scorePrefs.goScore - 1); scorePrefs.noGoScore = Math.min(Number(document.getElementById('threshold-nogo').value), scorePrefs.cautionScore - 1);
     try { localStorage.setItem('fishedge:planner:score-prefs', JSON.stringify(scorePrefs)); } catch (_) {}
     if (forecast && forecast.frames) { dayAggregates = aggregateByDay(); currentFrameIdx = dayAggregates.map(() => 0); renderDayStrip(); renderBriefing(); }
   });
