@@ -760,7 +760,8 @@
         </defs>
         <circle cx="${cx}" cy="${cy}" r="${R}" fill="url(#bvMoonShadow)" stroke="#4b5868" stroke-width="1.2"/>
         <g clip-path="url(#${litClipId})">
-          <image href="/trip-planner/data/${region}/briefing/moon-texture-v1.png" x="${cx-R}" y="${cy-R}" width="${2*R}" height="${2*R}" preserveAspectRatio="xMidYMid slice"/>
+          <!-- Moon texture is a shared visual asset, not a regional data product. -->
+          <image href="/trip-planner/data/usec_md/briefing/moon-texture-v1.png?v=planner-regional-tides-v36" x="${cx-R}" y="${cy-R}" width="${2*R}" height="${2*R}" preserveAspectRatio="xMidYMid slice"/>
         </g>
         <text x="${W - 16}" y="20" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11" fill="#d6e5f2" font-weight="700">${m.name.toUpperCase()}</text>
         <text x="${W - 16}" y="36" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10" fill="#9fb0c3">${(illum*100).toFixed(0)}% lit</text>
@@ -959,6 +960,13 @@
     }
 
     function modelTideCurve(station) {
+      // Station predictions are the field-comparable CO-OPS harmonic series
+      // shipped with the regional payload. Use the gridded STOFS model only
+      // as a fallback for stations without a CO-OPS curve.
+      const stationCurve = forecastData?.tides?.curves?.[station.id];
+      if (Array.isArray(stationCurve) && stationCurve.length) return stationCurve
+        .map(point => ({t: Number(point.t), v: Number(point.v)}))
+        .filter(point => Number.isFinite(point.t) && Number.isFinite(point.v));
       return (forecastData?.frames || []).map(frame => {
         // Use the original serialized prediction directly. Do not rebuild it
         // from harmonic phase/amplitude; that changes the phase convention.
@@ -3015,7 +3023,7 @@
 
     const scalarBackdrop = document.createElement('canvas');
     function drawScalarAndWaves(heatKey) {
-      const marine = ['wave_height_ft','swell_height_ft','wind_wave_height_ft','sea_surface_temperature_f','wave_steepness','ride_harshness_index','surface_height_m'].includes(heatKey);
+      const marine = ['wave_height_ft','swell_height_ft','wind_wave_height_ft','sea_surface_temperature_f','wave_steepness','ride_harshness_index','surface_height_m','astronomical_tide_ft'].includes(heatKey);
       // clearOverlays() resets the context to backing-pixel identity. Restore
       // CSS-pixel coordinates before every scalar draw so high-DPR devices do
       // not compress the field into the upper-left corner.
