@@ -1050,7 +1050,7 @@
     // instead of reusing an older cached JSON response.
     // Bump whenever the JSON artifact changes; otherwise a Pages/browser
     // cache can keep serving a pre-calibration tide field after HTML deploy.
-    const FORECAST_DATA_BUILD = 'planner-controls-audit-v32';
+    const FORECAST_DATA_BUILD = 'planner-region-loader-v33';
     const DEV_FORECAST_URL = `/trip-planner/data/${region}/briefing/forecast.json?v=${FORECAST_DATA_BUILD}`;
     const WAVE_MASK_URL = `/trip-planner/data/${region}/briefing/native_wave_mask.png?v=${FORECAST_DATA_BUILD}`;
     const CORS_PROXY = 'https://corsproxy.io/?';
@@ -5171,8 +5171,6 @@
                            window.location.hostname.includes('pages.dev') ||
                            window.location.hostname === 'localhost' ||
                            window.location.hostname === '127.0.0.1';
-        const primaryForecastUrl = isStaging ? DEV_FORECAST_URL : FORECAST_URL;
-        forecastData = normalizeForecastPayload(await loadForecastPayload(primaryForecastUrl));
         // The viewer is a rolling operational product: never expose stale
         // frames before today or beyond the next seven days, even if a
         // backend artifact contains a longer history.
@@ -5184,25 +5182,37 @@
           const t = parseForecastTime(frame.time);
           return Number.isFinite(t) && t >= windowStart && t <= windowEnd;
         });
-        let windowFrames = framesInWindow(forecastData);
-        // The external production feed can lag during a data refresh. Use the
-        // versioned Pages artifact as a bounded fallback instead of showing a
-        // blank planner when the live payload has no current frames.
-        if (!windowFrames.length && !isStaging) {
-          const liveGeneratedAt = forecastData.generated_at;
-          const bundled = normalizeForecastPayload(await loadForecastPayload(DEV_FORECAST_URL));
-          const bundledFrames = framesInWindow(bundled);
-          if (bundledFrames.length) {
-            forecastData = bundled;
-            windowFrames = bundledFrames;
-            console.warn('[forecast] live feed stale; using bundled Pages forecast', {
-              live_generated_at: liveGeneratedAt,
-              fallback_generated_at: bundled.generated_at,
-            });
+        const expectedBbox = BBOXES[region];
+        const forecastSources = isStaging ? [DEV_FORECAST_URL] : [DEV_FORECAST_URL, FORECAST_URL];
+        const forecastErrors = [];
+        for (const sourceUrl of forecastSources) {
+          try {
+            const candidate = normalizeForecastPayload(await loadForecastPayload(sourceUrl));
+            if (candidate.region && candidate.region !== region) {
+              throw new Error(`forecast region mismatch: ${candidate.region}`);
+            }
+            const candidateBbox = (candidate.display_bbox || candidate.bbox || candidate.field_bbox || []).map(Number);
+            if (candidateBbox.length !== 4 || candidateBbox.some(value => !Number.isFinite(value))) {
+              throw new Error('forecast bbox missing');
+            }
+            if (expectedBbox && (candidateBbox[0] > expectedBbox[0] || candidateBbox[1] > expectedBbox[1] ||
+              candidateBbox[2] < expectedBbox[2] || candidateBbox[3] < expectedBbox[3])) {
+              throw new Error('forecast bbox does not cover selected region');
+            }
+            const windowFrames = framesInWindow(candidate);
+            if (!windowFrames.length) throw new Error('no current forecast frames');
+            forecastData = { ...candidate, frames: windowFrames };
+            if (sourceUrl === DEV_FORECAST_URL && !isStaging) {
+              console.warn('[forecast] using bundled regional Pages artifact');
+            }
+            break;
+          } catch (error) {
+            forecastErrors.push(`${sourceUrl}: ${error.message || error}`);
           }
         }
-        if (windowFrames.length) forecastData = { ...forecastData, frames: windowFrames };
-        else throw new Error('forecast has no frames in the rolling +168h window');
+        if (!forecastData) {
+          throw new Error(`forecast unavailable for ${region}: ${forecastErrors.join('; ')}`);
+        }
         // Dev carries a NOAA GFS diagnostic payload while the shared feed is
         // migrated off Open-Meteo. Fall back to local if the prod CDN still
         // serves the legacy schema.

@@ -39,4 +39,8 @@ assert(html.includes('function renderPlannerDistanceLayer()'), 'planner distance
 assert(html.includes("fishedge:planner:distance:v1"), 'planner distance measurements must persist');
 assert(html.includes('restorePlannerState()'), 'planner tool state must restore on reload');
 assert(!html.includes('className = \'bv-layer-details\''), 'planner Details disclosure must remain removed');
+assert(html.includes("const forecastSources = isStaging ? [DEV_FORECAST_URL] : [DEV_FORECAST_URL, FORECAST_URL]"), 'production must prefer the same-origin regional forecast artifact');
+assert(html.includes('forecast region mismatch'), 'forecast loader must reject a mismatched region');
+assert(html.includes('forecast frame chunks incomplete'), 'forecast loader must reject incomplete frame chunks');
+assert(html.includes('forecast unavailable for ${region}'), 'forecast loader must report both regional source failures');
 console.log('PASS: planner scale, labels, gust behavior, and progressive-detail contracts');
