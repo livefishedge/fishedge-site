@@ -35,7 +35,7 @@ assert(html.includes('currentParticleColor'), 'current particles must use SST-or
 assert(html.includes('Math.min(compact ? 1800 : 2400'), 'current particles must use bounded mobile/desktop caps');
 assert(html.includes("region === 'usec_south' ? [80, 90] : [65, 90]"), 'SST ranges must be region-aware');
 assert(html.includes("dataKey === 'astronomical_tide_ft'"), 'ocean raster masks must distinguish tide from wave/SST support');
-assert(html.includes('forecastData.wave_open_water_cells || forecastData.wave_water_cells || forecastData.tide_water_cells'), 'SST/wave rasters must use wave support coverage');
+assert(html.includes('forecastData.wave_water_coverage || forecastData.wave_open_water_cells || forecastData.wave_water_cells || forecastData.tide_water_cells'), 'SST/wave rasters must use wave coverage');
 assert(html.includes("input.addEventListener('change'"), 'hamburger layer toggles must redraw data layers');
 assert(html.includes('function renderPlannerDistanceLayer()'), 'planner distance renderer must rebuild all graphics');
 assert(html.includes("fishedge:planner:distance:v1"), 'planner distance measurements must persist');
