@@ -1,0 +1,42 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+
+const html = fs.readFileSync('dashboard/trip-planner/briefing-viewer.html', 'utf8');
+assert(!html.includes('new ol.control.ScaleLine()'), 'planner must not show the generic distance scale bar');
+assert(!html.includes('>View Mode:</span>'), 'planner must not show the redundant View Mode label');
+for (const mode of ['Sea State', 'Weather', 'Currents', 'Tides']) assert(html.includes(`>${mode}</button>`), `mode missing: ${mode}`);
+for (const label of ['Swell Height', 'Wave Height', 'Surface Steepness', 'Visibility', 'Feels Like', 'Humidity']) {
+  assert(html.includes(label), `canonical label missing: ${label}`);
+}
+assert(html.includes("scale: 'ALERT'"), 'surface steepness must use the alert palette');
+assert(html.includes("scale: 'RIDE'"), 'ride harshness must use the ride-comfort palette');
+assert(html.includes('const target = Math.max(70, Math.min(500, Math.round(area / 2200)))'), 'gust particles must be less frequent than wind particles');
+assert(html.includes('vec.speed / sustained.speed'), 'gust speed must scale with gust:wind ratio');
+assert(html.includes('randomValidGustParticle'), 'gusts must seed on valid gust data');
+assert(html.includes('waveReadout?.addEventListener'), 'collapsed readout must expand from any click');
+assert(html.includes('#bv-wave-readout.is-collapsed .bv-readout-toggle{display:none}'), 'collapsed readout must hide the plus control');
+const weatherDetail = html.slice(html.indexOf("weather: {"), html.indexOf("fishing: {"));
+assert(weatherDetail.includes("'cloud_low'") && weatherDetail.includes("'cloud_mid'"), 'low/mid cloud must remain in Weather Details');
+const seaDetail = html.slice(html.indexOf("sea: {"), html.indexOf("weather: {"));
+assert(!seaDetail.includes("'surface_texture'"), 'surface texture must be removed from Sea Details');
+assert(html.includes('data-layer="surface_height"'), 'Currents mode must expose Sea Surface Height anomaly contours');
+assert(html.includes("surface_height_m: ['ft', 'm']"), 'SLA unit toggle must expose imperial and metric labels');
+assert(html.includes("key === 'surface_height_m' && unitModes[key] === 'imperial'"), 'SLA imperial conversion must be implemented');
+assert(html.includes("displayUnit('surface_height_m', 'm')"), 'SLA contour labels must honor the selected unit');
+assert(html.includes("mapFields:[['sea_surface_temperature_f','Sea-surface temperature']]"), 'SST must remain the only Currents color-map field');
+assert(html.includes('const currentParticles = []'), 'currents must have an animated particle layer');
+assert(html.includes('const dt = vec.speed * 0.00035'), 'current particles must move slower than wind particles');
+assert(html.includes('CURRENT_VISUAL_SPEED_MULTIPLIER = 2.5'), 'current particle display speed must be halved to 2.5x');
+assert(html.includes('maxAge: 840 + Math.random() * 600'), 'current particle lifetime must be doubled');
+assert(html.includes('maxTrailPoints = mapEl.clientWidth < 600 ? 72 : 112'), 'current trails must remain long geographic histories');
+assert(html.includes('traceCurrentDirection(lon0, lat0, direction, maxSteps = 96)'), 'current streamlines must use bounded bidirectional geographic tracing');
+assert(html.includes('Midpoint (RK2) advection'), 'current particles must use midpoint advection');
+assert(html.includes('currentParticleColor'), 'current particles must use SST-origin tinting');
+assert(html.includes('Math.min(compact ? 1800 : 2400'), 'current particles must use bounded mobile/desktop caps');
+assert(html.includes("fixedRange: [70, 80]"), 'SST range must be 70–80°F');
+assert(html.includes("input.addEventListener('change'"), 'hamburger layer toggles must redraw data layers');
+assert(html.includes('function renderPlannerDistanceLayer()'), 'planner distance renderer must rebuild all graphics');
+assert(html.includes("fishedge:planner:distance:v1"), 'planner distance measurements must persist');
+assert(html.includes('restorePlannerState()'), 'planner tool state must restore on reload');
+assert(!html.includes('className = \'bv-layer-details\''), 'planner Details disclosure must remain removed');
+console.log('PASS: planner scale, labels, gust behavior, and progressive-detail contracts');

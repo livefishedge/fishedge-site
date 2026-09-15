@@ -1,0 +1,777 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>FishEdge Forecast Dashboard</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@10.2.1/ol.css">
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; height: 100%;
+      background: #07111d; color: #dcecf7;
+      font: 14px system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    #map { position: absolute; inset: 58px 0 0; }
+
+    .top {
+      height: 58px; display: flex; align-items: center; gap: 16px;
+      padding: 0 18px; background: #0a1929;
+      border-bottom: 1px solid #24465d;
+      position: relative; z-index: 4;
+    }
+    .top a { color: #67d9ff; text-decoration: none; }
+    .top h1 { font-size: 17px; margin: 0; color: #edfaff; }
+    .top .date { color: #91afc0; font: 12px ui-monospace, monospace; }
+    .top .live { margin-left: auto; color: #7de4b0; font-size: 11px; }
+
+    .panel-toggle {
+      position: fixed; top: 70px; right: 16px; z-index: 11;
+      width: 44px; height: 44px; border-radius: 50%;
+      background: #0a1929; border: 1px solid #31546b;
+      color: #67d9ff; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px; box-shadow: 0 4px 12px rgba(0,0,0,.5);
+      transition: transform .25s;
+    }
+    .panel-toggle:hover { background: #15324a; }
+    body.panel-open .panel-toggle { transform: rotate(90deg); }
+
+    .panel {
+      /* 2026-08-21 (Mike 14:06 ET) — transparent so OSM base layer shows through.
+         Dropped backdrop-filter blur + box-shadow that assumed a dark
+         background. Border-left stays so the panel is still distinguishable. */
+      position: fixed; z-index: 10; top: 58px; right: 0; bottom: 0;
+      width: 300px;
+      background: transparent;
+      border-left: 1px solid #31546b;
+      padding: 18px 16px 20px;
+      overflow-y: auto;
+      transition: transform .3s ease;
+    }
+    .panel h2 {
+      font-size: 13px; margin: 0 0 14px; color: #b9eaff;
+      letter-spacing: .4px; text-transform: uppercase;
+    }
+    .row {
+      display: flex; align-items: center; justify-content: space-between;
+      margin: 10px 0; color: #d0e4ed; font-size: 12px;
+    }
+    .row label { cursor: pointer; }
+    .row input[type="checkbox"], .row input[type="radio"] {
+      width: 18px; height: 18px; accent-color: #5bdcff; cursor: pointer;
+    }
+    .row input[type="range"] {
+      width: 100%; accent-color: #5bdcff; margin-top: 4px;
+    }
+    .frame-row { display: flex; align-items: center; gap: 8px; }
+    .frame-row .play-btn {
+      width: 36px; height: 36px; flex-shrink: 0;
+      background: #15324a; border: 1px solid #67d9ff; border-radius: 50%;
+      color: #67d9ff; cursor: pointer; font-size: 14px;
+      display: flex; align-items: center; justify-content: center;
+      padding: 0; line-height: 1;
+      font-family: ui-monospace, monospace;
+    }
+    .frame-row .play-btn:hover { background: #1d4666; }
+    .frame-row .play-btn:active { background: #67d9ff; color: #07111d; }
+    .source { border-top: 1px solid #24465d; margin-top: 14px; padding-top: 12px; color: #7898aa; font-size: 11px; line-height: 1.5; }
+    .source b { color: #b9eaff; }
+
+    
+
+    .ol-control button { background: #0a1929 !important; color: #dcecf7 !important; }
+    .ol-attribution { background: #0a1929cc !important; color: #8ba8b8 !important; }
+    .ol-zoom { top: auto; right: auto; left: 12px; bottom: 110px; }
+
+    #vectors {
+      position: absolute; inset: 58px 0 0;
+      width: 100%; height: calc(100% - 58px);
+      pointer-events: none; z-index: 3;
+    }
+
+    @media (max-width: 700px) {
+      .top { padding: 0 11px; gap: 9px; }
+      .top h1 { font-size: 14px; }
+      .top .live { display: none; }
+      .panel { transform: translateX(100%); }
+      body.panel-open .panel { transform: translateX(0); }
+      
+    }
+    @media (min-width: 701px) {
+      .panel-toggle { display: none; }
+      .panel { transform: translateX(0); }
+    }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <a href="/planner/">← Planner</a>
+    <h1>Forecast Dashboard</h1>
+    <span class="date" id="date"></span>
+    <span class="live">● DEV FORECAST</span>
+  </header>
+
+  <div id="map"></div>
+
+  <button class="panel-toggle" id="panelToggle" aria-label="Toggle layers panel">☰</button>
+
+  <aside class="panel" id="panel">
+    <h2>Forecast data layers</h2>
+
+    <div class="row"><label>Open-Meteo wind / waves</label>
+      <input name="source" value="om" type="radio" checked></div>
+    <div class="row"><label>CMEMS SST + currents</label>
+      <input name="source" value="cmems" type="radio"></div>
+
+    <div class="row"><label>Wind streamlines + particles</label>
+      <input id="wind" type="checkbox" checked></div>
+    <div class="row"><label>Wave-height gradient</label>
+      <input id="waves" type="checkbox" checked></div>
+    <div class="row"><label>Swell direction</label>
+      <input id="swell" type="checkbox" checked></div>
+    <div class="row"><label>Current streamlines + particles</label>
+      <input id="current" type="checkbox" checked></div>
+    <div class="row" style="flex-direction:column;align-items:stretch">
+      <label>Forecast frame</label>
+      <div class="frame-row">
+        <input id="frame" type="range" min="0" max="55" value="0">
+        <button id="playFrame" class="play-btn" aria-label="Advance to next frame">▶</button>
+      </div>
+    </div>
+
+    <div class="source">
+      <b id="status">Loading JSON forecast grids…</b><br>
+      <span id="frameTime">Frame —</span><br>
+      Grid-tied vectors · OpenLayers 10.2.1<br>
+      Region: USEC Mid-Atlantic · [-77, 36, -72, 40]
+    </div>
+  </aside>
+
+  <canvas id="vectors"></canvas>
+  <script src="https://cdn.jsdelivr.net/npm/ol@10.2.1/dist/ol.js"></script>
+  <script>
+  // ============================================================
+  // FishEdge Forecast Dashboard — viewer.html (REBUILT 2026-08-21)
+  //
+  // Major overhaul per Mike's "major overhaul" directive. Previous
+  // version scattered 50 wind barbs and 100 wave dots across a
+  // 17×21 grid — too sparse to read. New version:
+  //
+  //   - Wind: streamlines + animated particles (same grid, denser
+  //     visual coverage, reads as FLOW not as point samples)
+  //   - Waves: smooth bilinear-style gradient via overlapping circles
+  //     (continuous field, not dot heatmap)
+  //   - Currents: kept streamlines + particles from previous version
+  //     (was already good)
+  //   - Static context: Baltimore Canyon + 6 inlets as OL vector
+  //     layers (anchors the visualization to the captain's world)
+  // ============================================================
+  const qs = new URLSearchParams(location.search);
+  const date = qs.get('date') || new Date().toISOString().slice(0,10);
+  const region = qs.get('region') || 'usec_md';
+  const bbox = [-77, 36, -72, 40];
+  const extent = ol.proj.transformExtent(bbox, 'EPSG:4326', 'EPSG:3857');
+  const base = 'https://data.fishedge.live/' + region + '/briefing/';
+
+  document.getElementById('date').textContent = date;
+
+  // -------- static context: canyons + inlets (drawn as OL layers) --------
+  // Source: dashboard/trip-planner/ui/inlet-picker.js
+  const CANYON_LINE_COORDS = [
+    [-74.78, 38.08], [-74.65, 38.13], [-74.48, 38.18],
+    [-74.32, 38.24], [-74.17, 38.30],
+  ];
+  const INLETS = [
+    { id: 'ocean-city-md',         label: 'Ocean City Inlet',     lon: -75.0919, lat: 38.3286 },
+    { id: 'indian-river-inlet-de', label: 'Indian River Inlet',   lon: -75.0589, lat: 38.6100 },
+    { id: 'cape-may-nj',           label: 'Cape May',             lon: -74.9594, lat: 38.9686 },
+    { id: 'lewes-de',              label: 'Lewes',                lon: -75.1197, lat: 38.7817 },
+    { id: 'chesapeake-bay-bt',     label: 'Chesapeake Bay BT',    lon: -76.1133, lat: 36.9667 },
+    { id: 'solomons-island-md',    label: 'Solomons Island',      lon: -76.4511, lat: 38.3172 },
+  ];
+
+  const canyonSource = new ol.source.Vector({
+    features: [new ol.Feature({
+      geometry: new ol.geom.LineString(CANYON_LINE_COORDS),
+      name: 'Baltimore Canyon',
+    })],
+  });
+  const canyonLayer = new ol.layer.Vector({
+    source: canyonSource,
+    style: new ol.style.Style({
+      stroke: new ol.style.Stroke({ color: '#7d8aff', width: 2.5, lineDash: [6, 4] }),
+      text: new ol.style.Text({
+        text: 'Baltimore Canyon',
+        font: 'bold 12px ui-monospace, monospace',
+        fill: new ol.style.Fill({ color: '#7d8aff' }),
+        stroke: new ol.style.Stroke({ color: '#07111d', width: 3 }),
+        offsetY: -12,
+        placement: 'line',
+      }),
+    }),
+  });
+
+  const inletFeatures = INLETS.map(inl => new ol.Feature({
+    geometry: new ol.geom.Point(ol.proj.fromLonLat([inl.lon, inl.lat])),
+    name: inl.label,
+  }));
+  const inletLayer = new ol.layer.Vector({
+    source: new ol.source.Vector({ features: inletFeatures }),
+    style: new ol.style.Style({
+      image: new ol.style.Circle({
+        radius: 6, fill: new ol.style.Fill({ color: '#ffc94d' }),
+        stroke: new ol.style.Stroke({ color: '#0a1929', width: 2 }),
+      }),
+      text: new ol.style.Text({
+        text: '',  // populated dynamically via style function based on zoom
+        font: '11px ui-monospace, monospace',
+        fill: new ol.style.Fill({ color: '#ffc94d' }),
+        stroke: new ol.style.Stroke({ color: '#07111d', width: 3 }),
+        offsetY: 14,
+      }),
+    }),
+  });
+
+  // show inlet labels only when zoomed in enough
+  inletLayer.setStyle((feature, resolution) => {
+    const show = resolution < 4000; // ~zoom 8+
+    return new ol.style.Style({
+      image: new ol.style.Circle({
+        radius: 6, fill: new ol.style.Fill({ color: '#ffc94d' }),
+        stroke: new ol.style.Stroke({ color: '#0a1929', width: 2 }),
+      }),
+      text: show ? new ol.style.Text({
+        text: feature.get('name'),
+        font: '11px ui-monospace, monospace',
+        fill: new ol.style.Fill({ color: '#ffc94d' }),
+        stroke: new ol.style.Stroke({ color: '#07111d', width: 3 }),
+        offsetY: 14,
+      }) : null,
+    });
+  });
+
+  const map = new ol.Map({
+    target: 'map',
+    layers: [
+      new ol.layer.Tile({ source: new ol.source.OSM(), opacity: 0.40 }),
+      canyonLayer,
+      inletLayer,
+      new ol.layer.Image({
+        source: new ol.source.ImageStatic({
+          url: base + 'cmems/sst_' + date + '.png',
+          imageExtent: extent,
+          projection: 'EPSG:3857',
+        }),
+        visible: false,
+        opacity: 0.86,
+      })
+    ],
+    view: new ol.View({
+      projection: 'EPSG:3857',
+      center: ol.proj.fromLonLat([-74.5, 38]),
+      zoom: 7,
+      minZoom: 5,
+      maxZoom: 13,
+    })
+  });
+
+  const canvas = document.getElementById('vectors');
+  const ctx = canvas.getContext('2d');
+  const status = document.getElementById('status');
+  const frameTime = document.getElementById('frameTime');
+  const slider = document.getElementById('frame');
+  const checks = {
+    wind:   document.getElementById('wind'),
+    waves:  document.getElementById('waves'),
+    swell:  document.getElementById('swell'),
+    current:document.getElementById('current'),
+  };
+  const sstLayer = map.getLayers().item(3);
+  let om = null, cm = null, frames = [], fi = 0, lastFrame = performance.now();
+
+  // -------- hint.fm-style wind particles (persistent state) --------
+  // Mike (2026-08-21 16:58 ET, after sending the wind-viz research paper):
+  // replace the previous fade-along-static-pathline particles with proper
+  // hint.fm/wind advecting streamlets — each particle is moved each frame by
+  // Euler integration, leaves a short line segment between old/new positions,
+  // and respawns on age-out or bbox-exit (stochastic re-seeding). State
+  // stays across frames so each particle leaves a comet tail.
+  const particles = [];
+  for (let i = 0; i < 1000; i++) {
+    particles.push({
+      lon: bbox[0] + Math.random() * (bbox[2] - bbox[0]),
+      lat: bbox[1] + Math.random() * (bbox[3] - bbox[1]),
+      age: Math.random() * 80,
+      maxAge: 80 + Math.random() * 60,
+    });
+  }
+
+  function resize() {
+    const r = document.getElementById('map').getBoundingClientRect();
+    const d = devicePixelRatio || 1;
+    canvas.width = r.width * d;
+    canvas.height = r.height * d;
+    canvas.style.width = r.width + 'px';
+    canvas.style.height = r.height + 'px';
+    ctx.setTransform(d, 0, 0, d, 0, 0);
+  }
+  addEventListener('resize', resize);
+  map.on('moveend', resize);
+  resize();
+
+  const panelToggle = document.getElementById('panelToggle');
+  panelToggle.addEventListener('click', () => {
+    document.body.classList.toggle('panel-open');
+  });
+  map.on('click', () => {
+    if (window.matchMedia('(max-width: 700px)').matches) {
+      document.body.classList.remove('panel-open');
+    }
+  });
+
+  function finite(v) { return Number.isFinite(Number(v)); }
+  function pix(lon, lat) {
+    return map.getPixelFromCoordinate(ol.proj.fromLonLat([lon, lat]));
+  }
+  function frameDate(f) { return String(f.time || '').slice(0, 10); }
+
+  function choose() {
+    const source = document.querySelector('input[name=source]:checked').value === 'cmems' ? cm : om;
+    const all = source ? source.frames : [];
+    frames = all.filter(f => frameDate(f) === date);
+    if (!frames.length) frames = all;
+    slider.max = Math.max(0, frames.length - 1);
+    fi = Math.min(fi, Math.max(0, frames.length - 1));
+    slider.value = fi;
+  }
+
+  // -------- wind sampling + tracing --------
+  // dirDeg is meteorological FROM-direction. For visual flow we
+  // want the direction the wind is going TO (flip 180°).
+  function windAt(grid, f, lon, lat) {
+    const xs = grid.lons, ys = grid.lats;
+    const dx = xs[1] - xs[0], dy = ys[1] - ys[0];
+    const ix = Math.max(0, Math.min(xs.length - 1, Math.round((lon - xs[0]) / dx)));
+    const iy = Math.max(0, Math.min(ys.length - 1, Math.round((lat - ys[0]) / dy)));
+    const speed = Number(f.wind_speed_kn?.[iy]?.[ix]);
+    const dir = Number(f.wind_direction_deg?.[iy]?.[ix]);
+    if (!finite(speed) || !finite(dir) || speed < 0.5) return [0, 0];
+    // vector wind-is-going-to: opposite of from-direction
+    const a = (dir + 180) * Math.PI / 180;
+    const u = Math.sin(a);
+    const v = -Math.cos(a);
+    return [u * speed, v * speed]; // u, v in knots (visual scale)
+  }
+  function traceWind(grid, f, lon0, lat0, useProportionalSpeed) {
+    // 2026-08-21 (Mike 13:46 ET, 'didn't work'): with the 3x hires grid,
+    // 0.5 * (grid.lons[1] - grid.lons[0]) = 0.042 deg per step = ~11px/step,
+    // so 28 steps covered only ~310px per streamline and the canvas went
+    // from 2,667 cyan pixels (old) to 318 (hires w/ default stepDeg).
+    // Fixed stepDeg (~0.08 deg = ~20px/step) + bumped iteration cap to 50
+    // so each streamline covers ~1000px of map — similar density to the
+    // old 17x21 build, plus the hires smoothness from sub-cell velocities.
+    // 2026-08-21 14:38 ET (Mike): 'particle move speed should be
+    // proportional to actual wind speed'. Streamlines keep the fixed
+    // stepDeg (they show flow pattern, not particle motion). Particles
+    // get stepDeg * min(2.0, sp/10) so they move faster in strong
+    // wind and slower in calm — the local sp drives the scale per step.
+    const path = [];
+    let lon = lon0, lat = lat0;
+    for (let i = 0; i < 50; i++) {
+      if (lon < bbox[0] || lon > bbox[2] || lat < bbox[1] || lat > bbox[3]) break;
+      path.push([lon, lat]);
+      const [u, v] = windAt(grid, f, lon, lat);
+      const sp = Math.hypot(u, v);
+      if (sp < 0.04) break;
+      const stepScale = useProportionalSpeed ? Math.min(2.0, sp / 10) : 1;
+      const stepDeg = 0.08 * stepScale;
+      lon += (u / sp) * stepDeg * 0.8;
+      lat += (v / sp) * stepDeg * 0.8;
+    }
+    return path;
+  }
+
+  // -------- hires wind grid (client-side bilinear interpolation) --------
+  // forecast.json ships 17x21 — too coarse for hint.fm/wind smoothness.
+  // buildHiresGrid() bilinearly interpolates wind_speed_kn (scalar) and
+  // wind_direction_deg (via u/v components, proper circular interp)
+  // to a denser virtual grid. factor=3 turns 17x21 into 51x63 = 3,213
+  // cells; streamlines now differ at sub-cell positions because the
+  // direction field is interpolated, not snapped.
+  function buildHiresGrid(grid, f, factor) {
+    const srcLats = grid.lats, srcLons = grid.lons;
+    const newLats = [], newLons = [];
+    for (let i = 0; i < (srcLats.length - 1) * factor; i++) {
+      const t = i / factor, idx = Math.floor(t), frac = t - idx;
+      newLats.push(srcLats[idx] * (1 - frac) + srcLats[idx + 1] * frac);
+    }
+    for (let i = 0; i < (srcLons.length - 1) * factor; i++) {
+      const t = i / factor, idx = Math.floor(t), frac = t - idx;
+      newLons.push(srcLons[idx] * (1 - frac) + srcLons[idx + 1] * frac);
+    }
+    function interpScalar(field) {
+      if (!field) return null;
+      const out = [];
+      for (let y = 0; y < newLats.length; y++) {
+        out.push([]);
+        const yi = Math.floor(y / factor);
+        const yf = (y / factor) - yi;
+        const yi2 = Math.min(yi + 1, srcLats.length - 1);
+        for (let x = 0; x < newLons.length; x++) {
+          const xi = Math.floor(x / factor);
+          const xf = (x / factor) - xi;
+          const xi2 = Math.min(xi + 1, srcLons.length - 1);
+          const v00 = field[yi]?.[xi], v01 = field[yi]?.[xi2];
+          const v10 = field[yi2]?.[xi], v11 = field[yi2]?.[xi2];
+          if (v00 == null || v01 == null || v10 == null || v11 == null) {
+            out[y].push(null);
+          } else {
+            const v0 = v00 * (1 - xf) + v01 * xf;
+            const v1 = v10 * (1 - xf) + v11 * xf;
+            out[y].push(v0 * (1 - yf) + v1 * yf);
+          }
+        }
+      }
+      return out;
+    }
+    function interpDirection() {
+      const field = f.wind_direction_deg;
+      if (!field) return null;
+      const out = [];
+      for (let y = 0; y < newLats.length; y++) {
+        out.push([]);
+        const yi = Math.floor(y / factor);
+        const yf = (y / factor) - yi;
+        const yi2 = Math.min(yi + 1, srcLats.length - 1);
+        for (let x = 0; x < newLons.length; x++) {
+          const xi = Math.floor(x / factor);
+          const xf = (x / factor) - xi;
+          const xi2 = Math.min(xi + 1, srcLons.length - 1);
+          const a00 = field[yi]?.[xi], a01 = field[yi]?.[xi2];
+          const a10 = field[yi2]?.[xi], a11 = field[yi2]?.[xi2];
+          if (a00 == null || a01 == null || a10 == null || a11 == null) {
+            out[y].push(null);
+            continue;
+          }
+          // u = sin(deg), v = cos(deg) — interp u and v (proper circular),
+          // convert back to deg
+          const u00 = Math.sin(a00 * Math.PI / 180), v00 = Math.cos(a00 * Math.PI / 180);
+          const u01 = Math.sin(a01 * Math.PI / 180), v01 = Math.cos(a01 * Math.PI / 180);
+          const u10 = Math.sin(a10 * Math.PI / 180), v10 = Math.cos(a10 * Math.PI / 180);
+          const u11 = Math.sin(a11 * Math.PI / 180), v11 = Math.cos(a11 * Math.PI / 180);
+          const u0 = u00 * (1 - xf) + u01 * xf;
+          const v0 = v00 * (1 - xf) + v01 * xf;
+          const u1 = u10 * (1 - xf) + u11 * xf;
+          const v1 = v10 * (1 - xf) + v11 * xf;
+          const u = u0 * (1 - yf) + u1 * yf;
+          const v = v0 * (1 - yf) + v1 * yf;
+          const dir = Math.atan2(u, v) * 180 / Math.PI;
+          out[y].push((dir + 360) % 360);
+        }
+      }
+      return out;
+    }
+    return {
+      lats: newLats,
+      lons: newLons,
+      wind_speed_kn: interpScalar(f.wind_speed_kn),
+      wind_direction_deg: interpDirection(),
+    };
+  }
+
+  // -------- wind: hint.fm-style advecting particles (no static streamlines) --------
+  // 2026-08-22 (Mike): the previous static-streamlines + particles mix
+  // had two issues:
+  //   1) Streamlines from grid-aligned seeds followed near-identical paths
+  //      (after bilinear interpolation, neighboring cells have similar
+  //      wind), causing visible 'clumps' of streamlines in low-wind/sink
+  //      regions.
+  //   2) Streamlines and particles didn't always visually agree because
+  //      streamlines show the full integrated path (instantaneous snapshot)
+  //      while particles advect frame-by-frame (sampled at current position).
+  // Dropped the static streamlines entirely. Hint.fm/wind doesn't use them
+  // — it relies on dense advecting particles alone to convey the flow.
+  // 1000 particles + trail-decay buffer gives full coverage of the map.
+  function drawWind(grid, f) {
+    if (!checks.wind.checked || !f.wind_speed_kn) return;
+    const hires = buildHiresGrid(grid, f, 3);
+    const lats = hires.lats, lons = hires.lons;
+
+    // 1) trail decay — slightly fade canvas so old particle tails leave
+    // comet trails. Drawn BEFORE the new particles, AFTER the streamlines,
+    // so the streamlines stay sharp but particle tails accumulate and fade.
+    ctx.fillStyle = 'rgba(7, 17, 29, 0.06)';
+    ctx.globalAlpha = 1;
+    ctx.fillRect(0, 0, canvas.width / devicePixelRatio, canvas.height / devicePixelRatio);
+
+    // 2) flowing particles — 1000 hint.fm-style advecting streamlets.
+    // Each particle is moved each frame by Euler integration of the local
+    // (u,v) wind vector at its position (Mercator-corrected: lon step
+    // scaled by 1/cos(lat)). A short line segment between the old and new
+    // pixel positions gives the comet-tail look. Stochastic respawn on
+    // age-out or bbox-exit keeps density uniform.
+    for (const p of particles) {
+      if (p.age >= p.maxAge ||
+          p.lon < bbox[0] || p.lon > bbox[2] ||
+          p.lat < bbox[1] || p.lat > bbox[3]) {
+        // stochastic respawn at a random bbox position
+        p.lon = bbox[0] + Math.random() * (bbox[2] - bbox[0]);
+        p.lat = bbox[1] + Math.random() * (bbox[3] - bbox[1]);
+        p.age = 0;
+        p.maxAge = 80 + Math.random() * 60;
+        continue;
+      }
+      const [u, v] = windAt(hires, hires, p.lon, p.lat);
+      const sp = Math.hypot(u, v);
+      if (sp < 0.3) {
+        // no wind → mark for respawn next frame
+        p.age = p.maxAge;
+        continue;
+      }
+      // Mercator distortion: longitude step scaled by 1/cos(lat) so
+      // particles don't appear to accelerate near the pole (Mid-Atlantic
+      // bbox center ~lat 38N, cos ~0.79).
+      const cosLat = Math.cos(p.lat * Math.PI / 180);
+      const dt = sp * 0.0009; // advection scale (tuned for visual speed)
+      const oldLon = p.lon, oldLat = p.lat;
+      p.lon += (u / sp) * dt / cosLat;
+      p.lat += (v / sp) * dt;
+      p.age += 1;
+      const oldP = pix(oldLon, oldLat);
+      const newP = pix(p.lon, p.lat);
+      if (oldP && newP) {
+        const t = Math.min(1, sp / 30);
+        const fadeOut = Math.min(1, (1 - p.age / p.maxAge) * 1.5);
+        const a = (0.35 + 0.45 * t) * fadeOut;
+        ctx.strokeStyle = `rgba(${Math.round(220 + 30 * t)}, ${Math.round(230 + 20 * t)}, 255, ${a})`;
+        ctx.lineWidth = 0.8 + t * 1.0;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(oldP[0], oldP[1]);
+        ctx.lineTo(newP[0], newP[1]);
+        ctx.stroke();
+      }
+    }
+  }
+
+  // -------- smooth wave-height gradient (overlapping circles) --------
+  // Replaces drawWaveField (100 dots) with overlapping alpha circles
+  // → continuous color field at every grid cell.
+  function drawWaveGradient(grid, f) {
+    if (!checks.waves.checked || !f.wave_height_ft) return;
+    const lats = grid.lats, lons = grid.lons, z = f.wave_height_ft;
+    // Draw every grid cell with overlapping large-radius circles.
+    // Each circle's radius (~50px) is much larger than the cell step
+    // (~10px at zoom 7), so the circles overlap and blend into a
+    // smooth gradient. Alpha ramps with height for visual contrast.
+    for (let y = 0; y < lats.length; y++) {
+      for (let x = 0; x < lons.length; x++) {
+        const v = Number(z[y]?.[x]);
+        if (!finite(v)) continue;
+        const p = pix(lons[x], lats[y]);
+        if (!p) continue;
+        const t = Math.min(1, Math.max(0, v / 8));  // 0–8 ft range
+        // color: blue (calm) → cyan (mid) → green (choppy) → yellow (rough)
+        let r, g, b;
+        if (t < 0.33) {
+          const k = t / 0.33;
+          r = Math.round(40 + 30 * k);
+          g = Math.round(120 + 80 * k);
+          b = Math.round(200 + 20 * k);
+        } else if (t < 0.66) {
+          const k = (t - 0.33) / 0.33;
+          r = Math.round(70 + 50 * k);
+          g = Math.round(200 + 0 * k);
+          b = Math.round(220 - 50 * k);
+        } else {
+          const k = (t - 0.66) / 0.34;
+          r = Math.round(120 + 120 * k);
+          g = Math.round(200 - 60 * k);
+          b = Math.round(170 - 130 * k);
+        }
+        ctx.fillStyle = `rgba(${r},${g},${b},${0.28 + 0.32 * t})`;
+        ctx.beginPath();
+        // Radius scales with viewport — at zoom 7 each grid cell is
+        // ~10px apart, so 60px radius overlaps neighbors ~6x → smooth
+        const radius = 60 + 25 * t;
+        ctx.arc(p[0], p[1], radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+
+  // -------- swell direction arrows (compact, single-arrow per cell) --------
+  function drawSwell(grid, f) {
+    if (!checks.swell.checked || !f.swell_direction_deg) return;
+    const lats = grid.lats, lons = grid.lons;
+    const s = f.swell_height_ft, d = f.swell_direction_deg;
+    if (!s || !d) return;
+    for (let y = 0; y < lats.length; y += 3) {
+      for (let x = 0; x < lons.length; x += 3) {
+        const height = Number(s[y]?.[x]);
+        const deg = Number(d[y]?.[x]);
+        if (!finite(height) || !finite(deg) || height < 0.5) continue;
+        // direction is swell FROM — flip for arrow (TO direction)
+        const a = (deg + 180) * Math.PI / 180;
+        const p = pix(lons[x], lats[y]);
+        if (!p) continue;
+        const len = 12 + 14 * Math.min(1, height / 6);
+        const ex = p[0] + Math.sin(a) * len;
+        const ey = p[1] - Math.cos(a) * len;
+        ctx.strokeStyle = '#ffb15c';
+        ctx.lineWidth = 2;
+        ctx.globalAlpha = 0.85;
+        ctx.beginPath();
+        ctx.moveTo(p[0], p[1]);
+        ctx.lineTo(ex, ey);
+        ctx.stroke();
+        // arrowhead
+        const ha = 0.5;
+        ctx.beginPath();
+        ctx.moveTo(ex, ey);
+        ctx.lineTo(ex - Math.sin(a - ha) * 6, ey + Math.cos(a - ha) * 6);
+        ctx.moveTo(ex, ey);
+        ctx.lineTo(ex - Math.sin(a + ha) * 6, ey + Math.cos(a + ha) * 6);
+        ctx.stroke();
+      }
+    }
+  }
+
+  // -------- currents (kept from previous version) --------
+  function currentAt(field, f, lon, lat) {
+    const xs = field.lons, ys = field.lats;
+    const dx = xs[1] - xs[0], dy = ys[1] - ys[0];
+    const ix = Math.max(0, Math.min(xs.length - 1, Math.round((lon - xs[0]) / dx)));
+    const iy = Math.max(0, Math.min(ys.length - 1, Math.round((lat - ys[0]) / dy)));
+    const u = Number(f.u_kn?.[iy]?.[ix]);
+    const v = Number(f.v_kn?.[iy]?.[ix]);
+    return (finite(u) && finite(v)) ? [u, v] : [0, 0];
+  }
+  function trace(field, f, lon0, lat0) {
+    const path = [];
+    let lon = lon0, lat = lat0;
+    for (let i = 0; i < 28; i++) {
+      if (lon < bbox[0] || lon > bbox[2] || lat < bbox[1] || lat > bbox[3]) break;
+      path.push([lon, lat]);
+      const [u, v] = currentAt(field, f, lon, lat);
+      const sp = Math.hypot(u, v);
+      if (sp < 0.04) break;
+      const stepDeg = 0.5 * (field.lons[1] - field.lons[0]);
+      lon += (u / sp) * stepDeg * 0.8;
+      lat += (v / sp) * stepDeg * 0.8;
+    }
+    return path;
+  }
+  function drawCurrents(field, f, now) {
+    if (!checks.current.checked) return;
+    const xs = field.lons, ys = field.lats;
+    // 1) streamlines
+    for (let sy = 2; sy < ys.length; sy += 3) {
+      for (let sx = 2; sx < xs.length; sx += 3) {
+        const path = trace(field, f, xs[sx], ys[sy]);
+        if (path.length < 3) continue;
+        ctx.strokeStyle = '#5be6c0';
+        ctx.lineWidth = 1.4;
+        ctx.globalAlpha = 0.55;
+        ctx.beginPath();
+        path.forEach((p, i) => {
+          const q = pix(p[0], p[1]);
+          if (!q) return;
+          i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]);
+        });
+        ctx.stroke();
+      }
+    }
+    // 2) particles
+    const seedCount = 24;
+    const t = (now / 1400) % 1;
+    for (let i = 0; i < seedCount; i++) {
+      const fy = (i * 7) % (ys.length - 4) + 2;
+      const fx = (i * 11) % (xs.length - 4) + 2;
+      const path = trace(field, f, xs[fx], ys[fy]);
+      if (path.length < 3) continue;
+      const phase = (t + i * 0.07) % 1;
+      const at = Math.floor(phase * (path.length - 1));
+      const p = pix(path[at][0], path[at][1]);
+      if (!p) continue;
+      const [u, v] = currentAt(field, f, path[at][0], path[at][1]);
+      const sp = Math.hypot(u, v);
+      const t2 = Math.min(1, sp / 1.5);
+      const r = Math.round(91 + 100 * t2);
+      const g = Math.round(230 + 25 * t2);
+      const b = Math.round(208 - 30 * t2);
+      ctx.globalAlpha = 0.35;
+      ctx.fillStyle = `rgba(${r},${g},${b},0.35)`;
+      ctx.beginPath();
+      ctx.arc(p[0], p[1], 9, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = `rgb(${r},${g},${b})`;
+      ctx.beginPath();
+      ctx.arc(p[0], p[1], 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // -------- main draw loop --------
+  function draw(now) {
+    // 2026-08-21 (Mike 14:38 ET): drop auto-cycling. Frame advances only
+    // when the user drags the slider OR clicks the ▶ play button.
+    ctx.clearRect(0, 0, canvas.width / devicePixelRatio, canvas.height / devicePixelRatio);
+    const isCm = document.querySelector('input[name=source]:checked').value === 'cmems';
+    const source = isCm ? cm : om;
+    const f = frames[fi];
+    if (source && f) {
+      if (isCm) {
+        drawCurrents(source, f, now);
+      } else {
+        drawWaveGradient(source, f);
+        drawWind(source, f);
+        drawSwell(source, f);
+      }
+      frameTime.textContent = f.time || 'Frame —';
+    }
+    requestAnimationFrame(draw);
+  }
+
+  // -------- event wiring --------
+  document.querySelectorAll('input[name=source]').forEach(x => {
+    x.addEventListener('change', () => {
+      const cmMode = x.value === 'cmems';
+      sstLayer.setVisible(cmMode);
+      choose();
+      status.textContent = cmMode ? 'CMEMS SST + currents.json' : 'Open-Meteo forecast.json vectors';
+    });
+  });
+  Object.values(checks).forEach(x => x.addEventListener('change', choose));
+  slider.addEventListener('input', () => { fi = +slider.value; lastFrame = performance.now(); });
+  const playFrame = document.getElementById('playFrame');
+  playFrame.addEventListener('click', () => {
+    // Advance one frame at a time (wraps at end of day). Click repeatedly
+    // to step through frames like a stop-motion animator.
+    fi = (fi + 1) % Math.max(1, frames.length);
+    slider.value = fi;
+    lastFrame = performance.now();
+  });
+
+  // -------- load JSON, then start --------
+  Promise.all([
+    fetch(base + 'forecast.json').then(r => r.json()),
+    fetch(base + 'cmems/currents.json').then(r => r.json()),
+  ]).then(([a, b]) => {
+    om = a; cm = b;
+    choose();
+    const og = a.lats && a.lons ? `${a.lats.length}×${a.lons.length}` : '?';
+    const cg = b.lats && b.lons ? `${b.lats.length}×${b.lons.length}` : '?';
+    status.textContent = `JSON loaded · OM ${og} weather grid · CMEMS ${cg} current grid`;
+  }).catch(e => {
+    status.textContent = 'Forecast JSON unavailable: ' + e.message;
+  });
+
+  choose();
+  requestAnimationFrame(draw);
+  </script>
+</body>
+</html>

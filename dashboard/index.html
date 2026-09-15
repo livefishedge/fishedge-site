@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
+  <script src="/planner-spa-router.js?v=20260901-tide-route"></script>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <title>Captain's Dashboard</title>
@@ -8,42 +9,8 @@
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@10.4.0/ol.css">
 
-  <!-- Load only the small auth client synchronously. The dashboard's heavy
-       map/plot libraries are deferred so unauthenticated visitors can reach
-       the login form without downloading the 500 KB app first. -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="supabase-init.js?v=20260806c"></script>
-  <script>
-    (function fastAuthRedirect() {
-      if (!window.sb?.auth) return;
-      window.__authReady = window.__authReady || new Promise(resolve => {
-        window.__authReadyResolve = resolve;
-      });
-      // A just-completed login can need one storage/event turn before the
-      // persisted Supabase session is visible to a newly navigated document.
-      // Redirecting on the first empty read creates the intermittent black
-      // dashboard: the shell is already present, but boot is aborted.
-      window.__getSessionWithRetry = window.__getSessionWithRetry || (async function() {
-        // Supabase storage is normally available on the first read. Keep only
-        // two short retries for a just-completed login; an unauthenticated
-        // visitor should reach the login form promptly, not wait several
-        // seconds for an exhaustive retry loop.
-        for (let attempt = 0; attempt < 3; attempt++) {
-          try {
-            const { data, error } = await window.sb.auth.getSession();
-            if (!error && data?.session) return data.session;
-          } catch (_) {}
-          await new Promise(resolve => setTimeout(resolve, 120 + attempt * 140));
-        }
-        return null;
-      });
-      window.__sessionPromise = window.__sessionPromise || window.__getSessionWithRetry();
-      window.__sessionPromise.then((session) => {
-        if (!session) window.location.replace('login.html');
-      }).catch(() => {});
-    })();
-  </script>
-  <script defer src="https://cdn.jsdelivr.net/npm/ol@10.4.0/dist/ol.js"></script>
+  <script src="https://cdn.plot.ly/plotly-2.34.0.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/ol@10.4.0/dist/ol.js"></script>
 <script>
 /* Instrumentation shim for locate-me.js (same pattern as the dashboard).
    The viewer's map state is module-scoped, not on window. Patch the
@@ -65,22 +32,40 @@
   window.ol.Map = TrackedMap;
 })();
 </script>
-<script defer src="fish-locate.js?v=20260815-location-retry"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/ol-mapbox-style@13.4.1/dist/olms.js"></script>
-  <script defer src="drawMobileUvArrowsLite.js?v=20260517-arrows2"></script>
+<script src="fish-locate.js?v=20260815-location-retry"></script>
+  <script src="https://cdn.jsdelivr.net/npm/ol-mapbox-style@13.4.1/dist/olms.js"></script>
+  <script src="drawMobileUvArrowsLite.js?v=20260517-arrows2"></script>
   <!-- Auth + Analytics -->
-  <script defer src="canyon-charts.js?v=20260815h-static-data"></script>
-  <script defer src="loran-td.js?v=20260818-3"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/posthog-js@1.200.0/dist/array.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-init.js?v=20260806c"></script>
+  <script src="canyon-charts.js?v=20260815h-static-data"></script>
+  <script src="loran-td.js?v=20260818-3"></script>
+  <!-- 2026-08-19: Trip Planner as a Map | Planner tab inside the dashboard.
+       Tab bar lives in the existing #toolbar (top row). Planner overlay
+       mounts lazily when the Planner tab is clicked. -->
+  <script src="trip-planner/adapters/index.js?v=20260819-1"></script>
+  <script src="trip-planner/adapters/ndbc-realtime.js?v=20260819-1"></script>
+  <script src="trip-planner/adapters/open-meteo-marine.js?v=20260819-1"></script>
+  <script src="trip-planner/adapters/open-meteo-weather.js?v=20260819-1"></script>
+  <script src="trip-planner/adapters/coops-tides.js?v=20260901-2"></script>
+  <script src="trip-planner/adapters/nws-alerts.js?v=20260819-1"></script>
+  <script src="trip-planner/reconciler.js?v=20260819-1"></script>
+  <script src="trip-planner/decision-engine.js?v=20260819-1"></script>
+  <script src="trip-planner/storage.js?v=20260819-1"></script>
+  <script src="trip-planner/fixtures/ocean-city-normal.js?v=20260819-1"></script>
+  <script src="trip-planner/ui/inlet-picker.js?v=20260819-1"></script>
+  <script src="trip-planner/ui/compact-strip.js?v=20260819-1"></script>
+  <script src="trip-planner/ui/briefing-drawer.js?v=20260820-raster-viewer-1"></script>
+  <script src="trip-planner/ui/five-day-outlook.js?v=20260819-1"></script>
+  <script src="trip-planner/ui/my-trips-sidebar.js?v=20260819-1"></script>
+  <link rel="stylesheet" href="trip-planner/ui/planner-shell.css?v=20260819-1">
+  <script src="dashboard-planner.js?v=20260820-raster-viewer-1"></script>
+  <script src="https://cdn.jsdelivr.net/npm/posthog-js@1.200.0/dist/array.js"></script>
 
 
   <style>
     :root{ --bg:#050b10; --fg:#e0e6ee; --panel:rgba(5,11,16,0.90); --border:#1b2836; }
     html,body{ height:100%; margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,-apple-system,"Segoe UI",sans-serif; overflow:hidden; -webkit-text-size-adjust:100%; }
-    /* Do not expose the default South map while the auth gate is resolving.
-       Unauthenticated visitors should transition from this loading card to
-       login.html, never briefly see an authenticated dashboard. */
-    body.auth-pending > :not(#dashboard-boot-status):not(#global-error-overlay){ visibility:hidden !important; }
 
     /* ======= Toolbar (fixed top bar - replaces #controls) ======= */
     #toolbar{
@@ -321,21 +306,7 @@
       touch-action:none;
       z-index:20;
       cursor:crosshair;
-      background:#cfd2d4;
     }
-    #dashboard-boot-status{
-      position:fixed; inset:0; z-index:1990; display:flex; align-items:center;
-      justify-content:center; pointer-events:none; background:#cfd2d4;
-      color:#163047; font:700 14px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif;
-      transition:opacity .18s ease;
-    }
-    #dashboard-boot-status[hidden]{ display:none; }
-    #dashboard-boot-status .boot-card{
-      max-width:280px; padding:14px 18px; border-radius:10px; text-align:center;
-      background:rgba(255,255,255,.88); box-shadow:0 3px 18px rgba(0,0,0,.18);
-    }
-    #dashboard-boot-status button{ pointer-events:auto; margin-top:9px; padding:6px 12px;
-      border:0; border-radius:6px; background:#145b8d; color:#fff; font-weight:700; }
     #map .ol-viewport,
     #map .ol-unselectable,
     #map canvas{
@@ -1138,12 +1109,57 @@
       max-width:min(380px, calc(100vw - 24px));
     }
     #hamburger-btn{ z-index:1000; }
+
+    /* ======= Trip Planner: Map | Planner tab bar (top row of toolbar) ======= */
+    #fishedge-view-tabs{
+      display:inline-flex; align-items:center; gap:4px;
+      margin-right:8px; padding-right:8px; border-right:1px solid var(--border);
+    }
+    .vt-tab{
+      min-height:24px; padding:0 10px;
+      border:1px solid transparent; border-radius:4px;
+      background:transparent; color:var(--fg);
+      font-weight:700; font-size:11px;
+      display:inline-flex; align-items:center; gap:4px;
+      cursor:pointer; font-family:inherit;
+    }
+    .vt-tab:hover{ background:rgba(255,255,255,0.05); }
+    .vt-tab.active{
+      background:#0c1723; border-color:#273649;
+      box-shadow:inset 0 0 0 1px var(--accent); color:var(--accent);
+    }
+    .vt-icon{ font-size:13px; }
+
+    /* ======= Planner overlay (full-screen, hidden by default) ======= */
+    #fishedge-planner-overlay{
+      position:fixed; top:0; left:0; right:0; bottom:0;
+      z-index:850;
+      background:var(--bg,#050b10); color:var(--fg,#e0e6ee);
+      display:none; overflow:auto;
+      padding-top:38px; /* sit below the toolbar */
+    }
+    body.fishedge-view-planner #fishedge-planner-overlay{ display:block; }
+
+    /* When planner is active, hide all map-only chrome so the overlay owns the screen. */
+    body.fishedge-view-planner #map,
+    body.fishedge-view-planner #plot,
+    body.fishedge-view-planner #modebar-host,
+    body.fishedge-view-planner #readout,
+    body.fishedge-view-planner #feedback-float,
+    body.fishedge-view-planner #hamburger-btn,
+    body.fishedge-view-planner #combined-readout,
+    body.fishedge-view-planner #combined-hover-tip,
+    body.fishedge-view-planner #combined-overlay,
+    body.fishedge-view-planner #captain-tools,
+    body.fishedge-view-planner #thermal-hover-tip,
+    body.fishedge-view-planner #mobile-time-badge,
+    body.fishedge-view-planner #nav-bar,
+    body.fishedge-view-planner #fishedge-locate-host{ display:none !important; }
   </style>
 
 <!-- locate-me cache-buster: 20260806 (force CDN revalidate after 47412bc01e stuck) -->
 </head>
-<body class="auth-pending">
-<div id="dashboard-boot-status"><div class="boot-card">Loading dashboard…</div></div>
+<body>
 <!-- host for fishedge-locate-me button (rendered by /locate-me.js) -->
 <div id="fishedge-locate-host" style="position:fixed;top:8px;right:8px;z-index:1100;"></div>
   <!-- Global error overlay: catches 'The string did not match the expected
@@ -1245,11 +1261,9 @@
     (async function initAuth() {
       // Auth: check session first (handles page refresh with existing session),
       // then listen for changes (handles magic link redirect with new session).
-      const session = await (window.__sessionPromise || window.__getSessionWithRetry
-        ? (window.__sessionPromise || window.__getSessionWithRetry())
-        : sb.auth.getSession().then(({ data }) => data?.session || null));
+      const { data: { session } } = await sb.auth.getSession();
       // No session -> redirect to the actual login form on first visit. This
-      // replaces the legacy full-screen "Sign in / My Account" gate so the
+      // replaces the legacy full-screen sign-in/account gate so the
       // first page a visitor sees is the real login/signup form, not an
       // intermediate click-through.
       if (!session) {
@@ -1257,10 +1271,6 @@
         return;
       }
       if (session && await enforceEmailVerification(session)) {
-        if (window.__authReadyResolve) {
-          window.__authReadyResolve(session);
-          window.__authReadyResolve = null;
-        }
         setAccountLinkVisible(true);
         posthog.identify(session.user.email, { email: session.user.email });
         // Multi-region load: profile.selected_region (active) + user_regions (entitlement list).
@@ -1341,6 +1351,10 @@
   </script>
 
   <div id="toolbar">
+    <span id="fishedge-view-tabs" role="tablist" aria-label="Dashboard views">
+      <button class="vt-tab active" data-view="map" type="button" role="tab" aria-selected="true"><span class="vt-icon">🗺️</span><span>Map</span></button>
+      <button class="vt-tab" data-view="planner" type="button" role="tab" aria-selected="false"><span class="vt-icon">⚓</span><span>Planner</span></button>
+    </span>
     <span id="nav-bar">
       <button id="prev-btn" type="button" title="Previous frame" aria-label="Previous frame">&#8592;</button>
       <input id="frame-slider" type="range" min="0" max="0" step="1" value="0" aria-label="Frame progress" />
@@ -1371,6 +1385,15 @@
   </div>
   <button id="hamburger-btn" aria-label="Open product menu">☰</button>
   <div id="map"></div>
+  <div id="fishedge-planner-overlay" aria-hidden="true">
+    <header id="fishedge-inlet-picker"></header>
+    <main class="planner-shell">
+      <section id="fishedge-five-day-outlook" aria-label="5-day outlook"></section>
+      <aside id="fishedge-my-trips" aria-label="Saved trips"></aside>
+    </main>
+    <div id="fishedge-compact-strip-host"></div>
+    <div id="fishedge-briefing-host"></div>
+  </div>
   <div id="combined-readout">—, —</div>
   <div id="combined-hover-tip"></div>
   <div id="thermal-hover-tip"></div>
@@ -1441,7 +1464,7 @@
     </div>
     <div class="combined-section">
       <label class="combined-toggle">
-        <input type="checkbox" id="chk-combined-chl">
+        <input type="checkbox" id="chk-combined-chl" checked>
         <span class="box"></span>
         <span class="combined-dot dot-chl"></span>
         <span>Chlorophyll</span>
@@ -1471,7 +1494,7 @@
       <div id="combined-sst-scan-time" style="font-size:11px;color:#ff8c00;margin-left:28px;margin-bottom:8px;"></div>
       <div class="combined-product-row">
         <label class="combined-toggle">
-          <input type="checkbox" id="chk-combined-front">
+          <input type="checkbox" id="chk-combined-front" checked>
           <span class="box"></span>
           <span class="combined-dot dot-front"></span>
           <span>Thermal Fronts</span>
@@ -1490,7 +1513,7 @@
       </select>
       <div id="combined-thermal-scan-time" style="font-size:11px;color:#ff6666;margin-left:28px;margin-bottom:4px;"></div>
       <label class="combined-toggle">
-        <input type="checkbox" id="chk-combined-uv">
+        <input type="checkbox" id="chk-combined-uv" checked>
         <span class="box"></span>
         <span class="combined-dot dot-uv"></span>
         <span>Currents</span>
@@ -1515,7 +1538,7 @@
       </div>
       <div class="combined-product-row">
         <label class="combined-toggle">
-          <input type="checkbox" id="chk-combined-sla">
+          <input type="checkbox" id="chk-combined-sla" checked>
           <span class="box"></span>
           <span class="combined-dot dot-front"></span>
           <span>Sea Level Anomaly</span>
@@ -1536,7 +1559,7 @@
       </label>
       <div class="combined-product-row">
         <label class="combined-toggle">
-        <input type="checkbox" id="chk-combined-bathy">
+          <input type="checkbox" id="chk-combined-bathy" checked>
           <span class="box"></span>
           <span class="combined-dot dot-bathy"></span>
           <span>Bathymetry</span>
@@ -1544,9 +1567,17 @@
         <button id="combined-bathy-unit-toggle" class="combined-unit-button" type="button">fathom</button>
       </div>
       <div id="combined-bathy-legend" class="combined-inline-legend"></div>
+      <div class="combined-product-row" id="combined-canyon-row" style="display:none">
+        <label class="combined-toggle">
+          <input type="checkbox" id="chk-combined-canyon" checked>
+          <span class="box"></span>
+          <span class="combined-dot" style="background:#ff6b6b"></span>
+          <span>Canyon priority structure</span>
+        </label>
+      </div>
     </div>
     <div id="combined-account-link" style="margin-top:auto;padding-top:12px;border-top:1px solid var(--border);text-align:center;">
-      <a href="account.html" style="text-decoration:none;">MY ACCOUNT</a>
+      <a href="account.html" style="text-decoration:none;">ACCOUNT</a>
     </div>
     <div id="combined-home-link"><a href="/">HOME</a></div>
   </div>
@@ -1623,7 +1654,7 @@
       </div>
       <div id="hamburger-cbar"></div>
       <div style="text-align:center;margin-top:14px;" id="account-link-wrap" hidden>
-        <a href="account.html" style="color:var(--accent2);font-size:12px;font-weight:700;text-decoration:none;letter-spacing:0.05em;">MY ACCOUNT</a>
+        <a href="account.html" style="color:var(--accent2);font-size:12px;font-weight:700;text-decoration:none;letter-spacing:0.05em;">ACCOUNT</a>
       </div>
       <div id="home-link-wrap"><a href="/">HOME</a></div>
     </div>
@@ -1778,6 +1809,10 @@ var BBOX = [...(REGION_FALLBACKS[REGION_ID]?.bbox ?? REGION_FALLBACKS.usec_south
 // Declared before setActiveRegion() so the initial call can assign to it
 // without hitting a Temporal Dead Zone ReferenceError.
 var BATHY_JSON_URL = `https://data.fishedge.live/${REGION_ID}/gebco_bath_latest/gebco_bathy.json`;
+var SURVEY_BATHY_TILE_TEMPLATE = REGION_ID === "usec_md"
+  ? "data/survey_bathy/offshore_composite/color/{z}/{x}/{y}.png"
+  : "";
+var SURVEY_BATHY_TILE_VERSION = "20260823_h13095_h13480_v2";
 
 /**
  * Centralised region-state setter. Call whenever the active region changes
@@ -1793,12 +1828,15 @@ function setActiveRegion(regionId, regionMeta) {
     : [...(REGION_FALLBACKS[regionId]?.bbox ?? REGION_FALLBACKS.usec_south.bbox)];
   const bathyPath = regionMeta?.bathy_path || "gebco_bath_latest/gebco_bathy.json";
   BATHY_JSON_URL = `https://data.fishedge.live/${regionId}/${bathyPath}`;
+  SURVEY_BATHY_TILE_TEMPLATE = regionMeta?.survey_bathy_tile_template
+    || (regionId === "usec_md" ? "data/survey_bathy/offshore_composite/color/{z}/{x}/{y}.png" : "");
   // Invalidate layer caches on region switch so old data doesn't bleed through
   if (prevRegion !== regionId) {
     window._bathyData = null;
     window._bathyLayer = null;
     window._bathyContourSource = null;
     window._combinedBathyLayer = null;
+    window._combinedSurveyBathyLayer = null;
     window._combinedUvLayer = null;
     window._combinedHeightLayer = null;
     gridCache.__bathy_json = null; // invalidate stale bathy cache for new region
@@ -1884,13 +1922,16 @@ async function initializeData() {
 //      granted), tolerates the missing-table case by trusting the profile.
 //   4. Calls setActiveRegion() + initializeData() if the active region
 //      differs from the current REGION_ID.
-//   5. Never writes profiles.selected_region. Dashboard URL parameters and
-//      startup resolution are read-only; saved preferences can only be
-//      changed through an explicit account/profile action.
+//   5. PATCHes profiles.selected_region ONLY when the user explicitly chose
+//      a region (URL or saved profile). NEVER PATCH on entitlement-gated
+//      fallback — that would silently overwrite a saved preference.
 //   6. Stores the resolved region in window.__applyAuthRegionLastResult so
 //      the head IIFE can pass it to __profileReadyResolve.
 // =========================================================================
 window.__applyAuthRegion = function(profiles, granted, session, userId) {
+  const SUPABASE_URL = 'https://wfdpfeptmyiqifgwqpzu.supabase.co';
+  const SUPABASE_ANON_KEY = 'sb_publishable_W6wnJkT70jb69JUZgM1dow_nabPZycR';
+
   const profile = (profiles && profiles.length > 0) ? profiles[0] : null;
 
   // Normalize `granted` defensively. If the `user_regions` table is
@@ -1922,17 +1963,28 @@ window.__applyAuthRegion = function(profiles, granted, session, userId) {
   window.__applyAuthRegionLastResult = activeRegion;
 
   if (activeRegion && REGIONS[activeRegion] && REGION_ID !== activeRegion) {
-    // Never start a second data/render pipeline while the initial dashboard
-    // boot is in progress. That race was intermittent because it depended on
-    // profile latency and was especially visible as a black mobile map.
-    if (window.__dashboardBooting || !window.__dashboardStarted) {
-      window.__pendingAuthRegion = activeRegion;
-    } else {
-      setActiveRegion(activeRegion);
-      if (typeof initializeData === 'function') {
-        window.__dashboardRegionChangePromise = initializeData();
-      }
-    }
+    setActiveRegion(activeRegion);
+    if (typeof initializeData === 'function') initializeData();
+  }
+
+  // Persist active region to profile ONLY when the user explicitly chose
+  // it (URL ?region= or the saved profile preference). Never PATCH on
+  // entitlement-gated fallback — that would silently overwrite the saved
+  // preference the moment it drifted from grants.
+  const fromExplicitUserIntent =
+    (urlRegion && activeRegion === urlRegion) ||
+    (profile && profile.selected_region && activeRegion === profile.selected_region);
+  if (fromExplicitUserIntent && activeRegion && profile && profile.selected_region !== activeRegion) {
+    fetch(`${SUPABASE_URL}/rest/v1/profiles?user_id=eq.${userId}`, {
+      method: 'PATCH',
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=minimal',
+      },
+      body: JSON.stringify({ selected_region: activeRegion }),
+    }).catch(() => {});
   }
 
   if (profile && typeof posthog !== 'undefined') {
@@ -2495,6 +2547,8 @@ let desktopMapState = {
   slaContourLayer: null,
   slaContourLabelOverlays: [],
   bathyContourLayer: null,
+  surveyBathyLayer: null,
+  surveyBathyLayerTemplate: null,
   currentGridInfo: null,
   currentDataObj: null,
   ready: false
@@ -2952,9 +3006,11 @@ async function renderDesktopFrame(frameMeta) {
 
   // Bathymetry contours rendered as OL vector layer
   if (currentVar === "bathy") {
+    ensureDesktopSurveyBathyLayer(map);
     await ensureDesktopBathyContourLayer(map, dataObj, gridInfo);
-  } else if (desktopMapState.bathyContourLayer) {
-    desktopMapState.bathyContourLayer.setVisible(false);
+  } else {
+    if (desktopMapState.bathyContourLayer) desktopMapState.bathyContourLayer.setVisible(false);
+    if (desktopMapState.surveyBathyLayer) desktopMapState.surveyBathyLayer.setVisible(false);
   }
 
   // Preserve an existing viewport when switching pages/products; otherwise fit to data.
@@ -3482,11 +3538,9 @@ if (chkUv) chkUv.addEventListener("change", async e => {
   }
 });
 
-if (chkBathy) chkBathy.addEventListener("change", async e => {
-  if (e.target.checked && window._combinedMap) {
-    await ensureCombinedBathyLayer(window._combinedMap);
-  }
+if (chkBathy) chkBathy.addEventListener("change", e => {
   if (window._combinedBathyLayer) window._combinedBathyLayer.setVisible(e.target.checked);
+  if (window._combinedSurveyBathyLayer) window._combinedSurveyBathyLayer.setVisible(e.target.checked);
   const legend = document.getElementById("combined-bathy-legend");
   if (legend) legend.style.display = e.target.checked ? "" : "none";
 });
@@ -3533,10 +3587,7 @@ if (chkSla) chkSla.addEventListener("change", async e => {
     setContourLabelsVisible(window._combinedSlaContourLayer, true, "__slaLabelOverlays");
   }
 });
-if (chkFront) chkFront.addEventListener("change", async e => {
-  if (e.target.checked && window._combinedMap) {
-    await ensureCombinedFrontLayers(window._combinedMap);
-  }
+if (chkFront) chkFront.addEventListener("change", e => {
   if (window._combinedFrontDensityLayer) window._combinedFrontDensityLayer.setVisible(e.target.checked);
   if (window._combinedFrontLineLayer) window._combinedFrontLineLayer.setVisible(e.target.checked);
 });
@@ -4799,58 +4850,12 @@ function frontLabelTrace(frontData, label) {
 
 /* ===== Bathymetry (.nc) ===== */
 /* ===== Improved Bathymetry Loader ===== */
-let __fishedgeDataWorker = null;
-let __fishedgeWorkerSeq = 0;
-const __fishedgeWorkerPending = new Map();
-
-function getFishedgeDataWorker() {
-  if (__fishedgeDataWorker || typeof Worker === "undefined") return __fishedgeDataWorker;
-  try {
-    __fishedgeDataWorker = new Worker(new URL("data-worker.js", document.baseURI));
-    __fishedgeDataWorker.onmessage = event => {
-      const { id, ok, result, error } = event.data || {};
-      const pending = __fishedgeWorkerPending.get(id);
-      if (!pending) return;
-      __fishedgeWorkerPending.delete(id);
-      if (ok) pending.resolve(result);
-      else pending.reject(new Error(error || "Data worker failed"));
-    };
-    __fishedgeDataWorker.onerror = () => {
-      for (const pending of __fishedgeWorkerPending.values()) pending.reject(new Error("Data worker unavailable"));
-      __fishedgeWorkerPending.clear();
-      __fishedgeDataWorker?.terminate();
-      __fishedgeDataWorker = null;
-    };
-  } catch (_) { __fishedgeDataWorker = null; }
-  return __fishedgeDataWorker;
-}
-
-function runFishedgeWorker(message) {
-  const worker = getFishedgeDataWorker();
-  if (!worker) return Promise.reject(new Error("Web Worker unavailable"));
-  const id = ++__fishedgeWorkerSeq;
-  return new Promise((resolve, reject) => {
-    __fishedgeWorkerPending.set(id, { resolve, reject });
-    worker.postMessage({ id, ...message });
-  });
-}
-
-async function fetchJson(url, options = {}) {
-  try {
-    return await runFishedgeWorker({ type: "fetch-json", url, cache: options.cache || "default" });
-  } catch (workerError) {
-    // Safari/private browsing can block Workers. Preserve functionality with
-    // a main-thread fallback rather than making a layer unavailable.
-    const res = await fetch(url, options);
-    if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
-    return res.json();
-  }
-}
-
 async function loadBathymetryJson(url) {
   if (gridCache.__bathy_json) return gridCache.__bathy_json;
 
-  const data = await fetchJson(url);
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Failed to load bathy JSON: ${url}`);
+  const data = await res.json();
 
   // Validate structure
   if (!data.xAxis || !data.yAxis || !data.depth) {
@@ -5210,6 +5215,7 @@ function clearUvContourLayer(state) {
 // Render ADT contours as OL vectors so width is measured in screen pixels,
 // not low-resolution raster pixels. This is the authoritative Currents/Sea Level path.
 function buildUvContourLayer(dataObj, gridInfo, map) {
+  if (!map || !map.getSize || map.getSize()[0] === 0 || map.getSize()[1] === 0) return null;
   const d = (dataObj?.data && !Array.isArray(dataObj.data)) ? dataObj.data : dataObj;
   const zMeters = d?.adt || d?.z;
   const z = is2D(zMeters) ? zMeters.map(row => row.map(v => metersToHeight(v))) : zMeters;
@@ -5566,6 +5572,60 @@ async function ensureDesktopPlaceLayer(map) {
   map.addLayer(layer);
 }
 
+function surveyBathyTileUrl() {
+  if (!SURVEY_BATHY_TILE_TEMPLATE) return "";
+  const sep = SURVEY_BATHY_TILE_TEMPLATE.includes("?") ? "&" : "?";
+  return `${SURVEY_BATHY_TILE_TEMPLATE}${sep}v=${encodeURIComponent(SURVEY_BATHY_TILE_VERSION)}`;
+}
+
+function buildSurveyBathyTileLayer(options = {}) {
+  const url = surveyBathyTileUrl();
+  if (!url || !window.ol?.layer?.Tile || !window.ol?.source?.XYZ) return null;
+  const source = new ol.source.XYZ({
+    url,
+    minZoom: 8,
+    maxZoom: 14,
+    crossOrigin: "anonymous",
+    wrapX: false,
+    transition: 0
+  });
+  const layer = new ol.layer.Tile({
+    source,
+    opacity: options.opacity ?? 0.84,
+    zIndex: options.zIndex ?? 14,
+    minZoom: options.minZoom ?? 8,
+    maxZoom: options.maxZoom ?? 15
+  });
+  layer.set("name", "survey-bathy-composite");
+  layer.set("title", "Survey-first high-resolution bathymetry");
+  layer.set("tileTemplate", SURVEY_BATHY_TILE_TEMPLATE);
+  return layer;
+}
+
+function ensureDesktopSurveyBathyLayer(map) {
+  if (!map) return;
+  const template = SURVEY_BATHY_TILE_TEMPLATE || "";
+  if (!template) {
+    if (desktopMapState.surveyBathyLayer) {
+      map.removeLayer(desktopMapState.surveyBathyLayer);
+      desktopMapState.surveyBathyLayer = null;
+      desktopMapState.surveyBathyLayerTemplate = null;
+    }
+    return;
+  }
+  if (desktopMapState.surveyBathyLayer && desktopMapState.surveyBathyLayerTemplate !== template) {
+    map.removeLayer(desktopMapState.surveyBathyLayer);
+    desktopMapState.surveyBathyLayer = null;
+    desktopMapState.surveyBathyLayerTemplate = null;
+  }
+  if (!desktopMapState.surveyBathyLayer) {
+    desktopMapState.surveyBathyLayer = buildSurveyBathyTileLayer({ zIndex: 14, opacity: 0.86 });
+    desktopMapState.surveyBathyLayerTemplate = template;
+    if (desktopMapState.surveyBathyLayer) map.addLayer(desktopMapState.surveyBathyLayer);
+  }
+  desktopMapState.surveyBathyLayer?.setVisible(currentVar === "bathy");
+}
+
 async function ensureDesktopBathyContourLayer(map, bathyData, gridInfo) {
   if (!map) return;
   // Re-use existing layer or create new one
@@ -5575,7 +5635,7 @@ async function ensureDesktopBathyContourLayer(map, bathyData, gridInfo) {
     layer = new ol.layer.Vector({
       source,
       style: new ol.style.Style({
-        stroke: new ol.style.Stroke({ color: "#8bb8d4", width: 1.05, lineCap: "round", lineJoin: "round" })
+        stroke: new ol.style.Stroke({ color: "#8bb8d4", width: 0.8 })
       }),
       zIndex: 15
     });
@@ -5641,14 +5701,13 @@ function updateBathyContours(map, bd, layer) {
     ? viewExtent
     : ol.proj.transformExtent(viewExtent, viewProjCode, "EPSG:4326");
 
-  const contourZoom = map.getView().getZoom() || 0;
-  const maxW = contourZoom >= 9 ? 1920 : contourZoom >= 7 ? 800 : 800;
-  const maxH = contourZoom >= 9 ? 900 : contourZoom >= 7 ? 600 : 1200;
+  const maxW = 800, maxH = 1200;
   const sx = Math.max(1, Math.floor(bd.nx / maxW));
   const sy = Math.max(1, Math.floor(bd.ny / maxH));
 
   const maxDepth = depthMaxInExtent(bd, extent, sx, sy);
   const levels = generateContourLevels(maxDepth);
+
   const segments = [];
   for (const level of levels) {
     const segs = extractContourSegments(bd, level, sx, sy, extent);
@@ -5733,10 +5792,14 @@ function extractContourSegments(bd, level, sx, sy, extent) {
       }
       if (crossings.length >= 2) {
         const coords = crossings.slice(0, 2).map(c => c[0]);
-        if (coords[0] && coords[1]
-            && Math.hypot(coords[0][0] - vx0, coords[0][1] - vy0) > 0.01
-            && Math.hypot(coords[1][0] - vx0, coords[1][1] - vy0) > 0.01
-            && Math.hypot(coords[0][0] - coords[1][0], coords[0][1] - coords[1][1]) > 0.01) {
+        if (coords[0] && coords[1]) {
+          const d0 = Math.hypot(coords[0][0] - vx0, coords[0][1] - vy0);
+          const d1 = Math.hypot(coords[1][0] - vx0, coords[1][1] - vy0);
+          if (d0 > 0.01 && d1 > 0.01) {
+            segments.push(coords);
+          }
+        }
+        if (coords[0] && coords[1] && Math.hypot(coords[0][0] - coords[1][0], coords[0][1] - coords[1][1]) > 0.01) {
           segments.push(coords);
         }
       }
@@ -6221,12 +6284,9 @@ async function applyOfmTwoLayerBasemap(map) {
           if (L.type === "fill") return false;
           // Drop 3D building fill-extrusions — we want a flat 2D look.
           if (L.type === "fill-extrusion") return false;
-          // Keep only a small coastal-place label set. Roads, boundaries,
-          // POIs, and transit layers add visual noise and tile work without
-          // helping captains orient on this product.
-          if (L.type !== "symbol") return false;
-          const placeLabels = new Set(["label_town", "label_village", "label_city", "label_city_capital"]);
-          return L["source-layer"] === "place" && placeLabels.has(L.id);
+          // Keep lines (roads, road casings, bridges, boundaries) and
+          // symbols (place labels, road labels, POIs) for context.
+          return L.type === "line" || L.type === "symbol";
         });
         return out;
       }
@@ -6274,6 +6334,7 @@ async function renderCombinedMode() {
     window._combinedChlLayer = null;
     window._combinedSstLayer = null;
     window._combinedBathyLayer = null;
+    window._combinedSurveyBathyLayer = null;
     window._combinedUvLayer = null;
     window._combinedHeightLayer = null;
     window._combinedFrontDensityLayer = null;
@@ -6314,7 +6375,6 @@ async function renderCombinedMode() {
   installCaptainToolHandler(map);
   if (captainAddTool.points.length) renderPtsLayer(map);
   map.on("moveend", () => syncViewStateFromOlMap(map));
-  map.on("moveend", () => combinedChlScheduleResolutionCheck(map));
   console.log("[combined] OL map created, target:", !!map.getTargetElement(), "size:", map.getSize());
   const cv0 = map.getTargetElement()?.querySelector("canvas");
   console.log("[combined]   canvas initial:", cv0 ? `${cv0.width}x${cv0.height}` : "NO CANVAS");
@@ -6371,9 +6431,9 @@ async function renderCombinedMode() {
 
   const chlFrames = framesByVar.chl || [];
   const chlScanTimeDiv = document.getElementById("combined-chl-scan-time");
-  if (chlFrames.length && chkChl?.checked) {
+  if (chlFrames.length) {
     const frame = chlFrames[chlFrames.length - 1];  // framesByVar.chl is sorted oldest-first
-    const data = await fetchFrameData("chl", frame, { resolution: "coarse" });
+    const data = await fetchFrameData("chl", frame);
     const grid = await loadGridForVar("chl", data);
     window._combinedChlData = data;
     window._combinedChlGrid = grid;
@@ -6402,11 +6462,10 @@ async function renderCombinedMode() {
   }
 
   // ── Layer: SST Temperature (unchecked by default — conflicts visually with CHL) ──
-  if (document.getElementById("chk-combined-sst")?.checked) {
-    const sstFrames = framesByVar.sst || [];
-    console.log("[combined] SST frames count:", sstFrames.length);
-    const sstScanTimeDiv = document.getElementById("combined-sst-scan-time");
-    if (sstFrames.length) {
+  const sstFrames = framesByVar.sst || [];
+  console.log("[combined] SST frames count:", sstFrames.length);
+  const sstScanTimeDiv = document.getElementById("combined-sst-scan-time");
+  if (sstFrames.length) {
     const sorted = [...sstFrames].sort((a, b) => {
       const ta = epochMsForFrame("sst", a) || 0, tb = epochMsForFrame("sst", b) || 0;
       return tb - ta;
@@ -6476,36 +6535,100 @@ async function renderCombinedMode() {
           : "";
       }
     }
-    } else {
-      if (sstScanTimeDiv) sstScanTimeDiv.textContent = "";
-    }
+  } else {
+    if (sstScanTimeDiv) sstScanTimeDiv.textContent = "";
   }
 
-  // Bathymetry is opt-in in combined mode. Loading the 8 MB grid and
-  // preparing contours during startup was one of the largest main-thread
-  // stalls on mobile.
-  if (document.getElementById("chk-combined-bathy")?.checked) {
-    await ensureCombinedBathyLayer(map);
+  // ── Layer: Bathymetry contours ───────────────────────────────────────
+  const bathyData = await loadBathymetryJson(BATHY_JSON_URL);
+  const bathyGridInfo = { xAxis: bathyData.xAxis, yAxis: bathyData.yAxis, nx: bathyData.xAxis.length, ny: bathyData.yAxis.length };
+  // The OFM foreground keeps land labels/lines above data but intentionally
+  // omits land fills. Add the bathymetry-derived opaque mask here so contour
+  // lines and rasters cannot paint over land in the combined dashboard.
+  try {
+    const combinedLandCanvas = makeMobileLandCanvas(bathyData);
+    if (combinedLandCanvas) {
+      const combinedLandSource = canvasToOlSource(combinedLandCanvas, frameExtentFromGrid({ xAxis: bathyData.xAxis, yAxis: bathyData.yAxis }));
+      const combinedLandLayer = new ol.layer.Image({ source: combinedLandSource, zIndex: 20 });
+      map.addLayer(combinedLandLayer);
+      window._combinedLandLayer = combinedLandLayer;
+    }
+  } catch (landMaskError) {
+    // A land-mask rendering failure must never prevent product layers from
+    // loading; the OFM land foreground remains available as a fallback.
+    console.warn("[combined] land mask unavailable; continuing with data layers", landMaskError);
   }
+  const surveyBathyLayer = buildSurveyBathyTileLayer({ zIndex: 14, opacity: 0.82 });
+  if (surveyBathyLayer) {
+    surveyBathyLayer.setVisible(document.getElementById("chk-combined-bathy")?.checked ?? true);
+    map.addLayer(surveyBathyLayer);
+    window._combinedSurveyBathyLayer = surveyBathyLayer;
+  }
+  // ── Layer: Canyon priority structure ──────────────────────────────
+  // Overlay over the survey composite; toggleable via #chk-combined-canyon.
+  // Region-gated to usec_md; PNG bbox matches REGION_FALLBACKS.usec_md.bbox.
+  if (REGION_ID === "usec_md") {
+    const canyonRow = document.getElementById("combined-canyon-row");
+    if (canyonRow) canyonRow.style.display = "";
+    try {
+      const canyonExtent = ol.proj.transformExtent(
+        [BBOX[0], BBOX[1], BBOX[2], BBOX[3]],
+        "EPSG:4326", "EPSG:3857"
+      );
+      const canyonSource = new ol.source.ImageStatic({
+        url: "data/survey_bathy/offshore_priority_canyon.png",
+        projection: "EPSG:3857",
+        imageExtent: canyonExtent,
+      });
+      const canyonLayer = new ol.layer.Image({
+        source: canyonSource,
+        opacity: 0.6,
+        zIndex: 15, // one above survey tiles (14)
+      });
+      const canyonChk = document.getElementById("chk-combined-canyon");
+      canyonLayer.setVisible(canyonChk?.checked ?? true);
+      map.addLayer(canyonLayer);
+      window._combinedCanyonLayer = canyonLayer;
+      if (canyonChk) {
+        canyonChk.addEventListener("change", e => {
+          if (window._combinedCanyonLayer) {
+            window._combinedCanyonLayer.setVisible(e.target.checked);
+          }
+        });
+      }
+    } catch (canyonErr) {
+      console.warn("[combined] canyon overlay unavailable; continuing without it", canyonErr);
+    }
+  }
+  const bathyLayer = buildBathyContourLayer(bathyData, bathyGridInfo, map);
+  if (bathyLayer) { map.addLayer(bathyLayer); window._combinedBathyLayer = bathyLayer; }
 
   // ── Layer: UV arrows ─────────────────────────────────────────────────
   // v4.2: use the dedicated rebuild helper so the layer picks the
   // NEWEST UV frame (not the oldest) and refreshes on demand.
   const uvHoursSel = document.getElementById("combined-uv-hours");
-  if (document.getElementById("chk-combined-uv")?.checked) {
-    await rebuildCombinedUvLayer(map, { hoursMode: uvHoursSel?.value || "latest" });
-  }
+  await rebuildCombinedUvLayer(map, { hoursMode: uvHoursSel?.value || "latest" });
   // SLA is deliberately opt-in so the production dashboard's initial
   // appearance and network behavior remain unchanged.
   if (document.getElementById("chk-combined-sla")?.checked) {
     await rebuildCombinedSlaLayer(map);
   }
 
-  // Thermal fronts are also opt-in. Their rolling frame history can be much
-  // larger than the single frame ultimately displayed in combined mode.
-  if (document.getElementById("chk-combined-front")?.checked) {
-    await ensureCombinedFrontLayers(map);
-  }
+  // ── Layer: Thermal fronts — fixed-pixel point symbols
+  await thermalLoadData();
+  const thermalItems = thermalFrontState.frameData.length
+    ? [thermalFrontState.frameData[thermalFrontState.frameData.length - 1]]
+    : [];
+  window._combinedFrontData = thermalItems[0]?.data || null;
+  window._combinedFrontGrid = window._combinedFrontData
+    ? await loadGridForVar("thermal_fronts", window._combinedFrontData).catch(() => null)
+    : null;
+  const thermalScanTimeDiv = document.getElementById("combined-thermal-scan-time");
+  const initialThermalHours = parseInt(document.getElementById("combined-thermal-hours")?.value || "24", 10);
+  const initialThermal = buildThermalHoursComposite(map, initialThermalHours);
+  if (initialThermal.pointLayer) { map.addLayer(initialThermal.pointLayer); window._combinedFrontLineLayer = initialThermal.pointLayer; }
+  if (initialThermal.densityLayer) { map.addLayer(initialThermal.densityLayer); window._combinedFrontDensityLayer = initialThermal.densityLayer; }
+  if (thermalScanTimeDiv) thermalScanTimeDiv.textContent = initialThermal.scanTime || "";
 
   // ── Cursor circle (matches mobile/thermal-fronts behavior) ───────────
   const cursorFeature = new ol.Feature({
@@ -6600,25 +6723,6 @@ async function renderCombinedMode() {
     if (hoverTip) hoverTip.style.display = "none";
   });
 
-  // OL can finish constructing the map before its renderer has created the
-  // canvas, particularly on a cold mobile load while the vector-tile style
-  // is arriving. Do one explicit synchronous paint and one animation-frame
-  // repaint before declaring boot complete; otherwise the controls appear
-  // over a black target until a refresh happens to trigger a reflow.
-  map.updateSize();
-  try { map.renderSync(); } catch (e) {
-    console.warn("[combined] initial renderSync failed:", e?.message || e);
-  }
-  await new Promise(resolve => requestAnimationFrame(() => {
-    const m = window._combinedMap;
-    if (m) {
-      m.updateSize();
-      try { m.render(); } catch (_) {}
-    }
-    resolve();
-  }));
-  await new Promise(resolve => setTimeout(resolve, 0));
-
   window._combinedRenderLocked = false;
   // If CHL is already checked on first render (e.g. page refreshed in
   // combined mode), the change handler hasn't fired — init the panel now.
@@ -6638,6 +6742,7 @@ async function renderCombinedMode() {
   // Log all window._combined* layer refs
   console.log("[combined] window._combinedChlLayer:", !!window._combinedChlLayer);
   console.log("[combined] window._combinedBathyLayer:", !!window._combinedBathyLayer);
+  console.log("[combined] window._combinedSurveyBathyLayer:", !!window._combinedSurveyBathyLayer);
   console.log("[combined] window._combinedUvLayer:", !!window._combinedUvLayer);
   console.log("[combined] window._combinedFrontDensityLayer:", !!window._combinedFrontDensityLayer);
   console.log("[combined] window._combinedFrontLineLayer:", !!window._combinedFrontLineLayer);
@@ -6649,78 +6754,15 @@ async function renderCombinedMode() {
   return true;
 }
 
-async function ensureCombinedBathyLayer(map) {
-  if (!map || window._combinedBathyLayer || window._combinedBathyLoading) return window._combinedBathyLayer;
-  window._combinedBathyLoading = true;
-  try {
-    const bathyData = await loadBathymetryJson(BATHY_JSON_URL);
-    const bathyGridInfo = { xAxis: bathyData.xAxis, yAxis: bathyData.yAxis, nx: bathyData.xAxis.length, ny: bathyData.yAxis.length };
-    try {
-      const combinedLandCanvas = makeMobileLandCanvas(bathyData);
-      if (combinedLandCanvas) {
-        const combinedLandSource = canvasToOlSource(combinedLandCanvas, frameExtentFromGrid({ xAxis: bathyData.xAxis, yAxis: bathyData.yAxis }));
-        const combinedLandLayer = new ol.layer.Image({ source: combinedLandSource, zIndex: 20 });
-        map.addLayer(combinedLandLayer);
-        window._combinedLandLayer = combinedLandLayer;
-      }
-    } catch (landMaskError) {
-      console.warn("[combined] land mask unavailable; continuing with data layers", landMaskError);
-    }
-    const bathyLayer = buildBathyContourLayer(bathyData, bathyGridInfo, map);
-    if (bathyLayer) {
-      bathyLayer.setVisible(Boolean(document.getElementById("chk-combined-bathy")?.checked));
-      map.addLayer(bathyLayer);
-      window._combinedBathyLayer = bathyLayer;
-    }
-    return bathyLayer;
-  } catch (bathyError) {
-    const bathyLegend = document.getElementById("combined-bathy-legend");
-    if (bathyLegend) bathyLegend.textContent = "Bathymetry unavailable";
-    console.warn("[combined] bathymetry unavailable; continuing with other layers", BATHY_JSON_URL, bathyError);
-    return null;
-  } finally {
-    window._combinedBathyLoading = false;
-  }
-}
-
-async function ensureCombinedFrontLayers(map) {
-  if (!map || window._combinedFrontLoading) return window._combinedFrontLineLayer;
-  if (window._combinedFrontLineLayer || window._combinedFrontDensityLayer) return window._combinedFrontLineLayer;
-  window._combinedFrontLoading = true;
-  try {
-    await thermalLoadData();
-    const thermalItems = thermalFrontState.frameData.length
-      ? [thermalFrontState.frameData[thermalFrontState.frameData.length - 1]]
-      : [];
-    window._combinedFrontData = thermalItems[0]?.data || null;
-    window._combinedFrontGrid = window._combinedFrontData
-      ? await loadGridForVar("thermal_fronts", window._combinedFrontData).catch(() => null)
-      : null;
-    const thermalScanTimeDiv = document.getElementById("combined-thermal-scan-time");
-    const initialThermalHours = parseInt(document.getElementById("combined-thermal-hours")?.value || "24", 10);
-    const initialThermal = buildThermalHoursComposite(map, initialThermalHours);
-    if (initialThermal.pointLayer) { map.addLayer(initialThermal.pointLayer); window._combinedFrontLineLayer = initialThermal.pointLayer; }
-    if (initialThermal.densityLayer) { map.addLayer(initialThermal.densityLayer); window._combinedFrontDensityLayer = initialThermal.densityLayer; }
-    if (thermalScanTimeDiv) thermalScanTimeDiv.textContent = initialThermal.scanTime || "";
-    return initialThermal.pointLayer || null;
-  } finally {
-    window._combinedFrontLoading = false;
-  }
-}
-
 // ── Helpers for combined mode ──────────────────────────────────────────────
 
 function buildBathyContourLayer(bathyData, gridInfo, map) {
+  if (!map || !map.getSize || map.getSize()[0] === 0 || map.getSize()[1] === 0) return null;
   const source = new ol.source.Vector({ wrapX: false, projection: "EPSG:4326" });
   const layer = new ol.layer.Vector({
     source,
     style: feature => new ol.style.Style({
-      stroke: new ol.style.Stroke({
-        color: "#b25cff",
-        width: feature.get("depth") >= 1000 ? 1.25 : 1.05,
-        lineCap: "round",
-        lineJoin: "round"
-      })
+      stroke: new ol.style.Stroke({ color: "#b25cff", width: feature.get("depth") >= 1000 ? 1.1 : 0.9 })
     }),
     zIndex: 15
   });
@@ -6730,14 +6772,6 @@ function buildBathyContourLayer(bathyData, gridInfo, map) {
     nx: bathyData.xAxis.length, ny: bathyData.yAxis.length
   };
   window._bathyContourSource = source;
-  window.__bathyWorkerReady = false;
-  runFishedgeWorker({
-    type: "init-bathy", key: "combined-bathy",
-    xAxis: bathyData.xAxis, yAxis: bathyData.yAxis, depth: bathyData.depth
-  }).then(() => {
-    window.__bathyWorkerReady = true;
-    updateBathyContoursForMap(map);
-  }).catch(() => {});
   updateBathyContoursForMap(map);
   window._combinedMap?.on("moveend", () => scheduleCombinedBathyContourUpdate(window._combinedMap));
   return layer;
@@ -6753,116 +6787,7 @@ function scheduleCombinedBathyContourUpdate(map) {
 }
 
 function updateBathyContoursForMap(map) {
-  if (window.__bathyWorkerReady) {
-    const bd = window._bathyData;
-    const source = window._bathyContourSource;
-    if (!bd || !source || !map) return;
-    const viewExtent = map.getView().calculateExtent(map.getSize());
-    const viewProjCode = map.getView().getProjection().getCode();
-    const extent = viewProjCode === "EPSG:4326"
-      ? viewExtent
-      : ol.proj.transformExtent(viewExtent, viewProjCode, "EPSG:4326");
-    const contourZoom = map.getView().getZoom() || 0;
-    const maxW = contourZoom >= 9 ? 1920 : contourZoom >= 7 ? 800 : 400;
-    const maxH = contourZoom >= 9 ? 900 : contourZoom >= 7 ? 600 : 600;
-    const sx = Math.max(1, Math.floor(bd.nx / maxW));
-    const sy = Math.max(1, Math.floor(bd.ny / maxH));
-    const maxDepth = depthMaxInExtent(bd, extent, sx, sy);
-    const levels = generateContourLevels(maxDepth);
-    const request = (window.__bathyContourRequest || 0) + 1;
-    window.__bathyContourRequest = request;
-    runFishedgeWorker({ type: "contours", key: "combined-bathy", sx, sy, extent, levels })
-      .then(segments => {
-        if (request !== window.__bathyContourRequest) return;
-        source.clear();
-        window._combinedBathyLevels = levels;
-        updateCombinedBathyLegend(levels);
-        for (const path of stitchContourSegments(segments)) {
-          const feat = new ol.Feature({ geometry: new ol.geom.LineString(path.segment), depth: path.level });
-          feat.getGeometry().transform("EPSG:4326", "EPSG:3857");
-          source.addFeature(feat);
-        }
-      }).catch(() => updateBathyContoursSync(map));
-    return;
-  }
-  updateBathyContoursSync(map);
-}
-
-function stitchContourSegments(segments, joinTolerance = 0.00001) {
-  const key = point => `${Math.round(point[0] * 1e6)},${Math.round(point[1] * 1e6)}`;
-  const distance = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
-  const direction = (a, b) => {
-    const dx = b[0] - a[0], dy = b[1] - a[1];
-    const length = Math.hypot(dx, dy) || 1;
-    return [dx / length, dy / length];
-  };
-  const dot = (a, b) => a[0] * b[0] + a[1] * b[1];
-  const remaining = (segments || []).filter(item => item?.segment?.length >= 2)
-    .map(item => ({ level: item.level, points: item.segment.slice() }));
-  const paths = [];
-
-  // Grow each path from both ends. The old implementation only handled
-  // tail-to-head joins and made one pass, so a valid contour whose segments
-  // arrived in another orientation/order stayed visibly broken.
-  while (remaining.length) {
-    const current = remaining.pop();
-    const path = { level: current.level, segment: current.points };
-    let extended = true;
-    while (extended) {
-      extended = false;
-      const head = key(path.segment[0]);
-      const tail = key(path.segment[path.segment.length - 1]);
-      const headPoint = path.segment[0];
-      const tailPoint = path.segment[path.segment.length - 1];
-      for (let i = remaining.length - 1; i >= 0; i--) {
-        const candidate = remaining[i];
-        if (candidate.level !== path.level) continue;
-        const first = key(candidate.points[0]);
-        const last = key(candidate.points[candidate.points.length - 1]);
-        let match = null;
-        if (last === tail) match = { kind: "last-tail", distance: 0 };
-        else if (first === tail) match = { kind: "first-tail", distance: 0 };
-        else if (last === head) match = { kind: "last-head", distance: 0 };
-        else if (first === head) match = { kind: "first-head", distance: 0 };
-        else {
-          const pathTailDirection = direction(path.segment.at(-2), tailPoint);
-          const pathHeadDirection = direction(headPoint, path.segment[1]);
-          const candidates = [
-            ["last-tail", distance(candidate.points.at(-1), tailPoint),
-              dot(pathTailDirection, direction(candidate.points.at(-1), candidate.points.at(-2)))],
-            ["first-tail", distance(candidate.points[0], tailPoint),
-              dot(pathTailDirection, direction(candidate.points[0], candidate.points[1]))],
-            ["last-head", distance(candidate.points.at(-1), headPoint),
-              dot(pathHeadDirection, direction(candidate.points.at(-2), candidate.points.at(-1)))],
-            ["first-head", distance(candidate.points[0], headPoint),
-              dot(pathHeadDirection, direction(candidate.points[1], candidate.points[0]))]
-          ].filter(item => item[2] >= 0.75).sort((a, b) => a[1] - b[1]);
-          if (candidates.length && candidates[0][1] <= joinTolerance) {
-            match = { kind: candidates[0][0], distance: candidates[0][1] };
-          }
-        }
-        if (match?.kind === "last-tail") {
-          path.segment = path.segment.concat(candidate.points.slice(0, -1).reverse());
-        } else if (match?.kind === "first-tail") {
-          path.segment = path.segment.concat(candidate.points.slice(1));
-        } else if (match?.kind === "last-head") {
-          path.segment = candidate.points.slice(0, -1).concat(path.segment);
-        } else if (match?.kind === "first-head") {
-          path.segment = candidate.points.slice(1).reverse().concat(path.segment);
-        } else {
-          continue;
-        }
-        remaining.splice(i, 1);
-        extended = true;
-        break;
-      }
-    }
-    paths.push(path);
-  }
-  return paths;
-}
-
-function updateBathyContoursSync(map) {
+  if (!map || !map.getSize || map.getSize()[0] === 0 || map.getSize()[1] === 0) return;
   const bd = window._bathyData;
   const source = window._bathyContourSource;
   if (!bd || !source || !map) return;
@@ -6875,24 +6800,20 @@ function updateBathyContoursSync(map) {
     ? viewExtent
     : ol.proj.transformExtent(viewExtent, viewProjCode, "EPSG:4326");
   const [vx0, vy0, vx1, vy1] = extent;
-  const contourZoom = map.getView().getZoom() || 0;
-  const maxW = contourZoom >= 9 ? 1920 : contourZoom >= 7 ? 800 : 400;
-  const maxH = contourZoom >= 9 ? 900 : contourZoom >= 7 ? 600 : 600;
+  const maxW = 400, maxH = 600;
   const sx = Math.max(1, Math.floor(bd.nx / maxW));
   const sy = Math.max(1, Math.floor(bd.ny / maxH));
   const maxDepth = depthMaxInExtent(bd, extent, sx, sy);
   const levels = generateContourLevels(maxDepth);
   window._combinedBathyLevels = levels;
   updateCombinedBathyLegend(levels);
-  const segments = [];
   for (const level of levels) {
     const segs = extractContourSegments(bd, level, sx, sy, extent);
-    segments.push(...segs.map(segment => ({ level, segment })));
-  }
-  for (const path of stitchContourSegments(segments)) {
-    const feat = new ol.Feature({ geometry: new ol.geom.LineString(path.segment), depth: path.level });
-    feat.getGeometry().transform("EPSG:4326", "EPSG:3857");
-    source.addFeature(feat);
+    for (const seg of segs) {
+      const feat = new ol.Feature({ geometry: new ol.geom.LineString(seg), depth: level });
+      feat.getGeometry().transform("EPSG:4326", "EPSG:3857");
+      source.addFeature(feat);
+    }
   }
 }
 
@@ -6971,10 +6892,16 @@ function extractContourSegments(bd, level, sx, sy, extent) {
       }
       if (crossings.length >= 2) {
         const coords = crossings.slice(0, 2).map(c => c[0]);
-        // Keep every valid cell segment. The previous 0.01-degree filter
-        // deleted legitimate high-resolution contours and the second push
-        // duplicated segments, producing visible artifacts.
-        if (coords[0] && coords[1]) segments.push(coords);
+        if (coords[0] && coords[1]) {
+          const d0 = Math.hypot(coords[0][0] - vx0, coords[0][1] - vy0);
+          const d1 = Math.hypot(coords[1][0] - vx0, coords[1][1] - vy0);
+          if (d0 > 0.01 && d1 > 0.01) {
+            segments.push(coords);
+          }
+        }
+        if (coords[0] && coords[1] && Math.hypot(coords[0][0] - coords[1][0], coords[0][1] - coords[1][1]) > 0.01) {
+          segments.push(coords);
+        }
       }
     }
   }
@@ -7091,7 +7018,7 @@ async function buildChlCompositeLayer(map, hoursOrOpts) {
   if (!selected.length) return {};
   const loaded = (await Promise.all(selected.map(async frame => {
     try {
-      const data = await fetchFrameData("chl", frame, { resolution: opts.resolution || "coarse" });
+      const data = await fetchFrameData("chl", frame);
       const grid = await loadGridForVar("chl", data);
       const z = mobileZForVar("chl", data);
       return is2D(z) ? { frame, data, grid, z } : null;
@@ -7289,32 +7216,10 @@ function combinedChlEnsureState() {
       gatePct: 10,
       loadingPromise: null,
       panelRevealed: false,
-      resolution: "coarse",
       opSeq: 0                      // increments on each toggle to abort stale renders
     };
   }
   return window._combinedChl;
-}
-
-// Promote to the original raster only when a coarse cell would become
-// visibly blocky, and demote again when zooming back out.
-const CHL_FULL_RESOLUTION_ZOOM = 7;
-
-function combinedChlResolutionForMap(map) {
-  return Number(map?.getView?.().getZoom?.()) >= CHL_FULL_RESOLUTION_ZOOM
-    ? "full" : "coarse";
-}
-
-function combinedChlScheduleResolutionCheck(map) {
-  const s = combinedChlEnsureState();
-  clearTimeout(s.resolutionTimer);
-  s.resolutionTimer = setTimeout(() => {
-    if (!document.getElementById("chk-combined-chl")?.checked || !s.selectedFrameIds.size) return;
-    const next = combinedChlResolutionForMap(map);
-    if (next === s.resolution) return;
-    s.resolution = next;
-    combinedChlRenderSelected({ resolution: next });
-  }, 220);
 }
 
 function combinedChlManifestKey() {
@@ -7348,7 +7253,7 @@ async function combinedChlEnsureCoverage() {
         const id = combinedChlFrameId(frame);
         if (s.cache.has(id) && s.cache.get(id).manifestKey === k) return;
         try {
-          const data = await fetchFrameData("chl", frame, { resolution: "coarse" });
+          const data = await fetchFrameData("chl", frame);
           const coverage = combinedChlComputeCoveragePct(data);
           s.cache.set(id, {
             timeMs: combinedChlFrameTimeMs(frame) || null,
@@ -7533,10 +7438,8 @@ function combinedChlApplyHoursPreset(hoursRaw) {
   combinedChlRenderSelected();
 }
 
-async function combinedChlRenderSelected(options = {}) {
+async function combinedChlRenderSelected() {
   const s = combinedChlEnsureState();
-  const resolution = options.resolution || s.resolution || "coarse";
-  s.resolution = resolution;
   const mySeq = s.opSeq || 0;   // snapshot of the toggle that started this render
   const chlScanTimeDiv = document.getElementById("combined-chl-scan-time");
   // 0 chips: clear layer, show "Pick at least one chip"
@@ -7567,7 +7470,7 @@ async function combinedChlRenderSelected(options = {}) {
   if (selectedFrames.length === 1) {
     const frame = selectedFrames[0];
     try {
-      const data = await fetchFrameData("chl", frame, { resolution });
+      const data = await fetchFrameData("chl", frame);
       if (s.opSeq !== mySeq) return;   // stale — user deselected while we were fetching
       const grid = await loadGridForVar("chl", data);
       if (s.opSeq !== mySeq) return;
@@ -7605,7 +7508,7 @@ async function combinedChlRenderSelected(options = {}) {
     try { window._combinedMap.removeLayer(window._combinedChlLayer); } catch (_) {}
     window._combinedChlLayer = null;
   }
-  const result = await buildChlCompositeLayer(window._combinedMap, { selectedFrames, labelMode: "auto", resolution });
+  const result = await buildChlCompositeLayer(window._combinedMap, { selectedFrames, labelMode: "auto" });
   if (s.opSeq !== mySeq) return;   // stale — user deselected while compositing
   if (result?.layer) {
     if (window._combinedMap) window._combinedMap.addLayer(result.layer);
@@ -7620,7 +7523,6 @@ async function combinedChlRenderSelected(options = {}) {
 
 async function combinedChlInitPanel() {
   const s = combinedChlEnsureState();
-  s.resolution = combinedChlResolutionForMap(window._combinedMap);
   if (s.initialized && !combinedChlManifestChanged()) {
     combinedChlRebuildChips();
     return;
@@ -8159,18 +8061,6 @@ async function buildThermalFrontDensityCanvas(frontData, grid) {
   return canvas;
 }
 
-function showBathyUnavailable(error) {
-  console.warn("[bathy] unavailable", error);
-  const old = document.getElementById("bathy-unavailable-toast");
-  if (old) old.remove();
-  const toast = document.createElement("div");
-  toast.id = "bathy-unavailable-toast";
-  toast.textContent = "Bathymetry temporarily unavailable — map and locations remain available. Tap refresh to retry.";
-  toast.style.cssText = "position:fixed;top:40px;left:10px;right:10px;z-index:998;color:#fff;background:rgba(120,70,0,0.94);padding:10px 14px;border-radius:6px;font-size:13px;text-align:center;";
-  document.body.appendChild(toast);
-  setTimeout(() => toast.remove(), 6000);
-}
-
 async function renderMobileFrame(frameMeta) {
   if (currentVar === "chl_front" || currentVar === "sst_front" || currentVar === "thermal_fronts" || currentVar === "combined") {
     document.body.classList.remove("mobile-map-ready");
@@ -8193,15 +8083,7 @@ async function renderMobileFrame(frameMeta) {
 
   let dataObj, gridInfo;
   if (currentVar === "bathy") {
-    try {
-      dataObj = await loadBathymetryJson(BATHY_JSON_URL);
-    } catch (e) {
-      showBathyUnavailable(e);
-      document.body.classList.add("mobile-map-ready");
-      ensureMobilePlaceLayer(map);
-      map.updateSize();
-      return true;
-    }
+    dataObj = await loadBathymetryJson(BATHY_JSON_URL);
     gridInfo = { xAxis: dataObj.xAxis, yAxis: dataObj.yAxis, nx: dataObj.xAxis.length, ny: dataObj.yAxis.length };
   } else {
     dataObj = await fetchFrameData(currentVar, frameMeta);
@@ -8266,12 +8148,7 @@ async function renderMobileFrame(frameMeta) {
     mobileMapState.slaContourLabelOverlays = mobileMapState.slaContourLayer?.__slaLabelOverlays || [];
     if (mobileMapState.slaContourLayer) map.addLayer(mobileMapState.slaContourLayer);
   }
-  try {
-    await ensureMobileLandLayer(map);
-  } catch (e) {
-    console.warn("[bathy] land layer unavailable; continuing without it", e);
-    showBathyUnavailable(e);
-  }
+  await ensureMobileLandLayer(map);
   ensureMobilePlaceLayer(map);
   if (currentVar === "bathy") {
     await ensureMobileBathyContourLayer(map, dataObj, gridInfo);
@@ -9844,11 +9721,8 @@ async function thermalLoadData() {
     const latest = thermalFrontState.frames.at(-1)?.t;
     if (latest) thermalFrontState.frames = thermalFrontState.frames.filter(f => latest - f.t <= 21 * 864e5);
     thermalFrontState.frameData = await Promise.all(thermalFrontState.frames.map(async f => {
-      try {
-        return { meta: f, t: f.t, data: await fetchJson(framePathOf(f)) };
-      } catch (_) {
-        return { meta: f, t: f.t, data: { features: [] } };
-      }
+      const res = await fetch(framePathOf(f) + "?t=" + Date.now());
+      return { meta: f, t: f.t, data: res.ok ? await res.json() : { features: [] } };
     }));
     thermalFrontState.frameData = thermalFrontState.frameData.filter(item => Array.isArray(item.data?.features) && item.data.features.length > 0);
     thermalBuildDailyFrames();
@@ -10154,7 +10028,7 @@ function installRegionSelector(){
 async function loadIndex() {
   // 1. Fetch selected region index ONCE with a cache-buster
   const indexUrl = REGIONS[REGION_ID]?.index || `index-${REGION_ID}.json`;
-  const res = await fetch(indexUrl, { cache: "no-store" });
+  const res = await fetch(indexUrl + "?t=" + Date.now());
   if (!res.ok) throw new Error(`Failed to load ${indexUrl}`);
   const data = await res.json();
 
@@ -10338,15 +10212,7 @@ async function loadGridForVar(v, dataObj = null) {
 }
 
 
-function framePathForResolution(varKey, frameMeta, resolution = "full") {
-  if (varKey === "chl" && resolution === "coarse" && frameMeta?.coarse_json_path) {
-    return String(frameMeta.coarse_json_path);
-  }
-  return framePathOf(frameMeta);
-}
-
-async function fetchFrameData(varKey, frameMeta, options = {}) {
-  const resolution = options.resolution || "full";
+async function fetchFrameData(varKey, frameMeta) {
   const candidates = [frameMeta];
   // The rolling R2 publisher can leave a stale manifest entry after an old
   // object is purged. If the selected frame is 404, walk newest-first to the
@@ -10359,19 +10225,13 @@ async function fetchFrameData(varKey, frameMeta, options = {}) {
   }
   let lastPath = "";
   for (const candidate of candidates) {
-    const p = framePathForResolution(varKey, candidate, resolution);
+    const p = framePathOf(candidate);
     if (!p) continue;
     lastPath = p;
     try {
-      const data = await fetchJson(p);
-      data.__resolution = resolution;
-      return data;
+      const res = await fetch(p + (p.includes('?') ? '&' : '?') + 't=' + Date.now());
+      if (res.ok) return await res.json();
     } catch (_) {}
-  }
-  if (resolution === "coarse") {
-    // Older rolling R2 windows may not have derivatives yet; preserve the
-    // existing full-resolution behavior instead of making CHL unavailable.
-    return fetchFrameData(varKey, frameMeta, { resolution: "full" });
   }
   throw new Error(`Frame load failed: ${lastPath || "no json path"}`);
 }
@@ -10484,7 +10344,6 @@ async function showFrame() {
   const e = new Error();
   const callers = e.stack?.split("\n").slice(1,4).join(" | ") || "";
   console.log("[showFrame] ENTRY currentVar:", currentVar, "IS_TOUCH:", IS_TOUCH, "callers:", callers);
-  if (currentVar !== "combined") await ensurePlotly();
   console.log("[showFrame] ENTRY timestamp:", Date.now());
   updateReadoutPosition();
 
@@ -10738,7 +10597,7 @@ async function loadCaptainBriefing() {
   if (!panel || !status || !plansDiv || !healthDiv || !fullDiv) return;
 
   try {
-    const res = await fetch(`https://data.fishedge.live/${REGION_ID}/briefing/latest.json`, { cache: "no-store" });
+    const res = await fetch(`https://data.fishedge.live/${REGION_ID}/briefing/latest.json?t=${Date.now()}`);
     if (!res.ok) throw new Error(`No briefing artifact for ${REGION_ID}`);
     const briefing = await res.json();
     const when = briefing.generated_at ? new Date(briefing.generated_at).toLocaleString() : "unknown";
@@ -10811,65 +10670,18 @@ async function loadCaptainBriefing() {
 })();
 
 /* ========================= INIT ========================= */
-let __plotlyLoadPromise = null;
-function ensurePlotly() {
-  if (window.Plotly) return Promise.resolve(window.Plotly);
-  if (__plotlyLoadPromise) return __plotlyLoadPromise;
-  __plotlyLoadPromise = new Promise((resolve, reject) => {
-    const script = document.createElement("script");
-    script.src = "https://cdn.plot.ly/plotly-2.34.0.min.js";
-    script.async = true;
-    script.onload = () => resolve(window.Plotly);
-    script.onerror = () => reject(new Error("Plotly failed to load"));
-    document.head.appendChild(script);
-  });
-  return __plotlyLoadPromise;
-}
-
-async function initDashboard() {
-  window.__dashboardStarted = true;
-  window.__dashboardBooting = true;
-  const bootStatus = document.getElementById('dashboard-boot-status');
-  const setBootStatus = (message, failed) => {
-    if (!bootStatus) return;
-    const card = bootStatus.querySelector('.boot-card');
-    if (card) card.innerHTML = failed
-      ? `${message}<br><button type="button" onclick="location.reload()">Retry</button>`
-      : message;
-    bootStatus.hidden = false;
-  };
-  const finishBootStatus = () => { if (bootStatus) bootStatus.hidden = true; };
+(async function init() {
   try {
-    setBootStatus('Loading dashboard…', false);
-    // Never allow the explicit URL-region fast path to bypass authentication.
-    // Boot only after initAuth has confirmed a valid, verified session.
-    if (window.__authReady) await window.__authReady;
     installRegionSelector();
     // Wait for the auth callback to determine the correct active region
     // before fetching the index. Without this, init() races the profile
     // fetch and may end up loading usec_south frames while the BBOX is
     // usec_md (the "stuck loading dashboard" symptom).
     if (window.__profileReady) {
-      // An explicit URL region is authoritative and can boot immediately.
-      // Without one, the saved profile region must resolve before the first
-      // index fetch; otherwise the default South index can render briefly
-      // before a Mid-Atlantic profile switches the page underneath it.
-      const hasExplicitRegion = QUERY_PARAMS.has('region');
-      const safeTimeout = new Promise(r => setTimeout(() => r(null), hasExplicitRegion ? 750 : 3000));
+      const safeTimeout = new Promise(r => setTimeout(() => r(null), 4000));
       await Promise.race([window.__profileReady, safeTimeout]);
     }
-    // The profile callback is serialized while booting. Apply its resolved
-    // region before loadIndex() so the very first data request is correct.
-    if (window.__pendingAuthRegion && window.__pendingAuthRegion !== REGION_ID) {
-      setActiveRegion(window.__pendingAuthRegion);
-      window.__pendingAuthRegion = null;
-    }
-    // Combined mode keeps bathymetry opt-in. The old unconditional land-mask
-    // preparation downloaded and parsed the ~13 MB bathy grid before the map
-    // could appear, even when the Bathymetry checkbox was off.
-    const initTasks = [loadIndex()];
-    if (currentVar !== "combined") initTasks.push(prepareLandMask());
-    await Promise.all(initTasks);
+    await Promise.all([ loadIndex(), prepareLandMask() ]);
     // Start on the latest frame for each variable (not the oldest)
     for (const v of ["chl","sst","uv"]) {
       if (framesByVar[v]?.length) {
@@ -10887,42 +10699,15 @@ async function initDashboard() {
     syncTimeControls();
     syncArrowLegend();
     syncControlsHeight();
-    if (currentVar === "combined") {
-      await showFrame();
-    } else if (currentVar === "thermal_fronts" || framesByVar[currentVar]?.length) {
-      await ensurePlotly();
-      await showFrame();
-    }
+    if (currentVar === "thermal_fronts" || framesByVar[currentVar]?.length) await showFrame();
     else { }
     // Apply combined-mode body class at startup if already on combined
     if (currentVar === "combined") document.body.classList.add("combined-mode");
     if (typeof syncDashboardChrome === "function") syncDashboardChrome();
-    window.__dashboardBooting = false;
-    if (window.__pendingAuthRegion && window.__pendingAuthRegion !== REGION_ID) {
-      const nextRegion = window.__pendingAuthRegion;
-      window.__pendingAuthRegion = null;
-      setActiveRegion(nextRegion);
-      await initializeData();
-    }
-    document.body.classList.remove("auth-pending");
-    document.body.classList.add("auth-ready");
-    finishBootStatus();
   } catch (e) {
     console.error("Init failed:", e);
-    window.__dashboardBooting = false;
-    document.body.classList.remove("auth-pending");
-    document.body.classList.add("auth-ready");
-    setBootStatus('Dashboard could not finish loading.', true);
   }
-}
-// Deferred OpenLayers/Plotly scripts execute after parsing but before
-// DOMContentLoaded. Do not initialize the dashboard from the parser itself:
-// doing so races `ol` on a cold load and produces a black map until refresh.
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", initDashboard, { once: true });
-} else {
-  initDashboard();
-}
+})();
 
 /* ================= LOGIN GATE (DISABLED - always show map) ================= */
 (function() {
@@ -11046,7 +10831,7 @@ async function pollForUpdates() {
   try {
     // Ping index.json with a random string to force GitHub to give us the newest version
     const regionIndexUrl = REGIONS[REGION_ID]?.index || `index-${REGION_ID}.json`;
-    const res = await fetch(regionIndexUrl, { cache: "no-store" });
+    const res = await fetch(regionIndexUrl + "?nocache=" + Date.now());
     if (!res.ok) throw new Error(`Failed to poll ${regionIndexUrl}`);
     const data = await res.json();
 
