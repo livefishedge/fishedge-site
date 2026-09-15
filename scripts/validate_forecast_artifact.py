@@ -75,6 +75,14 @@ def main():
     source = payload.get("tide_harmonic_source") or payload.get("regional_tide_source") or payload.get("ofs_tidal_forecast")
     if not source:
         raise SystemExit(f"{region} missing tidal source provenance")
+    native = payload.get("native_mesh") or {}
+    if not native.get("complete_native_mesh_processed"):
+        raise SystemExit(f"{region} missing complete native mesh processing contract")
+    if not isinstance(native.get("native_contours"), list) or not native["native_contours"]:
+        raise SystemExit(f"{region} missing native tidal contours")
+    phase = native.get("phase_tiles") or {}
+    if not isinstance(phase.get("frames"), int) or phase["frames"] <= 0:
+        raise SystemExit(f"{region} missing native phase-tile contract")
     print({"path": str(args.path), "frames": len(frames), "window_frames": len(usable),
            "first": min(times).isoformat(), "last": max(times).isoformat(),
            "generated_at": payload["generated_at"]})

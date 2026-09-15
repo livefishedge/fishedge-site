@@ -49,6 +49,7 @@ jobs:
           git add data/usec_md/briefing/frames/forecast-frames-*.json dashboard/trip-planner/data/usec_md/briefing/frames/forecast-frames-*.json
           git add data/usec_south/briefing/forecast.json dashboard/trip-planner/data/usec_south/briefing/forecast.json
           git add data/usec_south/briefing/frames/forecast-frames-*.json dashboard/trip-planner/data/usec_south/briefing/frames/forecast-frames-*.json
+          git add dashboard/trip-planner/data/usec_south/briefing/native_phase_tiles || true
           if [ -f data/usec_md/briefing/tidal_forecast.json ]; then git add data/usec_md/briefing/tidal_forecast.json; fi
           git diff --cached --quiet || git commit -m "chore: refresh marine and CO-OPS data"
           git push
