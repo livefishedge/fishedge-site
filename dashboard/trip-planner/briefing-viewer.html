@@ -2330,6 +2330,13 @@
         return a*(1-tx)*(1-ty) + b*tx*(1-ty) + c*(1-tx)*ty + d*tx*ty;
       };
 
+      // Use the support mask that belongs to the product family. SST and
+      // wave fields share the wave-model footprint; using the narrower tidal
+      // wet-cell mask here drops valid South nearshore SST cells.
+      const supportCells = dataKey === 'astronomical_tide_ft'
+        ? forecastData.tide_water_cells
+        : (forecastData.wave_open_water_cells || forecastData.wave_water_cells || forecastData.tide_water_cells);
+
       // Fill the tile by walking the source grid lattice (fast path):
       // for each grid cell, draw a quad with linear color interpolation per row.
       const cellW = Math.abs(toX(lons[1]) - toX(lons[0]));
@@ -2337,8 +2344,7 @@
       // quad per cell
       for (let yi = 0; yi < ny - 1; yi++) {
         for (let xi = 0; xi < nx - 1; xi++) {
-          if (oceanOnly && forecastData.tide_water_cells &&
-              forecastData.tide_water_cells[yi]?.[xi] !== true) continue;
+          if (oceanOnly && supportCells && supportCells[yi]?.[xi] !== true) continue;
           let v00 = grid[yi][xi];
           let v10 = grid[yi][xi+1];
           let v01 = grid[yi+1][xi];
