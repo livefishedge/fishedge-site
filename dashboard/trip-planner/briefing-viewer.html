@@ -599,10 +599,8 @@
 
     // viridis-like 7-stop palette (matches captain's UV_SCALE / CHL_ALGAE feel)
     const SCALES = {
-      // Continuous ocean-temperature ramp. Do not use a white midpoint:
-      // Mid-Atlantic SST commonly sits near the middle of 70–80°F, and a
-      // white midpoint makes correctly sampled current filaments look like
-      // uncolored wind streaks.
+      // Continuous ocean-temperature ramp shared by the SST raster and
+      // current-particle origin colors.
       SST: [[0.0,'#173f8a'],[0.16,'#176fb3'],[0.32,'#16a6b7'],[0.48,'#54c878'],[0.62,'#d8d447'],[0.78,'#f29f32'],[1.0,'#d94732']],
       UV:  [[0.0,'#440154'],[0.17,'#443983'],[0.34,'#31688e'],[0.5,'#35b779'],[0.67,'#90d743'],[0.83,'#fde725'],[1.0,'#fff7bc']],
       CHL: [[0.0,'#001f3f'],[0.2,'#0074d9'],[0.4,'#39cccc'],[0.5,'#2ecc40'],[0.7,'#ffdc00'],[0.85,'#ff851b'],[1.0,'#ff4136']],
@@ -4661,7 +4659,12 @@
     }
 
     function makeCurrentParticle(lon, lat, age = 0) {
-      return { lon, lat, age, maxAge: 840 + Math.random() * 600, trail: [] };
+      const originSstF = sampleGridAtPoint(currentFrame?.sea_surface_temperature_f, lat, lon, false);
+      return {
+        lon, lat, age, maxAge: 840 + Math.random() * 600, trail: [],
+        originLon: lon, originLat: lat,
+        originSstF: Number.isFinite(originSstF) ? originSstF : null,
+      };
     }
 
     function seedCurrentParticles() {
@@ -4746,13 +4749,16 @@
       }
     }
 
-    function currentParticleColor(lon, lat) {
+    function currentParticleColor(lon, lat, originSstF = null) {
       // Allow the nearby finite-water fallback at coastal/missing corners;
       // returning a neutral color for every partial cell was visually
       // indistinguishable from an uncolored wind layer.
-      const temp = sampleGridAtPoint(currentFrame?.sea_surface_temperature_f, lat, lon, false);
+      const temp = Number.isFinite(originSstF)
+        ? originSstF
+        : sampleGridAtPoint(currentFrame?.sea_surface_temperature_f, lat, lon, false);
       if (!Number.isFinite(temp)) return '#70d6ff';
-      return sampleScale('SST', Math.max(0, Math.min(1, (temp - 70) / 10)));
+      const [vmin, vmax] = PRODUCTS.sea_surface_temperature_f.fixedRange;
+      return sampleScale('SST', Math.max(0, Math.min(1, (temp - vmin) / (vmax - vmin))));
     }
 
     function startParticleAnimation() {
@@ -4907,7 +4913,9 @@
               const geoStart = p.trail[Math.min(p.trail.length - 1, start)] || [oldLon, oldLat];
               const geoEnd = p.trail[Math.min(p.trail.length - 1, end)] || [p.lon, p.lat];
               const progress = (band + 1) / bands;
-              flowCtx.strokeStyle = currentParticleColor((geoStart[0] + geoEnd[0]) / 2, (geoStart[1] + geoEnd[1]) / 2);
+              // Keep each filament colored by its origin SST rather than
+              // changing color as advection crosses the South grid.
+              flowCtx.strokeStyle = currentParticleColor(p.originLon, p.originLat, p.originSstF);
               flowCtx.globalAlpha = Math.min(0.82, (0.26 + 0.32 * progress + 0.18 * speedT) * fadeOut);
               flowCtx.lineWidth = 0.55 + 0.35 * speedT;
               flowCtx.beginPath();
