@@ -584,7 +584,10 @@
       // rendered as the swell and wind-wave overlays below.
       wave_composite:{name: 'Significant Wave Height', unit: 'ft', scale: 'UV', viz: 'composite', dataKey: 'wave_height_ft', dynamicRange: false, fixedRange: [0, 5] },
       wind_wave_height_ft:{name: 'Wave Height (Chop)', unit: 'ft', scale: 'UV', viz: 'heat', dataKey: 'wind_wave_height_ft', dynamicRange: false, fixedRange: [0, 5] },
-      sea_surface_temperature_f: { name: 'Sea-surface temperature', unit: '°F', scale: 'SST', viz: 'heat', dataKey: 'sea_surface_temperature_f', dynamicRange: false, fixedRange: [70, 80] },
+      // These are display limits, not an accuracy claim. South's September
+      // marine forecast is concentrated around 80–90°F; MD includes cooler
+      // shelf water and therefore needs a wider range to avoid clipping.
+      sea_surface_temperature_f: { name: 'Sea-surface temperature', unit: '°F', scale: 'SST', viz: 'heat', dataKey: 'sea_surface_temperature_f', dynamicRange: false, fixedRange: region === 'usec_south' ? [80, 90] : [65, 90] },
       wave_steepness: { name: 'Surface Steepness', unit: 'Sₛ', scale: 'ALERT', viz: 'heat', dataKey: 'wave_steepness', dynamicRange: false, fixedRange: [0, 0.10] },
       ride_harshness_index: { name: 'Ride Harshness', unit: '0 smooth · 3 severe', scale: 'RIDE', viz: 'heat', dataKey: 'ride_harshness_index', dynamicRange: false, fixedRange: [0, 3] },
       surface_height_m: { name: 'Sea Level Anomaly', unit: 'm', scale: 'SLA', viz: 'contours', dataKey: 'surface_height_m', dynamicRange: false, fixedRange: [-1, 1] },
@@ -1057,7 +1060,7 @@
     // instead of reusing an older cached JSON response.
     // Bump whenever the JSON artifact changes; otherwise a Pages/browser
     // cache can keep serving a pre-calibration tide field after HTML deploy.
-    const FORECAST_DATA_BUILD = 'planner-regional-tides-v44';
+    const FORECAST_DATA_BUILD = 'planner-regional-tides-v45';
     const DEV_FORECAST_URL = `/trip-planner/data/${region}/briefing/forecast.json?v=${FORECAST_DATA_BUILD}`;
     const WAVE_MASK_URL = `/trip-planner/data/${region}/briefing/native_wave_mask.png?v=${FORECAST_DATA_BUILD}`;
     const CORS_PROXY = 'https://corsproxy.io/?';

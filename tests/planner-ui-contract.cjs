@@ -33,7 +33,7 @@ assert(html.includes('traceCurrentDirection(lon0, lat0, direction, maxSteps = 96
 assert(html.includes('Midpoint (RK2) advection'), 'current particles must use midpoint advection');
 assert(html.includes('currentParticleColor'), 'current particles must use SST-origin tinting');
 assert(html.includes('Math.min(compact ? 1800 : 2400'), 'current particles must use bounded mobile/desktop caps');
-assert(html.includes("fixedRange: [70, 80]"), 'SST range must be 70–80°F');
+assert(html.includes("region === 'usec_south' ? [80, 90] : [65, 90]"), 'SST ranges must be region-aware');
 assert(html.includes("input.addEventListener('change'"), 'hamburger layer toggles must redraw data layers');
 assert(html.includes('function renderPlannerDistanceLayer()'), 'planner distance renderer must rebuild all graphics');
 assert(html.includes("fishedge:planner:distance:v1"), 'planner distance measurements must persist');
