@@ -278,9 +278,9 @@
   function setPlannerRegion(region, canonicalize = true) {
     if (!REGION_IDS.has(region)) throw new Error(`Unsupported planner region: ${region}`);
     PLANNER_REGION = region;
-    DATA_BASE = /\.pages\.dev$/.test(location.hostname)
-      ? `${location.origin}/trip-planner/data/${region}/briefing/`
-      : `https://data.fishedge.live/${region}/briefing/`;
+    // Pages publishes the validated regional artifact with the app. Use it as
+    // the primary source so a missing/stale R2 mirror cannot blank the Planner.
+    DATA_BASE = `${location.origin}/trip-planner/data/${region}/briefing/`;
     if (canonicalize) {
       const url = new URL(location.href);
       url.searchParams.set('region', region);
@@ -665,15 +665,28 @@
 
   async function loadForecast() {
     try {
-      const r = await fetch(DATA_BASE + 'forecast.json', { cache: 'no-store' });
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      forecast = await r.json();
-      if (forecast.frames_manifest?.chunks?.length) {
-        const base = new URL(forecast.frames_manifest.dir || './frames/', DATA_BASE);
-        const chunks = await Promise.all(forecast.frames_manifest.chunks.map(name => fetch(new URL(name, base), {cache:'no-store'}).then(x => x.json())));
-        forecast.frames = chunks.flatMap(chunk => Array.isArray(chunk.frames) ? chunk.frames : []);
-        if (forecast.frames.length !== Number(forecast.frames_manifest.frame_count)) throw new Error('Incomplete forecast chunks');
+      const sources = [DATA_BASE, `https://data.fishedge.live/${PLANNER_REGION}/briefing/`];
+      let lastError = null;
+      for (const baseUrl of [...new Set(sources)]) {
+        try {
+          const r = await fetch(baseUrl + 'forecast.json', { cache: 'no-store' });
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          const candidate = await r.json();
+          if (candidate.region && candidate.region !== PLANNER_REGION) throw new Error('Region mismatch');
+          if (candidate.frames_manifest?.chunks?.length) {
+            const base = new URL(candidate.frames_manifest.dir || './frames/', baseUrl);
+            const chunks = await Promise.all(candidate.frames_manifest.chunks.map(name => fetch(new URL(name, base), {cache:'no-store'}).then(x => {
+              if (!x.ok) throw new Error(`HTTP ${x.status}`);
+              return x.json();
+            })));
+            candidate.frames = chunks.flatMap(chunk => Array.isArray(chunk.frames) ? chunk.frames : []);
+            if (candidate.frames.length !== Number(candidate.frames_manifest.frame_count)) throw new Error('Incomplete forecast chunks');
+          }
+          forecast = candidate;
+          break;
+        } catch (error) { lastError = error; }
       }
+      if (!forecast) throw lastError || new Error('No forecast source available');
       dayAggregates = aggregateByDay();
       if (dayAggregates.length === 0) throw new Error('No daily aggregates');
       selectedDayIdx = 0;
