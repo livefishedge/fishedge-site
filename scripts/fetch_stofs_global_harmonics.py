@@ -150,7 +150,7 @@ def mesh(remote):
     return dict(np.load(MESH_CACHE, allow_pickle=False))
 
 
-def read_zeta(remote, node_ids, hours):
+def read_zeta(remote, node_ids, hours, checkpoint_dir=None):
     var = remote.ds.variables["zeta"]
     itemsize = var.data.dtype.itemsize
     recsize = int(remote.ds._recsize)
@@ -184,19 +184,40 @@ def read_zeta(remote, node_ids, hours):
         coalesced.append((lo, hi))
     spans = coalesced
     out = np.full((len(hours), len(node_ids)), np.nan)
+    checkpoint_dir = Path(checkpoint_dir) if checkpoint_dir else None
+    if checkpoint_dir:
+        checkpoint_dir.mkdir(parents=True, exist_ok=True)
     def fetch_span(hour, lo, hi):
         raw = remote.range(begin + hour * recsize + lo * itemsize, (hi - lo) * itemsize)
         values = np.frombuffer(raw, dtype=var.data.dtype).astype(float)
         values[values < -9000] = np.nan
         return lo, hi, values
-    for ti, hour in enumerate(hours):
+    def fetch_hour(ti_hour):
+        ti, hour = ti_hour
+        checkpoint = checkpoint_dir / f"hour-{int(hour):04d}.npy" if checkpoint_dir else None
+        if checkpoint and checkpoint.exists():
+            row = np.load(checkpoint, allow_pickle=False)
+            if row.shape == (len(node_ids),):
+                return ti, row
+        row = np.full(len(node_ids), np.nan)
         with ThreadPoolExecutor(max_workers=8) as pool:
             reads = list(pool.map(lambda span: fetch_span(int(hour), *span), spans))
         for lo, hi, values in reads:
             left = int(np.searchsorted(node_ids, lo, side="left"))
             right = int(np.searchsorted(node_ids, hi, side="left"))
-            selected = values[node_ids[left:right] - lo]
-            out[ti, left:right] = selected
+            row[left:right] = values[node_ids[left:right] - lo]
+        if checkpoint:
+            tmp = checkpoint.with_suffix('.tmp.npy')
+            np.save(tmp, row.astype(np.float32, copy=False), allow_pickle=False)
+            tmp.replace(checkpoint)
+        return ti, row
+
+    # Bounded hour-level parallelism avoids a 168-hour serial wall clock while
+    # keeping memory and remote request pressure finite.
+    pending = [(ti, int(hour)) for ti, hour in enumerate(hours)]
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        for ti, row in pool.map(fetch_hour, pending):
+            out[ti] = row
     return out
 
 

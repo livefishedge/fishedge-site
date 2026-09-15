@@ -32,6 +32,8 @@ def main():
     ap.add_argument('--mesh-cache', type=Path, required=True)
     ap.add_argument('--forecast', type=Path, required=True)
     ap.add_argument('--out-dir', type=Path, required=True)
+    ap.add_argument('--checkpoint-dir', type=Path,
+                    help='reuse resumable per-hour zeta slices from native extraction')
     ap.add_argument('--width', type=int, default=900)
     ap.add_argument('--height', type=int, default=650)
     ap.add_argument('--frames', type=int, default=0,
@@ -47,16 +49,23 @@ def main():
     mesh = dict(np.load(args.mesh_cache, allow_pickle=False))
     x = np.asarray(mesh['x'], float); y = np.asarray(mesh['y'], float)
     tri = np.asarray(mesh['elements'], np.int32)
-    ds = LocalClassicNetCDF(args.source)
-    try:
-        source_count = int(ds.ds.variables['zeta'].data.shape[0])
-        node_ids = np.asarray(mesh['node_ids'], np.int64)
-        z = (read_zeta(ds, node_ids, np.arange(source_count, dtype=int)) * 3.280839895).astype(np.float32)
-        depth_var = ds.ds.variables.get('depth')
-        if depth_var is None: raise SystemExit('native source lacks depth')
-        depth = np.asarray(depth_var.data[node_ids], float)
-    finally:
-        ds.close()
+    if args.checkpoint_dir:
+        files = sorted(args.checkpoint_dir.glob('hour-*.npy'))
+        if not files: raise SystemExit('native checkpoint has no hourly slices')
+        z = np.stack([np.load(path, allow_pickle=False) for path in files]).astype(np.float32)
+        source_count = z.shape[0]
+        depth = None
+    else:
+        ds = LocalClassicNetCDF(args.source)
+        try:
+            source_count = int(ds.ds.variables['zeta'].data.shape[0])
+            node_ids = np.asarray(mesh['node_ids'], np.int64)
+            z = (read_zeta(ds, node_ids, np.arange(source_count, dtype=int)) * 3.280839895).astype(np.float32)
+            depth_var = ds.ds.variables.get('depth')
+            if depth_var is None: raise SystemExit('native source lacks depth')
+            depth = np.asarray(depth_var.data[node_ids], float)
+        finally:
+            ds.close()
 
     # Co-range uses the same native wet-node rule as this source-derived
     # range: a node is drawable when it has any finite HTP value and positive
@@ -65,7 +74,12 @@ def main():
 
     finite = np.isfinite(z)
     lo = np.full(z.shape[1], np.nan); hi = np.full(z.shape[1], np.nan)
-    good = finite.any(axis=0) & (depth > 0)
+    if depth is None:
+        source_forecast = json.loads(args.forecast.read_text())
+        native_range = np.asarray([(np.nan if v is None else float(v)) for v in (source_forecast.get('native_mesh') or {}).get('range_ft', [])])
+        good = finite.any(axis=0) & np.isfinite(native_range)
+    else:
+        good = finite.any(axis=0) & (depth > 0)
     lo[good] = np.nanmin(np.where(finite[:, good], z[:, good], np.nan), axis=0)
     hi[good] = np.nanmax(np.where(finite[:, good], z[:, good], np.nan), axis=0)
     half = (hi - lo) / 2

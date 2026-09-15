@@ -16,7 +16,7 @@ def main():
     required = ('node_count', 'triangle_count', 'contour_triangle_count', 'source')
     missing = [k for k in required if k not in m and k not in (m.get('source') or {})]
     if missing: raise SystemExit('native provenance missing: ' + ','.join(missing))
-    packaged = {k: m[k] for k in ('node_count','triangle_count','contour_triangle_count','contour_step_ft','native_contours','source') if k in m}
+    packaged = {k: m[k] for k in ('node_count','triangle_count','contour_triangle_count','contour_step_ft','native_contours','phase_tiles','source') if k in m}
     packaged['representation'] = 'precomputed native-mesh contours; raw nodes/faces kept out of Pages payload due 25 MiB file limit'
     packaged['complete_native_mesh_processed'] = True
     p['native_mesh'] = packaged

@@ -77,7 +77,8 @@ def build_complete_region_mesh(remote, cache_path, region_bbox):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--date', default='20260901')
+    ap.add_argument('--date', required=True,
+                    help='STOFS cycle date; never silently use a stale default')
     ap.add_argument('--cycle', default='00')
     ap.add_argument('--mesh-cache', type=Path, required=True)
     ap.add_argument('--forecast', type=Path, required=True)
@@ -88,6 +89,8 @@ def main():
                     help='discard the legacy nearest-grid cache and select all regional faces')
     ap.add_argument('--bbox', type=float, nargs=4, metavar=('WEST','SOUTH','EAST','NORTH'),
                     default=DEFAULT_BBOX, help='WGS84 region bbox')
+    ap.add_argument('--checkpoint-dir', type=Path,
+                    help='directory for resumable per-hour regional zeta slices')
     args = ap.parse_args()
     source_url = f"{S3}/{find_key(args.date, args.cycle)}"
     remote = LocalClassicNetCDF(args.local_source) if args.local_source else RemoteClassicNetCDF(source_url)
@@ -102,7 +105,8 @@ def main():
         # hour changes extrema and is not a full-horizon range.
         hours = np.arange(count, dtype=int)
         node_ids_for_read = np.asarray(m['node_ids'], dtype=np.int64)
-        zeta_m = read_zeta(remote, node_ids_for_read, hours)
+        zeta_m = read_zeta(remote, node_ids_for_read, hours,
+                           checkpoint_dir=args.checkpoint_dir)
         depth_var = remote.ds.variables.get('depth')
         if depth_var is None:
             raise SystemExit('native source lacks depth/wet-dry variable')
