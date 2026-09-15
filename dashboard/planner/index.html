@@ -272,9 +272,10 @@
   // frame's wind/wave/swell. "▶ Next" button cycles through the day's
   // 3-hour frames. Briefing card + map link use the selected frame.
   // ============================================================
+  const PLANNER_REGION = new URLSearchParams(location.search).get('region') === 'usec_south' ? 'usec_south' : 'usec_md';
   const DATA_BASE = /\.pages\.dev$/.test(location.hostname)
-    ? `${location.origin}/trip-planner/data/usec_md/briefing/`
-    : 'https://data.fishedge.live/usec_md/briefing/';
+    ? `${location.origin}/trip-planner/data/${PLANNER_REGION}/briefing/`
+    : `https://data.fishedge.live/${PLANNER_REGION}/briefing/`;
   const INLET_STORAGE_KEY = 'fished…nlet';
   const TRIPS_STORAGE_KEY = 'fishedge:planner:trips';
 

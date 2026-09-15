@@ -25,14 +25,41 @@ copy, using the versioned briefing-forecast-v2 contract.
 """
 
 import json
+import os
 import time
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 import requests
 import numpy as np
 
-REGION = "usec_md"
-FULL_BBOX = [-76.5, 35.5, -71.5, 40.5]
+REGION = os.environ.get("FISHEDGE_REGION", "usec_md")
+REGION_CONFIG = {
+    "usec_md": {
+        "bbox": [-76.5, 35.5, -71.5, 40.5], "n": 11,
+        "stations": [
+            {"id": "8536110", "name": "Cape May, NJ", "lat": 38.9683, "lon": -74.9600},
+            {"id": "8534720", "name": "Atlantic City, NJ", "lat": 39.355, "lon": -74.418},
+            {"id": "8570283", "name": "Ocean City Inlet", "lat": 38.328, "lon": -75.092},
+            {"id": "8632200", "name": "Kiptopeke", "lat": 37.1652, "lon": -75.9884},
+            {"id": "8638610", "name": "Sewells Point", "lat": 36.9428, "lon": -76.3286},
+            {"id": "8639348", "name": "Money Point", "lat": 36.7782, "lon": -76.3019},
+            {"id": "8637689", "name": "Yorktown USCG", "lat": 37.2265, "lon": -76.4788},
+            {"id": "8651370", "name": "Duck, NC", "lat": 36.183, "lon": -75.747},
+        ],
+    },
+    "usec_south": {
+        "bbox": [-81.0, 31.0, -73.0, 36.0], "n": 17,
+        "stations": [
+            {"id": "8651370", "name": "Duck, NC", "lat": 36.183, "lon": -75.747},
+            {"id": "8656483", "name": "Beaufort, NC", "lat": 34.719, "lon": -76.670},
+            {"id": "8658120", "name": "Wilmington, NC", "lat": 34.227, "lon": -77.953},
+            {"id": "8665530", "name": "Charleston, SC", "lat": 32.781, "lon": -79.925},
+        ],
+    },
+}
+if REGION not in REGION_CONFIG:
+    raise SystemExit(f"unsupported FISHEDGE_REGION: {REGION}")
+FULL_BBOX = REGION_CONFIG[REGION]["bbox"]
 # The planner displays the whole operational domain. Keeping the producer
 # grid on the old inner box made SST appear as a floating rectangle when the
 # map showed the full usec_md region. Use a square request that encloses the
@@ -41,9 +68,9 @@ FULL_BBOX = [-76.5, 35.5, -71.5, 40.5]
 DISPLAY_BBOX = FULL_BBOX
 FETCH_STEP_DEG = 0.5
 DISPLAY_STEP_DEG = 0.5
-N = 11  # square NxN fetch -> 5° span, matches Captain's Dashboard usec_md
-OUT_PATH = Path(__file__).resolve().parents[1] / "data" / "usec_md" / "briefing" / "forecast.json"
-DASHBOARD_OUT_PATH = Path(__file__).resolve().parents[1] / "dashboard" / "trip-planner" / "data" / "usec_md" / "briefing" / "forecast.json"
+N = REGION_CONFIG[REGION]["n"]
+OUT_PATH = Path(__file__).resolve().parents[1] / "data" / REGION / "briefing" / "forecast.json"
+DASHBOARD_OUT_PATH = Path(__file__).resolve().parents[1] / "dashboard" / "trip-planner" / "data" / REGION / "briefing" / "forecast.json"
 FRAME_CHUNK_SIZE = 24
 # Request one extra calendar day so a rolling today→+7-day viewer window has
 # a full 168 hours even when the refresh runs after local midnight.
@@ -60,16 +87,7 @@ FORECAST_DAYS = 8
 #   - Kiptopeke + Sewells Point + Money Point + Yorktown = Chesapeake references
 #   - Duck, NC = outer banks (Hatteras corridor edge)
 # Units: feet (CO-OPS MLLW datum, the same as the USEC captain convention).
-TIDE_STATIONS = [
-    {"id": "8536110", "name": "Cape May, NJ",       "lat": 38.9683, "lon": -74.9600},
-    {"id": "8534720", "name": "Atlantic City, NJ",  "lat": 39.355, "lon": -74.418},
-    {"id": "8570283", "name": "Ocean City Inlet",   "lat": 38.328, "lon": -75.092},
-    {"id": "8632200", "name": "Kiptopeke",          "lat": 37.1652, "lon": -75.9884},
-    {"id": "8638610", "name": "Sewells Point",      "lat": 36.9428, "lon": -76.3286},
-    {"id": "8639348", "name": "Money Point",        "lat": 36.7782, "lon": -76.3019},
-    {"id": "8637689", "name": "Yorktown USCG",      "lat": 37.2265, "lon": -76.4788},
-    {"id": "8651370", "name": "Duck, NC",           "lat": 36.183, "lon": -75.747},
-]
+TIDE_STATIONS = REGION_CONFIG[REGION]["stations"]
 COOPS_API = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter"
 COOPS_HOURS = 168  # viewer renders today through seven days later
 
@@ -274,17 +292,21 @@ def add_tide_display_fields(frames):
     if not frames or not frames[0].get("tide_height_ft"):
         return
     source = [frame.get("tide_height_ft") for frame in frames]
-    ny, nx = len(source[0]), len(source[0][0])
+    valid_source = [grid for grid in source if grid and grid[0]]
+    if not valid_source:
+        return
+    ny, nx = len(valid_source[0]), len(valid_source[0][0])
     ranges = []
     for yi in range(ny):
         row = []
         for xi in range(nx):
-            values = [grid[yi][xi] for grid in source if grid and grid[yi][xi] is not None]
+            values = [grid[yi][xi] for grid in valid_source if grid[yi][xi] is not None]
             row.append(float(max(values) - min(values)) if values else None)
         ranges.append(row)
     for frame in frames:
-        frame["astronomical_tide_ft"] = frame["tide_height_ft"]
-        frame["tide_range_ft"] = ranges
+        if frame.get("tide_height_ft"):
+            frame["astronomical_tide_ft"] = frame["tide_height_ft"]
+            frame["tide_range_ft"] = ranges
 
 
 def build_square_grid(bbox, step, n):
