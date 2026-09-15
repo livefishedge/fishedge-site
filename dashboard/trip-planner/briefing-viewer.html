@@ -232,8 +232,6 @@
     #bv-wave-readout .bv-readout-tide{ margin-top:6px; overflow-x:auto; }
     #bv-wave-readout .bv-readout-tide svg{ display:block; width:280px; height:112px; }
     .bv-chart-viewport{max-width:100%;overflow:auto;touch-action:none;overscroll-behavior:contain}
-    .bv-chart-controls{display:flex;gap:6px;align-items:center;margin:4px 0;touch-action:manipulation}
-    .bv-chart-controls button{min-width:36px;min-height:32px;border:1px solid #55758c;border-radius:4px;background:#132333;color:#d6e5f2}
     #bv-click-marker{width:8px;height:8px;border:1px solid #fff;border-radius:50%;box-shadow:0 0 0 1px #e91e63,0 0 6px #000;transform:translate(-50%,-50%);pointer-events:none;display:none}
     #bv-wave-readout b{ color:#fff; }
     .dot-temp { background: #ff8c00; }
@@ -273,8 +271,9 @@
     .bv-ranges-title b { color: #e3f2fd; font-weight: 600; }
     #bv-cbar { width: 100%; height: 22px; display:block; }
     .bv-ranges-ticks { display: flex; justify-content: space-between; font-size: 9px; line-height: 1; color: #9fb0c3; font-family: monospace; margin-top: 1px; }
-    .bv-map-field-shell{ align-items:center; max-width:none; overflow:visible; }
-    .bv-map-field-shell .bv-ranges{ position:static; display:grid; grid-template-columns:1fr; gap:0; width:min(40vw,360px); min-width:140px; height:28px; margin-left:4px; pointer-events:auto; }
+    .bv-map-field-shell{ align-items:center; max-width:none; min-width:0; overflow:hidden; white-space:nowrap; flex:1 1 auto; }
+    .bv-map-field-shell select{ flex:0 1 clamp(72px,25vw,155px); min-width:0; }
+    .bv-map-field-shell .bv-ranges{ position:static; display:grid; grid-template-columns:1fr; gap:0; width:auto; min-width:0; flex:1 1 120px; height:28px; margin-left:4px; pointer-events:auto; }
     .bv-map-field-shell .bv-ranges #bv-cbar{ min-width:0; width:100%; height:13px; }
     .bv-map-field-shell .bv-ranges .bv-ranges-ticks{ width:100%; height:9px; margin-top:0; font-size:8px; }
 
@@ -320,7 +319,7 @@
     .bv-map { top:172px !important; bottom:0; }
     .bv-time { display:none !important; }
     .bv-active-layer-strip { right:0 !important; flex-direction:column; align-items:stretch; gap:3px; overflow:hidden; min-height:84px; box-sizing:border-box; }
-    .bv-layer-selector-row { display:flex; align-items:center; gap:5px; width:100%; box-sizing:border-box; min-height:36px; overflow:visible; }
+    .bv-layer-selector-row { display:flex; flex-wrap:nowrap; align-items:center; gap:5px; width:100%; min-width:0; box-sizing:border-box; min-height:36px; overflow:hidden; }
     .bv-layer-checkbox-row { display:flex; align-items:center; gap:5px; min-height:36px; overflow-x:auto; overflow-y:hidden; scrollbar-width:none; }
     .bv-layer-checkbox-row::-webkit-scrollbar { display:none; }
     .bv-layer-break { flex-basis:100%; width:0; height:0; }
@@ -331,8 +330,8 @@
       .bv-frame-date { font-size:9px; }
       .bv-active-layer-strip { top:80px !important; padding-left:8px; padding-right:8px; }
       .bv-active-layer-strip { right:0 !important; min-height:84px; overflow-y:hidden; }
-      .bv-layer-selector-row { width:100%; max-width:none; overflow:visible; }
-      .bv-map-field-shell .bv-ranges{ width:183px; min-width:183px; }
+      .bv-layer-selector-row { width:100%; max-width:none; overflow:hidden; }
+      .bv-map-field-shell .bv-ranges{ width:auto; min-width:0; flex-basis:80px; }
       .bv-map { top:164px !important; }
       .bv-details-panel { top:145px; }
       .bv-map-field select { max-width:105px; }
@@ -1322,22 +1321,12 @@
       const viewport = document.createElement('div');
       viewport.className = 'bv-chart-viewport';
       svg.before(viewport); viewport.append(svg);
-      const controls = document.createElement('div');
-      controls.className = 'bv-chart-controls';
-      controls.innerHTML = '<button type="button" aria-label="Zoom tide chart out">−</button><output aria-live="polite">1×</output><button type="button" aria-label="Zoom tide chart in">+</button><button type="button">Reset</button>';
-      viewport.before(controls);
-      const [out, zoomIn, reset] = controls.querySelectorAll('button');
       let scale = 1;
       const setScale = value => {
         scale = Math.max(1, Math.min(2, value));
         svg.style.width = `${280 * scale}px`; svg.style.height = `${112 * scale}px`;
-        controls.querySelector('output').textContent = `${Number(scale.toFixed(2))}×`;
-        out.disabled = scale <= 1; zoomIn.disabled = scale >= 2;
         if (scale === 1) { viewport.scrollLeft = 0; viewport.scrollTop = 0; }
       };
-      out.onclick = () => setScale(scale - 0.25);
-      zoomIn.onclick = () => setScale(scale + 0.25);
-      reset.onclick = () => setScale(1);
       const points = new Map();
       const distance = () => { const p = [...points.values()]; return p.length === 2 ? Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y) : 0; };
       viewport.addEventListener('pointerdown', event => {
@@ -2000,11 +1989,7 @@
         }
         panel.append(group);
       }
-      if (activePlannerPreset === 'tides') {
-        const button = document.createElement('button'); button.type='button'; button.dataset.station='true'; button.textContent='Station'; panel.append(button);
-      }
-      const note = document.createElement('p'); note.textContent = 'Map choices replace the fill. Currents are regional surface flow, not inlet-resolving flow.';
-      panel.append(note); details.append(panel); selectorRow.append(details);
+      details.append(panel); selectorRow.append(details);
       details.addEventListener('toggle', () => { if(details.isConnected) detailsOpen=details.open; });
       // Reset view was removed per 12:41 ET request.
       for (const key of preset.layers.filter(k => !SCALAR_LAYERS[k] && layerVisibility[k] && !preset.primary.includes(k))) {
