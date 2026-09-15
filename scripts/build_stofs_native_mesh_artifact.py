@@ -15,7 +15,7 @@ from scipy.io import netcdf_file
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from fetch_stofs_global_harmonics import RemoteClassicNetCDF, read_zeta, S3
 
-BBOX = (-77.2, 35.8, -71.8, 40.2)
+DEFAULT_BBOX = (-77.2, 35.8, -71.8, 40.2)
 
 def find_key(date, cycle):
     return f"stofs_2d_glo.{date}/{cycle}/rerun/stofs_2d_glo_tide.63.nc"
@@ -38,7 +38,7 @@ class LocalClassicNetCDF:
         return data
     def close(self): self.ds.close()
 
-def build_complete_region_mesh(remote, cache_path):
+def build_complete_region_mesh(remote, cache_path, region_bbox):
     """Select every native ADCIRC face intersecting USEC-MD.
 
     The old cache was built from nearest neighbours of a 17x21 raster.  That
@@ -49,7 +49,7 @@ def build_complete_region_mesh(remote, cache_path):
     x = np.frombuffer(remote.variable_bytes("x"), dtype=remote.ds.variables["x"].data.dtype).astype(float, copy=True)
     y = np.frombuffer(remote.variable_bytes("y"), dtype=remote.ds.variables["y"].data.dtype).astype(float, copy=True)
     elements = np.frombuffer(remote.variable_bytes("element"), dtype=remote.ds.variables["element"].data.dtype).astype(np.int64, copy=True).reshape((-1, 3)) - 1
-    lo_x, lo_y, hi_x, hi_y = BBOX
+    lo_x, lo_y, hi_x, hi_y = region_bbox
     # A face intersects the region when its bounding box intersects it. This
     # includes shoreline faces whose vertices straddle the regional boundary.
     ex = x[elements]
@@ -63,7 +63,7 @@ def build_complete_region_mesh(remote, cache_path):
                 (ey.max(axis=1) >= lo_y) & (ey.min(axis=1) <= hi_y))
     regional_elements = elements[selected]
     if not len(regional_elements):
-        raise SystemExit("native mesh has no faces intersecting USEC-MD")
+        raise SystemExit("native mesh has no faces intersecting requested region")
     node_ids = np.unique(regional_elements.ravel())
     local = np.full(len(x), -1, dtype=np.int64)
     local[node_ids] = np.arange(len(node_ids))
@@ -86,13 +86,15 @@ def main():
                     help='verified local copy of the immutable STOFS HTP NetCDF')
     ap.add_argument('--rebuild-mesh', action='store_true',
                     help='discard the legacy nearest-grid cache and select all regional faces')
+    ap.add_argument('--bbox', type=float, nargs=4, metavar=('WEST','SOUTH','EAST','NORTH'),
+                    default=DEFAULT_BBOX, help='WGS84 region bbox')
     args = ap.parse_args()
     source_url = f"{S3}/{find_key(args.date, args.cycle)}"
     remote = LocalClassicNetCDF(args.local_source) if args.local_source else RemoteClassicNetCDF(source_url)
     try:
         has_complete_cache = args.mesh_cache.exists() and 'selection' in np.load(args.mesh_cache, allow_pickle=False).files
         if args.rebuild_mesh or not has_complete_cache:
-            m = build_complete_region_mesh(remote, args.mesh_cache)
+            m = build_complete_region_mesh(remote, args.mesh_cache, tuple(args.bbox))
         else:
             m = dict(np.load(args.mesh_cache, allow_pickle=False))
         count = int(remote.ds.variables['zeta'].data.shape[0])
@@ -161,7 +163,7 @@ def main():
         'range_min_ft': float(np.nanmin(ranges)), 'range_max_ft': float(np.nanmax(ranges)),
         'native_source_object': find_key(args.date, args.cycle),
         'native_source_sha256': (None if not args.local_source else __import__('hashlib').sha256(args.local_source.read_bytes()).hexdigest()),
-        'mesh_selection': 'all faces whose native lon/lat bbox intersects USEC-MD',
+        'mesh_selection': f'all faces whose native lon/lat bbox intersects {list(args.bbox)}',
         'htp_hours': int(len(hours)),
         'wet_nodes': int(np.sum(depth_m > 0.0)),
     }

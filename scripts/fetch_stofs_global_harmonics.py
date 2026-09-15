@@ -172,14 +172,14 @@ def read_zeta(remote, node_ids, hours):
         # Native mesh node IDs are spatially scattered in the global file.
         # For a regional subset, fewer larger reads are materially faster than
         # thousands of tiny HTTP requests.  Keep each window bounded.
-        if joined and lo - joined[-1][1] <= 100_000 and hi - joined[-1][0] <= 10_000_000:
+        if joined and lo - joined[-1][1] <= 100_000 and hi - joined[-1][0] <= 100_000_000:
             joined[-1] = (joined[-1][0], hi)
         else:
             joined.append((lo, hi))
     coalesced = []
     for lo, hi in joined:
-        while hi - lo > 10_000_000:
-            coalesced.append((lo, lo + 10_000_000)); lo += 10_000_000
+        while hi - lo > 100_000_000:
+            coalesced.append((lo, lo + 100_000_000)); lo += 100_000_000
         coalesced.append((lo, hi))
     spans = coalesced
     out = np.full((len(hours), len(node_ids)), np.nan)
@@ -274,8 +274,20 @@ def merge_forecast(path, fields, source):
     amp = fields["M2"]["amplitude_ft"]
     high_phase = fields["M2"]["phase_deg"]
     wet_mask = fields.get("wet_mask")
-    first = dt.datetime.strptime(payload["frames"][0]["time"].replace("Z", ""), "%Y-%m-%dT%H:%M")
-    for frame in payload["frames"]:
+    frame_containers = [(payload, payload.get("frames", []), None)]
+    manifest = payload.get("frames_manifest") or {}
+    if not frame_containers[0][1] and manifest.get("chunks"):
+        base = Path(path).parent / str(manifest.get("dir", "frames"))
+        frame_containers = []
+        for name in manifest["chunks"]:
+            chunk_path = base / str(name)
+            chunk = json.loads(chunk_path.read_text())
+            frame_containers.append((chunk, chunk.get("frames", []), chunk_path))
+    all_frames = [frame for _, frames, _ in frame_containers for frame in frames]
+    if not all_frames: raise RuntimeError(f"forecast has no frames: {path}")
+    first = dt.datetime.strptime(all_frames[0]["time"].replace("Z", ""), "%Y-%m-%dT%H:%M")
+    for container, frames, chunk_path in frame_containers:
+      for frame in frames:
         current = dt.datetime.strptime(frame["time"].replace("Z", ""), "%Y-%m-%dT%H:%M")
         hours = (current - first).total_seconds() / 3600.0
         frame["tide_amplitude_ft"] = amp
@@ -297,13 +309,43 @@ def merge_forecast(path, fields, source):
                 row.append(float(value) if covered else None)
             summed.append(row)
         frame["astronomical_tide_ft"] = summed
+      if chunk_path is not None:
+          chunk_path.write_text(json.dumps(container, allow_nan=False, separators=(",", ":")))
     if wet_mask is not None:
         payload["tide_water_cells"] = wet_mask
     payload["tide_harmonic_source"] = {"provider": "NOAA STOFS-2D Global HTP", "object": source, "constituents": list(CONSTITUENTS), "primary": "M2", "method": "lazy regional mesh extraction + QC harmonic fit", "min_m2_amplitude_m": MIN_M2_AMPLITUDE_M}
+    payload["regional_tide_harmonics"] = {
+        "source": payload["tide_harmonic_source"],
+        "reference_time": all_frames[0]["time"],
+        "periods_hours": CONSTITUENTS,
+        "fields": fields,
+    }
+    # Use harmonic extrema over the full available cycle as the co-range
+    # contract; it is derived from the same source field as stage.
+    sample_hours = np.arange(0, 168, 0.25)
+    ranges = np.full_like(np.asarray(amp, dtype=float), np.nan)
+    for yi in range(len(amp)):
+        for xi in range(len(amp[yi])):
+            vals = []
+            for hour in sample_hours:
+                value = 0.0; covered = False
+                for name, period in CONSTITUENTS.items():
+                    a = fields[name]["amplitude_ft"][yi][xi]; p = fields[name]["phase_deg"][yi][xi]
+                    if a is not None and p is not None:
+                        value += float(a) * np.cos(2.0 * np.pi * hour / period - np.deg2rad(float(p))); covered = True
+                if covered: vals.append(value)
+            if vals: ranges[yi, xi] = max(vals) - min(vals)
+    for container, frames, chunk_path in frame_containers:
+      for frame in frames: frame["tide_range_ft"] = [[None if not np.isfinite(v) else float(v) for v in row] for row in ranges]
+      if chunk_path is not None:
+          chunk_path.write_text(json.dumps(container, allow_nan=False, separators=(",", ":")))
+    payload["tide_range_field"] = "tide_range_ft"
+    payload["tide_range_definition"] = "full 168-hour harmonic-source max-min"
     Path(path).write_text(json.dumps(payload, allow_nan=False, separators=(",", ":")))
 
 
 def main():
+    global BBOX, MESH_CACHE, STEP
     ap = argparse.ArgumentParser()
     ap.add_argument("--date", required=True)
     ap.add_argument("--cycle", default="00")
@@ -311,7 +353,16 @@ def main():
     ap.add_argument("--stride", type=int, default=3, help="sample every N source hours for the harmonic fit")
     ap.add_argument("--output", required=True, type=Path)
     ap.add_argument("--merge-forecast", nargs="*", default=[])
+    ap.add_argument("--bbox", type=float, nargs=4, metavar=("WEST","SOUTH","EAST","NORTH"),
+                    help="WGS84 bbox for the regional extraction")
+    ap.add_argument("--mesh-cache", type=Path,
+                    help="regional mesh cache; defaults to the MD cache")
+    ap.add_argument("--step", type=float, default=STEP,
+                    help="output grid spacing in degrees")
     args = ap.parse_args()
+    if args.bbox: BBOX = list(args.bbox)
+    if args.mesh_cache: MESH_CACHE = args.mesh_cache
+    STEP = args.step
     key = find_htp(args.date, args.cycle)
     if MESH_CACHE.exists():
         m = dict(np.load(MESH_CACHE, allow_pickle=False))

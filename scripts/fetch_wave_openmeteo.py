@@ -50,7 +50,6 @@ REGION_CONFIG = {
     "usec_south": {
         "bbox": [-81.0, 31.0, -73.0, 36.0], "n": 17,
         "stations": [
-            {"id": "8651370", "name": "Duck, NC", "lat": 36.183, "lon": -75.747},
             {"id": "8656483", "name": "Beaufort, NC", "lat": 34.719, "lon": -76.670},
             {"id": "8658120", "name": "Wilmington, NC", "lat": 34.227, "lon": -77.953},
             {"id": "8665530", "name": "Charleston, SC", "lat": 32.781, "lon": -79.925},
@@ -184,7 +183,7 @@ def _find_next_tide_event(curve, now_ms=None):
     return None
 
 
-def fetch_all_tides(hours=COOPS_HOURS, begin=None):
+def fetch_all_tides(hours=COOPS_HOURS, begin=None, region=None):
     """Fetch CO-OPS curves for every station. Failures are downgraded to
     per-station errors so a single dead station does not kill the artifact.
 
@@ -198,8 +197,9 @@ def fetch_all_tides(hours=COOPS_HOURS, begin=None):
         "source": "NOAA CO-OPS api/data/ (predictions, MLLW, hourly)",
       }
     """
+    stations = REGION_CONFIG[(region or REGION)]["stations"]
     out = {
-        "stations": TIDE_STATIONS,
+        "stations": stations,
         "curves": {},
         "range": {},
         "next_event": {},
@@ -208,7 +208,7 @@ def fetch_all_tides(hours=COOPS_HOURS, begin=None):
         "source": "NOAA CO-OPS api/data/ (predictions, MLLW, hourly)",
     }
     failures = []
-    for st in TIDE_STATIONS:
+    for st in stations:
         try:
             res = fetch_coops_curve(st["id"], hours=hours, begin=begin)
             out["curves"][st["id"]] = res["curve"]
@@ -307,6 +307,43 @@ def add_tide_display_fields(frames):
         if frame.get("tide_height_ft"):
             frame["astronomical_tide_ft"] = frame["tide_height_ft"]
             frame["tide_range_ft"] = ranges
+
+
+def apply_regional_tide_harmonics(frames, contract):
+    """Regenerate stage from the stored regional model coefficients.
+
+    CO-OPS curves validate station behavior; they must not replace the
+    regional offshore field on every weather refresh.  The coefficients are
+    serialized by the STOFS extractor so new forecast hours remain aligned
+    without refitting or copying a stale frame.
+    """
+    if not contract or not contract.get("fields") or not contract.get("reference_time"):
+        return False
+    try:
+        ref = datetime.fromisoformat(str(contract["reference_time"]).replace("Z", "+00:00"))
+        fields = contract["fields"]
+        periods = contract.get("periods_hours") or {"M2": 12.4206, "S2": 12.0, "K1": 23.9345, "O1": 25.8193}
+        for frame in frames:
+            t = datetime.fromisoformat(str(frame["time"]).replace("Z", "+00:00"))
+            hours = (t - ref).total_seconds() / 3600.0
+            grid = []
+            for yi in range(len(frames[0].get("astronomical_tide_ft") or [])):
+                row = []
+                for xi in range(len((frames[0].get("astronomical_tide_ft") or [[]])[yi])):
+                    value = 0.0; covered = False
+                    for name, period in periods.items():
+                        item = fields.get(name) or {}
+                        amp = (item.get("amplitude_ft") or [[]])[yi][xi]
+                        phase = (item.get("phase_deg") or [[]])[yi][xi]
+                        if amp is None or phase is None: continue
+                        value += float(amp) * np.cos(2.0 * np.pi * hours / float(period) - np.deg2rad(float(phase)))
+                        covered = True
+                    row.append(float(value) if covered else None)
+                grid.append(row)
+            frame["astronomical_tide_ft"] = grid
+        return True
+    except (KeyError, IndexError, TypeError, ValueError, OverflowError):
+        return False
 
 
 def build_square_grid(bbox, step, n):
@@ -869,12 +906,15 @@ def main():
     if prior_payload:
         for key in ('tide_water_cells', 'native_mesh', 'tide_range_contract',
                     'tide_range_definition', 'tide_harmonic_source',
+                    'regional_tide_harmonics',
                     'regional_tide_source', 'regional_tide_prediction_field',
                     'wave_water_cells', 'wave_water_coverage',
                     'wave_open_water_cells', 'wave_water_mask_contract',
                     'wave_component_contract'):
             if key in prior_payload:
                 payload[key] = prior_payload[key]
+    if prior_payload and apply_regional_tide_harmonics(frames, prior_payload.get("regional_tide_harmonics")):
+        add_tide_display_fields(frames)
     # Keep the manifest below Cloudflare Pages' per-file limit. The frame data
     # dominates the payload; static metadata (including masks and native tide
     # mesh) remains in forecast.json and frame chunks are listed explicitly.

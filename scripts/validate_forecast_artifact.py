@@ -26,6 +26,19 @@ def main():
     parser.add_argument("path", type=Path)
     args = parser.parse_args()
     payload, frames = load_frames(args.path)
+    region = payload.get("region")
+    regions = {
+        "usec_md": [-76.5, 35.5, -71.5, 40.5],
+        "usec_south": [-81.0, 31.0, -73.0, 36.0],
+    }
+    if region not in regions:
+        raise SystemExit(f"forecast has unsupported region: {region!r}")
+    bbox = payload.get("bbox") or payload.get("display_bbox")
+    if not isinstance(bbox, list) or len(bbox) != 4 or any(not isinstance(v, (int, float)) for v in bbox):
+        raise SystemExit("forecast missing numeric bbox")
+    expected = regions[region]
+    if bbox[0] > expected[0] or bbox[1] > expected[1] or bbox[2] < expected[2] or bbox[3] < expected[3]:
+        raise SystemExit(f"forecast bbox does not cover {region}: {bbox}")
     if not frames:
         raise SystemExit("forecast has no frames")
     times = []
@@ -40,6 +53,25 @@ def main():
         raise SystemExit(f"forecast has no frames in rolling window: {min(times)}..{max(times)}")
     if not payload.get("generated_at"):
         raise SystemExit("forecast missing generated_at provenance")
+    stations = (payload.get("tides") or {}).get("stations") or []
+    if not stations:
+        raise SystemExit("forecast missing regional tide stations")
+    for station in stations:
+        if not all(isinstance(station.get(k), (int, float)) for k in ("lat", "lon")):
+            raise SystemExit(f"station has invalid coordinates: {station}")
+        if not (expected[0] <= station["lon"] <= expected[2] and expected[1] <= station["lat"] <= expected[3]):
+            raise SystemExit(f"station outside {region} bbox: {station}")
+    sample = frames[0]
+    for field in ("astronomical_tide_ft", "tide_range_ft"):
+        grid = sample.get(field)
+        if not isinstance(grid, list) or len(grid) != len(payload.get("lats", [])) or not grid or len(grid[0]) != len(payload.get("lons", [])):
+            raise SystemExit(f"{region} frame missing aligned {field}")
+    mask = payload.get("tide_water_cells")
+    if not isinstance(mask, list) or len(mask) != len(payload["lats"]) - 1 or len(mask[0]) != len(payload["lons"]) - 1:
+        raise SystemExit(f"{region} tide_water_cells mask is not aligned to forecast grid")
+    source = payload.get("tide_harmonic_source") or payload.get("regional_tide_source") or payload.get("ofs_tidal_forecast")
+    if not source:
+        raise SystemExit(f"{region} missing tidal source provenance")
     print({"path": str(args.path), "frames": len(frames), "window_frames": len(usable),
            "first": min(times).isoformat(), "last": max(times).isoformat(),
            "generated_at": payload["generated_at"]})

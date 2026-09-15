@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Regenerate the wave coastline mask from the signed STOFS depth field."""
 import json
+import argparse
 from pathlib import Path
 import cv2
 import numpy as np
@@ -9,12 +10,17 @@ import cartopy.io.shapereader as shpreader
 from fetch_stofs_global_harmonics import RemoteClassicNetCDF, S3
 
 ROOT = Path(__file__).resolve().parents[1]
-payload_paths = [ROOT / 'data/usec_md/briefing/forecast.json', ROOT / 'dashboard/trip-planner/data/usec_md/briefing/forecast.json']
-mask_path = ROOT / 'dashboard/trip-planner/data/usec_md/briefing/native_wave_mask.png'
+parser = argparse.ArgumentParser()
+parser.add_argument('--region', choices=('usec_md', 'usec_south'), default='usec_md')
+parser.add_argument('--bbox', type=float, nargs=4, required=True, metavar=('WEST','SOUTH','EAST','NORTH'))
+parser.add_argument('--mesh-cache', type=Path, required=True)
+args = parser.parse_args()
+payload_paths = [ROOT / f'data/{args.region}/briefing/forecast.json', ROOT / f'dashboard/trip-planner/data/{args.region}/briefing/forecast.json']
+mask_path = ROOT / f'dashboard/trip-planner/data/{args.region}/briefing/native_wave_mask.png'
 url = f'{S3}/stofs_2d_glo.20260901/00/rerun/stofs_2d_glo_tide.63.nc'
 payload = json.loads(payload_paths[0].read_text())
 lats = np.asarray(payload['lats'], float); lons = np.asarray(payload['lons'], float)
-mesh = np.load(ROOT / 'data/usec_md/briefing/.stofs_mesh_cache.npz', allow_pickle=False)
+mesh = np.load(args.mesh_cache, allow_pickle=False)
 nodes = np.column_stack((mesh['x'], mesh['y'])).astype(float)
 triangles = np.asarray(mesh['elements'], np.int32)
 node_ids = np.asarray(mesh['node_ids'], np.int64)
@@ -120,4 +126,4 @@ payload['wave_open_water_cells'] = open_mask
 payload['wave_water_mask_contract'] = {'kind': 'native_mesh_cell_footprint', 'source': 'native mesh triangles whose three STOFS depth values are finite and positive, intersected with detailed land geometry', 'purpose': 'wave, swell, wind-wave and significant-wave-height overlays', 'cell_rule': 'coverage is a diagnostic footprint; partial wet cells retain local water anchors and are rendered with barrier-aware paths', 'open_water_rule': 'wet pixels connected to the raster boundary through water; this is a conservative geometry support gate, not a shallow-water propagation model', 'projection': 'normalized EPSG:3857 rows', 'raster_row_order': 'north_to_south; cell arrays are aggregated after north/south flip to forecast south_to_north order', 'tidal_mask_separate': True}
 encoded = json.dumps(payload, allow_nan=False, separators=(',', ':'))
 for path in payload_paths: path.write_text(encoded)
-print(json.dumps({'wet_nodes': int(wet.sum()), 'wet_triangles': int(len(triangles)), 'wave_cells': int(sum(map(sum, mask))), 'open_water_cells': int(sum(map(sum, open_mask))), 'mask': str(mask_path)}))
+print(json.dumps({'region': args.region, 'wet_nodes': int(wet.sum()), 'wet_triangles': int(len(triangles)), 'wave_cells': int(sum(map(sum, mask))), 'open_water_cells': int(sum(map(sum, open_mask))), 'mask': str(mask_path)}))

@@ -813,9 +813,7 @@
     // api/data/ txt endpoints. We precompute the request URL on the Python
     // side and ship station metadata + sample curves inline so the viewer
     // can render without a live fetch.
-    const TIDE_STATIONS = (forecastData && forecastData.tides && Array.isArray(forecastData.tides.stations))
-      ? forecastData.tides.stations
-      : [
+    const FALLBACK_TIDE_STATIONS = [
           { id: '8536110', name: 'Cape May, NJ',     lat: 38.9683, lon: -74.9600 },
           { id: '8534720', name: 'Atlantic City, NJ',lat: 39.355, lon: -74.418 },
           { id: '8570283', name: 'Ocean City Inlet', lat: 38.328, lon: -75.092 },
@@ -825,7 +823,8 @@
           { id: '8637689', name: 'Yorktown USCG',     lat: 37.2265, lon: -76.4788 },
           { id: '8651370', name: 'Duck, NC',         lat: 36.183, lon: -75.747 },
         ];
-    let activeTideStation = TIDE_STATIONS[0];
+    let TIDE_STATIONS = [];
+    let activeTideStation = null;
 
     function renderTideChart(curve, range, nextEvent, observed, targetId = 'bv-tide-svg') {
       const svg = document.getElementById(targetId);
@@ -1050,7 +1049,7 @@
     // instead of reusing an older cached JSON response.
     // Bump whenever the JSON artifact changes; otherwise a Pages/browser
     // cache can keep serving a pre-calibration tide field after HTML deploy.
-    const FORECAST_DATA_BUILD = 'planner-region-loader-v33';
+    const FORECAST_DATA_BUILD = 'planner-regional-tides-v34';
     const DEV_FORECAST_URL = `/trip-planner/data/${region}/briefing/forecast.json?v=${FORECAST_DATA_BUILD}`;
     const WAVE_MASK_URL = `/trip-planner/data/${region}/briefing/native_wave_mask.png?v=${FORECAST_DATA_BUILD}`;
     const CORS_PROXY = 'https://corsproxy.io/?';
@@ -1716,6 +1715,8 @@
         if (status) status.textContent = 'Loran-C TD grid failed to load';
       } finally { button.disabled = false; }
     });
+    // Forecast data is asynchronous; station metadata must be installed from
+    // the selected regional payload before markers or selectors are drawn.
     drawTideStations();
     map.on('singleclick', event => {
       if (distanceMode) {
@@ -5257,6 +5258,13 @@
           return;
         }
         const startIdx = nearestFrameIdxToDate(frames, targetDate);
+        TIDE_STATIONS = Array.isArray(forecastData.tides?.stations) && forecastData.tides.stations.length
+          ? forecastData.tides.stations
+          : FALLBACK_TIDE_STATIONS.filter(station => station.lon >= bbox[0] && station.lon <= bbox[2] &&
+              station.lat >= bbox[1] && station.lat <= bbox[3]);
+        activeTideStation = TIDE_STATIONS[0] || null;
+        setupTideStationSelect();
+        drawTideStations();
         const slider = document.getElementById('bv-slider');
         slider.min = '0';
         slider.max = String(frames.length - 1);
