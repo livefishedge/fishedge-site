@@ -39,6 +39,8 @@ jobs:
         run: |
           python scripts/validate_forecast_artifact.py data/usec_md/briefing/forecast.json
           python scripts/validate_forecast_artifact.py dashboard/trip-planner/data/usec_md/briefing/forecast.json
+          python scripts/validate_forecast_artifact.py data/usec_south/briefing/forecast.json
+          python scripts/validate_forecast_artifact.py dashboard/trip-planner/data/usec_south/briefing/forecast.json
       - name: Commit refreshed artifacts
         run: |
           git config user.name 'FishEdge data refresh'
