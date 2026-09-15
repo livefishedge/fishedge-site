@@ -32,6 +32,10 @@ jobs:
             --date "$(date -u +%Y%m%d)" --hours 72 \
             --merge-forecast data/usec_md/briefing/forecast.json \
             --merge-forecast dashboard/trip-planner/data/usec_md/briefing/forecast.json
+      - name: Validate refreshed forecast artifacts
+        run: |
+          python scripts/validate_forecast_artifact.py data/usec_md/briefing/forecast.json
+          python scripts/validate_forecast_artifact.py dashboard/trip-planner/data/usec_md/briefing/forecast.json
       - name: Commit refreshed artifacts
         run: |
           git config user.name 'FishEdge data refresh'
@@ -41,3 +45,20 @@ jobs:
           if [ -f data/usec_md/briefing/tidal_forecast.json ]; then git add data/usec_md/briefing/tidal_forecast.json; fi
           git diff --cached --quiet || git commit -m "chore: refresh marine and CO-OPS data"
           git push
+      - name: Sync current briefing artifacts to R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_S3_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_S3_SECRET_ACCESS_KEY }}
+        run: |
+          if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
+            echo '::error::R2 credentials are not configured; refusing to leave data.fishedge.live stale'
+            exit 1
+          fi
+          endpoint='https://5fec32b363f766a68734c384d1890cb1.r2.cloudflarestorage.com'
+          aws s3 cp data/usec_md/briefing/forecast.json \
+            s3://fishedge-data/usec_md/briefing/forecast.json \
+            --endpoint-url "$endpoint" --cache-control 'no-cache, max-age=0'
+          for file in data/usec_md/briefing/frames/forecast-frames-*.json; do
+            aws s3 cp "$file" "s3://fishedge-data/usec_md/briefing/frames/$(basename "$file")" \
+              --endpoint-url "$endpoint" --cache-control 'no-cache, max-age=0'
+          done
