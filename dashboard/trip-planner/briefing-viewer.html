@@ -1993,7 +1993,10 @@
         }
         panel.append(group);
       }
-      details.append(panel); selectorRow.append(details);
+      // Keep the primary selector row dedicated to the colormap so the
+      // colorbar gets the device width. Details remains available alongside
+      // the secondary layer controls instead of competing with the bar.
+      details.append(panel); checkboxRow.append(details);
       details.addEventListener('toggle', () => { if(details.isConnected) detailsOpen=details.open; });
       // Reset view was removed per 12:41 ET request.
       for (const key of preset.layers.filter(k => !SCALAR_LAYERS[k] && layerVisibility[k] && !preset.primary.includes(k))) {
