@@ -1521,19 +1521,33 @@
     }
     const plannerWaypoints = [];
     const plannerWaypointOverlays = [];
+    function clearPlannerWaypointOverlays() {
+      plannerWaypointOverlays.splice(0).forEach(overlay => map.removeOverlay(overlay));
+    }
     let waypointMode = false;
     function renderPlannerWaypoints() {
       const panel = document.getElementById('captain-pts-list');
       if (!panel) return;
       panel.replaceChildren();
       const wrapper = panel.parentElement;
-      if (!plannerWaypoints.length) { wrapper?.style.setProperty('display', 'none'); wrapper?.classList.remove('visible'); return; }
+      clearPlannerWaypointOverlays();
+      if (!plannerWaypoints.length) {
+        wrapper?.style.setProperty('display', 'none'); wrapper?.classList.remove('visible');
+        document.getElementById('captain-save-btn')?.style.setProperty('display', 'none');
+        return;
+      }
       plannerWaypoints.forEach((point, index) => {
+        const marker = document.createElement('button');
+        marker.type = 'button'; marker.textContent = String(index + 1);
+        marker.title = `Waypoint ${index + 1}`;
+        marker.style.cssText = 'width:22px;height:22px;border-radius:50%;border:1px solid #fff;background:#15324a;color:#fff;font:700 11px monospace;cursor:pointer;';
+        const coordinate = ol.proj.fromLonLat([point.lon, point.lat], mapProjection);
+        const overlay = new ol.Overlay({ element: marker, positioning: 'center-center', stopEvent: true });
+        overlay.setPosition(coordinate); map.addOverlay(overlay); plannerWaypointOverlays.push(overlay);
         const row = document.createElement('div'); row.className = 'cp-row';
         const label = document.createElement('span'); label.textContent = `${index + 1}  ${point.lat.toFixed(4)}°, ${point.lon.toFixed(4)}°`;
         const remove = document.createElement('button'); remove.type = 'button'; remove.textContent = 'Remove'; remove.addEventListener('click', () => {
-          const overlay = plannerWaypointOverlays[index]; if (overlay) map.removeOverlay(overlay);
-          plannerWaypointOverlays.splice(index, 1); plannerWaypoints.splice(index, 1);
+          plannerWaypoints.splice(index, 1);
           renderPlannerWaypoints();
         });
         row.append(label, remove); panel.appendChild(row);
@@ -1558,7 +1572,7 @@
         const label = document.createElement('span'); label.textContent = `${i + 1}  ${a[1].toFixed(4)}°, ${a[0].toFixed(4)}° → ${b[1].toFixed(4)}°, ${b[0].toFixed(4)}°  ·  ${d.toFixed(2)} nm`;
         const remove = document.createElement('button'); remove.type = 'button'; remove.textContent = '×'; remove.addEventListener('click', () => {
           distancePoints.splice(i * 2, 2);
-          distanceSource.clear();
+          renderPlannerDistanceLayer();
           renderPlannerDistances();
         });
         row.append(label, remove); list.appendChild(row);
@@ -1579,6 +1593,47 @@
     const distanceLayer = new ol.layer.Vector({ source: distanceSource, zIndex: 2200, style: new ol.style.Style({ stroke: new ol.style.Stroke({ color: '#4fc3f7', width: 3 }), image: new ol.style.Circle({ radius: 5, fill: new ol.style.Fill({ color: '#4fc3f7' }), stroke: new ol.style.Stroke({ color: '#071017', width: 2 }) }) }) });
     map.addLayer(distanceLayer);
     const distanceNm = (a,b) => { const r=3440.065, p=Math.PI/180, dlat=(b[1]-a[1])*p, dlon=(b[0]-a[0])*p; const h=Math.sin(dlat/2)**2+Math.cos(a[1]*p)*Math.cos(b[1]*p)*Math.sin(dlon/2)**2; return r*2*Math.atan2(Math.sqrt(h),Math.sqrt(1-h)); };
+    function renderPlannerDistanceLayer() {
+      const features = distancePoints.map(point => new ol.Feature(new ol.geom.Point(ol.proj.fromLonLat(point, mapProjection))));
+      for (let i = 1; i < distancePoints.length; i += 2) {
+        features.push(new ol.Feature(new ol.geom.LineString([
+          ol.proj.fromLonLat(distancePoints[i - 1], mapProjection),
+          ol.proj.fromLonLat(distancePoints[i], mapProjection),
+        ])));
+      }
+      distanceSource.clear();
+      distanceSource.addFeatures(features);
+    }
+    function restorePlannerState() {
+      try {
+        const waypoints = JSON.parse(localStorage.getItem('fishedge:planner:waypoints') || '[]');
+        if (Array.isArray(waypoints)) waypoints.forEach(point => {
+          const lon = Number(point?.lon), lat = Number(point?.lat);
+          if (Number.isFinite(lon) && Number.isFinite(lat) && lon >= -180 && lon <= 180 && lat >= -90 && lat <= 90) plannerWaypoints.push({ lon, lat });
+        });
+        const savedDistance = JSON.parse(localStorage.getItem('fishedge:planner:distance:v1') || '[]');
+        if (Array.isArray(savedDistance)) savedDistance.forEach(point => {
+          const lon = Number(point?.lon), lat = Number(point?.lat);
+          if (Number.isFinite(lon) && Number.isFinite(lat) && lon >= -180 && lon <= 180 && lat >= -90 && lat <= 90) distancePoints.push([lon, lat]);
+        });
+      } catch (error) { console.warn('[planner] saved tool state ignored:', error); }
+    }
+    function savePlannerDistance() {
+      try {
+        localStorage.setItem('fishedge:planner:distance:v1', JSON.stringify(distancePoints.map(([lon, lat]) => ({ lon, lat }))));
+        const status = document.getElementById('bv-mode-context');
+        if (status) { status.textContent = 'Distance measurements saved'; status.classList.add('visible'); }
+        document.getElementById('captain-dist-panel')?.classList.add('collapsed');
+      } catch (error) {
+        const status = document.getElementById('bv-mode-context');
+        if (status) { status.textContent = 'Unable to save distance measurements'; status.classList.add('visible'); }
+        console.error('[planner] distance save failed', error);
+      }
+    }
+    restorePlannerState();
+    renderPlannerWaypoints();
+    renderPlannerDistanceLayer();
+    renderPlannerDistances();
     // locate-me.js owns both the button and geolocation flow. Planner only
     // registers its map above; a second handler here would request location
     // twice and bypass the shared accuracy marker/error reporting.
@@ -1616,8 +1671,13 @@
         localStorage.setItem('fishedge:planner:waypoints', JSON.stringify(plannerWaypoints));
         const status = document.getElementById('bv-mode-context');
         if (status) { status.textContent = 'Waypoints saved'; status.classList.add('visible'); }
-      } catch (error) { console.error('[planner] waypoint save failed', error); }
+      } catch (error) {
+        const status = document.getElementById('bv-mode-context');
+        if (status) { status.textContent = 'Unable to save waypoints'; status.classList.add('visible'); }
+        console.error('[planner] waypoint save failed', error);
+      }
     });
+    document.getElementById('captain-dist-exit')?.addEventListener('click', event => { event.stopPropagation(); savePlannerDistance(); });
     document.getElementById('captain-dist-tool')?.addEventListener('click', event => {
       distanceMode = !distanceMode;
       if (distanceMode) {
@@ -1665,11 +1725,9 @@
         const clickedCoordinate = event.coordinate;
         const [lon, lat] = ol.proj.toLonLat(clickedCoordinate, mapProjection);
         distancePoints.push([lon, lat]);
-        const features = distancePoints.map(p => new ol.Feature(new ol.geom.Point(ol.proj.fromLonLat(p, mapProjection))));
-        if (distancePoints.length === 2) features.push(new ol.Feature(new ol.geom.LineString(distancePoints.map(p => ol.proj.fromLonLat(p, mapProjection)))));
-        distanceSource.clear(); distanceSource.addFeatures(features);
+        renderPlannerDistanceLayer();
         const status = document.getElementById('bv-mode-context');
-        if (status) status.textContent = distancePoints.length === 2 ? `Distance · ${distanceNm(distancePoints[0], distancePoints[1]).toFixed(2)} nm` : 'Distance mode · tap one more point';
+        if (status) status.textContent = distancePoints.length % 2 === 0 ? `Distance · ${distanceNm(distancePoints[distancePoints.length - 2], distancePoints[distancePoints.length - 1]).toFixed(2)} nm` : 'Distance mode · tap one more point';
         renderPlannerDistances();
         return;
       }
@@ -1677,8 +1735,6 @@
         const clickedCoordinate = event.coordinate;
         const [lon, lat] = ol.proj.toLonLat(clickedCoordinate, mapProjection);
         plannerWaypoints.push({ lon, lat });
-        const marker = document.createElement('button'); marker.type = 'button'; marker.textContent = String(plannerWaypoints.length); marker.title = `Waypoint ${plannerWaypoints.length}`; marker.style.cssText = 'width:22px;height:22px;border-radius:50%;border:1px solid #fff;background:#15324a;color:#fff;font:700 11px monospace;cursor:pointer;';
-        const overlay = new ol.Overlay({ element: marker, positioning: 'center-center', stopEvent: true }); overlay.setPosition(clickedCoordinate); map.addOverlay(overlay); plannerWaypointOverlays.push(overlay);
         renderPlannerWaypoints();
         return;
       }

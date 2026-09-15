@@ -35,4 +35,8 @@ assert(html.includes('currentParticleColor'), 'current particles must use SST-or
 assert(html.includes('Math.min(compact ? 1800 : 2400'), 'current particles must use bounded mobile/desktop caps');
 assert(html.includes("fixedRange: [70, 80]"), 'SST range must be 70–80°F');
 assert(html.includes("input.addEventListener('change'"), 'hamburger layer toggles must redraw data layers');
+assert(html.includes('function renderPlannerDistanceLayer()'), 'planner distance renderer must rebuild all graphics');
+assert(html.includes("fishedge:planner:distance:v1"), 'planner distance measurements must persist');
+assert(html.includes('restorePlannerState()'), 'planner tool state must restore on reload');
+assert(!html.includes('className = \'bv-layer-details\''), 'planner Details disclosure must remain removed');
 console.log('PASS: planner scale, labels, gust behavior, and progressive-detail contracts');

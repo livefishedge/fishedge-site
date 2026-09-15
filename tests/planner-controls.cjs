@@ -23,10 +23,8 @@ const url = process.env.PLANNER_URL || 'http://127.0.0.1:8766/trip-planner/brief
     await select().selectOption('');await page.waitForTimeout(150);
     assert.equal(await pixels(),0,'None must clear fill');
     await page.locator('[data-preset=weather]').click();
-    await page.locator('.bv-layer-details summary').click();
-    await page.locator('[data-scalar=dew_point_f]').click();
-    assert(await page.locator('.bv-layer-details').evaluate(e=>e.open),'Details stays open after selection');
-    assert.equal(await select().inputValue(),'dew_point_f');
+    await select().selectOption('dew_point_f');
+    assert.equal(await select().inputValue(),'dew_point_f','weather colormap remains selectable');
     await page.locator('[data-preset=fishing]').click();
     await page.locator('[data-preset=weather]').click();
     assert.equal(await select().inputValue(),'dew_point_f','view remembers field');
@@ -91,9 +89,7 @@ const url = process.env.PLANNER_URL || 'http://127.0.0.1:8766/trip-planner/brief
     assert(currentPixels>100,'Forecast Current renders semipermanent particle tracks');
     await page.setViewportSize({width:390,height:844});
     await page.locator('[data-preset=weather]').click();
-    await page.locator('.bv-layer-details summary').click();
-    const box=await page.locator('.bv-details-panel').boundingBox();
-    assert(box.x>=0 && box.x+box.width<=390,'Details fits mobile');
+    assert.equal(await page.locator('.bv-layer-details').count(),0,'Details disclosure is removed');
     assert(!(await page.locator('#bv-time').isVisible()),'legacy 7-day freshness banner is removed');
     const ranges = await page.locator('.bv-ranges').boundingBox();
     const framebar = await page.locator('.bv-framebar').boundingBox();
@@ -113,6 +109,6 @@ const url = process.env.PLANNER_URL || 'http://127.0.0.1:8766/trip-planner/brief
     assert.equal(await page.locator('#bv-active-layer-strip').evaluate(e=>getComputedStyle(e).display),'none','Moon mode hides map layer strip');
     await page.screenshot({path:'/tmp/planner-audit-mobile.png'});
     assert.deepEqual(errors,[]);
-    console.log('PASS: scalar pixels, wave motion, None, Details persistence, view memory/reset, map readout/marker, 8 station charts, mobile bounds, no page errors');
+    console.log('PASS: scalar pixels, wave motion, None, view memory/reset, map readout/marker, station charts, mobile bounds, no Details control, no page errors');
   } finally { await browser.close(); }
 })().catch(e=>{console.error(e);process.exitCode=1});
