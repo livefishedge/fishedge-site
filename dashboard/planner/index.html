@@ -272,13 +272,41 @@
   // frame's wind/wave/swell. "▶ Next" button cycles through the day's
   // 3-hour frames. Briefing card + map link use the selected frame.
   // ============================================================
-  const PLANNER_REGION = new URLSearchParams(location.search).get('region') === 'usec_south' ? 'usec_south' : 'usec_md';
-  document.querySelectorAll('a[href*="region=usec_md"]').forEach((link) => {
-    link.href = link.href.replace('region=usec_md', `region=${PLANNER_REGION}`);
-  });
-  const DATA_BASE = /\.pages\.dev$/.test(location.hostname)
-    ? `${location.origin}/trip-planner/data/${PLANNER_REGION}/briefing/`
-    : `https://data.fishedge.live/${PLANNER_REGION}/briefing/`;
+  let PLANNER_REGION = null;
+  let DATA_BASE = null;
+  const REGION_IDS = new Set(['usec_md', 'usec_south']);
+  function setPlannerRegion(region, canonicalize = true) {
+    if (!REGION_IDS.has(region)) throw new Error(`Unsupported planner region: ${region}`);
+    PLANNER_REGION = region;
+    DATA_BASE = /\.pages\.dev$/.test(location.hostname)
+      ? `${location.origin}/trip-planner/data/${region}/briefing/`
+      : `https://data.fishedge.live/${region}/briefing/`;
+    if (canonicalize) {
+      const url = new URL(location.href);
+      url.searchParams.set('region', region);
+      history.replaceState(null, '', `${url.pathname}?${url.searchParams}${url.hash}`);
+    }
+    document.querySelectorAll('a[href*="region=usec_md"], a[href*="region=usec_south"]').forEach((link) => {
+      const url = new URL(link.href, location.href);
+      url.searchParams.set('region', region);
+      link.href = url.href;
+    });
+  }
+  async function resolvePlannerRegion() {
+    const explicit = new URLSearchParams(location.search).get('region');
+    if (explicit) {
+      setPlannerRegion(explicit);
+      return;
+    }
+    const sessionResult = await window.sb?.auth.getSession();
+    const userId = sessionResult?.data?.session?.user?.id;
+    if (!userId || !window.sb?.from) throw new Error('Unable to resolve account region');
+    const profileResult = await window.sb.from('profiles').select('selected_region').eq('user_id', userId).maybeSingle();
+    if (profileResult.error) throw new Error(`Unable to load account region: ${profileResult.error.message}`);
+    const selected = profileResult.data?.selected_region;
+    if (!REGION_IDS.has(selected)) throw new Error('Account has no valid planner region');
+    setPlannerRegion(selected);
+  }
   const INLET_STORAGE_KEY = 'fished…nlet';
   const TRIPS_STORAGE_KEY = 'fishedge:planner:trips';
 
@@ -749,7 +777,9 @@
   document.getElementById('prepare-trip')?.addEventListener('click', () => { landing.hidden = true; workspace.hidden = false; history.replaceState(null, '', '?new=1'); window.scrollTo(0, 0); });
   renderUpcomingTrips();
   renderMyTrips();
-  loadForecast();
+  resolvePlannerRegion().then(loadForecast).catch((error) => {
+    document.getElementById('dayStrip').innerHTML = `<div class="day-card" style="color:#ff8080;border-color:#9b1c1c">Failed to resolve planner region: ${String(error.message || error)}</div>`;
+  });
   </script>
 </body>
 </html>

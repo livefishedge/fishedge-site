@@ -170,8 +170,8 @@
   // ============================================================
   const qs = new URLSearchParams(location.search);
   const date = qs.get('date') || new Date().toISOString().slice(0,10);
-  const region = qs.get('region') || 'usec_md';
-  const bbox = [-77, 36, -72, 40];
+  const region = qs.get('region') === 'usec_south' ? 'usec_south' : 'usec_md';
+  const bbox = region === 'usec_south' ? [-81, 31, -73, 36] : [-76.5, 35.5, -71.5, 40.5];
   const extent = ol.proj.transformExtent(bbox, 'EPSG:4326', 'EPSG:3857');
   const base = 'https://data.fishedge.live/' + region + '/briefing/';
 

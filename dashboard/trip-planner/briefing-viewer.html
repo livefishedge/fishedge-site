@@ -1091,7 +1091,7 @@
     // The source contract is the same one used by dashboard/index.html. The
     // manifest gives us the newest available analysis and the local fallback
     // keeps dev independent of the production hostname/cache.
-    const SLA_MANIFEST_URLS = ['/dashboard/index-usec_md.json', '/index-usec_md.json'];
+    const SLA_MANIFEST_URLS = [`/dashboard/index-${region}.json`, `/index-${region}.json`];
     async function loadSlaProduct() {
       if (slaProductPromise) return slaProductPromise;
       slaProductPromise = (async () => {
