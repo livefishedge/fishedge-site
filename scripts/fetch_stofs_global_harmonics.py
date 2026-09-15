@@ -37,6 +37,7 @@ M2_HOURS = CONSTITUENTS["M2"]
 # undefined.  Keep those cells out of the co-tidal field rather than allowing
 # tiny coastal/noise fits to create false phase contours.
 MIN_M2_AMPLITUDE_M = 0.03
+MAX_CONSTITUENT_AMPLITUDE_FT = 20.0
 
 
 class RemoteClassicNetCDF:
@@ -235,6 +236,16 @@ def fit_and_rasterize(values, x, y, times):
         rms = float(np.sqrt(np.mean(residual * residual)))
         quality[i] = m2_amp >= MIN_M2_AMPLITUDE_M and rms <= max(0.04, 0.45 * m2_amp)
     coeff[:, ~quality] = np.nan
+    # A short 126-hour window cannot reliably separate the near-collinear
+    # M2/S2 pair at every coastal node. Reject numerically explosive
+    # constituent fits rather than allowing them to create trillion-foot
+    # ranges and freeze the browser contour renderer. The remaining fitted
+    # constituents still contribute only where their own amplitude is finite
+    # and physically bounded.
+    for offset in range(1, design.shape[1], 2):
+        amplitude_ft = np.hypot(coeff[offset], coeff[offset + 1]) * 3.280839895
+        bad = ~np.isfinite(amplitude_ft) | (amplitude_ft > MAX_CONSTITUENT_AMPLITUDE_FT)
+        coeff[offset:offset + 2, bad] = np.nan
     tree = cKDTree(np.column_stack((x, y)))
     target = np.array([(lon, lat) for lat in lats for lon in lons])
     _, ix = tree.query(target, k=min(8, len(x)))

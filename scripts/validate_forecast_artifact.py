@@ -66,6 +66,9 @@ def main():
         grid = sample.get(field)
         if not isinstance(grid, list) or len(grid) != len(payload.get("lats", [])) or not grid or len(grid[0]) != len(payload.get("lons", [])):
             raise SystemExit(f"{region} frame missing aligned {field}")
+    ranges = [v for row in sample["tide_range_ft"] for v in row if isinstance(v, (int, float))]
+    if not ranges or max(ranges) > 30.0:
+        raise SystemExit(f"{region} tide range is physically implausible: max={max(ranges, default=float('nan'))}")
     mask = payload.get("tide_water_cells")
     if not isinstance(mask, list) or len(mask) != len(payload["lats"]) - 1 or len(mask[0]) != len(payload["lons"]) - 1:
         raise SystemExit(f"{region} tide_water_cells mask is not aligned to forecast grid")
