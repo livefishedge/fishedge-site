@@ -1218,17 +1218,25 @@
     if (!globalThis.__fishedgeMaps.includes(map)) globalThis.__fishedgeMaps.push(map);
     const initialMapCenter = map.getView().getCenter()?.slice() || null;
     const initialMapZoom = map.getView().getZoom();
+    function captainToolbarMinTop() {
+      const headers = ['.bv-toolbar', '.bv-framebar', '#bv-active-layer-strip', '.bv-map-field-shell']
+        .map(selector => document.querySelector(selector))
+        .filter(Boolean);
+      const bottom = headers.reduce((max, node) => Math.max(max, node.getBoundingClientRect().bottom), 0);
+      return Math.ceil(bottom + 6);
+    }
     function positionCaptainTools() {
       const tools = document.getElementById('captain-tools');
       if (!tools) return;
       // Keep OpenLayers' viewport dimensions synchronized with the planner's
       // responsive header stack before converting click pixels to coordinates.
       map.updateSize();
-      const headers = ['.bv-toolbar', '.bv-framebar', '#bv-active-layer-strip', '.bv-map-field-shell']
-        .map(selector => document.querySelector(selector))
-        .filter(Boolean);
-      const bottom = headers.reduce((max, node) => Math.max(max, node.getBoundingClientRect().bottom), 0);
-      document.documentElement.style.setProperty('--bv-header-bottom', `${Math.ceil(bottom + 6)}px`);
+      const minTop = captainToolbarMinTop();
+      document.documentElement.style.setProperty('--bv-header-bottom', `${minTop}px`);
+      // If a prior drag placed the toolbar behind the header, recover it
+      // immediately so the drag handle remains reachable after resize/layout.
+      const currentTop = parseFloat(tools.style.top);
+      if (Number.isFinite(currentTop) && currentTop < minTop) tools.style.top = `${minTop}px`;
       // Panels belong below the toolbar, never over it. Use the live toolbar
       // rectangle so this remains true after dragging, rotation, or resize.
       const rect = tools.getBoundingClientRect();
@@ -1266,8 +1274,9 @@
         if (!drag || drag.pointerId !== event.pointerId) return;
         const maxLeft = Math.max(0, window.innerWidth - captainTools.offsetWidth);
         const maxTop = Math.max(0, window.innerHeight - captainTools.offsetHeight);
+        const minTop = Math.min(captainToolbarMinTop(), maxTop);
         captainTools.style.left = `${Math.max(0, Math.min(maxLeft, event.clientX-drag.dx))}px`;
-        captainTools.style.top = `${Math.max(0, Math.min(maxTop, event.clientY-drag.dy))}px`;
+        captainTools.style.top = `${Math.max(minTop, Math.min(maxTop, event.clientY-drag.dy))}px`;
         captainTools.style.right = 'auto';
         positionCaptainTools();
         event.preventDefault(); event.stopPropagation();
