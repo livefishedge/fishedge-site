@@ -1057,7 +1057,7 @@
     // instead of reusing an older cached JSON response.
     // Bump whenever the JSON artifact changes; otherwise a Pages/browser
     // cache can keep serving a pre-calibration tide field after HTML deploy.
-    const FORECAST_DATA_BUILD = 'planner-regional-tides-v37';
+    const FORECAST_DATA_BUILD = 'planner-regional-tides-v41';
     const DEV_FORECAST_URL = `/trip-planner/data/${region}/briefing/forecast.json?v=${FORECAST_DATA_BUILD}`;
     const WAVE_MASK_URL = `/trip-planner/data/${region}/briefing/native_wave_mask.png?v=${FORECAST_DATA_BUILD}`;
     const CORS_PROXY = 'https://corsproxy.io/?';
@@ -2163,6 +2163,14 @@
       if (!preset) return;
       if (!reset) viewSettings[activePlannerPreset] = {layers:{...layerVisibility}, heat:selectedHeatKey};
       activePlannerPreset = name;
+      // A preset owns the base renderer as well as the visible checkboxes.
+      // Leaving currentProduct on the previous mode allows its storm/wave
+      // composite to be painted over Tidal Stage.
+      const presetProduct = {
+        sea: 'wave_composite', weather: 'visibility_mi',
+        tides: 'astronomical_tide_ft', fishing: 'sea_surface_temperature_f', moon: 'wave_composite'
+      }[name];
+      if (presetProduct) currentProduct = presetProduct;
       document.body.classList.toggle('bv-moon-active', name === 'moon');
       const moonPanel = document.getElementById('bv-moon-mode-panel');
       if (moonPanel) {
@@ -2635,6 +2643,12 @@
         // independently advected geographic tracks are the only motion layer
         // in this presentation.
         drawScalarAndWaves(activeHeatKey());
+      } else if (activeHeatKey() === 'astronomical_tide_ft') {
+        // Tidal Stage is painted once on the masked canvas. The raster layer
+        // is intentionally disabled for this field because its coarse quads
+        // can survive over land and produce rectangular artifacts.
+        ensureWaveMaskImage();
+        drawScalarAndWaves('astronomical_tide_ft');
       } else if (def.viz === 'streamlines') {
         // Wind playback is particle-only; its screen trails decay as the
         // particles pass rather than leaving a permanent streamline field.
@@ -3070,6 +3084,10 @@
         drawFineWaveHeatGrid(scalarKey, grid, lons, lats, scale, r, 4, alpha);
         return;
       }
+      if (scalarKey === 'astronomical_tide_ft') {
+        drawFineWaveHeatGrid(scalarKey, grid, lons, lats, scale, r, 4, 0.62);
+        return;
+      }
       for (let yi = 0; yi < lats.length - 1; yi++) {
         for (let xi = 0; xi < lons.length - 1; xi++) {
           const vals = [grid[yi]?.[xi], grid[yi]?.[xi + 1], grid[yi + 1]?.[xi], grid[yi + 1]?.[xi + 1]];
@@ -3183,10 +3201,12 @@
       const projected = lats.map((lat, yi) => lons.map((lon, xi) =>
         map.getPixelFromCoordinate(ol.proj.fromLonLat([lon, lat], mapProjection))));
       const finite = v => Number.isFinite(v);
-      const paint = (points, value) => {
+      const paint = (points, value, phase = null) => {
         if (!points || points.length < 3 || !finite(value)) return;
-        const c = hexToRgb(sampleScale(scale, Math.max(0, Math.min(1,
-          scalarNorm(convertDisplayValue(key, value), range.vmin, range.vmax, scale)))));
+        const normalized = phase == null
+          ? Math.max(0, Math.min(1, scalarNorm(convertDisplayValue(key, value), range.vmin, range.vmax, scale)))
+          : phase;
+        const c = hexToRgb(sampleScale(phase == null ? scale : 'TIDE', normalized));
         streamlineCtx.fillStyle = `rgba(${c[0]},${c[1]},${c[2]},${alpha})`;
         streamlineCtx.beginPath(); streamlineCtx.moveTo(points[0][0], points[0][1]);
         for (const p of points.slice(1)) streamlineCtx.lineTo(p[0], p[1]);
@@ -3211,12 +3231,18 @@
             const cellLon1 = lons[xi] + (lons[xi + 1] - lons[xi]) * u1;
             const cellLat0 = lats[yi] + (lats[yi + 1] - lats[yi]) * v0;
             const cellLat1 = lats[yi] + (lats[yi + 1] - lats[yi]) * v1;
+            if (key === 'astronomical_tide_ft' && ![
+              [cellLon0, cellLat0], [cellLon1, cellLat0],
+              [cellLon1, cellLat1], [cellLon0, cellLat1],
+              [(cellLon0 + cellLon1) / 2, (cellLat0 + cellLat1) / 2]
+            ].every(([lon, lat]) => cachedMaskWaterAt(lon, lat))) continue;
             if (key === 'swell_height_ft') {
               const exposureVec = bilinearPartitionVec(currentFrame, 'swell', (cellLon0 + cellLon1) / 2, (cellLat0 + cellLat1) / 2);
               if (!swellQuadSupported(cellLon0, cellLat0, cellLon1, cellLat1) || !swellExposureAt((cellLon0 + cellLon1) / 2, (cellLat0 + cellLat1) / 2, exposureVec)) continue;
             }
             paint([point(u0,v0), point(u1,v0), point(u1,v1), point(u0,v1)],
-              (bilinear(u0,v0) + bilinear(u1,v0) + bilinear(u1,v1) + bilinear(u0,v1)) / 4);
+              (bilinear(u0,v0) + bilinear(u1,v0) + bilinear(u1,v1) + bilinear(u0,v1)) / 4,
+              key === 'astronomical_tide_ft' ? localTideStageCell(frameIdx, yi, xi) : null);
           }
         } else {
           // A shoreline/source gap is represented only by the finite source
@@ -3226,7 +3252,8 @@
             const cellLon = (lons[xi] + lons[xi + 1]) / 2, cellLat = (lats[yi] + lats[yi + 1]) / 2;
             if (key !== 'swell_height_ft' || (swellSupportedAt(cellLon, cellLat) &&
                 swellExposureAt(cellLon, cellLat, bilinearPartitionVec(currentFrame, 'swell', cellLon, cellLat)))) {
-              paint(finiteIds.map(i => corners[i]), finiteIds.reduce((sum, i) => sum + vals[i], 0) / finiteIds.length);
+              paint(finiteIds.map(i => corners[i]), finiteIds.reduce((sum, i) => sum + vals[i], 0) / finiteIds.length,
+                key === 'astronomical_tide_ft' ? localTideStageCell(frameIdx, yi, xi) : null);
             }
           }
         }
