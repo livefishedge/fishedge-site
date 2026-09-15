@@ -5171,10 +5171,8 @@
                            window.location.hostname.includes('pages.dev') ||
                            window.location.hostname === 'localhost' ||
                            window.location.hostname === '127.0.0.1';
-        forecastData = isStaging
-          ? await loadForecastPayload(DEV_FORECAST_URL)
-          : await loadForecastPayload(FORECAST_URL);
-        forecastData = normalizeForecastPayload(forecastData);
+        const primaryForecastUrl = isStaging ? DEV_FORECAST_URL : FORECAST_URL;
+        forecastData = normalizeForecastPayload(await loadForecastPayload(primaryForecastUrl));
         // The viewer is a rolling operational product: never expose stale
         // frames before today or beyond the next seven days, even if a
         // backend artifact contains a longer history.
@@ -5182,10 +5180,27 @@
         // not device-local midnight, so the UI always has a complete +168h.
         const windowStart = Date.now() - 24 * 3600000;
         const windowEnd = windowStart + 7 * 24 * 3600000;
-        const windowFrames = forecastData.frames.filter(frame => {
+        const framesInWindow = payload => payload.frames.filter(frame => {
           const t = parseForecastTime(frame.time);
           return Number.isFinite(t) && t >= windowStart && t <= windowEnd;
         });
+        let windowFrames = framesInWindow(forecastData);
+        // The external production feed can lag during a data refresh. Use the
+        // versioned Pages artifact as a bounded fallback instead of showing a
+        // blank planner when the live payload has no current frames.
+        if (!windowFrames.length && !isStaging) {
+          const liveGeneratedAt = forecastData.generated_at;
+          const bundled = normalizeForecastPayload(await loadForecastPayload(DEV_FORECAST_URL));
+          const bundledFrames = framesInWindow(bundled);
+          if (bundledFrames.length) {
+            forecastData = bundled;
+            windowFrames = bundledFrames;
+            console.warn('[forecast] live feed stale; using bundled Pages forecast', {
+              live_generated_at: liveGeneratedAt,
+              fallback_generated_at: bundled.generated_at,
+            });
+          }
+        }
         if (windowFrames.length) forecastData = { ...forecastData, frames: windowFrames };
         else throw new Error('forecast has no frames in the rolling +168h window');
         // Dev carries a NOAA GFS diagnostic payload while the shared feed is
