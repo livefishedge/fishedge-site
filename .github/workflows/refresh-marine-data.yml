@@ -70,4 +70,11 @@ jobs:
               aws s3 cp "$file" "s3://fishedge-data/$region/briefing/frames/$(basename "$file")" \
                 --endpoint-url "$endpoint" --cache-control 'no-cache, max-age=0'
             done
+            mask="dashboard/trip-planner/data/$region/briefing/native_wave_mask.png"
+            if [ ! -s "$mask" ]; then
+              echo "::error::missing regional water mask: $mask"
+              exit 1
+            fi
+            aws s3 cp "$mask" "s3://fishedge-data/$region/briefing/native_wave_mask.png" \
+              --endpoint-url "$endpoint" --cache-control 'no-cache, max-age=0'
           done
