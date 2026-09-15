@@ -1823,6 +1823,7 @@ function setActiveRegion(regionId, regionMeta) {
   if (!REGIONS[regionId]) return;
   const prevRegion = REGION_ID;
   REGION_ID = regionId;
+  window.__FISHEDGE_ACTIVE_REGION = REGION_ID;
   BBOX = regionMeta?.bbox
     ? regionMeta.bbox.map(Number)
     : [...(REGION_FALLBACKS[regionId]?.bbox ?? REGION_FALLBACKS.usec_south.bbox)];

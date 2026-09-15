@@ -16,6 +16,9 @@
 
   function setView(view) {
     if (view !== 'map' && view !== 'planner') return;
+    // Region selection is resolved by dashboard/index.html. Publish a small
+    // shared adapter value so the lazily mounted Planner never guesses MD.
+    global.__FISHEDGE_ACTIVE_REGION = global.REGION_ID === 'usec_south' ? 'usec_south' : 'usec_md';
     document.body.classList.toggle('fishedge-view-planner', view === 'planner');
     document.querySelectorAll('.vt-tab').forEach((t) => {
       const active = t.dataset.view === view;

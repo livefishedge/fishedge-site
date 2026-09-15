@@ -277,7 +277,8 @@
     }
     // The dashboard exposes the authenticated active region as REGION_ID.
     // Keep the standalone drawer safe when opened outside the dashboard.
-    const region = window.REGION_ID === 'usec_south' ? 'usec_south' : 'usec_md';
+    const activeRegion = window.__FISHEDGE_ACTIVE_REGION || window.REGION_ID;
+    const region = activeRegion === 'usec_south' ? 'usec_south' : 'usec_md';
     const omBase    = `https://data.fishedge.live/${region}/briefing/raster_`;
     const cmemsBase = `https://data.fishedge.live/${region}/briefing/cmems_raster_`;
     const cards = dates.map((d, i) =>

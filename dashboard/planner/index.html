@@ -273,6 +273,9 @@
   // 3-hour frames. Briefing card + map link use the selected frame.
   // ============================================================
   const PLANNER_REGION = new URLSearchParams(location.search).get('region') === 'usec_south' ? 'usec_south' : 'usec_md';
+  document.querySelectorAll('a[href*="region=usec_md"]').forEach((link) => {
+    link.href = link.href.replace('region=usec_md', `region=${PLANNER_REGION}`);
+  });
   const DATA_BASE = /\.pages\.dev$/.test(location.hostname)
     ? `${location.origin}/trip-planner/data/${PLANNER_REGION}/briefing/`
     : `https://data.fishedge.live/${PLANNER_REGION}/briefing/`;
@@ -577,7 +580,7 @@
         Frame ${idx + 1}/${d.frames.length} · Wind ${frame.maxWind}kt · Seas ${frame.maxWave}ft${frame.maxSwell > 0.5 ? ` · Swell ${frame.maxSwell}ft` : ''}
       </p>
       ${breakdown ? `<ul class="score-breakdown"><li><strong>Score breakdown</strong></li>${breakdown}</ul>` : '<p class="score-breakdown">Score breakdown unavailable: required data are missing.</p>'}
-      <a class="map-link" href="/dashboard/trip-planner/briefing-viewer?date=${d.date}&region=usec_md&target=${encodeURIComponent(targetSelect?.value || 'baltimore_canyon_line')}&from=planner">View on full map →</a>
+      <a class="map-link" href="/dashboard/trip-planner/briefing-viewer?date=${d.date}&region=${PLANNER_REGION}&target=${encodeURIComponent(targetSelect?.value || 'baltimore_canyon_line')}&from=planner">View on full map →</a>
     `;
   }
 
@@ -590,7 +593,7 @@
     const selectedScores = dayAggregates.filter(d => selectedFishingDays.has(d.date)).map(d => d.score).filter(Number.isFinite);
     const score = selectedScores.length ? Math.min(...selectedScores) : null;
     const map = document.getElementById('full-forecast-maps');
-    if (map) map.href = `/dashboard/trip-planner/briefing-viewer?region=usec_md&target=${encodeURIComponent(targetSelect?.value || '')}&from=planner`;
+    if (map) map.href = `/dashboard/trip-planner/briefing-viewer?region=${PLANNER_REGION}&target=${encodeURIComponent(targetSelect?.value || '')}&from=planner`;
     host.className = '';
     host.innerHTML = `<div style="line-height:1.7;font-size:12px"><strong style="color:#edfaff">${inlet}</strong><br><span style="color:#91afc0">Target:</span> ${target}<br><span style="color:#91afc0">Fishing days:</span> ${days.length ? days.map(d => new Date(`${d}T12:00:00`).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})).join(', ') : 'None selected'}<br><span style="color:#91afc0">Trip score:</span> ${score == null ? 'Select a fishing day' : `${score}/100`}</div>`;
   }
@@ -617,7 +620,7 @@
           <div style="color:#edfaff;font-weight:600">${t.name || 'Untitled trip'}</div>
           <div style="color:#91afc0;font-size:11px">${t.inlet_key || 'unknown'} · ${t.departure_iso ? new Date(t.departure_iso).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric'}) : 'no departure'}</div>
           <div style="color:#7898aa;font-size:11px">${t.route_distance_nm != null ? `${t.route_distance_nm} nm planned route` : 'route preview unavailable'} · ${t.status || 'draft'}</div>
-          ${t.route_polyline ? `<a class="map-link" href="/dashboard/trip-planner/briefing-viewer?region=usec_md&trip_id=${encodeURIComponent(t.id)}&target=${encodeURIComponent(t.target_id || '')}&route=${encodeURIComponent(t.route_polyline)}&from=planner">Open route on map →</a>` : ''}
+          ${t.route_polyline ? `<a class="map-link" href="/dashboard/trip-planner/briefing-viewer?region=${PLANNER_REGION}&trip_id=${encodeURIComponent(t.id)}&target=${encodeURIComponent(t.target_id || '')}&route=${encodeURIComponent(t.route_polyline)}&from=planner">Open route on map →</a>` : ''}
         </div>
       `).join('');
     } catch (_) { /* ignore */ }
