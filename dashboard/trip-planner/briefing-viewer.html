@@ -1569,8 +1569,15 @@
         });
         row.append(label, remove); list.appendChild(row);
       }
+      if (distancePoints.length % 2) {
+        const point = distancePoints[distancePoints.length - 1];
+        const row = document.createElement('div'); row.className = 'cd-row';
+        const label = document.createElement('span');
+        label.textContent = `Point ${distancePoints.length}  ${point[1].toFixed(4)}°, ${point[0].toFixed(4)}° · waiting for next point`;
+        row.append(label); list.appendChild(row);
+      }
       total.textContent = pairs ? `Total · ${totalNm.toFixed(2)} nm` : '';
-      panel.classList.toggle('visible', pairs > 0);
+      panel.classList.toggle('visible', distancePoints.length > 0);
     }
     const distancePoints = [];
     let distanceMode = false;
@@ -1583,16 +1590,16 @@
     // twice and bypass the shared accuracy marker/error reporting.
     const locateClone = document.getElementById('captain-locate-btn-combined');
     if (locateClone) locateClone.style.display = 'flex';
-    const captainPanelList = (id, panelId) => {
-      const list = document.getElementById(id);
+    const captainPanelTitle = (id, panelId) => {
+      const title = document.getElementById(id);
       const panel = document.getElementById(panelId);
-      list?.addEventListener('click', event => {
+      title?.addEventListener('click', event => {
         if (event.target.closest('button')) return;
         panel?.classList.toggle('collapsed');
       });
     };
-    captainPanelList('captain-pts-list', 'captain-pts-panel');
-    captainPanelList('captain-dist-list', 'captain-dist-panel');
+    captainPanelTitle('captain-pts-drag-handle', 'captain-pts-panel');
+    captainPanelTitle('captain-dist-drag-handle', 'captain-dist-panel');
     document.getElementById('captain-add-tool')?.addEventListener('click', event => {
       waypointMode = !waypointMode;
       if (waypointMode) {
@@ -1658,13 +1665,12 @@
     drawTideStations();
     map.on('singleclick', event => {
       if (distanceMode) {
-        // Re-derive from the map pixel so the stored coordinate uses the
-        // exact rendered click location even when the viewport has custom
-        // layout/CSS offsets.
-        const clickedCoordinate = map.getCoordinateFromPixel(event.pixel) || event.coordinate;
+        // OpenLayers has already converted the browser event into the map's
+        // active projection. Keep that canonical coordinate; converting a
+        // second time from a potentially stale pixel caused visible drift.
+        const clickedCoordinate = event.coordinate;
         const [lon, lat] = ol.proj.toLonLat(clickedCoordinate, mapProjection);
         distancePoints.push([lon, lat]);
-        if (distancePoints.length > 2) distancePoints.splice(0, distancePoints.length - 2);
         const features = distancePoints.map(p => new ol.Feature(new ol.geom.Point(ol.proj.fromLonLat(p, mapProjection))));
         if (distancePoints.length === 2) features.push(new ol.Feature(new ol.geom.LineString(distancePoints.map(p => ol.proj.fromLonLat(p, mapProjection)))));
         distanceSource.clear(); distanceSource.addFeatures(features);
@@ -1674,7 +1680,7 @@
         return;
       }
       if (waypointMode) {
-        const clickedCoordinate = map.getCoordinateFromPixel(event.pixel) || event.coordinate;
+        const clickedCoordinate = event.coordinate;
         const [lon, lat] = ol.proj.toLonLat(clickedCoordinate, mapProjection);
         plannerWaypoints.push({ lon, lat });
         const marker = document.createElement('button'); marker.type = 'button'; marker.textContent = String(plannerWaypoints.length); marker.title = `Waypoint ${plannerWaypoints.length}`; marker.style.cssText = 'width:22px;height:22px;border-radius:50%;border:1px solid #fff;background:#15324a;color:#fff;font:700 11px monospace;cursor:pointer;';
