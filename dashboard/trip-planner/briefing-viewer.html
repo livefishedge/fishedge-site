@@ -4617,6 +4617,7 @@
     // speed × 0.0009 deg/frame for both wind (kn) and currents.
     let particleRaf = 0;
     let particleLast = 0;
+    let currentReplenishTick = 0;
 
     function seedWindParticles() {
       particles.length = 0;
@@ -4672,14 +4673,13 @@
 
     function makeCurrentParticle(lon, lat, age = 0) {
       const originSstF = sampleGridAtPoint(currentFrame?.sea_surface_temperature_f, lat, lon, false);
-      // Pre-seed a short velocity-derived trail so a fresh particle is
-      // visible on its first paint, instead of flashing empty for two frames.
-      const initialBearing = currentBearingDeg(lat, lon);
       const trail = [];
-      if (initialBearing != null) {
+      const originVec = bilinearVec(currentFrame, lon, lat, 'current');
+      if (originVec && originVec.speed >= 0.05) {
+        const cosLat = Math.max(0.35, Math.cos(lat * Math.PI / 180));
         for (let step = 1; step <= 3; step += 1) {
-          const prevLon = lon - Math.cos(initialBearing) * 0.012 * step;
-          const prevLat = lat - Math.sin(initialBearing) * 0.012 * step;
+          const prevLon = lon - originVec.u / originVec.speed * 0.012 * step / cosLat;
+          const prevLat = lat - originVec.v / originVec.speed * 0.012 * step;
           if (!currentIsValidAt(prevLon, prevLat)) break;
           trail.push([prevLon, prevLat]);
         }
@@ -4691,28 +4691,13 @@
       };
     }
 
-    // Single shared eligibility gate. Seed, respawn, replenish, and draw all
-    // pass through this so MD and South particles come from the same physics
-    // and the same visibility threshold.
+    // One eligibility contract for current particles. It deliberately uses
+    // the artifact's canonical current_u/current_v fields through bilinearVec
+    // rather than assuming a separate water_current_* field name.
     function currentIsValidAt(lon, lat) {
-      if (!currentFrame || !currentFrame.water_current_u || !currentFrame.water_current_v) return false;
-      const u = sampleGridAtPoint(currentFrame.water_current_u, lat, lon, false);
-      const v = sampleGridAtPoint(currentFrame.water_current_v, lat, lon, false);
-      if (!Number.isFinite(u) || !Number.isFinite(v)) return false;
-      return Math.hypot(u, v) >= 0.05;
-    }
-
-    function currentBearingRad(lat, lon) {
-      if (!currentFrame || !currentFrame.water_current_u || !currentFrame.water_current_v) return null;
-      const u = sampleGridAtPoint(currentFrame.water_current_u, lat, lon, false);
-      const v = sampleGridAtPoint(currentFrame.water_current_v, lat, lon, false);
-      if (!Number.isFinite(u) || !Number.isFinite(v)) return null;
-      return Math.atan2(v, u);
-    }
-
-    function currentBearingDeg(lat, lon) {
-      const rad = currentBearingRad(lat, lon);
-      return rad == null ? null : rad;
+      if (!isCurrentWaterPoint(lon, lat)) return false;
+      const vec = bilinearVec(currentFrame, lon, lat, 'current');
+      return !!vec && Number.isFinite(vec.speed) && vec.speed >= 0.05;
     }
 
     function seedCurrentParticles() {
@@ -4738,30 +4723,28 @@
         const seed = currentWaterSeeds[Math.floor(Math.random() * currentWaterSeeds.length)];
         const lon = seed[0] + (Math.random() - 0.5) * 0.05;
         const lat = seed[1] + (Math.random() - 0.5) * 0.05;
-        if (!currentIsValidAt(lon, lat)) continue;
         const particle = makeCurrentParticle(lon, lat, Math.random() * 180);
-        // makeCurrentParticle already pre-seeds a velocity-derived trail;
-        // push the current position as well so the head point renders on
-        // frame 1 instead of frame 2.
+        // Staggered short histories prevent the first stationary frame from
+        // looking like a field of isolated dots while keeping all history
+        // geographically tied to the live velocity field.
         particle.trail.push([lon, lat]);
         currentParticles.push(particle);
       }
     }
 
     function randomCurrentParticle() {
-      // Always return a drawable particle. South has sparse cells where the
-      // current vector is null or below the 0.05 kn visibility threshold; if
-      // we returned null here the draw loop would crash on `p.lon` and the
-      // entire currents layer would disappear.
-      for (let attempt = 0; attempt < 12; attempt += 1) {
-        if (!currentWaterSeeds.length) break;
+      if (currentWaterSeeds.length) {
         const seed = currentWaterSeeds[Math.floor(Math.random() * currentWaterSeeds.length)];
-        const lon = seed[0] + (Math.random() - 0.5) * 0.05;
-        const lat = seed[1] + (Math.random() - 0.5) * 0.05;
-        if (currentIsValidAt(lon, lat)) return makeCurrentParticle(lon, lat);
+        for (let attempt = 0; attempt < 8; attempt += 1) {
+          const lon = seed[0] + (Math.random() - 0.5) * 0.05;
+          const lat = seed[1] + (Math.random() - 0.5) * 0.05;
+          if (currentIsValidAt(lon, lat)) return makeCurrentParticle(lon, lat);
+        }
       }
-      // Fallback to bbox corner so we never return null.
-      return makeCurrentParticle(bbox[0], bbox[1]);
+      // Keep the array structurally safe when a region has no eligible
+      // current cell; the draw loop will replace this inert particle without
+      // dereferencing null and killing the animation frame.
+      return { lon: bbox[0], lat: bbox[1], age: 0, maxAge: 1, trail: [], inert: true };
     }
 
     function replenishVisibleCurrentParticles() {
@@ -4788,11 +4771,7 @@
       const compact = rect.width < 600;
       const target = Math.max(compact ? 900 : 1200, Math.min(compact ? 1800 : 2400, Math.round(rect.width * rect.height / (compact ? 240 : 190))));
       let attempts = 0;
-      // Throttle replenishment to ~8 candidates per RAF so we never spend
-      // a full frame's worth of compute on spawn validation. The target
-      // is reached over multiple frames.
-      let spawnBudget = 8;
-      while (visible < target && attempts++ < 2500 && spawnBudget-- > 0) {
+      while (visible < target && attempts++ < 2500) {
         const lon = viewBox[0] + Math.random() * (viewBox[2] - viewBox[0]);
         const lat = viewBox[1] + Math.random() * (viewBox[3] - viewBox[1]);
         if (!currentIsValidAt(lon, lat)) continue;
@@ -4914,6 +4893,9 @@
         // Current particles use the same animated language as wind, but move
         // more slowly and inherit a subtle SST tint from their origin point.
         if (layerVisibility.current) {
+          // Top up gradually during playback; map events alone leave the
+          // field sparse after invalid coastal particles are respawned.
+          if (++currentReplenishTick % 8 === 0) replenishVisibleCurrentParticles();
           // Keep source-over blending so overlapping warm/cool tracks retain
           // their SST colors instead of washing out to white.
           flowCtx.save();
@@ -4924,7 +4906,7 @@
             // Mask at spawn and periodically while advecting; sampling the
             // image for every particle on every frame is prohibitively costly
             // at the requested 10x density.
-            if (!vec || !isCurrentWaterPoint(p.lon, p.lat) || vec.speed < 0.05 || p.age >= p.maxAge ||
+            if (!p || !currentIsValidAt(p.lon, p.lat) || p.age >= p.maxAge ||
                 p.lon < bbox[0] || p.lon > bbox[2] || p.lat < bbox[1] || p.lat > bbox[3]) {
               currentParticles[i] = randomCurrentParticle();
               continue;
