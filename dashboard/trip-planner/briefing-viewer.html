@@ -2103,6 +2103,11 @@
       const waveKeys = ['wave_height_ft', 'swell_height_ft', 'wind_wave_height_ft'];
       return currentProduct === 'wave_composite' && waveKeys.includes(heatKey) ? 'wave_composite' : heatKey;
     }
+    let rasterFrameToken = 0;
+    function invalidatePlannerRaster() {
+      rasterFrameToken += 1;
+      rasterLayer?.getSource()?.changed();
+    }
 
     // Captain-focused summary: show a few decision variables at the center
     // of the current planning domain without adding another map renderer.
@@ -2548,8 +2553,12 @@
       renderMarineSummary();
       computeActiveRange();
       drawColorbar();
-      map.render();
       drawOverlaysForProduct();
+      // ImageCanvas caches by extent/resolution. A frame change must create a
+      // new source revision before the map render, otherwise the legend can
+      // advance while the scalar image remains on the prior frame.
+      invalidatePlannerRaster();
+      map.render();
       renderActiveLayerStrip();
       if (lastWaveReadoutCoordinate) renderWaveReadout(lastWaveReadoutCoordinate, { preserveTideChart: waveReadout?.querySelector('[data-tide-chart]')?.dataset.active === '1' });
       if (stationPopup.style.display === 'block') renderActiveTide();
@@ -5112,9 +5121,19 @@
       setFrame(frameIdx + 1);
       pause();
     });
+    let pendingSliderFrame = null;
+    let sliderFrameRaf = 0;
     document.getElementById('bv-slider').addEventListener('input', e => {
-      setFrame(parseInt(e.target.value, 10));
+      pendingSliderFrame = parseInt(e.target.value, 10);
       pause();
+      if (sliderFrameRaf) return;
+      sliderFrameRaf = requestAnimationFrame(() => {
+        sliderFrameRaf = 0;
+        if (pendingSliderFrame == null) return;
+        const nextFrame = pendingSliderFrame;
+        pendingSliderFrame = null;
+        setFrame(nextFrame);
+      });
     });
     const playBtn = document.getElementById('bv-play');
     const speedSelect = document.getElementById('bv-speed');
