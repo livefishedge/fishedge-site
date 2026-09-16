@@ -3107,6 +3107,7 @@
 
     function drawWaveHeatOverlay(heatKey = activeHeatKey()) {
       const scalarKey = heatKey;
+      if (!currentFrame || !forecastData) return;
       // Tidal stage is rendered from native-mesh tiles generated from the
       // same HTP nodes/elements as co-range. Fall back to the legacy grid only
       // for older payloads without phase tiles.
