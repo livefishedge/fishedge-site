@@ -77,7 +77,12 @@ def main():
     if depth is None:
         source_forecast = json.loads(args.forecast.read_text())
         native_range = np.asarray([(np.nan if v is None else float(v)) for v in (source_forecast.get('native_mesh') or {}).get('range_ft', [])])
-        good = finite.any(axis=0) & np.isfinite(native_range)
+        # Pages packages omit raw node ranges to stay below the payload limit;
+        # the checkpointed native zeta series is then the authoritative
+        # validity source.
+        good = finite.any(axis=0)
+        if native_range.size == good.size:
+            good &= np.isfinite(native_range)
     else:
         good = finite.any(axis=0) & (depth > 0)
     lo[good] = np.nanmin(np.where(finite[:, good], z[:, good], np.nan), axis=0)
@@ -154,11 +159,11 @@ def main():
         [95,159,69,255], [69,117,180,255], [155,214,106,255],
         [255,240,138,255], [255,173,114,255], [215,48,39,255]
     ], dtype=np.uint8)
-    # Match the co-range contour builder exactly: a face belongs to the
-    # footprint when all three of its nodes have a finite native range. Do
-    # not use frame 0 phase finiteness here; a missing value in one phase
-    # frame must not make that coastal face disappear from the atlas.
-    tri_valid = valid[tri].all(axis=1)
+    # A coastal face may straddle wet/dry native nodes. Requiring all three
+    # nodes to have a full-horizon range removes valid shoreline/inlet water.
+    # Retain faces with at least two valid native nodes; the transparent image
+    # plus the browser shoreline mask remains the land-safety boundary.
+    tri_valid = valid[tri].sum(axis=1) >= 2
     tri_indices = tri[tri_valid]
     # Anchor the raster to the same valid native wet-face envelope used by
     # the contour product. The full mesh cache includes a narrow outer frame
@@ -168,21 +173,20 @@ def main():
     valid_nodes = np.unique(tri_indices)
     xmin, xmax = float(mx[valid_nodes].min()), float(mx[valid_nodes].max())
     ymin, ymax = float(my[valid_nodes].min()), float(my[valid_nodes].max())
-    # Co-range is the authoritative native shoreline registration. When the
-    # forecast already contains its contour paths, use their WGS84 envelope
-    # as the shared raster anchor so stage and co-range cannot be published
-    # with subtly different clipped extents.
-    contour_points = [point for line in forecast_payload.get('native_mesh', {}).get('native_contours', [])
-                      for point in line.get('coordinates', [])]
+    # The image must cover the authoritative configured region. A contour
+    # envelope is not a coverage envelope: it can omit the outer shelf and
+    # coastal areas where no contour level happens to occur.
+    region_bbox = forecast_payload.get('bbox')
+    if not (isinstance(region_bbox, list) and len(region_bbox) == 4):
+        region_bbox = [float(v) for v in (args.hotspot_bbox or [])]
+    if len(region_bbox) != 4:
+        raise SystemExit('forecast lacks authoritative regional bbox')
+    xmin, ymin = mercator(float(region_bbox[0]), float(region_bbox[1]))
+    xmax, ymax = mercator(float(region_bbox[2]), float(region_bbox[3]))
     if args.hotspot_bbox:
         west, south, east, north = args.hotspot_bbox
         xmin, ymin = mercator(west, south)
         xmax, ymax = mercator(east, north)
-    elif contour_points:
-        contour_x, contour_y = mercator(np.asarray([p[0] for p in contour_points]),
-                                        np.asarray([p[1] for p in contour_points]))
-        xmin, xmax = float(contour_x.min()), float(contour_x.max())
-        ymin, ymax = float(contour_y.min()), float(contour_y.max())
     args.out_dir.mkdir(parents=True, exist_ok=True)
     world = 2 * np.pi * R
     tile_n = 2 ** args.tile_zoom
