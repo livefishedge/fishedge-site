@@ -1,0 +1,978 @@
+#!/usr/bin/env python3
+"""
+Wave data fetcher for FishEdge briefing — swell pipeline.
+
+Source: Open-Meteo Marine API
+  https://marine-api.open-meteo.com/v1/marine
+The API may select among several marine models and does not expose the selected
+model in this response; the producer must preserve that uncertainty.
+
+Background:
+  - NOAA NOMADS WW3 GRIB endpoints returned 403 from this environment and no
+    GRIB2 decoder was installed.
+  - Open-Meteo wraps the same WW3 fields in JSON. The API requires same number
+    of lats and lons (it zips them positionally, one response per coordinate),
+  so we fetch an NxN square grid and bilinearly interpolate to the display
+  bbox (21x23 for the full usec_md operational domain).
+
+Returns per hour, per grid point:
+  - wave_height (significant), wave_direction, wave_period
+  - wind_wave_height, wind_wave_direction, wind_wave_period  (partition)
+  - swell_wave_height, swell_wave_direction, swell_wave_period (partition)
+
+Output written to data/usec_md/briefing/forecast.json and the dashboard fixture
+copy, using the versioned briefing-forecast-v2 contract.
+"""
+
+import json
+import os
+import time
+from pathlib import Path
+from datetime import datetime, timedelta, timezone
+import requests
+import numpy as np
+
+REGION = os.environ.get("FISHEDGE_REGION", "usec_md")
+REGION_CONFIG = {
+    "usec_md": {
+        "bbox": [-76.5, 35.5, -71.5, 40.5], "n": 11,
+        "stations": [
+            {"id": "8536110", "name": "Cape May, NJ", "lat": 38.9683, "lon": -74.9600},
+            {"id": "8534720", "name": "Atlantic City, NJ", "lat": 39.355, "lon": -74.418},
+            {"id": "8570283", "name": "Ocean City Inlet", "lat": 38.328, "lon": -75.092},
+            {"id": "8632200", "name": "Kiptopeke", "lat": 37.1652, "lon": -75.9884},
+            {"id": "8638610", "name": "Sewells Point", "lat": 36.9428, "lon": -76.3286},
+            {"id": "8639348", "name": "Money Point", "lat": 36.7782, "lon": -76.3019},
+            {"id": "8637689", "name": "Yorktown USCG", "lat": 37.2265, "lon": -76.4788},
+            {"id": "8651370", "name": "Duck, NC", "lat": 36.183, "lon": -75.747},
+        ],
+    },
+    "usec_south": {
+        "bbox": [-81.0, 31.0, -73.0, 36.0], "n": 17,
+        "stations": [
+            {"id": "8656483", "name": "Beaufort, NC", "lat": 34.719, "lon": -76.670},
+            {"id": "8658120", "name": "Wilmington, NC", "lat": 34.227, "lon": -77.953},
+            {"id": "8665530", "name": "Charleston, SC", "lat": 32.781, "lon": -79.925},
+        ],
+    },
+}
+if REGION not in REGION_CONFIG:
+    raise SystemExit(f"unsupported FISHEDGE_REGION: {REGION}")
+FULL_BBOX = REGION_CONFIG[REGION]["bbox"]
+# The planner displays the whole operational domain. Keeping the producer
+# grid on the old inner box made SST appear as a floating rectangle when the
+# map showed the full usec_md region. Use a square request that encloses the
+# full domain; the API returns the requested coordinates and the viewer keeps
+# them as the geospatial contract.
+DISPLAY_BBOX = FULL_BBOX
+FETCH_STEP_DEG = 0.5
+DISPLAY_STEP_DEG = 0.5
+N = REGION_CONFIG[REGION]["n"]
+OUT_PATH = Path(__file__).resolve().parents[1] / "data" / REGION / "briefing" / "forecast.json"
+DASHBOARD_OUT_PATH = Path(__file__).resolve().parents[1] / "dashboard" / "trip-planner" / "data" / REGION / "briefing" / "forecast.json"
+FRAME_CHUNK_SIZE = 24
+# Request one extra calendar day so a rolling today→+7-day viewer window has
+# a full 168 hours even when the refresh runs after local midnight.
+FORECAST_DAYS = 8
+
+
+# ---- CO-OPS tide stations (curators: NJ/DE/MD/VA inshore + outer banks) ----
+# NOAA Center for Operational Oceanographic Products and Services publishes
+# free harmonic tide predictions in plain text via api/data/. We precompute the
+# request URL per station here so the viewer never needs a live API hop. These
+# stations cover the usec_md bbox with measured-water-level redundancy:
+#   - Cape May + Atlantic City = NJ inshore reference
+#   - Ocean City Inlet = MD eastern shore (inside the display bbox)
+#   - Kiptopeke + Sewells Point + Money Point + Yorktown = Chesapeake references
+#   - Duck, NC = outer banks (Hatteras corridor edge)
+# Units: feet (CO-OPS MLLW datum, the same as the USEC captain convention).
+TIDE_STATIONS = REGION_CONFIG[REGION]["stations"]
+COOPS_API = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter"
+COOPS_HOURS = 168  # viewer renders today through seven days later
+
+
+def fetch_coops_curve(station_id, hours=COOPS_HOURS, begin=None):
+    """Fetch a single CO-OPS station's hourly tide prediction for the next
+    `hours` hours, starting at the top of the next hour (UTC).
+
+    Returns a dict with `curve` (list of {t, v} epoch-ms + ft), `range`
+    ({vmin, vmax} in ft), and `next_event` ({t, label} for the first high or
+    low after `now`). Raises RuntimeError on fetch failure so the caller can
+    decide whether to abort or fall back to a synthetic curve.
+    """
+    begin = begin or datetime.utcnow().replace(minute=0, second=0, microsecond=0)
+    end = begin + timedelta(hours=hours)
+    query_begin = begin - timedelta(hours=24)
+    params = {
+        "product": "predictions",
+        "application": "FishEdge.Briefing",
+        "begin_date": query_begin.strftime("%Y%m%d %H:%M"),
+        "end_date": end.strftime("%Y%m%d %H:%M"),
+        "datum": "MLLW",
+        "station": station_id,
+        "time_zone": "gmt",
+        "units": "english",
+        "interval": "h",
+        "format": "json",
+    }
+    last_err = None
+    for attempt in range(3):
+        try:
+            r = requests.get(COOPS_API, params=params, timeout=30)
+            if r.status_code == 200:
+                payload = r.json()
+                preds = payload.get("predictions") or []
+                if not preds:
+                    raise RuntimeError(f"empty predictions for station {station_id}")
+                curve = []
+                for p in preds:
+                    # CO-OPS time is "YYYY-MM-DD HH:MM" in the requested zone.
+                    dt = datetime.strptime(p["t"], "%Y-%m-%d %H:%M")
+                    epoch_ms = int(dt.replace(tzinfo=timezone.utc).timestamp() * 1000)
+                    curve.append({"t": epoch_ms, "v": float(p["v"])})
+                vs = [c["v"] for c in curve]
+                rng = {"vmin": min(vs), "vmax": max(vs)}
+                next_event = _find_next_tide_event(curve, int(begin.replace(tzinfo=timezone.utc).timestamp() * 1000))
+                return {"curve": curve, "range": rng, "next_event": next_event}
+            last_err = f"http {r.status_code}: {r.text[:200]}"
+        except Exception as e:
+            last_err = f"exception: {e}"
+        time.sleep(2 ** attempt)
+    raise RuntimeError(f"CO-OPS fetch failed for {station_id} after 3 tries: {last_err}")
+
+
+def fetch_coops_observed(station_id, end=None, hours=24):
+    """Fetch the recent measured water-level series for a station."""
+    end = end or datetime.utcnow().replace(minute=0, second=0, microsecond=0)
+    begin = end - timedelta(hours=hours)
+    params = {
+        "product": "water_level", "application": "FishEdge.Briefing",
+        "begin_date": begin.strftime("%Y%m%d %H:%M"),
+        "end_date": end.strftime("%Y%m%d %H:%M"), "datum": "MLLW",
+        "station": station_id, "time_zone": "gmt", "units": "english",
+        "interval": "6", "format": "json",
+    }
+    r = requests.get(COOPS_API, params=params, timeout=30)
+    if r.status_code != 200: raise RuntimeError(f"observed http {r.status_code}")
+    values = r.json().get("data") or []
+    return [{"t": int(datetime.strptime(p["t"], "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc).timestamp() * 1000), "v": float(p["v"])} for p in values if p.get("v") not in (None, "")]
+
+
+def _find_next_tide_event(curve, now_ms=None):
+    """Find the first high or low tide after the first point in the curve.
+
+    A tide event is a local extremum where the sign of (v[i+1] - v[i]) flips.
+    Returns {"t": epoch_ms, "label": "high 3.2 ft @ 14:00 UTC"} or None.
+    """
+    if len(curve) < 3:
+        return None
+    now_ms = curve[0]["t"] if now_ms is None else now_ms
+    for i in range(1, len(curve) - 1):
+        dv_prev = curve[i]["v"] - curve[i - 1]["v"]
+        dv_next = curve[i + 1]["v"] - curve[i]["v"]
+        if dv_prev == 0 or dv_next == 0:
+            continue
+        if (dv_prev > 0) != (dv_next > 0):
+            t_iso = curve[i]["t"]
+            if t_iso < now_ms:
+                continue
+            kind = "high" if dv_prev > 0 else "low"
+            dt = datetime.fromtimestamp(t_iso / 1000, tz=timezone.utc)
+            label = f"{kind} {curve[i]['v']:.1f} ft @ {dt.strftime('%H:%M')}"
+            return {"t": t_iso, "label": label}
+    return None
+
+
+def fetch_all_tides(hours=COOPS_HOURS, begin=None, region=None):
+    """Fetch CO-OPS curves for every station. Failures are downgraded to
+    per-station errors so a single dead station does not kill the artifact.
+
+    Returns a dict shaped for the viewer's `forecast.tides` slot:
+      {
+        "stations": [ {id, name, lat, lon}, ... ],
+        "curves":   { station_id: [{t, v}, ...] },
+        "range":    { station_id: {vmin, vmax} },
+        "next_event": { station_id: {t, label} | null },
+        "generated_at": epoch_ms,
+        "source": "NOAA CO-OPS api/data/ (predictions, MLLW, hourly)",
+      }
+    """
+    stations = REGION_CONFIG[(region or REGION)]["stations"]
+    out = {
+        "stations": stations,
+        "curves": {},
+        "range": {},
+        "next_event": {},
+        "observed": {},
+        "generated_at": int(time.time() * 1000),
+        "source": "NOAA CO-OPS api/data/ (predictions, MLLW, hourly)",
+    }
+    failures = []
+    for st in stations:
+        try:
+            res = fetch_coops_curve(st["id"], hours=hours, begin=begin)
+            out["curves"][st["id"]] = res["curve"]
+            out["range"][st["id"]] = res["range"]
+            out["next_event"][st["id"]] = res["next_event"]
+            # M2 harmonic amplitude matches the co-range contour lines:
+            # co-range = 2 × amplitude at each grid cell or station.
+            out.setdefault("amplitude_ft", {})[st["id"]] = res.get("amplitude_ft")
+            try:
+                out["observed"][st["id"]] = fetch_coops_observed(st["id"])
+            except Exception as e:
+                print(f"  observed {st['id']}: unavailable ({e})")
+            print(f"  tides {st['id']} {st['name']}: {len(res['curve'])} pts, range {res['range']['vmin']:.1f}-{res['range']['vmax']:.1f} ft")
+        except Exception as e:
+            failures.append(f"{st['id']} ({st['name']}): {e}")
+            print(f"  tides {st['id']} {st['name']}: FAILED {e}")
+    out["fetch_failures"] = failures
+    return out
+
+
+def add_tide_grids(frames, tides, lats, lons, preserve_ofs=True, land_mask=None):
+    """Add an IDW-interpolated tide-height surface to each forecast frame.
+
+    CO-OPS predictions are point forecasts. This produces a regional
+    visualization between those points; station curves remain authoritative.
+    Frames outside the fetched prediction window are left without a grid.
+    """
+    stations = tides.get("stations") or []
+    curves = tides.get("curves") or {}
+    points = [(st, curves.get(st["id"]) or []) for st in stations]
+    points = [(st, curve) for st, curve in points if curve]
+    if not points:
+        return frames
+    for frame in frames:
+        # Preserve only official OFS model surfaces. A prior CO-OPS fallback
+        # is deliberately replaceable so shoreline masking can be corrected
+        # on subsequent refreshes.
+        source = set(frame.get("tide_model_source") or [])
+        if preserve_ofs and source.intersection({"dbofs", "cbofs"}):
+            continue
+        frame_time = str(frame["time"]).replace("Z", "")
+        frame_ms = int(datetime.strptime(frame_time, "%Y-%m-%dT%H:%M").replace(tzinfo=timezone.utc).timestamp() * 1000)
+        values = []
+        for st, curve in points:
+            nearest = min(curve, key=lambda p: abs(p["t"] - frame_ms))
+            if abs(nearest["t"] - frame_ms) <= 2 * 3600000:
+                values.append((st["lat"], st["lon"], nearest["v"]))
+        if not values:
+            continue
+        grid = []
+        for lat in lats:
+            row = []
+            for xi, lon in enumerate(lons):
+                if land_mask and land_mask[lats.index(lat)][xi]:
+                    row.append(None)
+                    continue
+                weighted = []
+                for slat, slon, value in values:
+                    dlat = lat - slat
+                    dlon = (lon - slon) * np.cos(np.deg2rad(lat))
+                    d2 = dlat * dlat + dlon * dlon
+                    if d2 < 1e-10:
+                        weighted = [(1.0, value)]
+                        break
+                    weighted.append((1.0 / d2, value))
+                total = sum(weight for weight, _ in weighted)
+                row.append(float(sum(weight * value for weight, value in weighted) / total) if total else None)
+            grid.append(row)
+        frame["tide_height_ft"] = grid
+    return frames
+
+
+def add_tide_display_fields(frames):
+    """Keep popup prediction, stage raster, and co-range on one series.
+
+    The live refresh path creates ``tide_height_ft`` from the current CO-OPS
+    station blend.  The viewer also needs the explicit stage/range fields;
+    derive both from that exact serialized series rather than leaving stale
+    or absent fields after a refresh.
+    """
+    if not frames or not frames[0].get("tide_height_ft"):
+        return
+    source = [frame.get("tide_height_ft") for frame in frames]
+    valid_source = [grid for grid in source if grid and grid[0]]
+    if not valid_source:
+        return
+    ny, nx = len(valid_source[0]), len(valid_source[0][0])
+    ranges = []
+    for yi in range(ny):
+        row = []
+        for xi in range(nx):
+            values = [grid[yi][xi] for grid in valid_source if grid[yi][xi] is not None]
+            row.append(float(max(values) - min(values)) if values else None)
+        ranges.append(row)
+    for frame in frames:
+        if frame.get("tide_height_ft"):
+            frame["astronomical_tide_ft"] = frame["tide_height_ft"]
+            frame["tide_range_ft"] = ranges
+
+
+def apply_regional_tide_harmonics(frames, contract):
+    """Regenerate stage from the stored regional model coefficients.
+
+    CO-OPS curves validate station behavior; they must not replace the
+    regional offshore field on every weather refresh.  The coefficients are
+    serialized by the STOFS extractor so new forecast hours remain aligned
+    without refitting or copying a stale frame.
+    """
+    if not contract or not contract.get("fields") or not contract.get("reference_time"):
+        return False
+    try:
+        ref = datetime.fromisoformat(str(contract["reference_time"]).replace("Z", "+00:00"))
+        fields = contract["fields"]
+        periods = contract.get("periods_hours") or {"M2": 12.4206, "S2": 12.0, "K1": 23.9345, "O1": 25.8193}
+        for frame in frames:
+            t = datetime.fromisoformat(str(frame["time"]).replace("Z", "+00:00"))
+            hours = (t - ref).total_seconds() / 3600.0
+            grid = []
+            for yi in range(len(frames[0].get("astronomical_tide_ft") or [])):
+                row = []
+                for xi in range(len((frames[0].get("astronomical_tide_ft") or [[]])[yi])):
+                    value = 0.0; covered = False
+                    for name, period in periods.items():
+                        item = fields.get(name) or {}
+                        amp = (item.get("amplitude_ft") or [[]])[yi][xi]
+                        phase = (item.get("phase_deg") or [[]])[yi][xi]
+                        if amp is None or phase is None: continue
+                        value += float(amp) * np.cos(2.0 * np.pi * hours / float(period) - np.deg2rad(float(phase)))
+                        covered = True
+                    row.append(float(value) if covered else None)
+                grid.append(row)
+            frame["astronomical_tide_ft"] = grid
+        return True
+    except (KeyError, IndexError, TypeError, ValueError, OverflowError):
+        return False
+
+
+def build_square_grid(bbox, step, n):
+    """Build NxN lat/lon grid covering bbox (centered)."""
+    lon_span = (n - 1) * step
+    lat_span = (n - 1) * step
+    lon_c = 0.5 * (bbox[0] + bbox[2])
+    lat_c = 0.5 * (bbox[1] + bbox[3])
+    lons = [round(lon_c - 0.5 * lon_span + step * i, 4) for i in range(n)]
+    lats = [round(lat_c - 0.5 * lat_span + step * i, 4) for i in range(n)]
+    return lats, lons
+
+
+def fetch_grid(lats_grid, lons_grid, forecast_days=7):
+    """Open-Meteo zips lat/lon positionally — a list of (npts) dicts is returned,
+    one per coordinate pair, in the same order as the input arrays.
+
+    To get a 2D grid, we enumerate (lat, lon) pairs row-major into flat arrays
+    of length npts = nrows * ncols.
+    """
+    url = "https://marine-api.open-meteo.com/v1/marine"
+    fields = [
+        "wave_height", "wave_direction", "wave_period",
+        "wind_wave_height", "wind_wave_direction", "wind_wave_period",
+        "swell_wave_height", "swell_wave_direction", "swell_wave_period",
+        "ocean_current_velocity", "ocean_current_direction", "sea_surface_temperature",
+    ]
+    flat_lats = []
+    flat_lons = []
+    for lat in lats_grid:
+        for lon in lons_grid:
+            flat_lats.append(lat)
+            flat_lons.append(lon)
+    npts = len(flat_lats)
+    assert npts == len(flat_lons)
+    # Open-Meteo's URL becomes too large for the full operational grid when
+    # all coordinates and seven days of fields are sent in one GET. Batch the
+    # points while preserving row-major order; the returned list can still be
+    # reshaped into the same 2-D forecast grid by the caller.
+    results = []
+    batch_size = 100
+    for start in range(0, npts, batch_size):
+        end = min(npts, start + 100)
+        params = {
+            "latitude": ",".join(f"{x:.4f}" for x in flat_lats[start:end]),
+            "longitude": ",".join(f"{x:.4f}" for x in flat_lons[start:end]),
+            "hourly": ",".join(fields),
+            "length_unit": "imperial",
+            "forecast_days": forecast_days,
+            "timezone": "UTC",
+        }
+        last_err = None
+        for attempt in range(3):
+            try:
+                post_params = {**params, "latitude": flat_lats[start:end], "longitude": flat_lons[start:end], "hourly": fields, "timezone": ["UTC"] * (end - start)}
+                r = (requests.post(url, json=post_params, timeout=120) if npts > 100
+                     else requests.get(url, params=params, timeout=120))
+                if r.status_code == 200:
+                    data = r.json()
+                    if not isinstance(data, list):
+                        raise RuntimeError(f"unexpected response type: {type(data).__name__}")
+                    if len(data) != end - start:
+                        raise RuntimeError(f"expected {end - start} points, got {len(data)}")
+                    results.extend(data)
+                    if end < npts:
+                        time.sleep(16)
+                    break
+                last_err = f"http {r.status_code}: {r.text[:200]}"
+            except Exception as e:
+                last_err = f"exception: {e}"
+            time.sleep(2 ** attempt)
+        else:
+            raise RuntimeError(f"open-meteo batch {start}:{end} failed after 3 tries: {last_err}")
+    return results
+
+
+def reshape_grid(resp_list, nrows, ncols):
+    """Reshape list-of-points into per-hour 2D grids (lat-major, lon-minor)."""
+    times = resp_list[0]["hourly"]["time"]
+    field_names = [k for k in resp_list[0]["hourly"].keys() if k != "time"]
+    out_frames = []
+    for h_idx, t_iso in enumerate(times):
+        # Open-Meteo returns UTC timestamps without an offset. Preserve the
+        # source instant explicitly so browser timezone cannot reinterpret it.
+        frame = {"time": t_iso if str(t_iso).endswith(('Z', '+00:00')) else f"{t_iso}Z"}
+        for fld in field_names:
+            grid = []
+            for row in range(nrows):
+                rowvals = []
+                for col in range(ncols):
+                    pt = row * ncols + col
+                    val = resp_list[pt]["hourly"][fld][h_idx]
+                    rowvals.append(val)
+                grid.append(rowvals)
+            frame[fld] = grid
+        out_frames.append(frame)
+    return out_frames
+
+
+def source_grid_metadata(resp_list, requested_lats, requested_lons):
+    """Preserve the native coordinates returned by the provider.
+
+    Open-Meteo may snap a requested point to a different model cell. The
+    viewer must not silently call the returned value a local observation.
+    """
+    native_lats = []
+    native_lons = []
+    displacements_km = []
+    for row, req_lat in enumerate(requested_lats):
+        lat_row = []
+        lon_row = []
+        for col, req_lon in enumerate(requested_lons):
+            point = resp_list[row * len(requested_lons) + col]
+            lat = float(point.get("latitude", req_lat))
+            lon = float(point.get("longitude", req_lon))
+            lat_row.append(lat); lon_row.append(lon)
+            dlat = (lat - req_lat) * 111.32
+            dlon = (lon - req_lon) * 111.32 * np.cos(np.deg2rad(req_lat))
+            displacements_km.append(float(np.hypot(dlat, dlon)))
+        native_lats.append(lat_row); native_lons.append(lon_row)
+    return {
+        "requested_grid": {"lats": requested_lats, "lons": requested_lons},
+        "returned_latitude": native_lats,
+        "returned_longitude": native_lons,
+        "max_displacement_km": round(max(displacements_km or [0.0]), 3),
+        "mean_displacement_km": round(float(np.mean(displacements_km or [0.0])), 3),
+    }
+
+
+def interp_to_display(frames, src_lats, src_lons, dst_lats, dst_lons):
+    """Bilinear interp each field from src NxN grid to dst MxK grid. NaN-safe."""
+    direction_fields = {"wave_direction", "wind_wave_direction", "swell_wave_direction", "ocean_current_direction"}
+    categorical_fields = {"weather_code"}
+    src_lat_arr = np.array(src_lats)
+    src_lon_arr = np.array(src_lons)
+    out = []
+    for fr in frames:
+        new_fr = {"time": fr["time"]}
+        for fld, grid in fr.items():
+            if fld == "time":
+                continue
+            arr = np.array(grid, dtype=float)
+            rows = []
+            for dl in dst_lats:
+                if dl <= src_lat_arr[0]:
+                    li, lf = 0, 0.0
+                elif dl >= src_lat_arr[-1]:
+                    li, lf = len(src_lat_arr) - 2, 1.0
+                else:
+                    li = int(np.searchsorted(src_lat_arr, dl) - 1)
+                    lf = (dl - src_lat_arr[li]) / (src_lat_arr[li + 1] - src_lat_arr[li])
+                row = []
+                for dn in dst_lons:
+                    if dn <= src_lon_arr[0]:
+                        mi, mf = 0, 0.0
+                    elif dn >= src_lon_arr[-1]:
+                        mi, mf = len(src_lon_arr) - 2, 1.0
+                    else:
+                        mi = int(np.searchsorted(src_lon_arr, dn) - 1)
+                        mf = (dn - src_lon_arr[mi]) / (src_lon_arr[mi + 1] - src_lon_arr[mi])
+                    v00, v01, v10, v11 = arr[li, mi], arr[li, mi + 1], arr[li + 1, mi], arr[li + 1, mi + 1]
+                    if fld in categorical_fields:
+                        # Weather codes are classes, not a continuous field;
+                        # use the nearest source point instead of inventing
+                        # intermediate codes between neighboring cells.
+                        nearest = min(((v00, (1 - lf) * (1 - mf)), (v01, (1 - lf) * mf),
+                                       (v10, lf * (1 - mf)), (v11, lf * mf)), key=lambda item: -item[1])
+                        row.append(None if np.isnan(nearest[0]) else int(round(nearest[0])))
+                        continue
+                    if fld in direction_fields:
+                        # Compass angles are circular: interpolate unit-vector
+                        # components, never degrees (359° and 1° are adjacent,
+                        # not opposite directions).
+                        weights = ((1 - lf) * (1 - mf), (1 - lf) * mf, lf * (1 - mf), lf * mf)
+                        corners = (v00, v01, v10, v11)
+                        valid = [(v, wt) for v, wt in zip(corners, weights) if not np.isnan(v)]
+                        if not valid:
+                            row.append(None)
+                        else:
+                            sx = sum(wt * np.sin(np.deg2rad(v)) for v, wt in valid)
+                            sy = sum(wt * np.cos(np.deg2rad(v)) for v, wt in valid)
+                            row.append(float(np.rad2deg(np.arctan2(sx, sy)) % 360.0))
+                        continue
+                    if any(np.isnan([v00, v01, v10, v11])):
+                        vals = [v for v in (v00, v01, v10, v11) if not np.isnan(v)]
+                        row.append(float(np.mean(vals)) if vals else None)
+                        continue
+                    v = (
+                        v00 * (1 - lf) * (1 - mf)
+                        + v01 * (1 - lf) * mf
+                        + v10 * lf * (1 - mf)
+                        + v11 * lf * mf
+                    )
+                    row.append(float(v))
+                rows.append(row)
+            new_fr[fld] = rows
+        out.append(new_fr)
+    return out
+
+
+def fetch_atmospheric_wind(lats_grid, lons_grid, forecast_days=7):
+    """Atmospheric 10-m wind from Open-Meteo's main forecast endpoint (NOT marine).
+
+    Same coordinate shape as the marine call, same forecast_days, same timezone.
+    The hourly timeline aligns hour-for-hour with the marine response so we can
+    merge them by `time` ISO string.
+    """
+    url = "https://api.open-meteo.com/v1/forecast"
+    fields = [
+        "wind_speed_10m", "wind_gusts_10m", "wind_direction_10m",
+        "temperature_2m", "apparent_temperature", "dew_point_2m",
+        "pressure_msl", "relative_humidity_2m", "cloud_cover",
+        "cloud_cover_low", "cloud_cover_mid", "cloud_cover_high",
+        "visibility", "precipitation", "precipitation_probability",
+        "rain", "showers", "snowfall", "uv_index", "weather_code",
+    ]
+    flat_lats, flat_lons = [], []
+    for lat in lats_grid:
+        for lon in lons_grid:
+            flat_lats.append(lat)
+            flat_lons.append(lon)
+    npts = len(flat_lats)
+    results = []
+    batch_size = 100
+    for start in range(0, npts, batch_size):
+        end = min(npts, start + 100)
+        params = {
+            "latitude": ",".join(f"{x:.4f}" for x in flat_lats[start:end]),
+            "longitude": ",".join(f"{x:.4f}" for x in flat_lons[start:end]),
+            "hourly": ",".join(fields),
+            "wind_speed_unit": "kn",
+            "temperature_unit": "fahrenheit",
+            "precipitation_unit": "inch",
+            "forecast_days": forecast_days,
+            "timezone": "UTC",
+        }
+        last_err = None
+        for attempt in range(3):
+            try:
+                post_params = {**params, "latitude": flat_lats[start:end], "longitude": flat_lons[start:end], "hourly": fields, "timezone": ["UTC"] * (end - start)}
+                r = (requests.post(url, json=post_params, timeout=120) if npts > 100
+                     else requests.get(url, params=params, timeout=120))
+                if r.status_code == 200:
+                    data = r.json()
+                    if not isinstance(data, list):
+                        raise RuntimeError(f"unexpected response type: {type(data).__name__}")
+                    if len(data) != end - start:
+                        raise RuntimeError(f"expected {end - start} points, got {len(data)}")
+                    results.extend(data)
+                    if end < npts:
+                        time.sleep(16)
+                    break
+                last_err = f"http {r.status_code}: {r.text[:200]}"
+            except Exception as e:
+                last_err = f"exception: {e}"
+            time.sleep(2 ** attempt)
+        else:
+            raise RuntimeError(f"open-meteo atmospheric batch {start}:{end} failed after 3 tries: {last_err}")
+    return results
+
+
+def add_derived_marine_fields(frames):
+    """Normalize marine extras and derive operational diagnostic fields.
+
+    The source supplies current velocity in km/h and SST in °C.  The viewer
+    contract uses knots and °F.  Derived fields are deliberately explicit so
+    the UI never silently treats a diagnostic as a measured source variable.
+    """
+    for frame in frames:
+        current_kmh = frame.pop("ocean_current_velocity", None)
+        current_dir = frame.pop("ocean_current_direction", None)
+        sst_c = frame.pop("sea_surface_temperature", None)
+        def map_grid(grid, fn):
+            return [[None if v is None else fn(float(v)) for v in row] for row in grid] if grid else None
+        frame["current_speed_kn"] = map_grid(current_kmh, lambda v: v / 1.852)
+        frame["current_direction_deg"] = current_dir
+        # Preserve explicit east/north current components for downstream
+        # renderers.  Open-Meteo supplies speed plus direction; keeping the
+        # converted u/v fields avoids treating ocean flow like wind or
+        # interpolating circular direction angles.
+        if current_kmh and current_dir:
+            frame["current_u_ms"] = [[None if current_kmh[yi][xi] is None or current_dir[yi][xi] is None else
+                                       float(current_kmh[yi][xi]) / 3.6 * np.sin(float(current_dir[yi][xi]) * np.pi / 180.0)
+                                       for xi in range(len(current_kmh[yi]))] for yi in range(len(current_kmh))]
+            frame["current_v_ms"] = [[None if current_kmh[yi][xi] is None or current_dir[yi][xi] is None else
+                                       float(current_kmh[yi][xi]) / 3.6 * np.cos(float(current_dir[yi][xi]) * np.pi / 180.0)
+                                       for xi in range(len(current_kmh[yi]))] for yi in range(len(current_kmh))]
+        frame["sea_surface_temperature_f"] = map_grid(sst_c, lambda v: v * 9.0 / 5.0 + 32.0)
+        hs = frame.get("wave_height")
+        period = frame.get("wave_period")
+        wind_wave = frame.get("wind_wave_height")
+        def derived_grid(fn):
+            if not hs or not period: return None
+            out = []
+            for yi, row in enumerate(hs):
+                vals = []
+                for xi, h in enumerate(row):
+                    p = period[yi][xi]
+                    ww = wind_wave[yi][xi] if wind_wave else None
+                    vals.append(fn(h, p, ww))
+                out.append(vals)
+            return out
+        # Deep-water steepness diagnostic using Hs_m / (1.56 * T²).
+        # The marine request uses imperial height, so convert feet to metres
+        # before applying the wavelength coefficient.
+        frame["wave_steepness"] = derived_grid(
+            lambda h, p, ww: None if h is None or p is None or p <= 0 else (h * 0.3048) / (1.56 * p * p)
+        )
+        # 0 = smooth, 1 = moderate, 2 = harsh, 3 = severe. This is a
+        # transparent operational classification, not a vessel-specific load.
+        frame["ride_harshness_index"] = derived_grid(
+            lambda h, p, ww: None if h is None or p is None else float(min(3.0,
+                (1.0 if h >= 3.0 else 0.0) +
+                (1.0 if h >= 5.0 or (p <= 6.0 and h >= 3.0) else 0.0) +
+                (1.0 if (ww is not None and ww >= 3.0) else 0.0)))
+        )
+        wind = frame.get("wind_speed_kn")
+        frame["surface_texture_index"] = [
+            [None if wind is None or v is None else min(20.0, max(0.0, float(v))) for v in row]
+            for row in wind
+        ] if wind else None
+    return frames
+
+
+def merge_wind_into_frames(frames, wind_resp, nrows, ncols):
+    """Add atmospheric wind_speed_kn + wind_direction_deg to each marine frame.
+
+    The marine API and forecast API both return hour-aligned times. We index by
+    ISO time rather than position to absorb any minute-level drift between the
+    two endpoints (the marine uses HH:00, the forecast can use HH:00 too).
+    """
+    if not wind_resp:
+        return frames
+    # The marine endpoint currently emits UTC timestamps with a trailing `Z`,
+    # while the forecast endpoint emits the same instants without an offset
+    # (for `timezone=UTC`).  Match instants, not their spelling; otherwise the
+    # whole atmospheric grid silently becomes null on every frame.
+    def canonical_time(value):
+        text = str(value).strip()
+        if text.endswith("Z"):
+            text = text[:-1]
+        return text
+    times = wind_resp[0]["hourly"]["time"]
+    time_idx = {canonical_time(t): i for i, t in enumerate(times)}
+    out = []
+    for fr in frames:
+        new_fr = dict(fr)
+        h_idx = time_idx.get(canonical_time(fr["time"]))
+        sp_grid = []
+        dg_grid = []
+        gust_grid, temp_grid, pressure_grid = [], [], []
+        apparent_grid, dew_grid, humidity_grid = [], [], []
+        cloud_grid, cloud_low_grid, cloud_mid_grid, cloud_high_grid = [], [], [], []
+        visibility_grid, precip_grid, precip_prob_grid = [], [], []
+        rain_grid, showers_grid, snow_grid, uv_grid, weather_code_grid = [], [], [], [], []
+        for row in range(nrows):
+            sp_row, gust_row, dg_row, temp_row, pressure_row = [], [], [], [], []
+            apparent_row, dew_row, humidity_row = [], [], []
+            cloud_row, cloud_low_row, cloud_mid_row, cloud_high_row = [], [], [], []
+            visibility_row, precip_row, precip_prob_row = [], [], []
+            rain_row, showers_row, snow_row, uv_row, weather_code_row = [], [], [], [], []
+            for col in range(ncols):
+                pt = row * ncols + col
+                if h_idx is None:
+                    sp_row.append(None)
+                    gust_row.append(None)
+                    dg_row.append(None)
+                    temp_row.append(None); pressure_row.append(None)
+                    apparent_row.append(None); dew_row.append(None); humidity_row.append(None)
+                    cloud_row.append(None); cloud_low_row.append(None); cloud_mid_row.append(None); cloud_high_row.append(None)
+                    visibility_row.append(None); precip_row.append(None); precip_prob_row.append(None)
+                    rain_row.append(None); showers_row.append(None); snow_row.append(None); uv_row.append(None); weather_code_row.append(None)
+                    continue
+                sp = wind_resp[pt]["hourly"]["wind_speed_10m"][h_idx]
+                gust = wind_resp[pt]["hourly"]["wind_gusts_10m"][h_idx]
+                dg = wind_resp[pt]["hourly"]["wind_direction_10m"][h_idx]
+                temp = wind_resp[pt]["hourly"]["temperature_2m"][h_idx]
+                apparent = wind_resp[pt]["hourly"]["apparent_temperature"][h_idx]
+                dew = wind_resp[pt]["hourly"]["dew_point_2m"][h_idx]
+                pressure = wind_resp[pt]["hourly"]["pressure_msl"][h_idx]
+                humidity = wind_resp[pt]["hourly"]["relative_humidity_2m"][h_idx]
+                cloud = wind_resp[pt]["hourly"]["cloud_cover"][h_idx]
+                cloud_low = wind_resp[pt]["hourly"]["cloud_cover_low"][h_idx]
+                cloud_mid = wind_resp[pt]["hourly"]["cloud_cover_mid"][h_idx]
+                cloud_high = wind_resp[pt]["hourly"]["cloud_cover_high"][h_idx]
+                visibility = wind_resp[pt]["hourly"]["visibility"][h_idx]
+                precip = wind_resp[pt]["hourly"]["precipitation"][h_idx]
+                precip_prob = wind_resp[pt]["hourly"]["precipitation_probability"][h_idx]
+                rain = wind_resp[pt]["hourly"]["rain"][h_idx]
+                showers = wind_resp[pt]["hourly"]["showers"][h_idx]
+                snow = wind_resp[pt]["hourly"]["snowfall"][h_idx]
+                uv = wind_resp[pt]["hourly"]["uv_index"][h_idx]
+                weather_code = wind_resp[pt]["hourly"]["weather_code"][h_idx]
+                # rename to forecast.json contract keys (kn + deg)
+                sp_row.append(sp)
+                gust_row.append(gust)
+                dg_row.append(dg)
+                temp_row.append(temp); pressure_row.append(pressure)
+                apparent_row.append(apparent); dew_row.append(dew); humidity_row.append(humidity)
+                cloud_row.append(cloud); cloud_low_row.append(cloud_low); cloud_mid_row.append(cloud_mid); cloud_high_row.append(cloud_high)
+                visibility_row.append(None if visibility is None else visibility / 1609.344)
+                precip_row.append(precip); precip_prob_row.append(precip_prob)
+                rain_row.append(rain); showers_row.append(showers); snow_row.append(snow); uv_row.append(uv); weather_code_row.append(weather_code)
+            sp_grid.append(sp_row)
+            gust_grid.append(gust_row)
+            dg_grid.append(dg_row)
+            temp_grid.append(temp_row)
+            pressure_grid.append(pressure_row)
+            apparent_grid.append(apparent_row); dew_grid.append(dew_row); humidity_grid.append(humidity_row)
+            cloud_grid.append(cloud_row); cloud_low_grid.append(cloud_low_row); cloud_mid_grid.append(cloud_mid_row); cloud_high_grid.append(cloud_high_row)
+            visibility_grid.append(visibility_row); precip_grid.append(precip_row); precip_prob_grid.append(precip_prob_row)
+            rain_grid.append(rain_row); showers_grid.append(showers_row); snow_grid.append(snow_row); uv_grid.append(uv_row); weather_code_grid.append(weather_code_row)
+        new_fr["wind_speed_kn"] = sp_grid
+        new_fr["wind_gust_kn"] = gust_grid
+        new_fr["wind_direction_deg"] = dg_grid
+        new_fr["temperature_f"] = temp_grid
+        new_fr["pressure_hpa"] = pressure_grid
+        new_fr["apparent_temperature_f"] = apparent_grid
+        new_fr["dew_point_f"] = dew_grid
+        new_fr["relative_humidity_pct"] = humidity_grid
+        new_fr["cloud_cover_pct"] = cloud_grid
+        new_fr["cloud_cover_low_pct"] = cloud_low_grid
+        new_fr["cloud_cover_mid_pct"] = cloud_mid_grid
+        new_fr["cloud_cover_high_pct"] = cloud_high_grid
+        new_fr["visibility_mi"] = visibility_grid
+        new_fr["precipitation_in"] = precip_grid
+        new_fr["precipitation_probability_pct"] = precip_prob_grid
+        new_fr["rain_in"] = rain_grid
+        new_fr["showers_in"] = showers_grid
+        new_fr["snowfall_in"] = snow_grid
+        new_fr["uv_index"] = uv_grid
+        new_fr["weather_code"] = weather_code_grid
+        out.append(new_fr)
+    return out
+
+
+def main():
+    fetch_lats, fetch_lons = build_square_grid(DISPLAY_BBOX, FETCH_STEP_DEG, N)
+    nrows, ncols = len(fetch_lats), len(fetch_lons)
+    npts = nrows * ncols
+    print(f"fetch grid: {nrows}x{ncols} ({npts} pts)")
+
+    resp = fetch_grid(fetch_lats, fetch_lons, forecast_days=FORECAST_DAYS)
+    source_grid = source_grid_metadata(resp, fetch_lats, fetch_lons)
+    nhours = len(resp[0]["hourly"]["time"])
+    print(f"fetched {nhours} hours from open-meteo marine ({len(resp)} points)")
+
+    # Atmospheric fields are required by briefing-forecast-v2. Never publish
+    # a marine-only artifact after the weather request fails.
+    wind_resp = fetch_atmospheric_wind(fetch_lats, fetch_lons, forecast_days=FORECAST_DAYS)
+    print(f"fetched atmospheric fields from open-meteo forecast ({len(wind_resp)} points)")
+
+    frames = reshape_grid(resp, nrows, ncols)
+    if wind_resp:
+        frames = merge_wind_into_frames(frames, wind_resp, nrows, ncols)
+
+    # CO-OPS tide curves — independent of the wave grid, fetched per-station.
+    # Failures are downgraded per-station so a single dead station does not
+    # poison the artifact; the viewer falls back to "tide unavailable" when
+    # the active station's curve is absent.
+    tides = fetch_all_tides()
+    n_tides_ok = len(tides["curves"])
+    n_tides_fail = len(tides.get("fetch_failures") or [])
+    print(f"tides: {n_tides_ok}/{len(TIDE_STATIONS)} stations ok ({n_tides_fail} failed)")
+
+    # Build a finer display grid from the API-safe source grid. Interpolation
+    # improves visual continuity; it does not add source resolution or fill
+    # missing/land values.
+    dst_lats, dst_lons = [], []
+    lat = DISPLAY_BBOX[1]
+    while lat <= DISPLAY_BBOX[3] + 1e-9:
+        dst_lats.append(round(lat, 4))
+        lat += DISPLAY_STEP_DEG
+    lon = DISPLAY_BBOX[0]
+    while lon <= DISPLAY_BBOX[2] + 1e-9:
+        dst_lons.append(round(lon, 4))
+        lon += DISPLAY_STEP_DEG
+    print(f"display grid: {len(dst_lats)}x{len(dst_lons)}")
+
+    frames = interp_to_display(frames, fetch_lats, fetch_lons, dst_lats, dst_lons)
+    frames = add_derived_marine_fields(frames)
+    frames = add_tide_grids(frames, tides, dst_lats, dst_lons)
+    add_tide_display_fields(frames)
+
+    # Normalize the mixed upstream names into one stable viewer contract.
+    rename = {
+        "wave_height": "wave_height_ft", "wave_direction": "wave_direction_deg", "wave_period": "wave_period_s",
+        "swell_wave_height": "swell_height_ft", "swell_wave_direction": "swell_direction_deg", "swell_wave_period": "swell_period_s",
+        "wind_wave_height": "wind_wave_height_ft", "wind_wave_direction": "wind_wave_direction_deg", "wind_wave_period": "wind_wave_period_s",
+    }
+    for fr in frames:
+        for old, new in rename.items():
+            fr[new] = fr.pop(old)
+
+    # Preserve the independently built tidal rendering contract when the
+    # weather/wave refresh runs.  This job owns the seven-day atmospheric and
+    # wave fields; it must not silently discard the tidal water mask or native
+    # tide metadata that the contour/stage renderer depends on.
+    prior_payload = None
+    for prior_path in (OUT_PATH, DASHBOARD_OUT_PATH):
+        if prior_path.exists():
+            try:
+                prior_payload = json.loads(prior_path.read_text())
+                break
+            except Exception:
+                pass
+    payload = {
+        "schema_version": "briefing-forecast-v2",
+        "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "source": "Open-Meteo Marine API (selected marine model not exposed by response)",
+        "source_url": "https://marine-api.open-meteo.com/v1/marine",
+        "region": REGION,
+        "bbox": FULL_BBOX,
+        "display_bbox": DISPLAY_BBOX,
+        "lats": dst_lats,
+        "lons": dst_lons,
+        "marine_source_grid": source_grid,
+        "marine_source_contract": {
+            "model_identity": "provider-selected; not exposed in API response",
+            "requested_grid_is_not_native": True,
+            "returned_coordinates_preserved": True,
+            "coastal_validity": "finite values are not sufficient evidence of local validity; consult wave_component_contract and water-support metadata",
+        },
+        "frame_interval_hours": 1,
+        "units": {
+            "wave_height_ft": "ft", "swell_height_ft": "ft", "wind_wave_height_ft": "ft",
+            "wave_direction_deg": "deg", "swell_direction_deg": "deg", "wind_wave_direction_deg": "deg",
+            "wave_period_s": "s", "swell_period_s": "s", "wind_wave_period_s": "s",
+            "current_speed_kn": "kn", "current_direction_deg": "deg", "current_u_ms": "m/s", "current_v_ms": "m/s",
+            "sea_surface_temperature_f": "°F",
+            "wave_steepness": "dimensionless", "ride_harshness_index": "0=smooth, 3=severe",
+            "wind_speed_kn": "kn", "wind_gust_kn": "kn", "wind_direction_deg": "deg",
+            "temperature_f": "°F", "pressure_hpa": "hPa (mean sea level)",
+            "apparent_temperature_f": "°F", "dew_point_f": "°F",
+            "relative_humidity_pct": "%", "cloud_cover_pct": "%",
+            "cloud_cover_low_pct": "%", "cloud_cover_mid_pct": "%", "cloud_cover_high_pct": "%",
+            "visibility_mi": "mi", "precipitation_in": "in", "precipitation_probability_pct": "%",
+            "rain_in": "in", "showers_in": "in", "snowfall_in": "in", "uv_index": "index",
+            "weather_code": "WMO code",
+            "tide_height_ft": "ft (MLLW)",
+        },
+        "frames": frames,
+        "tides": tides,
+        "quality": {
+            "status": "pass",
+            "source_model": "provider-selected marine model (not exposed)",
+            "atmospheric_source": "Open-Meteo Forecast API (temperature_2m, pressure_msl, 10 m wind)",
+            "max_age_hours": 12,
+            "via": "open-meteo.com/v1/marine (JSON)",
+            "grid_order": "latitude-major, longitude-minor",
+            "notes": (
+                "The Open-Meteo Marine API combines several marine models and does not expose "
+                "the selected model in this response. The API requires equal-length "
+                "lat/lon arrays; we fetch a 23x23 square over the full operational bbox and "
+                "bilinearly interpolate to the full display grid. Atmospheric 10-m wind "
+                "is pulled from api.open-meteo.com/v1/forecast on the same grid+timeline."
+            ),
+        },
+    }
+    if prior_payload:
+        for key in ('tide_water_cells', 'native_mesh', 'tide_range_contract',
+                    'tide_range_definition', 'tide_harmonic_source',
+                    'regional_tide_harmonics',
+                    'regional_tide_source', 'regional_tide_prediction_field',
+                    'wave_water_cells', 'wave_water_coverage',
+                    'wave_open_water_cells', 'wave_water_mask_contract',
+                    'wave_component_contract'):
+            if key in prior_payload:
+                payload[key] = prior_payload[key]
+    if prior_payload and apply_regional_tide_harmonics(frames, prior_payload.get("regional_tide_harmonics")):
+        add_tide_display_fields(frames)
+    # Keep the manifest below Cloudflare Pages' per-file limit. The frame data
+    # dominates the payload; static metadata (including masks and native tide
+    # mesh) remains in forecast.json and frame chunks are listed explicitly.
+    chunk_names = [f"forecast-frames-{start // FRAME_CHUNK_SIZE:03d}.json"
+                   for start in range(0, len(frames), FRAME_CHUNK_SIZE)]
+    manifest_payload = {k: v for k, v in payload.items() if k != "frames"}
+    manifest_payload["frames_manifest"] = {
+        "version": 1,
+        "dir": "frames/",
+        "chunks": chunk_names,
+        "frame_count": len(frames),
+        "chunk_size": FRAME_CHUNK_SIZE,
+    }
+    encoded = json.dumps(manifest_payload, allow_nan=False, separators=(",", ":"))
+    for output_path in (OUT_PATH, DASHBOARD_OUT_PATH):
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = output_path.with_suffix(output_path.suffix + ".tmp")
+        tmp.write_text(encoded)
+        tmp.replace(output_path)
+        frames_dir = output_path.parent / "frames"
+        frames_dir.mkdir(parents=True, exist_ok=True)
+        for start, name in zip(range(0, len(frames), FRAME_CHUNK_SIZE), chunk_names):
+            chunk = {"schema_version": payload["schema_version"],
+                     "start": start, "frames": frames[start:start + FRAME_CHUNK_SIZE]}
+            chunk_tmp = (frames_dir / name).with_suffix(".json.tmp")
+            chunk_tmp.write_text(json.dumps(chunk, allow_nan=False, separators=(",", ":")))
+            chunk_tmp.replace(frames_dir / name)
+        print(f"wrote {output_path} ({output_path.stat().st_size} bytes manifest, {len(frames)} frames in {len(chunk_names)} chunks)")
+
+
+def split_existing_artifact():
+    """Split the current artifact without re-fetching rate-limited APIs."""
+    for output_path in (OUT_PATH, DASHBOARD_OUT_PATH):
+        payload = json.loads(output_path.read_text())
+        frames = payload.pop("frames")
+        chunk_names = [f"forecast-frames-{start // FRAME_CHUNK_SIZE:03d}.json"
+                       for start in range(0, len(frames), FRAME_CHUNK_SIZE)]
+        payload["frames_manifest"] = {
+            "version": 1, "dir": "frames/", "chunks": chunk_names,
+            "frame_count": len(frames), "chunk_size": FRAME_CHUNK_SIZE,
+        }
+        tmp = output_path.with_suffix(output_path.suffix + ".tmp")
+        tmp.write_text(json.dumps(payload, allow_nan=False, separators=(",", ":")))
+        tmp.replace(output_path)
+        frames_dir = output_path.parent / "frames"
+        frames_dir.mkdir(parents=True, exist_ok=True)
+        for start, name in zip(range(0, len(frames), FRAME_CHUNK_SIZE), chunk_names):
+            chunk_tmp = (frames_dir / name).with_suffix(".json.tmp")
+            chunk_tmp.write_text(json.dumps({"schema_version": payload["schema_version"],
+                                              "start": start,
+                                              "frames": frames[start:start + FRAME_CHUNK_SIZE]},
+                                             allow_nan=False, separators=(",", ":")))
+            chunk_tmp.replace(frames_dir / name)
+        print(f"split {output_path}: {output_path.stat().st_size} byte manifest, {len(chunk_names)} chunks")
+
+
+if __name__ == "__main__":
+    if "--split-existing" in __import__("sys").argv:
+        split_existing_artifact()
+    else:
+        main()

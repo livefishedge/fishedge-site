@@ -43,7 +43,10 @@
 
   // ── Configuration ───────────────────────────────────────────────────
   const CONFIG = {
-      GEOJSON_URL:    "loran/td_grid_9960_usec_md.geojson",
+      // This script is shared by /dashboard/ and nested Planner routes.
+      // Keep the data URL absolute so fetch does not resolve to
+      // /dashboard/trip-planner/loran/... on the Planner viewer.
+      GEOJSON_URL:    "/dashboard/loran/td_grid_9960_usec_md.geojson",
       REGION:        "usec_md",
       Z_INDEX:       8,
       LABEL_Z_INDEX: 1000,

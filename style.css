@@ -549,7 +549,10 @@ body.nav-open { overflow: hidden; }
   .brand-logo { height: 36px; }
 }
 @media (max-width: 480px) {
-  .topbar { align-items: flex-start; }
+  .topbar { align-items: flex-start; position: sticky; }
+  /* Keep the auth action in the logo row at the upper right. */
+  .topbar #nav-login,
+  .topbar #nav-go { position: absolute; top: 12px; right: 16px; margin: 0; }
   .nav {
     flex-basis: 100%;
     justify-content: flex-start;

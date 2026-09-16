@@ -624,6 +624,20 @@ const captainUi = buildLocateButton(doc, {
     }, 1500);
   }
 
+  function setLocateStatus(ui, message) {
+    if (ui && typeof ui.setStatus === 'function') {
+      ui.setStatus(message);
+      return;
+    }
+    // Planner intentionally has no Dashboard #toolbar. Reuse its visible
+    // mode-status strip so Locate errors and success are never silent there.
+    const plannerStatus = (typeof document !== 'undefined') ? document.getElementById('bv-mode-context') : null;
+    if (plannerStatus) {
+      plannerStatus.textContent = message;
+      plannerStatus.classList.add('visible');
+    }
+  }
+
   async function handleLocateClick(env) {
     env = env || {};
     const nav = env.navigator || (typeof navigator !== 'undefined' ? navigator : null);
@@ -636,26 +650,21 @@ const captainUi = buildLocateButton(doc, {
     const ui = env.ui || null;
 
     if (!supportsGeolocation(nav)) {
-      if (ui) ui.setStatus('Geolocation not supported in this browser');
+      setLocateStatus(ui, 'Geolocation not supported in this browser');
       return;
     }
     if (!isHttps(loc)) {
-      if (ui) ui.setStatus('Geolocation requires HTTPS');
+      setLocateStatus(ui, 'Geolocation requires HTTPS');
       return;
     }
-    if (ui) ui.setStatus('Requesting location\u2026');
+    setLocateStatus(ui, 'Requesting location\u2026');
 
     try {
       const position = await getCurrentPosition(nav);
       const result = showPosition(ol, position);
       STATE.lastPosition = position;
-      if (ui) {
-        if (result.maps === 0) {
-          ui.setStatus('Got position, but no map detected — try refreshing');
-        } else {
-          ui.setStatus(formatStatus(position));
-        }
-      }
+      if (result.maps === 0) setLocateStatus(ui, 'Got position, but no map detected — try refreshing');
+      else setLocateStatus(ui, formatStatus(position));
       if (STATE.persistEnabled) {
         const c = position.coords;
         storePosition(storage, STORAGE_ENABLED_KEY, STORAGE_KEY, c.latitude, c.longitude, c.accuracy, position.timestamp);
@@ -669,7 +678,7 @@ const captainUi = buildLocateButton(doc, {
       else if (code === 'unavailable') msg = 'Location unavailable. Try again outdoors or near a window.';
       else if (code === 'timeout') msg = 'Location request timed out. Try again.';
       else if (code === 'unsupported') msg = 'Geolocation not supported in this browser.';
-      if (ui) ui.setStatus(msg);
+      setLocateStatus(ui, msg);
     }
   }
 

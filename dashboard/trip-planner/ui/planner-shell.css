@@ -1,0 +1,277 @@
+/*!
+ * Planner shell styles — branch feat/trip-planner-dev-mvp
+ * Peer route of /dashboard/. Shares the same dark palette, no map.
+ *
+ * Layout (desktop):
+ *   nav#fishedge-tab-switcher   ← tab nav (Dashboard / Planner), top, fixed
+ *   header#fishedge-inlet-picker← inlet + departure/return + target grounds
+ *   main#fishedge-planner-main  ← 5-day outlook (left) + My Trips (right)
+ *   #fishedge-compact-strip-host ← persistent GO/CAUTION pill (top-right)
+ *   #fishedge-briefing-host     ← briefing drawer portal (lazy)
+ *
+ * Mobile collapses to a single-column stack and pulls My Trips into the
+ * briefing drawer so.
+ */
+
+:root {
+  --bg: #050b10;
+  --fg: #e0e6ee;
+  --panel: rgba(5, 11, 16, 0.92);
+  --border: #1b2836;
+  --accent: #4d7dff;
+  --accent-dim: #1d4f91;
+  --go: #1e6e3a;
+  --caution: #a36d10;
+  --no-go: #9b1c1c;
+  --unknown: #404a55;
+  --muted: #9fb0c3;
+  --dim: #6b7d92;
+}
+
+html, body {
+  height: 100%;
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* ---------- Tab switcher ---------- */
+#fishedge-tab-switcher {
+  position: sticky; top: 0; z-index: 940;
+  display: flex; align-items: center; gap: 4px;
+  padding: 8px 12px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(6px);
+}
+#fishedge-tab-switcher .ts-tabs {
+  display: flex; gap: 4px; flex: 1;
+}
+#fishedge-tab-switcher .ts-tab {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 14px;
+  border: 1px solid #273649;
+  border-radius: 6px;
+  background: #0c1723;
+  color: var(--muted);
+  font-weight: 700; font-size: 13px;
+  text-decoration: none;
+  cursor: pointer;
+}
+#fishedge-tab-switcher .ts-tab:hover { color: var(--fg); border-color: #4d7dff; }
+#fishedge-tab-switcher .ts-tab.active {
+  background: var(--accent-dim);
+  color: #fff;
+  border-color: var(--accent);
+}
+#fishedge-tab-switcher .ts-tab .ts-icon { font-size: 16px; }
+#fishedge-tab-switcher .ts-meta {
+  font-size: 12px; color: var(--dim);
+  padding: 4px 8px; border: 1px solid var(--border); border-radius: 4px;
+}
+#fishedge-tab-switcher .ts-account {
+  padding: 6px 10px; border: 1px solid #273649; border-radius: 6px;
+  background: transparent; color: var(--muted); font-size: 12px; cursor: pointer;
+  text-decoration: none;
+}
+
+/* ---------- Inlet picker header ---------- */
+#fishedge-inlet-picker {
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.02);
+}
+#fishedge-inlet-picker .ip-row {
+  display: flex; gap: 12px; flex-wrap: wrap; align-items: center; width:100%; box-sizing:border-box;
+}
+#fishedge-inlet-picker .ip-field {
+  display: flex; flex-direction: column; gap: 2px; min-width: 160px;
+}
+#fishedge-inlet-picker .ip-card { display:flex; flex-direction:column; gap:8px; padding:10px; border:1px solid #31546b; border-radius:7px; background:rgba(12,23,35,.72); }
+#fishedge-inlet-picker .ip-card { min-width:0; max-width:100%; box-sizing:border-box; }
+#fishedge-inlet-picker .ip-card select,
+#fishedge-inlet-picker .ip-card input { max-width:100%; box-sizing:border-box; }
+#fishedge-inlet-picker .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+#fishedge-inlet-picker .ip-card h3 { margin:0; color:var(--fg); font-size:12px; text-transform:uppercase; letter-spacing:.5px; }
+#fishedge-inlet-picker .ip-card-fields { display:flex; gap:12px; flex-wrap:wrap; }
+#fishedge-inlet-picker .ip-field label {
+  font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.4px;
+}
+#fishedge-inlet-picker .ip-field select,
+#fishedge-inlet-picker .ip-field input {
+  background: #0c1723; color: var(--fg);
+  border: 1px solid #273649; border-radius: 4px;
+  padding: 6px 8px; font-size: 13px; min-height: 32px;
+}
+#fishedge-inlet-picker .ip-cta {
+  align-self: flex-end;
+  padding: 7px 14px; border: 0; border-radius: 4px;
+  background: var(--accent-dim); color: #fff;
+  font-weight: 700; font-size: 13px; cursor: pointer;
+}
+#fishedge-inlet-picker .ip-cta:hover { background: var(--accent); }
+#fishedge-inlet-picker .ip-save {
+  align-self: flex-end;
+  padding: 7px 10px; border: 1px solid #273649; border-radius: 4px;
+  background: transparent; color: var(--muted);
+  font-weight: 700; font-size: 12px; cursor: pointer;
+}
+#fishedge-inlet-picker .ip-save:hover { color: var(--fg); border-color: var(--accent); }
+
+/* ---------- Main planner body ---------- */
+#fishedge-planner-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 12px;
+  padding: 12px;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  #fishedge-planner-main { grid-template-columns: minmax(0, 1fr); }
+}
+
+#fishedge-five-day-outlook {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+.fdo-day {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px;
+  cursor: pointer;
+}
+.fdo-day:hover { border-color: var(--accent); }
+.fdo-day .fdo-when {
+  font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.4px;
+}
+.fdo-day .fdo-decision {
+  display: inline-block;
+  padding: 2px 8px; border-radius: 4px;
+  font-weight: 700; font-size: 11px; letter-spacing: 0.5px;
+  margin-top: 6px;
+}
+.fdo-day .fdo-decision.GO      { background: var(--go); color: #fff; }
+.fdo-day .fdo-decision.CAUTION { background: var(--caution); color: #fff; }
+.fdo-day .fdo-decision.NO_GO   { background: var(--no-go); color: #fff; }
+.fdo-day .fdo-decision.UNKNOWN { background: var(--unknown); color: #fff; }
+.fdo-day .fdo-summary {
+  font-size: 13px; color: var(--fg); margin-top: 6px;
+}
+.fdo-day .fdo-meta { font-size: 11px; color: var(--dim); margin-top: 4px; }
+.fdo-day .fdo-open { font-size: 11px; color: var(--accent); margin-top: 8px; font-weight: 700; }
+
+#fishedge-my-trips {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px;
+  position: sticky; top: 64px;
+}
+.mts-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 8px;
+}
+.mts-header h3 {
+  margin: 0; font-size: 13px; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.4px;
+}
+.mts-empty {
+  font-size: 12px; color: var(--dim); padding: 12px 0; text-align: center;
+}
+.mts-trip {
+  padding: 8px; border: 1px solid var(--border); border-radius: 4px;
+  margin-bottom: 6px; cursor: pointer;
+}
+.mts-trip:hover { border-color: var(--accent); }
+.mts-trip .mts-name { font-weight: 700; font-size: 13px; }
+.mts-trip .mts-meta { font-size: 11px; color: var(--dim); margin-top: 2px; }
+
+/* ---------- Compact strip host (reused from compact-strip.js) ---------- */
+#fishedge-compact-strip-host {
+  position: fixed; top: 56px; right: 12px; z-index: 9000;
+}
+@media (max-width: 700px) {
+  #fishedge-compact-strip-host { top: auto; bottom: 12px; right: 12px; }
+}
+
+/* ---------- Briefing host (portal) ---------- */
+#fishedge-briefing-host {
+  position: fixed; inset: 0; pointer-events: none; z-index: 9500;
+}
+#fishedge-briefing-host > * { pointer-events: auto; }
+
+/* Data freshness badge (LIVE / FORECAST) on the 5-day card */
+.fdo-freshness {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  margin-top: 2px;
+  margin-bottom: 4px;
+  vertical-align: middle;
+}
+.fdo-freshness.live {
+  background: #5a1212;
+  color: #ff8a8a;
+  border: 1px solid #c8364a;
+}
+.fdo-freshness.forecast {
+  background: #1a2e44;
+  color: #88aacc;
+  border: 1px solid #2a4d70;
+}
+/* Data freshness badge in the briefing drawer header */
+.bd-freshness-badge {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  margin: 4px 0 8px;
+}
+.bd-freshness-badge.live {
+  background: #5a1212;
+  color: #ff8a8a;
+  border: 1px solid #c8364a;
+}
+.bd-freshness-badge.forecast {
+  background: #1a2e44;
+  color: #88aacc;
+  border: 1px solid #2a4d70;
+}
+
+/* Compact current-conditions strip in the briefing drawer header */
+.bd-now-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(78px, 1fr));
+  gap: 4px;
+  margin: 6px 0 8px;
+}
+.bd-now-cell {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 5px 7px;
+  text-align: center;
+}
+.bd-now-label {
+  display: block;
+  font-size: 9px;
+  color: var(--dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.bd-now-value {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--fg);
+  margin-top: 2px;
+}

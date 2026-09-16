@@ -22,6 +22,7 @@
   // deployment. This avoids four live GIS requests and browser-side cleanup
   // on every map attach/refresh.
   var STATIC_LOCAL_GROUNDS_URL = 'data/fishing-grounds.json';
+  var STATIC_LOCAL_POINTS_URL = 'data/fishing-grounds-points.json';
   var MD_FISHING_ROOT =
     'https://mdgeodata.md.gov/imap/rest/services/Biota/MD_Finfish/FeatureServer/10/query';
   var MD_REEF_ROOT =
@@ -53,6 +54,8 @@
     visible: false,
     showPolygons: false,
     staticLocalPromise: null,
+    staticLocalPointsPromise: null,
+    staticLocalPolygonsPromise: null,
   };
 
   function log() {
@@ -154,7 +157,9 @@
       // returnCentroid=true. GeoJSON silently omitted that field, which made
       // multipart canyons fall back to an inaccurate largest-polygon point.
       f: 'json',
-      returnGeometry: 'true',
+      // Point mode must not download canyon polygons. The service-calculated
+      // centroid is sufficient for the default structure marker.
+      returnGeometry: state.showPolygons ? 'true' : 'false',
       returnCentroid: 'true',
       resultRecordCount: String(MAX_FEATURES),
       returnExceededLimitFeatures: 'false',
@@ -181,7 +186,7 @@
   }
 
   function fetchGrounds(bbox) {
-    var key = bboxKey(bbox);
+    var key = 'grounds:' + (state.showPolygons ? 'polygons:' : 'points:') + bboxKey(bbox);
     var cached = state.cache.get(key);
     if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) return Promise.resolve(cached.features);
     if (state.inflight.has(key)) return state.inflight.get(key);
@@ -256,8 +261,8 @@
     var cached = state.cache.get(key);
     if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) return Promise.resolve(cached.features);
     if (state.inflight.has(key)) return state.inflight.get(key);
-    if (!state.staticLocalPromise) {
-      state.staticLocalPromise = fetch(STATIC_LOCAL_GROUNDS_URL + '?v=1')
+    if (!state.staticLocalPointsPromise) {
+      state.staticLocalPointsPromise = fetch(STATIC_LOCAL_POINTS_URL + '?v=1')
         .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
         .then(function (j) { return Array.isArray(j.features) ? j.features : []; })
         .catch(function (err) {
@@ -265,13 +270,36 @@
           return [];
         });
     }
-    var promise = state.staticLocalPromise.then(function (allFeatures) {
+    var promise = state.staticLocalPointsPromise.then(function (allFeatures) {
       var features = allFeatures.filter(function (item) { return pointInBbox(item.point, bbox); });
       state.cache.set(key, { features: features, fetchedAt: Date.now() });
       return features;
     }).catch(function (err) {
       logErr('local fishing-ground fetch failed', err && err.message ? err.message : err);
       return [];
+    }).finally(function () { state.inflight.delete(key); });
+    state.inflight.set(key, promise);
+    return promise;
+  }
+
+  function fetchLocalPolygons(bbox) {
+    var key = 'local-polygons:' + bboxKey(bbox);
+    var cached = state.cache.get(key);
+    if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) return Promise.resolve(cached.features);
+    if (state.inflight.has(key)) return state.inflight.get(key);
+    if (!state.staticLocalPolygonsPromise) {
+      state.staticLocalPolygonsPromise = fetch(STATIC_LOCAL_GROUNDS_URL + '?v=1')
+        .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+        .then(function (j) { return Array.isArray(j.features) ? j.features : []; })
+        .catch(function (err) {
+          logErr('static fishing-ground polygon asset failed', err && err.message ? err.message : err);
+          return [];
+        });
+    }
+    var promise = state.staticLocalPolygonsPromise.then(function (allFeatures) {
+      var features = allFeatures.filter(function (item) { return pointInBbox(item.point, bbox); });
+      state.cache.set(key, { features: features, fetchedAt: Date.now() });
+      return features;
     }).finally(function () { state.inflight.delete(key); });
     state.inflight.set(key, promise);
     return promise;
@@ -448,7 +476,11 @@
       // Load the compiled local asset first. Only query the slower global
       // services when this viewport has no local coverage at all.
       fetchLocalGrounds(bbox).then(function (local) {
-        if (local.length) return mergeFeatures([], [], local);
+        if (local.length) {
+          return state.showPolygons
+            ? fetchLocalPolygons(bbox)
+            : local;
+        }
         return Promise.all([fetchGrounds(bbox), fetchGebco(bbox)])
           .then(function (sets) { return mergeFeatures(sets[0], sets[1], []); });
       }).then(function (items) {
@@ -461,6 +493,7 @@
         log('refreshed', items.length, 'underwater structures');
       }).catch(function (err) { logErr('fishing-ground refresh failed', err); });
     }
+    render.refresh = refresh;
     map.on('moveend', refresh);
     map.on('change:size', refresh);
     refresh();
@@ -503,6 +536,14 @@
   function setFullPolygons(visible) {
     state.showPolygons = Boolean(visible);
     state.items.forEach(function (render) { render(); });
+    // Polygon geometry is fetched lazily. Re-run each attached map only when
+    // the user explicitly enables the full-polygon view.
+    if (state.showPolygons) {
+      state.layers.forEach(function (_, map) {
+        var render = state.items.get(map);
+        if (render && render.refresh) render.refresh();
+      });
+    }
     window.dispatchEvent(new CustomEvent('fishedge-fishing-ground-polygons', {
       detail: { visible: state.showPolygons }
     }));
