@@ -2559,7 +2559,6 @@
       // advance while the scalar image remains on the prior frame.
       invalidatePlannerRaster();
       map.render();
-      renderActiveLayerStrip();
       if (lastWaveReadoutCoordinate) renderWaveReadout(lastWaveReadoutCoordinate, { preserveTideChart: waveReadout?.querySelector('[data-tide-chart]')?.dataset.active === '1' });
       if (stationPopup.style.display === 'block') renderActiveTide();
     }
