@@ -1838,13 +1838,14 @@
           // a heat-map fill under the vector overlay — the streamlines/isobars
           // carry the visual signal. Skip drawFrameToTile so the raster layer
           // is transparent for those products.
-          const viz = (PRODUCTS[currentProduct] || {}).viz;
+          const renderKey = effectiveScalarProductKey();
+          const viz = (PRODUCTS[renderKey] || {}).viz;
           // Wave products are animated on the coastline-clipped overlay canvas.
           // Keep the cached ImageCanvas transparent so it cannot freeze a
           // scalar frame underneath the animation.
-          if (['wave_composite', 'wave_height_ft', 'swell_height_ft', 'wind_wave_height_ft'].includes(currentProduct)) return c;
+          if (['wave_composite', 'wave_height_ft', 'swell_height_ft', 'wind_wave_height_ft'].includes(renderKey)) return c;
           if (viz === 'streamlines' || viz === 'contours') return c;
-          drawFrameToTile(ctx, currentFrame, currentProduct, requestedExtent, c.width, c.height);
+          drawFrameToTile(ctx, currentFrame, renderKey, requestedExtent, c.width, c.height);
           return c;
         },
       }),
@@ -2041,7 +2042,11 @@
     function setupActiveLayerStrip() {
       const strip=document.getElementById('bv-active-layer-strip');
       strip.addEventListener('change', event => {
-        if(event.target.matches('select[data-map-field]')) selectedHeatKey=event.target.value || null;
+        if(event.target.matches('select[data-map-field]')) {
+          selectedHeatKey = event.target.value || null;
+          clearOverlays();
+          rasterLayer?.getSource()?.changed();
+        }
         else if(event.target.matches('input[data-layer]')) {
           const key = event.target.dataset.layer;
           layerVisibility[key] = event.target.checked;
@@ -2059,7 +2064,12 @@
       });
       strip.addEventListener('click', event => {
         const button=event.target.closest('button');if(!button)return;
-        if(button.dataset.scalar) { selectedHeatKey=button.dataset.scalar;refreshPlanner(); }
+        if(button.dataset.scalar) {
+          selectedHeatKey = button.dataset.scalar;
+          clearOverlays();
+          rasterLayer?.getSource()?.changed();
+          refreshPlanner();
+        }
         else if(button.dataset.removeLayer) { layerVisibility[button.dataset.removeLayer]=false;refreshPlanner(); }
         else if(button.hasAttribute('data-reset-view')) applyPlannerPreset(activePlannerPreset, true);
       });
@@ -2077,7 +2087,7 @@
       // The composite raster is the scalar heat field. Directional variables
       // are drawn on transparent canvases, so they must never keep the raster
       // alive after the scalar checkboxes are cleared.
-      return !!(layerVisibility.wave_height || layerVisibility.swell || layerVisibility.wind_wave || layerVisibility.temperature || layerVisibility.apparent_temperature || layerVisibility.dew_point || layerVisibility.humidity || layerVisibility.cloud_cover || layerVisibility.cloud_low || layerVisibility.cloud_mid || layerVisibility.cloud_high || layerVisibility.visibility || layerVisibility.precipitation || layerVisibility.rain || layerVisibility.showers || layerVisibility.snowfall || layerVisibility.precipitation_probability || layerVisibility.uv_index || layerVisibility.pressure || layerVisibility.sst || layerVisibility.wave_steepness || layerVisibility.ride_harshness || layerVisibility.surface_height || layerVisibility.tide_level);
+      return !!activeHeatKey();
     }
 
     // Priority: significant wave height > exactly one partition > temperature > tide > pressure.
@@ -2085,6 +2095,14 @@
     // as the heat map; partitions still render as directional arrow overlays on top.
     // When exactly one partition is checked, that partition's heat map fills the display.
     function activeHeatKey() { return selectedHeatKey && PRODUCTS[selectedHeatKey] ? selectedHeatKey : null; }
+    // The colormap selector is the sole authority for scalar fill. Preset
+    // products still own independent particle/wave animation overlays.
+    function effectiveScalarProductKey() {
+      const heatKey = activeHeatKey();
+      if (!heatKey) return currentProduct;
+      const waveKeys = ['wave_height_ft', 'swell_height_ft', 'wind_wave_height_ft'];
+      return currentProduct === 'wave_composite' && waveKeys.includes(heatKey) ? 'wave_composite' : heatKey;
+    }
 
     // Captain-focused summary: show a few decision variables at the center
     // of the current planning domain without adding another map renderer.
@@ -2627,7 +2645,8 @@
     function drawOverlaysForProduct() {
       if (pageIsMagnified()) return;
       clearOverlays();
-      const def = PRODUCTS[currentProduct];
+      const selectedKey = activeHeatKey();
+      const def = PRODUCTS[selectedKey || currentProduct];
       const waveProduct = ['wave_composite', 'wave_height_ft', 'swell_height_ft', 'wind_wave_height_ft'].includes(currentProduct);
       const currentsMode = activePlannerPreset === 'fishing';
       // Mike #34713: 'doubling' effect on coastlines was caused by the
@@ -2662,6 +2681,10 @@
         // can survive over land and produce rectangular artifacts.
         ensureWaveMaskImage();
         drawScalarAndWaves('astronomical_tide_ft');
+      } else if (selectedKey && def.viz === 'contours') {
+        drawIsobars(false, selectedKey);
+      } else if (selectedKey && def.viz === 'streamlines') {
+        startParticleAnimation();
       } else if (def.viz === 'streamlines') {
         // Wind playback is particle-only; its screen trails decay as the
         // particles pass rather than leaving a permanent streamline field.
