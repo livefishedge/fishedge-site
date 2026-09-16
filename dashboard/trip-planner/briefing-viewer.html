@@ -4749,6 +4749,10 @@
     }
 
     function randomCurrentParticle() {
+      // Always return a drawable particle. South has sparse cells where the
+      // current vector is null or below the 0.05 kn visibility threshold; if
+      // we returned null here the draw loop would crash on `p.lon` and the
+      // entire currents layer would disappear.
       for (let attempt = 0; attempt < 12; attempt += 1) {
         if (!currentWaterSeeds.length) break;
         const seed = currentWaterSeeds[Math.floor(Math.random() * currentWaterSeeds.length)];
@@ -4756,7 +4760,8 @@
         const lat = seed[1] + (Math.random() - 0.5) * 0.05;
         if (currentIsValidAt(lon, lat)) return makeCurrentParticle(lon, lat);
       }
-      return null;
+      // Fallback to bbox corner so we never return null.
+      return makeCurrentParticle(bbox[0], bbox[1]);
     }
 
     function replenishVisibleCurrentParticles() {
