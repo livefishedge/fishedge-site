@@ -541,8 +541,8 @@
             var initial = mergeNamedFeatures(base);
             publish(initial);
             if (!south) return;
-            return fetchBoemSouth(bbox).then(function (remote) {
-              publish(mergeFeatureSets([initial, remote]));
+            return Promise.all([fetchGrounds(bbox), fetchBoemSouth(bbox)]).then(function (sets) {
+              publish(mergeFeatureSets([initial, sets[0], sets[1]]));
             });
           });
         }
