@@ -158,9 +158,9 @@
       // returnCentroid=true. GeoJSON silently omitted that field, which made
       // multipart canyons fall back to an inaccurate largest-polygon point.
       f: 'json',
-      // Point mode must not download canyon polygons. The service-calculated
-      // centroid is sufficient for the default structure marker.
-      returnGeometry: state.showPolygons ? 'true' : 'false',
+      // Canyon geometry is retained even in point mode so authoritative
+      // offshore canyon polygons can be shown by the shared underwater layer.
+      returnGeometry: 'true',
       returnCentroid: 'true',
       resultRecordCount: String(MAX_FEATURES),
       returnExceededLimitFeatures: 'false',
@@ -178,7 +178,9 @@
           var point = featurePoint(f);
           if (!point) return null;
           var p = f.attributes || {};
-          return { point: point, name: p.Name || 'Unnamed',
+          var geometry = f.geometry && Array.isArray(f.geometry.rings)
+            ? { type: 'Polygon', coordinates: f.geometry.rings } : null;
+          return { point: point, geometry: geometry, name: p.Name || 'Unnamed',
             type: 'Canyon', region: p.Region,
             system: p.Sys_Can };
         }).filter(Boolean);
@@ -434,7 +436,11 @@
         existing.geometry = mergeGeometry(existing.geometry, item.geometry);
       }
     });
-    return merged;
+    // Draw canyons first so decluttering and label priority favor the
+    // highest-value offshore structures when labels overlap.
+    return merged.sort(function (a, b) {
+      return (a.type === 'Canyon' ? 0 : 1) - (b.type === 'Canyon' ? 0 : 1);
+    });
   }
 
   function mergeFeatures(boem, gebco, local) {
@@ -445,23 +451,22 @@
   }
 
   function styleFor(feature) {
-    var type = feature.get('type');
-    var canyon = type === 'Canyon';
     var polygon = feature.getGeometry() && feature.getGeometry().getType() !== 'Point';
+    var underwaterColor = '#62e6c5';
     return new ol.style.Style({
-      fill: polygon ? new ol.style.Fill({ color: canyon ? 'rgba(255,209,102,0.12)' : 'rgba(98,230,197,0.10)' }) : undefined,
-      stroke: polygon ? new ol.style.Stroke({ color: canyon ? '#ffd166' : '#62e6c5', width: 1.4 }) : undefined,
+      fill: polygon ? new ol.style.Fill({ color: 'rgba(98,230,197,0.10)' }) : undefined,
+      stroke: polygon ? new ol.style.Stroke({ color: underwaterColor, width: 1.4 }) : undefined,
       image: new ol.style.RegularShape({
-        points: canyon ? 3 : 5,
-        radius: canyon ? 5 : 4,
-        angle: canyon ? 0 : Math.PI / 5,
-        fill: new ol.style.Fill({ color: canyon ? '#ffd166' : '#62e6c5' }),
+        points: 5,
+        radius: 4,
+        angle: Math.PI / 5,
+        fill: new ol.style.Fill({ color: underwaterColor }),
         stroke: new ol.style.Stroke({ color: '#08131b', width: 1.2 }),
       }),
       text: new ol.style.Text({
         text: feature.get('name'),
         font: '600 11px system-ui, -apple-system, sans-serif',
-        fill: new ol.style.Fill({ color: canyon ? '#ffe9b3' : '#a8ffe8' }),
+        fill: new ol.style.Fill({ color: '#a8ffe8' }),
         stroke: new ol.style.Stroke({ color: 'rgba(0,0,0,0.9)', width: 3 }),
         offsetY: -10,
         textAlign: 'center',
@@ -489,7 +494,7 @@
       source.clear();
       source.addFeatures((items || []).map(function (item) {
         var geometry = null;
-        if (state.showPolygons && item.geometry && typeof ol.format !== 'undefined') {
+        if ((state.showPolygons || item.type === 'Canyon') && item.geometry && typeof ol.format !== 'undefined') {
           try {
             geometry = new ol.format.GeoJSON().readGeometry(item.geometry, {
               dataProjection: 'EPSG:4326', featureProjection: 'EPSG:3857'
