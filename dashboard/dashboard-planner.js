@@ -130,7 +130,8 @@
 
   async function buildRealPlan(inletKey, targetId) {
     const UI = global.FishEdgeTripPlannerUI || {};
-    const canyonTargets = UI.InletPicker && UI.InletPicker.CANYON_TARGETS || {};
+    const activeRegion = global.__FISHEDGE_ACTIVE_REGION || 'usec_md';
+    const canyonTargets = UI.InletPicker && (UI.InletPicker.getTargets ? UI.InletPicker.getTargets(activeRegion) : UI.InletPicker.CANYON_TARGETS) || {};
     const inletMeta = (global.CoopsTides && global.CoopsTides.INLET_STATION_TABLE && global.CoopsTides.INLET_STATION_TABLE[inletKey])
       || { station_id: '8570283', label: 'Ocean City Inlet, MD', lat: 38.3286, lon: -75.0919 };
     const target = canyonTargets[targetId] || canyonTargets.baltimore_canyon_line;
@@ -285,7 +286,8 @@
       return;
     }
 
-    const canyonTargets = UI.InletPicker.CANYON_TARGETS || {};
+    const activeRegion = global.__FISHEDGE_ACTIVE_REGION || 'usec_md';
+    const canyonTargets = (UI.InletPicker.getTargets ? UI.InletPicker.getTargets(activeRegion) : UI.InletPicker.CANYON_TARGETS) || {};
     const defaultTarget = canyonTargets.baltimore_canyon_line;
 
     // Fixture-only fallback path (real-data path is async and tried first).
@@ -434,10 +436,15 @@
     let picker;
 
     try {
+      const targetCatalog = UI.InletPicker.getTargets ? UI.InletPicker.getTargets(activeRegion) : UI.InletPicker.CANYON_TARGETS;
+      const allowedInlets = UI.InletPicker.getInlets ? UI.InletPicker.getInlets(activeRegion) : UI.InletPicker.INLETS;
+      const savedInlet = Sto.getSavedInlet();
       picker = UI.InletPicker.mount(document.getElementById('fishedge-inlet-picker'), {
-        initialInlet: Sto.getSavedInlet() || 'ocean-city-md',
+        region: activeRegion,
+        initialInlet: allowedInlets[savedInlet] ? savedInlet : Object.keys(allowedInlets)[0],
+        initialTargetId: Object.keys(targetCatalog)[0],
         onChange: (inletKey) => { Sto.setSavedInlet(inletKey); rebuild(); },
-        onSave:   (tripPlan) => { Sto.saveTrip(tripPlan); rebuildMyTrips(); },
+        onSave:   (tripPlan) => { Sto.saveTrip(Object.assign({}, tripPlan, { region: activeRegion })); rebuildMyTrips(); },
       });
     } catch (e) { console.error('[dashboard-planner] InletPicker.mount failed:', e); throw e; }
 
@@ -456,10 +463,10 @@
     function rebuildMyTrips() {
       // MyTripsSidebar API: mount(host, opts)
       UI.MyTripsSidebar.mount(document.getElementById('fishedge-my-trips'), {
-        trips: Sto.listTrips(),
+        trips: Sto.listTrips().filter((trip) => trip && trip.region === activeRegion),
         onLoad: (trip) => {
           const date = trip?.departure_iso ? new Date(trip.departure_iso).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10);
-          const region = window.REGION_ID === 'usec_south' ? 'usec_south' : 'usec_md';
+          const region = trip?.region === 'usec_south' ? 'usec_south' : activeRegion;
           const params = new URLSearchParams({ date, region, from: 'saved-trip' });
           window.location.href = `/dashboard/trip-planner/briefing-viewer?${params}`;
         },

@@ -21,8 +21,8 @@
   // Local fishing-ground sources are compiled into one static asset during
   // deployment. This avoids four live GIS requests and browser-side cleanup
   // on every map attach/refresh.
-  var STATIC_LOCAL_GROUNDS_URL = 'data/fishing-grounds.json';
-  var STATIC_LOCAL_POINTS_URL = 'data/fishing-grounds-points.json';
+  var STATIC_LOCAL_GROUNDS_URL = '/dashboard/data/fishing-grounds.json';
+  var STATIC_LOCAL_POINTS_URL = '/dashboard/data/fishing-grounds-points.json';
   var MD_FISHING_ROOT =
     'https://mdgeodata.md.gov/imap/rest/services/Biota/MD_Finfish/FeatureServer/10/query';
   var MD_REEF_ROOT =
@@ -82,7 +82,7 @@
   }
 
   function selectedRegionBbox() {
-    var region = new URLSearchParams(window.location.search).get('region');
+    var region = new URLSearchParams(window.location.search).get('region') || window.REGION_ID || window.__FISHEDGE_ACTIVE_REGION;
     return REGION_BBOXES[region] || null;
   }
 

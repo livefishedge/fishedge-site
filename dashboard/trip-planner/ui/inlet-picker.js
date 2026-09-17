@@ -19,7 +19,16 @@
     'atlantic-city-nj':      { station_id: '8534720', label: 'Atlantic City, NJ', lat: 39.3554, lon: -74.4184 },
     'sandy-hook-nj':         { station_id: '8531680', label: 'Sandy Hook, NJ', lat: 40.4669, lon: -74.0094 },
     'montauk-ny':            { station_id: '8510560', label: 'Montauk, NY', lat: 41.0482, lon: -71.9597 },
+    'oregon-inlet-nc':       { station_id: '8652587', label: 'Oregon Inlet, NC', lat: 35.795696, lon: -75.548195 },
+    'hatteras-inlet-nc':     { station_id: '8654467', label: 'Hatteras, NC', lat: 35.2086, lon: -75.7042 },
+    'morehead-city-nc':      { station_id: '8656483', label: 'Morehead City / Beaufort, NC', lat: 34.719, lon: -76.67 },
+    'wrightsville-beach-nc': { station_id: '8658163', label: 'Wrightsville Beach, NC', lat: 34.213306, lon: -77.7867 },
+    'wilmington-nc':         { station_id: '8658120', label: 'Wilmington, NC', lat: 34.2267, lon: -77.9533 },
+    'myrtle-beach-sc':       { station_id: '8661070', label: 'Myrtle Beach, SC', lat: 33.655, lon: -78.9183 },
+    'charleston-sc':         { station_id: '8665530', label: 'Charleston, SC', lat: 32.780834, lon: -79.923615 },
+    'savannah-ga':           { station_id: '8670870', label: 'Savannah / Fort Pulaski, GA', lat: 32.034695, lon: -80.90303 },
   };
+  const SOUTH_INLETS = ['oregon-inlet-nc','hatteras-inlet-nc','morehead-city-nc','wrightsville-beach-nc','wilmington-nc','myrtle-beach-sc','charleston-sc','savannah-ga'];
 
   // Targets are operational areas, not single fishing points.  The line is
   // what the captain sees; lookup_points are only sampling anchors for the
@@ -77,6 +86,27 @@
     'Chincoteague Shoal', 'Winter Quarter Shoal', 'Ocean City Shoal',
     'Offshore Southeast', 'Cartwright Area', 'Acid Water or Stain', 'Mako',
   ]);
+  const SOUTH_GROUND_BBOX = [-81, 31, -73, 36];
+  const SOUTH_GROUND_NAMES = new Set([
+    'Long Shoal','Platt Shoal','Gibbs Shoal','Gull Shoal','Wimble Shoal','Clam Shoal',
+    'Brant Island Shoal','Brant Island Slue','Maw Point Shoal','Gum Thicket Shoal',
+    'Upper Middle','Inner Middle','Lower Middle',
+  ]);
+  const SOUTH_TARGETS = {
+    'south-long-shoal': { id:'south-long-shoal', label:'Long Shoal', kind:'ground', lookup_points:[[-75.7092656577,35.5496077655]], geometry:null },
+    'south-platt-shoal': { id:'south-platt-shoal', label:'Platt Shoal', kind:'ground', lookup_points:[[-75.4577212536,35.7755751439]], geometry:null },
+    'south-gibbs-shoal': { id:'south-gibbs-shoal', label:'Gibbs Shoal', kind:'ground', lookup_points:[[-75.9551908563,35.4602147409]], geometry:null },
+    'south-gull-shoal': { id:'south-gull-shoal', label:'Gull Shoal', kind:'ground', lookup_points:[[-75.973572253,35.3653221973]], geometry:null },
+    'south-wimble-shoal': { id:'south-wimble-shoal', label:'Wimble Shoal', kind:'ground', lookup_points:[[-75.4218024046,35.56482783]], geometry:null },
+    'south-clam-shoal': { id:'south-clam-shoal', label:'Clam Shoal', kind:'ground', lookup_points:[[-75.6508493669,35.2949058903]], geometry:null },
+    'south-brant-island-shoal': { id:'south-brant-island-shoal', label:'Brant Island Shoal', kind:'ground', lookup_points:[[-76.3570983283,35.1690880923]], geometry:null },
+    'south-brant-island-slue': { id:'south-brant-island-slue', label:'Brant Island Slue', kind:'ground', lookup_points:[[-76.3931929933,35.1713298749]], geometry:null },
+    'south-maw-point-shoal': { id:'south-maw-point-shoal', label:'Maw Point Shoal', kind:'ground', lookup_points:[[-76.5255344379,35.1356320935]], geometry:null },
+    'south-gum-thicket-shoal': { id:'south-gum-thicket-shoal', label:'Gum Thicket Shoal', kind:'ground', lookup_points:[[-76.5942449843,35.0602488012]], geometry:null },
+    'south-upper-middle': { id:'south-upper-middle', label:'Upper Middle', kind:'ground', lookup_points:[[-76.3387554538,35.2829533231]], geometry:null },
+    'south-inner-middle': { id:'south-inner-middle', label:'Inner Middle', kind:'ground', lookup_points:[[-76.2962401242,35.2484444866]], geometry:null },
+    'south-lower-middle': { id:'south-lower-middle', label:'Lower Middle', kind:'ground', lookup_points:[[-76.2415956823,35.2323500471]], geometry:null },
+  };
   function groundId(name) {
     const slug = String(name).toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
     return `ground-${slug || 'unnamed'}`;
@@ -84,28 +114,33 @@
   function html(value) {
     return String(value == null ? '' : value).replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[ch]));
   }
-  function mergeGroundCatalog(payload) {
-    const seen = new Set(Object.values(CANYON_TARGETS).map(t => String(t.label || '').trim().toLowerCase()));
-    const usedIds = new Set(Object.keys(CANYON_TARGETS));
+  function mergeGroundCatalog(payload, targets, names, bbox) {
+    const seen = new Set(Object.values(targets).map(t => String(t.label || '').trim().toLowerCase()));
+    const usedIds = new Set(Object.keys(targets));
     let added = 0;
     for (const feature of (payload && payload.features) || []) {
       const name = String(feature && feature.name || '').trim();
       const point = feature && feature.point;
       const lon = Number(point && point[0]); const lat = Number(point && point[1]);
-      if (!name || !Number.isFinite(lon) || !Number.isFinite(lat) || lon < -77 || lon > -71 || lat < 35 || lat > 41) continue;
-      const key = name.toLowerCase(); if (seen.has(key)) continue;
-      if (!CURATED_GROUND_NAMES.has(name)) continue;
+      if (!name || !Number.isFinite(lon) || !Number.isFinite(lat) || lon < bbox[0] || lon > bbox[2] || lat < bbox[1] || lat > bbox[3]) continue;
+      const key = name.toLowerCase();
+      if (seen.has(key)) {
+        const existing = Object.entries(targets).find(([, t]) => String(t.label || '').trim().toLowerCase() === key);
+        if (existing && !existing[1].geometry && feature.geometry) { targets[existing[0]] = Object.freeze(Object.assign({}, existing[1], { geometry: feature.geometry, source: feature.source || null })); added++; }
+        continue;
+      }
+      if (!names.has(name)) continue;
       let id = groundId(name); let suffix = 2;
       while (usedIds.has(id)) id = `${groundId(name)}-${suffix++}`;
-      CANYON_TARGETS[id] = Object.freeze({ id, label: name, kind: 'ground', lookup_points: Object.freeze([[lon, lat]]), description: `${name} offshore fishing ground${feature.source ? ` (${feature.source})` : ''}.`, source: feature.source || null });
+      targets[id] = Object.freeze({ id, label: name, kind: 'ground', lookup_points: Object.freeze([[lon, lat]]), geometry: feature.geometry || null, description: `${name} offshore fishing ground${feature.source ? ` (${feature.source})` : ''}.`, source: feature.source || null });
       seen.add(key); usedIds.add(id); added++;
     }
     return added;
   }
-  function loadGroundCatalog(onLoaded) {
+  function loadGroundCatalog(targets, names, bbox, onLoaded) {
     if (typeof fetch !== 'function') return;
     fetch(GROUND_DATA_URL, { cache: 'no-store' }).then(r => r.ok ? r.json() : null)
-      .then(payload => { const added = mergeGroundCatalog(payload); if (added && onLoaded) onLoaded(); })
+      .then(payload => { const added = mergeGroundCatalog(payload, targets, names, bbox); if (added && onLoaded) onLoaded(); })
       .catch(() => {});
   }
 
@@ -120,8 +155,8 @@
     return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
   }
 
-  function render(state, targets = CANYON_TARGETS) {
-    const opts = Object.entries(INLETS).map(([k, v]) =>
+  function render(state, targets = CANYON_TARGETS, inlets = INLETS) {
+    const opts = Object.entries(inlets).map(([k, v]) =>
       `<option value="${html(k)}"${k === state.inlet ? ' selected' : ''}>${html(v.label)}</option>`
     ).join('');
     return `
@@ -156,11 +191,15 @@
 
   function mount(host, opts = {}) {
     if (!host) throw new Error('inlet-picker mount: host is required');
+    const region = opts.region || global.__FISHEDGE_ACTIVE_REGION || 'usec_md';
+    const activeInletKeys = region === 'usec_south' ? SOUTH_INLETS : Object.keys(INLETS).filter(k => !SOUTH_INLETS.includes(k));
+    const activeInlets = Object.fromEntries(activeInletKeys.map(k => [k, INLETS[k]]).filter(([,v]) => v));
+    const activeTargets = region === 'usec_south' ? Object.assign({}, SOUTH_TARGETS) : CANYON_TARGETS;
     const state = {
-      inlet: opts.initialInlet || Object.keys(INLETS)[0],
+      inlet: activeInletKeys.includes(opts.initialInlet) ? opts.initialInlet : activeInletKeys[0],
       departure: opts.initialDeparture || todayIso(),
       return: opts.initialReturn || plus10hIso(),
-      target: opts.initialTargetId || 'baltimore_canyon_line',
+      target: opts.initialTargetId && activeTargets[opts.initialTargetId] ? opts.initialTargetId : Object.keys(activeTargets)[0],
     };
     function bind() {
       const inlet = host.querySelector('#ip-inlet');
@@ -174,9 +213,9 @@
       ret.addEventListener('change', () => { state.return = ret.value; opts.onChange && opts.onChange(state.inlet, snapshot()); });
       target.addEventListener('change', () => { state.target = target.value; opts.onChange && opts.onChange(state.inlet, snapshot()); });
       cta.addEventListener('click', () => opts.onChange && opts.onChange(state.inlet, snapshot()));
-      save.addEventListener('click', () => { const tripPlan = snapshot(); tripPlan.name = `${INLETS[state.inlet].label} · ${state.departure.replace('T', ' ')}`; opts.onSave && opts.onSave(tripPlan); });
+      save.addEventListener('click', () => { const tripPlan = snapshot(); tripPlan.name = `${activeInlets[state.inlet].label} · ${state.departure.replace('T', ' ')}`; opts.onSave && opts.onSave(tripPlan); });
     }
-    host.innerHTML = render(state); bind();
+    host.innerHTML = render(state, activeTargets, activeInlets); bind();
 
     function snapshot() {
       const dep = host.querySelector('#ip-departure');
@@ -186,35 +225,40 @@
       return {
         inlet_key: state.inlet,
         target_id: state.target,
-        target_area: CANYON_TARGETS[state.target],
+        target_area: activeTargets[state.target],
         departure_iso: depIso,
         return_iso: retIso,
         status: 'planned',
         route_polyline: global.FishEdgeTripStorage?.encodePolyline([
-          [INLETS[state.inlet].lon, INLETS[state.inlet].lat],
-          ...((CANYON_TARGETS[state.target] && CANYON_TARGETS[state.target].lookup_points) || []),
+          [activeInlets[state.inlet].lon, activeInlets[state.inlet].lat],
+          ...((activeTargets[state.target] && activeTargets[state.target].lookup_points) || []),
         ]),
         route_distance_nm: global.FishEdgeTripStorage?.routeDistanceNm([
-          [INLETS[state.inlet].lon, INLETS[state.inlet].lat],
-          ...((CANYON_TARGETS[state.target] && CANYON_TARGETS[state.target].lookup_points) || []),
+          [activeInlets[state.inlet].lon, activeInlets[state.inlet].lat],
+          ...((activeTargets[state.target] && activeTargets[state.target].lookup_points) || []),
         ]),
         route_approximate: true,
       };
     }
-    loadGroundCatalog(() => {
+    loadGroundCatalog(activeTargets, region === 'usec_south' ? SOUTH_GROUND_NAMES : CURATED_GROUND_NAMES, region === 'usec_south' ? SOUTH_GROUND_BBOX : [-77,35,-71,41], () => {
       const current = snapshot();
       state.inlet = current.inlet_key; state.target = current.target_id;
-      host.innerHTML = render(state); bind();
+      host.innerHTML = render(state, activeTargets, activeInlets); bind();
     });
 
     return Object.freeze({
       getInlet: () => state.inlet,
       getSnapshot: snapshot,
-      getInlets: () => INLETS,
+      getInlets: () => activeInlets,
     });
   }
 
-  const api = Object.freeze({ mount, render, INLETS, CANYON_TARGETS });
+  function getTargets(region) { return region === 'usec_south' ? SOUTH_TARGETS : CANYON_TARGETS; }
+  function getInlets(region) {
+    const keys = region === 'usec_south' ? SOUTH_INLETS : Object.keys(INLETS).filter(k => !SOUTH_INLETS.includes(k));
+    return Object.fromEntries(keys.map(k => [k, INLETS[k]]).filter(([,v]) => v));
+  }
+  const api = Object.freeze({ mount, render, INLETS, CANYON_TARGETS, SOUTH_INLETS, SOUTH_TARGETS, getTargets, getInlets });
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (typeof global !== 'undefined') global.FishEdgeTripPlannerUI = Object.assign(global.FishEdgeTripPlannerUI || {}, { InletPicker: api });
 })(typeof globalThis !== 'undefined' ? globalThis : this);

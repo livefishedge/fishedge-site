@@ -28,6 +28,15 @@
    * the table small and obvious so the captain can see the choice.
    */
   const INLET_STATION_TABLE = {
+    // USEC-South stations/ports from NOAA CO-OPS MDAPI (queried 2026-09-17).
+    'oregon-inlet-nc':         { station_id: '8652587', label: 'Oregon Inlet, NC', lat: 35.795696, lon: -75.548195 },
+    'hatteras-inlet-nc':       { station_id: '8654467', label: 'Hatteras, NC', lat: 35.2086, lon: -75.7042 },
+    'morehead-city-nc':        { station_id: '8656483', label: 'Morehead City / Beaufort, NC', lat: 34.719, lon: -76.67 },
+    'wrightsville-beach-nc':   { station_id: '8658163', label: 'Wrightsville Beach, NC', lat: 34.213306, lon: -77.7867 },
+    'wilmington-nc':           { station_id: '8658120', label: 'Wilmington, NC', lat: 34.2267, lon: -77.9533 },
+    'myrtle-beach-sc':         { station_id: '8661070', label: 'Myrtle Beach, SC', lat: 33.655, lon: -78.9183 },
+    'charleston-sc':           { station_id: '8665530', label: 'Charleston, SC', lat: 32.780834, lon: -79.923615 },
+    'savannah-ga':             { station_id: '8670870', label: 'Savannah / Fort Pulaski, GA', lat: 32.034695, lon: -80.90303 },
     'ocean-city-md':           { station_id: '8570283', label: 'Ocean City Inlet, MD',   lat: 38.3286, lon: -75.0919 },
     'indian-river-inlet-de':   { station_id: '8557863', label: 'Rehoboth Beach, DE (proxy)', lat: 38.7200, lon: -75.0833 },
     'cape-may-nj':             { station_id: '8536110', label: 'Cape May, NJ',           lat: 38.9686, lon: -74.9594 },

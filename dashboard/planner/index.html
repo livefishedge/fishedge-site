@@ -412,9 +412,14 @@
     'south-lower-middle': ['Lower Middle', -76.2415956823, 35.2323500471],
   };
   const SOUTH_INLETS = {
-    'beaufort-nc': ['Beaufort, NC', -76.67, 34.719],
-    'wilmington-nc': ['Wilmington, NC', -77.953, 34.227],
-    'charleston-sc': ['Charleston, SC', -79.925, 32.781],
+    'oregon-inlet-nc': ['Oregon Inlet, NC', -75.548195, 35.795696],
+    'hatteras-inlet-nc': ['Hatteras, NC', -75.7042, 35.2086],
+    'morehead-city-nc': ['Morehead City / Beaufort, NC', -76.67, 34.719],
+    'wrightsville-beach-nc': ['Wrightsville Beach, NC', -77.7867, 34.213306],
+    'wilmington-nc': ['Wilmington, NC', -77.9533, 34.2267],
+    'myrtle-beach-sc': ['Myrtle Beach, SC', -78.9183, 33.655],
+    'charleston-sc': ['Charleston, SC', -79.923615, 32.780834],
+    'savannah-ga': ['Savannah / Fort Pulaski, GA', -80.90303, 32.034695],
   };
   const INLET_POINTS = {
     'ocean-city-md':[-75.0919,38.3286], 'indian-river-inlet-de':[-75.0589,38.61],
@@ -712,9 +717,9 @@
   function renderUpcomingTrips() {
     const host = document.getElementById('upcoming-list'); if (!host) return;
     let trips = []; try { trips = JSON.parse(localStorage.getItem(TRIPS_STORAGE_KEY) || '[]'); } catch (_) {}
-    trips = trips.filter(t => t.status !== 'completed' && t.status !== 'cancelled').sort((a,b) => String(a.departure_iso||'').localeCompare(String(b.departure_iso||'')));
+    trips = trips.filter(t => t.region === PLANNER_REGION && t.status !== 'completed' && t.status !== 'cancelled').sort((a,b) => String(a.departure_iso||'').localeCompare(String(b.departure_iso||'')));
     if (!trips.length) { host.innerHTML = '<div class="my-trips-empty">No upcoming trips yet. Prepare a new trip to get started.</div>'; return; }
-    host.innerHTML = trips.map(t => `<div class="upcoming-item"><div><strong>${String(t.name || 'Untitled trip').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}</strong><div style="color:#91afc0;font-size:11px">${t.trip_ref || t.id || 'No trip ID'} · ${t.departure_iso ? new Date(t.departure_iso).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric'}) : 'No departure set'} · ${t.status || 'draft'}</div></div><span><a href="?new=1&trip_id=${encodeURIComponent(t.id)}">Edit</a> <button type="button" data-remove-trip="${encodeURIComponent(t.id)}" style="margin-left:8px;background:transparent;border:0;color:#ff9b9b;cursor:pointer">Remove</button></span></div>`).join('');
+    host.innerHTML = trips.map(t => `<div class="upcoming-item"><div><strong>${String(t.name || 'Untitled trip').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}</strong><div style="color:#91afc0;font-size:11px">${t.trip_ref || t.id || 'No trip ID'} · ${t.departure_iso ? new Date(t.departure_iso).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric'}) : 'No departure set'} · ${t.status || 'draft'}</div></div><span><a href="?new=1&region=${encodeURIComponent(PLANNER_REGION)}&trip_id=${encodeURIComponent(t.id)}">Edit</a> <button type="button" data-remove-trip="${encodeURIComponent(t.id)}" style="margin-left:8px;background:transparent;border:0;color:#ff9b9b;cursor:pointer">Remove</button></span></div>`).join('');
     host.querySelectorAll('[data-remove-trip]').forEach(btn => btn.addEventListener('click', () => { const id = decodeURIComponent(btn.dataset.removeTrip); trips = trips.filter(t => t.id !== id); localStorage.setItem(TRIPS_STORAGE_KEY, JSON.stringify(trips)); renderUpcomingTrips(); }));
   }
 
@@ -783,7 +788,7 @@
     const identity = createTripIdentity();
     const trip = { ...identity, name: `${inletSelect.selectedOptions?.[0]?.textContent || 'Home inlet'} → ${targetName}`, inlet_key: inletSelect.value, target_id: targetSelect.value, fishing_days: [...selectedFishingDays].sort(), departure_iso: now.toISOString(), return_iso: null, status: 'planned', created_iso: now.toISOString(), last_opened_iso: now.toISOString(), notes: 'Saved from Planner.' };
     let trips = []; try { trips = JSON.parse(localStorage.getItem(TRIPS_STORAGE_KEY) || '[]'); } catch (_) {}
-    trips.push(trip); localStorage.setItem(TRIPS_STORAGE_KEY, JSON.stringify(trips));
+    trip.region = PLANNER_REGION; trips.push(trip); localStorage.setItem(TRIPS_STORAGE_KEY, JSON.stringify(trips));
     document.getElementById('save-plan-status').textContent = `Trip ${trip.trip_ref} saved to Upcoming Trips.`; renderUpcomingTrips();
   });
   const scoreKeys = ['wave','steepness','harshness','wind','gust','visibility','inletWave','current'];
