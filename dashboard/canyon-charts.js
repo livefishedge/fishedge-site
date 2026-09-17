@@ -316,10 +316,8 @@
     }).catch(function (err) { logErr('BOEM South fishing-area fetch failed', err && err.message ? err.message : err); return []; });
   }
 
-  function mergeNamedFeatures(sets) {
-    var seen = new Set(), out = [];
-    sets.flat().forEach(function (item) { var key = String(item.name || '').toLowerCase() + '|' + (item.geometry ? 'polygon' : 'point'); if (!seen.has(key)) { seen.add(key); out.push(item); } });
-    return out;
+  function mergeFeatureSets(sets) {
+    return mergeNamedFeatures([].concat.apply([], sets));
   }
 
   function fetchGebco(bbox) {
@@ -495,10 +493,10 @@
       fetchLocalGrounds(bbox).then(function (local) {
         if (local.length) {
           if (!selectedRegionBbox() || selectedRegionBbox() !== REGION_BBOXES.usec_south) return state.showPolygons ? fetchLocalPolygons(bbox) : local;
-          return Promise.all([state.showPolygons ? fetchLocalPolygons(bbox) : local, fetchBoemSouth(bbox)]).then(function (sets) { return mergeNamedFeatures(sets); });
+          return Promise.all([state.showPolygons ? fetchLocalPolygons(bbox) : local, fetchBoemSouth(bbox)]).then(function (sets) { return mergeFeatureSets(sets); });
         }
         return Promise.all([fetchGrounds(bbox), fetchGebco(bbox), fetchBoemSouth(bbox)])
-          .then(function (sets) { return mergeNamedFeatures([mergeFeatures(sets[0], sets[1], []), sets[2]]); });
+          .then(function (sets) { return mergeFeatureSets([mergeFeatures(sets[0], sets[1], []), sets[2]]); });
       }).then(function (items) {
         // ArcGIS can return polygons that intersect the query envelope while
         // their label centroid is outside it. Keep only labels in the actual
