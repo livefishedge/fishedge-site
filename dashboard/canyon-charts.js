@@ -308,12 +308,14 @@
 
   function fetchBoemSouth(bbox) {
     var params = new URLSearchParams({ where:'1=1', geometry:bbox.join(','), geometryType:'esriGeometryEnvelope', inSR:'4326', spatialRel:'esriSpatialRelIntersects', outFields:SOUTH_BOEM_FIELDS, returnGeometry:'true', outSR:'4326', geometryPrecision:'5', resultRecordCount:'100', f:'json' });
-    return fetch(ATLANTIC_FISHING_ATLAS_ROOT + '?' + params.toString()).then(function (r) { if (!r.ok) throw new Error('BOEM HTTP ' + r.status); return r.json(); }).then(function (j) {
+    var ctrl = new AbortController();
+    var timeout = setTimeout(function () { ctrl.abort(); }, FETCH_TIMEOUT_MS);
+    return fetch(ATLANTIC_FISHING_ATLAS_ROOT + '?' + params.toString(), { signal: ctrl.signal }).then(function (r) { if (!r.ok) throw new Error('BOEM HTTP ' + r.status); return r.json(); }).then(function (j) {
       return (j.features || []).map(function (f) {
         var point = featurePoint(f), a = f.attributes || {};
         return point && a.NAME ? { point:point, geometry:f.geometry && f.geometry.rings ? { type:'Polygon', coordinates:f.geometry.rings } : null, name:a.NAME, type:a.TYPE || 'Fishing ground', source:'BOEM Atlantic Fishing Atlas' } : null;
       }).filter(Boolean);
-    }).catch(function (err) { logErr('BOEM South fishing-area fetch failed', err && err.message ? err.message : err); return []; });
+    }).finally(function () { clearTimeout(timeout); }).catch(function (err) { logErr('BOEM South fishing-area fetch failed', err && err.message ? err.message : err); return []; });
   }
 
   function mergeFeatureSets(sets) {
@@ -455,6 +457,7 @@
     map.addLayer(layer);
     layer.setVisible(state.visible);
     state.layers.set(map, layer);
+    var refreshSerial = 0;
     function render(items) {
       source.clear();
       source.addFeatures((items || []).map(function (item) {
@@ -488,23 +491,38 @@
         ? intersectBboxes(viewportBbox, selectedRegionBbox())
         : viewportBbox;
       if (!bbox) return;
+      var requestSerial = ++refreshSerial;
+      var south = selectedRegionBbox() === REGION_BBOXES.usec_south;
+      function publish(items) {
+        if (requestSerial !== refreshSerial) return;
+        items = (items || []).filter(function (item) { return pointInBbox(item.point, bbox); });
+        state.items.set(map, render);
+        render(items);
+        log('refreshed', items.length, 'underwater structures');
+      }
       // Load the compiled local asset first. Only query the slower global
       // services when this viewport has no local coverage at all.
       fetchLocalGrounds(bbox).then(function (local) {
         if (local.length) {
-          if (!selectedRegionBbox() || selectedRegionBbox() !== REGION_BBOXES.usec_south) return state.showPolygons ? fetchLocalPolygons(bbox) : local;
-          return Promise.all([state.showPolygons ? fetchLocalPolygons(bbox) : local, fetchBoemSouth(bbox)]).then(function (sets) { return mergeFeatureSets(sets); });
+          var basePromise = state.showPolygons ? fetchLocalPolygons(bbox) : Promise.resolve(local);
+          return basePromise.then(function (base) {
+            var initial = mergeNamedFeatures(base);
+            publish(initial);
+            if (!south) return;
+            return fetchBoemSouth(bbox).then(function (remote) {
+              publish(mergeFeatureSets([initial, remote]));
+            });
+          });
         }
-        return Promise.all([fetchGrounds(bbox), fetchGebco(bbox), fetchBoemSouth(bbox)])
-          .then(function (sets) { return mergeFeatureSets([mergeFeatures(sets[0], sets[1], []), sets[2]]); });
-      }).then(function (items) {
-        // ArcGIS can return polygons that intersect the query envelope while
-        // their label centroid is outside it. Keep only labels in the actual
-        // padded viewport so zooming in also reduces rendering work.
-        items = items.filter(function (item) { return pointInBbox(item.point, bbox); });
-        state.items.set(map, function () { render(items); });
-        render(items);
-        log('refreshed', items.length, 'underwater structures');
+        return Promise.all([fetchGrounds(bbox), fetchGebco(bbox)])
+          .then(function (sets) {
+            var initial = mergeFeatures(sets[0], sets[1], []);
+            publish(initial);
+            if (!south) return;
+            return fetchBoemSouth(bbox).then(function (remote) {
+              publish(mergeFeatureSets([initial, remote]));
+            });
+          });
       }).catch(function (err) { logErr('fishing-ground refresh failed', err); });
     }
     render.refresh = refresh;
