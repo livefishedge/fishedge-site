@@ -49,6 +49,7 @@
   var state = {
     layers: new Map(),
     items: new Map(),
+    data: new Map(),
     cache: new Map(),
     inflight: new Map(),
     attributionEl: null,
@@ -481,7 +482,10 @@
     var source = new ol.source.Vector({ wrapX: false });
     var layer = new ol.layer.Vector({
       source: source,
-      declutter: true,
+      // Keep every marker visible at wide zooms. Label ordering is handled by
+      // the canonical feature sort; OpenLayers decluttering otherwise hides
+      // the structure marker together with its label.
+      declutter: false,
       zIndex: BASEMAP_ZINDEX,
       properties: { 'fish-layer': 'fishing-grounds', 'fish-source': SOURCE_LABEL },
       style: styleFor,
@@ -491,6 +495,8 @@
     state.layers.set(map, layer);
     var refreshSerial = 0;
     function render(items) {
+      if (Array.isArray(items)) state.data.set(map, items);
+      items = state.data.get(map) || [];
       source.clear();
       source.addFeatures((items || []).map(function (item) {
         var geometry = null;
@@ -541,7 +547,15 @@
             var initial = mergeNamedFeatures(base);
             publish(initial);
             if (!south) return;
-            return Promise.all([fetchGrounds(bbox), fetchBoemSouth(bbox)]).then(function (sets) {
+            var canyonPromise = fetchGrounds(bbox).then(function (canyons) {
+              publish(mergeFeatureSets([initial, canyons]));
+              return canyons;
+            });
+            var boemPromise = fetchBoemSouth(bbox).then(function (remote) {
+              publish(mergeFeatureSets([initial, remote]));
+              return remote;
+            });
+            return Promise.all([canyonPromise, boemPromise]).then(function (sets) {
               publish(mergeFeatureSets([initial, sets[0], sets[1]]));
             });
           });
