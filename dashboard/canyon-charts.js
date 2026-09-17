@@ -214,6 +214,33 @@
       point[1] >= bbox[1] && point[1] <= bbox[3];
   }
 
+  function geometryBbox(geometry) {
+    if (!geometry) return null;
+    var coords = [];
+    (function collect(value) {
+      if (!Array.isArray(value)) return;
+      if (value.length >= 2 && typeof value[0] === 'number' && typeof value[1] === 'number') {
+        coords.push(value);
+        return;
+      }
+      value.forEach(collect);
+    })(geometry.rings || geometry.coordinates);
+    if (!coords.length) return null;
+    var minLon = coords[0][0], maxLon = coords[0][0], minLat = coords[0][1], maxLat = coords[0][1];
+    coords.forEach(function (point) {
+      minLon = Math.min(minLon, point[0]); maxLon = Math.max(maxLon, point[0]);
+      minLat = Math.min(minLat, point[1]); maxLat = Math.max(maxLat, point[1]);
+    });
+    return [minLon, minLat, maxLon, maxLat];
+  }
+
+  function featureIntersectsBbox(item, bbox) {
+    if (!item) return false;
+    if (pointInBbox(item.point, bbox)) return true;
+    var featureBox = geometryBbox(item.geometry);
+    return Boolean(featureBox && intersectBboxes(featureBox, bbox));
+  }
+
   function intersectBboxes(a, b) {
     var out = [Math.max(a[0], b[0]), Math.max(a[1], b[1]),
       Math.min(a[2], b[2]), Math.min(a[3], b[3])];
@@ -235,10 +262,10 @@
           var point = featurePoint(f);
           var p = f.attributes || {};
           var name = p.Name || p.name || p.NAME;
-          if (!point || !name || !pointInBbox(point, bbox)) return null;
           var geometry = f.geometry && Array.isArray(f.geometry.rings)
             ? { type: 'Polygon', coordinates: f.geometry.rings } : null;
-          return { point: point, geometry: geometry, name: name, type: type, source: 'Maryland DNR' };
+          var item = { point: point, geometry: geometry, name: name, type: type, source: 'Maryland DNR' };
+          return point && name && featureIntersectsBbox(item, bbox) ? item : null;
         }).filter(Boolean);
       });
   }
@@ -250,9 +277,9 @@
         return (j.features || []).map(function (f) {
           var point = featurePoint(f);
           var p = f.properties || {};
-          if (!point || !p.name || !pointInBbox(point, bbox)) return null;
-          return { point: point, geometry: f.geometry, name: p.name, type: 'Fishing ground',
+          var item = { point: point, geometry: f.geometry, name: p.name, type: 'Fishing ground',
             region: p.region, system: p.profileType, source: 'NJ DEP / Shore Guide' };
+          return point && p.name && featureIntersectsBbox(item, bbox) ? item : null;
         }).filter(Boolean);
       });
   }
@@ -272,7 +299,7 @@
         });
     }
     var promise = state.staticLocalPointsPromise.then(function (allFeatures) {
-      var features = allFeatures.filter(function (item) { return pointInBbox(item.point, bbox); });
+      var features = allFeatures.filter(function (item) { return featureIntersectsBbox(item, bbox); });
       state.cache.set(key, { features: features, fetchedAt: Date.now() });
       return features;
     }).catch(function (err) {
@@ -298,7 +325,7 @@
         });
     }
     var promise = state.staticLocalPolygonsPromise.then(function (allFeatures) {
-      var features = allFeatures.filter(function (item) { return pointInBbox(item.point, bbox); });
+      var features = allFeatures.filter(function (item) { return featureIntersectsBbox(item, bbox); });
       state.cache.set(key, { features: features, fetchedAt: Date.now() });
       return features;
     }).finally(function () { state.inflight.delete(key); });
@@ -495,7 +522,7 @@
       var south = selectedRegionBbox() === REGION_BBOXES.usec_south;
       function publish(items) {
         if (requestSerial !== refreshSerial) return;
-        items = (items || []).filter(function (item) { return pointInBbox(item.point, bbox); });
+        items = (items || []).filter(function (item) { return featureIntersectsBbox(item, bbox); });
         state.items.set(map, render);
         render(items);
         log('refreshed', items.length, 'underwater structures');
