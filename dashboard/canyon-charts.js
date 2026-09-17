@@ -500,7 +500,7 @@
       source.clear();
       source.addFeatures((items || []).map(function (item) {
         var geometry = null;
-        if ((state.showPolygons || item.type === 'Canyon') && item.geometry && typeof ol.format !== 'undefined') {
+  if (state.showPolygons && item.geometry && typeof ol.format !== 'undefined') {
           try {
             geometry = new ol.format.GeoJSON().readGeometry(item.geometry, {
               dataProjection: 'EPSG:4326', featureProjection: 'EPSG:3857'
