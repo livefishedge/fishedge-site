@@ -69,6 +69,7 @@
   };
 
   const GROUND_DATA_URL = '/dashboard/data/fishing-grounds.json';
+  const SOUTH_BOEM_URL = 'https://gis.boem.gov/arcgis/rest/services/AtlanticFishGuide/Atlantic_Coast_Fishing_Atlas/MapServer/2/query';
   // Operational target list for usec_md. The source layer contains hundreds
   // of survey labels (buoys, access zones, and duplicate polygons); these are
   // the named offshore grounds exposed as trip targets. usec_south gets its
@@ -90,7 +91,11 @@
   const SOUTH_GROUND_NAMES = new Set([
     'Long Shoal','Platt Shoal','Gibbs Shoal','Gull Shoal','Wimble Shoal','Clam Shoal',
     'Brant Island Shoal','Brant Island Slue','Maw Point Shoal','Gum Thicket Shoal',
-    'Upper Middle','Inner Middle','Lower Middle',
+    'Upper Middle','Inner Middle','Lower Middle','Frying Pan Shoal','East Bank',
+    'Cape Romain Shoal','Bull Breakers','Big Bank','Little Bank','Middle Ground',
+    'Deveaux Bank','Combahee Bank','Pelican Bank','Southeast Channel','South Channel',
+    'Offshore Lump','King Fish Shoal','Marlin Ground','240 Rock','West Rock','10 Fathom',
+    'Northwest Place','Gaskin Bank','Cape Lookout Shoal',
   ]);
   const SOUTH_TARGETS = {
     'south-long-shoal': { id:'south-long-shoal', label:'Long Shoal', kind:'ground', lookup_points:[[-75.7092656577,35.5496077655]], geometry:null },
@@ -107,6 +112,20 @@
     'south-inner-middle': { id:'south-inner-middle', label:'Inner Middle', kind:'ground', lookup_points:[[-76.2962401242,35.2484444866]], geometry:null },
     'south-lower-middle': { id:'south-lower-middle', label:'Lower Middle', kind:'ground', lookup_points:[[-76.2415956823,35.2323500471]], geometry:null },
   };
+  const SOUTH_OFFSHORE_TARGETS = {
+    'south-frying-pan-shoal':['Frying Pan Shoal',-77.917796,33.72386], 'south-east-bank':['East Bank',-79.145132,33.152159],
+    'south-cape-romain-shoal':['Cape Romain Shoal',-79.316756,32.978242], 'south-bull-breakers':['Bull Breakers',-79.556071,32.870263],
+    'south-big-bank':['Big Bank',-79.629241,32.725006], 'south-little-bank':['Little Bank',-79.666882,32.702276],
+    'south-middle-ground-sc':['Middle Ground',-80.135817,32.522623], 'south-deveaux-bank':['Deveaux Bank',-80.173391,32.53876],
+    'south-combahee-bank':['Combahee Bank',-80.439259,32.47346], 'south-pelican-bank':['Pelican Bank',-80.410581,32.444404],
+    'south-southeast-channel':['Southeast Channel',-80.553578,32.117867], 'south-south-channel':['South Channel',-80.622668,32.107974],
+    'south-offshore-lump':['Offshore Lump',-75.555564,34.871752], 'south-king-fish-shoal':['King Fish Shoal',-76.221115,34.998445],
+    'south-marlin-ground':['Marlin Ground',-76.115036,34.12414], 'south-240-rock':['240 Rock',-76.644076,34.254122],
+    'south-west-rock':['West Rock',-76.587005,34.302752], 'south-10-fathom':['10 Fathom',-76.569442,34.383338],
+    'south-northwest-place':['Northwest Place',-76.606618,34.426321], 'south-gaskin-bank':['Gaskin Bank',-80.705351,32.103082],
+    'south-cape-lookout-shoal':['Cape Lookout Shoal',-76.493878,34.513885], 'south-middle-ground-nc':['Middle Ground',-75.976491,35.949476],
+  };
+  const SOUTH_ALL_TARGETS = Object.assign({}, SOUTH_TARGETS, Object.fromEntries(Object.entries(SOUTH_OFFSHORE_TARGETS).map(([id, v]) => [id, { id, label:v[0], kind:'ground', lookup_points:[[v[1],v[2]]], geometry:null }])));
   function groundId(name) {
     const slug = String(name).toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
     return `ground-${slug || 'unnamed'}`;
@@ -139,8 +158,13 @@
   }
   function loadGroundCatalog(targets, names, bbox, onLoaded) {
     if (typeof fetch !== 'function') return;
-    fetch(GROUND_DATA_URL, { cache: 'no-store' }).then(r => r.ok ? r.json() : null)
-      .then(payload => { const added = mergeGroundCatalog(payload, targets, names, bbox); if (added && onLoaded) onLoaded(); })
+    const local = fetch(GROUND_DATA_URL, { cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null);
+    const remote = bbox === SOUTH_GROUND_BBOX ? fetch(SOUTH_BOEM_URL + '?' + new URLSearchParams({ where:'1=1', geometry:bbox.join(','), geometryType:'esriGeometryEnvelope', inSR:'4326', spatialRel:'esriSpatialRelIntersects', outFields:'OBJECTID,NAME,TYPE', returnGeometry:'true', outSR:'4326', geometryPrecision:'5', resultRecordCount:'100', f:'json' }))
+      .then(r => r.ok ? r.json() : null).then(j => ({ features:(j && j.features || []).map(f => { const rings = f.geometry && f.geometry.rings || []; const pts = rings.flat(); const point = pts.length ? [pts.reduce((a,p)=>a+p[0],0)/pts.length, pts.reduce((a,p)=>a+p[1],0)/pts.length] : null; return point ? { name:f.attributes?.NAME, point, geometry:{type:'Polygon',coordinates:rings}, source:'BOEM Atlantic Fishing Atlas' } : null; }).filter(Boolean) })).catch(() => null) : Promise.resolve(null);
+    Promise.all([local, remote]).then(([localPayload, remotePayload]) => {
+      const added = mergeGroundCatalog(localPayload, targets, names, bbox) + mergeGroundCatalog(remotePayload, targets, names, bbox);
+      if (added && onLoaded) onLoaded();
+    })
       .catch(() => {});
   }
 
@@ -194,7 +218,7 @@
     const region = opts.region || global.__FISHEDGE_ACTIVE_REGION || 'usec_md';
     const activeInletKeys = region === 'usec_south' ? SOUTH_INLETS : Object.keys(INLETS).filter(k => !SOUTH_INLETS.includes(k));
     const activeInlets = Object.fromEntries(activeInletKeys.map(k => [k, INLETS[k]]).filter(([,v]) => v));
-    const activeTargets = region === 'usec_south' ? Object.assign({}, SOUTH_TARGETS) : CANYON_TARGETS;
+    const activeTargets = region === 'usec_south' ? Object.assign({}, SOUTH_ALL_TARGETS) : CANYON_TARGETS;
     const state = {
       inlet: activeInletKeys.includes(opts.initialInlet) ? opts.initialInlet : activeInletKeys[0],
       departure: opts.initialDeparture || todayIso(),
@@ -253,12 +277,12 @@
     });
   }
 
-  function getTargets(region) { return region === 'usec_south' ? SOUTH_TARGETS : CANYON_TARGETS; }
+  function getTargets(region) { return region === 'usec_south' ? SOUTH_ALL_TARGETS : CANYON_TARGETS; }
   function getInlets(region) {
     const keys = region === 'usec_south' ? SOUTH_INLETS : Object.keys(INLETS).filter(k => !SOUTH_INLETS.includes(k));
     return Object.fromEntries(keys.map(k => [k, INLETS[k]]).filter(([,v]) => v));
   }
-  const api = Object.freeze({ mount, render, INLETS, CANYON_TARGETS, SOUTH_INLETS, SOUTH_TARGETS, getTargets, getInlets });
+  const api = Object.freeze({ mount, render, INLETS, CANYON_TARGETS, SOUTH_INLETS, SOUTH_TARGETS: SOUTH_ALL_TARGETS, getTargets, getInlets });
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (typeof global !== 'undefined') global.FishEdgeTripPlannerUI = Object.assign(global.FishEdgeTripPlannerUI || {}, { InletPicker: api });
 })(typeof globalThis !== 'undefined' ? globalThis : this);

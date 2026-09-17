@@ -30,6 +30,7 @@
   var ATLANTIC_FISHING_ATLAS_ROOT =
     'https://gis.boem.gov/arcgis/rest/services/AtlanticFishGuide/' +
     'Atlantic_Coast_Fishing_Atlas/MapServer/2/query';
+  var SOUTH_BOEM_FIELDS = 'OBJECTID,NAME,TYPE';
   var ATTRIBUTION =
     'Underwater structures: NJ DEP + MD DNR + BOEM/GEBCO';
   var CACHE_TTL_MS = 6 * 60 * 60 * 1000;
@@ -305,6 +306,22 @@
     return promise;
   }
 
+  function fetchBoemSouth(bbox) {
+    var params = new URLSearchParams({ where:'1=1', geometry:bbox.join(','), geometryType:'esriGeometryEnvelope', inSR:'4326', spatialRel:'esriSpatialRelIntersects', outFields:SOUTH_BOEM_FIELDS, returnGeometry:'true', outSR:'4326', geometryPrecision:'5', resultRecordCount:'100', f:'json' });
+    return fetch(ATLANTIC_FISHING_ATLAS_ROOT + '?' + params.toString()).then(function (r) { if (!r.ok) throw new Error('BOEM HTTP ' + r.status); return r.json(); }).then(function (j) {
+      return (j.features || []).map(function (f) {
+        var point = featurePoint(f), a = f.attributes || {};
+        return point && a.NAME ? { point:point, geometry:f.geometry && f.geometry.rings ? { type:'Polygon', coordinates:f.geometry.rings } : null, name:a.NAME, type:a.TYPE || 'Fishing ground', source:'BOEM Atlantic Fishing Atlas' } : null;
+      }).filter(Boolean);
+    }).catch(function (err) { logErr('BOEM South fishing-area fetch failed', err && err.message ? err.message : err); return []; });
+  }
+
+  function mergeNamedFeatures(sets) {
+    var seen = new Set(), out = [];
+    sets.flat().forEach(function (item) { var key = String(item.name || '').toLowerCase() + '|' + (item.geometry ? 'polygon' : 'point'); if (!seen.has(key)) { seen.add(key); out.push(item); } });
+    return out;
+  }
+
   function fetchGebco(bbox) {
     var key = 'gebco:' + bboxKey(bbox);
     var cached = state.cache.get(key);
@@ -477,12 +494,11 @@
       // services when this viewport has no local coverage at all.
       fetchLocalGrounds(bbox).then(function (local) {
         if (local.length) {
-          return state.showPolygons
-            ? fetchLocalPolygons(bbox)
-            : local;
+          if (!selectedRegionBbox() || selectedRegionBbox() !== REGION_BBOXES.usec_south) return state.showPolygons ? fetchLocalPolygons(bbox) : local;
+          return Promise.all([state.showPolygons ? fetchLocalPolygons(bbox) : local, fetchBoemSouth(bbox)]).then(function (sets) { return mergeNamedFeatures(sets); });
         }
-        return Promise.all([fetchGrounds(bbox), fetchGebco(bbox)])
-          .then(function (sets) { return mergeFeatures(sets[0], sets[1], []); });
+        return Promise.all([fetchGrounds(bbox), fetchGebco(bbox), fetchBoemSouth(bbox)])
+          .then(function (sets) { return mergeNamedFeatures([mergeFeatures(sets[0], sets[1], []), sets[2]]); });
       }).then(function (items) {
         // ArcGIS can return polygons that intersect the query envelope while
         // their label centroid is outside it. Keep only labels in the actual
