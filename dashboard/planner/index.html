@@ -281,6 +281,7 @@
     // Pages publishes the validated regional artifact with the app. Use it as
     // the primary source so a missing/stale R2 mirror cannot blank the Planner.
     DATA_BASE = `${location.origin}/trip-planner/data/${region}/briefing/`;
+    applyRegionalTripCatalog();
     if (canonicalize) {
       const url = new URL(location.href);
       url.searchParams.set('region', region);
@@ -391,12 +392,66 @@
     virginia_offshore:[-75.2,36.75], baltimore_trough:[-74.1,37.6],
     sausages:[-73.95,38.0]
   };
+  // South catalog researched from the repository's BOEM Atlantic Fishing
+  // Atlas layer (fishing-grounds.json) plus the NOAA CO-OPS stations already
+  // published in the South forecast. These are regional operating areas and
+  // station-based launch points, not synthetic replacements for the source.
+  const SOUTH_TARGETS = {
+    'south-long-shoal': ['Long Shoal', -75.7092656577, 35.5496077655],
+    'south-platt-shoal': ['Platt Shoal', -75.4577212536, 35.7755751439],
+    'south-gibbs-shoal': ['Gibbs Shoal', -75.9551908563, 35.4602147409],
+    'south-gull-shoal': ['Gull Shoal', -75.9735722530, 35.3653221973],
+    'south-wimble-shoal': ['Wimble Shoal', -75.4218024046, 35.5648278300],
+    'south-clam-shoal': ['Clam Shoal', -75.6508493669, 35.2949058903],
+    'south-brant-island-shoal': ['Brant Island Shoal', -76.3570983283, 35.1690880923],
+    'south-brant-island-slue': ['Brant Island Slue', -76.3931929933, 35.1713298749],
+    'south-maw-point-shoal': ['Maw Point Shoal', -76.5255344379, 35.1356320935],
+    'south-gum-thicket-shoal': ['Gum Thicket Shoal', -76.5942449843, 35.0602488012],
+    'south-upper-middle': ['Upper Middle', -76.3387554538, 35.2829533231],
+    'south-inner-middle': ['Inner Middle', -76.2962401242, 35.2484444866],
+    'south-lower-middle': ['Lower Middle', -76.2415956823, 35.2323500471],
+  };
+  const SOUTH_INLETS = {
+    'beaufort-nc': ['Beaufort, NC', -76.67, 34.719],
+    'wilmington-nc': ['Wilmington, NC', -77.953, 34.227],
+    'charleston-sc': ['Charleston, SC', -79.925, 32.781],
+  };
   const INLET_POINTS = {
     'ocean-city-md':[-75.0919,38.3286], 'indian-river-inlet-de':[-75.0589,38.61],
     'cape-may-nj':[-74.9594,38.9686], 'lewes-de':[-75.1197,38.7817],
     'chesapeake-bay-bt':[-76.1133,36.9667], 'solomons-island-md':[-76.4511,38.3172],
     'atlantic-city-nj':[-74.4184,39.3554], 'sandy-hook-nj':[-74.0094,40.4669], 'montauk-ny':[-71.9597,41.0482]
   };
+  function applyRegionalTripCatalog() {
+    if (!inletSelect || !targetSelect || !PLANNER_REGION) return;
+    const south = PLANNER_REGION === 'usec_south';
+    const inlets = south ? SOUTH_INLETS : {
+      'ocean-city-md':['Ocean City Inlet, MD',-75.0919,38.3286],
+      'indian-river-inlet-de':['Indian River Inlet, DE',-75.0589,38.61],
+      'cape-may-nj':['Cape May, NJ',-74.9594,38.9686],
+      'lewes-de':['Lewes, DE',-75.1197,38.7817],
+      'chesapeake-bay-bt':['Chesapeake Bay Bridge Tunnel, VA',-76.1133,36.9667],
+      'solomons-island-md':['Solomons Island, MD',-76.4511,38.3172],
+      'atlantic-city-nj':['Atlantic City, NJ',-74.4184,39.3554],
+      'sandy-hook-nj':['Sandy Hook, NJ',-74.0094,40.4669],
+      'montauk-ny':['Montauk, NY',-71.9597,41.0482],
+    };
+    const targets = south ? SOUTH_TARGETS : null;
+    inletSelect.innerHTML = Object.entries(inlets).map(([id, v]) => `<option value="${id}">${v[0]}</option>`).join('');
+    if (targets) {
+      targetSelect.innerHTML = Object.entries(targets).map(([id, v]) => `<option value="${id}" data-lon="${v[1]}" data-lat="${v[2]}">${v[0]}</option>`).join('');
+    } else {
+      targetSelect.innerHTML = `<option value="baltimore_canyon_line">Baltimore Canyon</option><option value="hudson_canyon">Hudson Canyon</option><option value="wilmington_canyon">Wilmington Canyon</option><option value="norfolk_canyon">Norfolk Canyon</option><option value="toms_canyon">Toms Canyon</option><option value="carteret_canyon">Carteret Canyon</option><option value="lindenkohl_canyon">Lindenkohl Canyon</option><option value="spencer_canyon">Spencer Canyon</option><option value="poor_mans_canyon">Poor Man's Canyon</option><option value="hudson_shelf_edge">Hudson Shelf Edge</option><option value="delaware_offshore">Delaware Offshore Grounds</option><option value="new_jersey_reef">New Jersey Offshore Reef</option><option value="virginia_offshore">Virginia Offshore Grounds</option><option value="baltimore_trough">Baltimore Trough</option><option value="sausages">Sausages</option>`;
+    }
+    const inletSaved = localStorage.getItem(INLET_STORAGE_KEY);
+    const targetSaved = localStorage.getItem(TARGET_STORAGE_KEY);
+    if (!inletSaved || ![...inletSelect.options].some(o => o.value === inletSaved)) inletSelect.selectedIndex = 0;
+    else inletSelect.value = inletSaved;
+    if (!targetSaved || ![...targetSelect.options].some(o => o.value === targetSaved)) targetSelect.selectedIndex = 0;
+    else targetSelect.value = targetSaved;
+    const inlet = south ? SOUTH_INLETS[inletSelect.value] : null;
+    if (inlet) INLET_POINTS[inletSelect.value] = [inlet[1], inlet[2]];
+  }
   function targetPoint() {
     const option = targetSelect && targetSelect.selectedOptions && targetSelect.selectedOptions[0];
     return option && option.dataset.lon ? [+option.dataset.lon, +option.dataset.lat] : TARGET_POINTS[targetSelect?.value];
@@ -704,13 +759,13 @@
   try { selectedFishingDays = new Set(JSON.parse(localStorage.getItem('fishedge:planner:fishing-days') || '[]')); } catch (_) {}
   try {
     const saved = localStorage.getItem(INLET_STORAGE_KEY);
-    if (saved) inletSelect.value = saved;
+    if (saved && [...inletSelect.options].some(o => o.value === saved)) inletSelect.value = saved;
   } catch (_) { /* ignore */ }
   inletSelect.addEventListener('change', () => {
     try { localStorage.setItem(INLET_STORAGE_KEY, inletSelect.value); } catch (_) { /* ignore */ }
     renderTripPlan();
   });
-  try { const savedTarget = localStorage.getItem(TARGET_STORAGE_KEY); if (savedTarget) targetSelect.value = savedTarget; } catch (_) { /* ignore */ }
+  try { const savedTarget = localStorage.getItem(TARGET_STORAGE_KEY); if (savedTarget && [...targetSelect.options].some(o => o.value === savedTarget)) targetSelect.value = savedTarget; } catch (_) { /* ignore */ }
   targetSelect.addEventListener('change', () => {
     try { localStorage.setItem(TARGET_STORAGE_KEY, targetSelect.value); } catch (_) {}
     if (forecast && forecast.frames) { selectedDayIdx = 0; currentFrameIdx = []; dayAggregates = aggregateByDay(); currentFrameIdx = dayAggregates.map(() => 0); renderDayStrip(); renderBriefing(); }
@@ -768,6 +823,7 @@
   // the dashboard picker. The compact option list is hydrated after first
   // paint so a slow data request never blocks the page.
   fetch('/dashboard/data/fishing-grounds.json', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(payload => {
+    if (PLANNER_REGION === 'usec_south') return;
     const curated = new Set(['17 Fathoms','17 Fathoms Bank','Axel Carlson Reef','Barnegat Light Reef','Manasquan Inlet Reef','Sandy Hook Ground','Sea Bright Ground','Shrewsbury Rock','Klondike (Shark River)','Mussel Bed','Mussel Bank','Oil Wreck','Romer Shoal','The Cigar','21 Mile Hill','3 Mile Hill','26 Mile (Big) Hill or Lump','Barnegat, South End Ridge','Barnegat, North End Ridge','Manasquan (Southeast) Ridge','Ambrose Ridge','Lightship Ridge','Scotland Ridge','Lindenkohl Canyon','Spencer Canyon','Toms Canyon','Carteret Canyon','Hudson Canyon','Baltimore Canyon','Wilmington Canyon','Norfolk Canyon',"Poor Man's Canyon",'Sausages','Miah Maull Shoal','Chincoteague Shoal','Winter Quarter Shoal','Ocean City Shoal','Offshore Southeast','Cartwright Area','Acid Water or Stain','Mako']);
     const seen = new Set(Array.from(targetSelect.options).map(o => o.textContent.trim().toLowerCase()));
     const used = new Set(Array.from(targetSelect.options).map(o => o.value));
@@ -787,7 +843,12 @@
   const workspace = document.getElementById('planner-workspace');
   const isNewTrip = new URLSearchParams(location.search).get('new') === '1';
   if (isNewTrip) { landing.hidden = true; workspace.hidden = false; }
-  document.getElementById('prepare-trip')?.addEventListener('click', () => { landing.hidden = true; workspace.hidden = false; history.replaceState(null, '', '?new=1'); window.scrollTo(0, 0); });
+  document.getElementById('prepare-trip')?.addEventListener('click', () => {
+    landing.hidden = true; workspace.hidden = false;
+    const url = new URL(location.href); url.searchParams.set('new', '1');
+    history.replaceState(null, '', `${url.pathname}?${url.searchParams}${url.hash}`);
+    window.scrollTo(0, 0);
+  });
   renderUpcomingTrips();
   renderMyTrips();
   resolvePlannerRegion().then(loadForecast).catch((error) => {
