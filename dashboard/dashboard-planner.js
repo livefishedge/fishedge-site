@@ -132,20 +132,25 @@
     const UI = global.FishEdgeTripPlannerUI || {};
     const activeRegion = global.__FISHEDGE_ACTIVE_REGION || 'usec_md';
     const canyonTargets = UI.InletPicker && (UI.InletPicker.getTargets ? UI.InletPicker.getTargets(activeRegion) : UI.InletPicker.CANYON_TARGETS) || {};
-    const inletMeta = (global.CoopsTides && global.CoopsTides.INLET_STATION_TABLE && global.CoopsTides.INLET_STATION_TABLE[inletKey])
-      || { station_id: '8570283', label: 'Ocean City Inlet, MD', lat: 38.3286, lon: -75.0919 };
-    const target = canyonTargets[targetId] || canyonTargets.baltimore_canyon_line;
-    if (!inletMeta || !target || !target.lookup_points || !target.lookup_points.length) return null;
+    const inletMeta = global.CoopsTides && global.CoopsTides.INLET_STATION_TABLE && global.CoopsTides.INLET_STATION_TABLE[inletKey];
+    const target = canyonTargets[targetId];
+    if (activeRegion === 'usec_south' && (!inletMeta || !target)) {
+      console.warn('[planner] South selection has no regional station/target mapping', { inletKey, targetId });
+      return null;
+    }
+    const safeInletMeta = inletMeta || { station_id: '8570283', label: 'Ocean City Inlet, MD', lat: 38.3286, lon: -75.0919 };
+    const safeTarget = target || canyonTargets.baltimore_canyon_line;
+    if (!safeInletMeta || !safeTarget || !safeTarget.lookup_points || !safeTarget.lookup_points.length) return null;
 
     // Show "fetching live conditions" message in the 5-day slot while we wait.
     const outlookHost = document.getElementById('fishedge-five-day-outlook');
     if (outlookHost) outlookHost.innerHTML = '<div class="fdo-loading">Fetching live conditions from Open-Meteo, CO-OPS, NWS…</div>';
 
     const [marine, weather, tides, alertsRaw] = await Promise.all([
-      fetchOpenMeteoMarine(inletMeta.lat, inletMeta.lon),
-      fetchOpenMeteoWeather(inletMeta.lat, inletMeta.lon),
-      fetchCoopsTides(inletMeta.station_id),
-      fetchNwsAlerts(inletMeta.lat, inletMeta.lon),
+      fetchOpenMeteoMarine(safeInletMeta.lat, safeInletMeta.lon),
+      fetchOpenMeteoWeather(safeInletMeta.lat, safeInletMeta.lon),
+      fetchCoopsTides(safeInletMeta.station_id),
+      fetchNwsAlerts(safeInletMeta.lat, safeInletMeta.lon),
     ]);
     console.info('[planner] real-data fetch results:', {
       inlet: inletKey,
@@ -159,8 +164,8 @@
     if (!marine && !weather && !tides && !alertsRaw) return null;
 
     const adapter = Tp_buildTripPlannerAdapter({
-      home_inlet: { id: inletKey || 'ocean-city-md', label: inletMeta.label, lonlat: [inletMeta.lon, inletMeta.lat] },
-      target: Object.assign({}, target, { anchor_lonlat: target.lookup_points[0] }),
+      home_inlet: { id: inletKey || 'ocean-city-md', label: safeInletMeta.label, lonlat: [safeInletMeta.lon, safeInletMeta.lat] },
+      target: Object.assign({}, safeTarget, { anchor_lonlat: safeTarget.lookup_points[0] }),
       departure_iso: '2026-08-19T04:00:00-04:00',
       return_iso:    '2026-08-19T14:00:00-04:00',
       tz: 'America/New_York',
@@ -184,7 +189,7 @@
                 dominant_period: first.wave_period,
                 dir_cardinal: dirDegToCardinal(first.wave_direction),
               },
-              source: { provider: 'Open-Meteo Marine', station_id: inletMeta.lat.toFixed(2) + ',' + inletMeta.lon.toFixed(2), age_minutes: 0 },
+              source: { provider: 'Open-Meteo Marine', station_id: safeInletMeta.lat.toFixed(2) + ',' + safeInletMeta.lon.toFixed(2), age_minutes: 0 },
               freshness: 'MODEL_FORECAST',
             };
           }
@@ -198,7 +203,7 @@
         const wrows = global.OpenMeteoWeather.parseHourly(weather) || [];
         if (wrows[0]) {
           const w = wrows[0];
-          const src = w.source || { provider: 'Open-Meteo', station_id: inletMeta.lat.toFixed(2) + ',' + inletMeta.lon.toFixed(2), age_minutes: 0 };
+          const src = w.source || { provider: 'Open-Meteo', station_id: safeInletMeta.lat.toFixed(2) + ',' + safeInletMeta.lon.toFixed(2), age_minutes: 0 };
           const fresh = w.freshness || 'MODEL_FORECAST';
           if (w.wind_speed_kt != null) {
             adapter.segments.target.now.wind = {
@@ -249,7 +254,7 @@
                 next_high: nextHigh ? { iso: nextHigh.iso, value: nextHigh.height_ft } : null,
                 next_low:  nextLow  ? { iso: nextLow.iso,  value: nextLow.height_ft  } : null,
               },
-              source: { provider: 'CO-OPS Tides', station_id: inletMeta.station_id, age_minutes: 0 },
+              source: { provider: 'CO-OPS Tides', station_id: safeInletMeta.station_id, age_minutes: 0 },
               freshness: 'DETERMINISTIC',
             };
           }
@@ -260,7 +265,7 @@
     // NWS Alerts → segment.alerts
     if (alertsRaw && global.NwsAlerts) {
       try {
-        const alerts = global.NwsAlerts.normalizeAlerts(alertsRaw, inletMeta.lat, inletMeta.lon) || [];
+        const alerts = global.NwsAlerts.normalizeAlerts(alertsRaw, safeInletMeta.lat, safeInletMeta.lon) || [];
         for (const k of Object.keys(adapter.segments)) adapter.segments[k].alerts = alerts;
       } catch (e) { console.warn('[planner] NwsAlerts parse failed:', e && e.message); }
     }
@@ -368,6 +373,19 @@
     // when the fixture has data), then overlay real data on top of any
     // fields the fixture didn't already fill. Real data wins where present.
     async function buildPlan(fixName, inletKey, targetId) {
+      const activeRegion = global.__FISHEDGE_ACTIVE_REGION || 'usec_md';
+      // South must never inherit the Mid-Atlantic Ocean City fixture. If its
+      // live regional adapters fail, surface an unavailable state instead of
+      // presenting conditions from the wrong geography.
+      if (activeRegion === 'usec_south') {
+        try {
+          const realSouth = await buildRealPlan(inletKey, targetId);
+          return realSouth || null;
+        } catch (e) {
+          console.warn('[planner] South live-data build failed; refusing cross-region fixture fallback:', e && e.message);
+          return null;
+        }
+      }
       const plan = buildFixturePlan(fixName, inletKey, targetId);
       try {
         const real = await buildRealPlan(inletKey, targetId);
@@ -404,6 +422,7 @@
       // and the plan carries a `data_freshness` field so the day card and
       // briefing drawer can render the right badge.
       const today = await buildPlan(fixName, inletKey);
+      if (!today) return [];
       today.data_freshness = 'live';
       today.day_offset = 0;
       const plans = [today];
@@ -435,6 +454,23 @@
     let currentPlans;
     let picker;
 
+    function mountPlans(plans) {
+      if (!plans || !plans.length) {
+        const outlook = document.getElementById('fishedge-five-day-outlook');
+        const compact = document.getElementById('fishedge-compact-strip-host');
+        if (outlook) outlook.innerHTML = '<div class="fdo-loading">Regional live conditions unavailable. No cross-region fallback data was used.</div>';
+        if (compact) compact.innerHTML = '';
+        return;
+      }
+      UI.FiveDayOutlook.mount(document.getElementById('fishedge-five-day-outlook'), plans, {
+        onDayClick: (idx) => openBriefing(plans[idx]),
+      });
+      UI.CompactStrip.mount(plans[0], {
+        onOpen: () => openBriefing(plans[0]),
+        host: document.getElementById('fishedge-compact-strip-host'),
+      });
+    }
+
     try {
       const targetCatalog = UI.InletPicker.getTargets ? UI.InletPicker.getTargets(activeRegion) : UI.InletPicker.CANYON_TARGETS;
       const allowedInlets = UI.InletPicker.getInlets ? UI.InletPicker.getInlets(activeRegion) : UI.InletPicker.INLETS;
@@ -450,14 +486,7 @@
 
     async function rebuild() {
       currentPlans = await build5DayPlans('ocean_city_normal', picker.getInlet(), picker.getSnapshot().target_id);
-      UI.FiveDayOutlook.mount(document.getElementById('fishedge-five-day-outlook'), currentPlans, {
-        onDayClick: (idx) => openBriefing(currentPlans[idx]),
-      });
-      // CompactStrip API: mount(plan, { onOpen, host })
-      UI.CompactStrip.mount(currentPlans[0], {
-        onOpen: () => openBriefing(currentPlans[0]),
-        host: document.getElementById('fishedge-compact-strip-host'),
-      });
+      mountPlans(currentPlans);
     }
 
     function rebuildMyTrips() {
@@ -477,13 +506,7 @@
     (async () => {
       try {
         currentPlans = await build5DayPlans('ocean_city_normal', picker.getInlet(), picker.getSnapshot().target_id);
-        UI.FiveDayOutlook.mount(document.getElementById('fishedge-five-day-outlook'), currentPlans, {
-          onDayClick: (idx) => openBriefing(currentPlans[idx]),
-        });
-        UI.CompactStrip.mount(currentPlans[0], {
-          onOpen: () => openBriefing(currentPlans[0]),
-          host: document.getElementById('fishedge-compact-strip-host'),
-        });
+        mountPlans(currentPlans);
         rebuildMyTrips();
         global.__FISHEDGE_PLANNER_DEV__ = { plans: currentPlans, picker, Sto, rebuild };
         global.__FISHEDGE_PLANNER_MOUNTED__ = true;

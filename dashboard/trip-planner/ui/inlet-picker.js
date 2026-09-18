@@ -96,6 +96,7 @@
     'Deveaux Bank','Combahee Bank','Pelican Bank','Southeast Channel','South Channel',
     'Offshore Lump','King Fish Shoal','Marlin Ground','240 Rock','West Rock','10 Fathom',
     'Northwest Place','Gaskin Bank','Cape Lookout Shoal',
+    'The Point','Atlantic 4','Hatteras','Keller','Pamlico',
   ]);
   const SOUTH_TARGETS = {
     'south-long-shoal': { id:'south-long-shoal', label:'Long Shoal', kind:'ground', lookup_points:[[-75.7092656577,35.5496077655]], geometry:null },
@@ -111,6 +112,11 @@
     'south-upper-middle': { id:'south-upper-middle', label:'Upper Middle', kind:'ground', lookup_points:[[-76.3387554538,35.2829533231]], geometry:null },
     'south-inner-middle': { id:'south-inner-middle', label:'Inner Middle', kind:'ground', lookup_points:[[-76.2962401242,35.2484444866]], geometry:null },
     'south-lower-middle': { id:'south-lower-middle', label:'Lower Middle', kind:'ground', lookup_points:[[-76.2415956823,35.2323500471]], geometry:null },
+    'south-the-point-canyon': { id:'south-the-point-canyon', label:'The Point Canyon', kind:'canyon', lookup_points:[[-74.5703692795,35.8776328788]], geometry:null },
+    'south-atlantic-4-canyon': { id:'south-atlantic-4-canyon', label:'Atlantic 4 Canyon', kind:'canyon', lookup_points:[[-73.6602293828,33.9334737529]], geometry:null },
+    'south-hatteras-canyon': { id:'south-hatteras-canyon', label:'Hatteras Canyon', kind:'canyon', lookup_points:[[-73.0592220839,33.0469840229]], geometry:null },
+    'south-keller-canyon': { id:'south-keller-canyon', label:'Keller Canyon', kind:'canyon', lookup_points:[[-73.2536907867,34.7202113278]], geometry:null },
+    'south-pamlico-canyon': { id:'south-pamlico-canyon', label:'Pamlico Canyon', kind:'canyon', lookup_points:[[-74.6305396042,34.4526188218]], geometry:null },
   };
   const SOUTH_OFFSHORE_TARGETS = {
     'south-frying-pan-shoal':['Frying Pan Shoal',-77.917796,33.72386], 'south-east-bank':['East Bank',-79.145132,33.152159],
