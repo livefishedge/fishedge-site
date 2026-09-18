@@ -412,28 +412,64 @@
   function mergeGeometry(a, b) {
     if (!a) return b;
     if (!b) return a;
-    if (a.type === 'Polygon' && b.type === 'Polygon') {
-      return { type: 'MultiPolygon', coordinates: [a.coordinates, b.coordinates] };
-    }
-    if (a.type === 'MultiPolygon' && b.type === 'Polygon') {
-      return { type: 'MultiPolygon', coordinates: a.coordinates.concat([b.coordinates]) };
-    }
-    if (a.type === 'Polygon' && b.type === 'MultiPolygon') {
-      return { type: 'MultiPolygon', coordinates: [a.coordinates].concat(b.coordinates) };
-    }
-    if (a.type === 'MultiPolygon' && b.type === 'MultiPolygon') {
-      return { type: 'MultiPolygon', coordinates: a.coordinates.concat(b.coordinates) };
-    }
-    return a;
+    var parts = [];
+    [a, b].forEach(function (geometry) {
+      if (geometry.type === 'Polygon') parts.push(geometry.coordinates);
+      if (geometry.type === 'MultiPolygon') parts = parts.concat(geometry.coordinates);
+    });
+    var unique = [];
+    parts.forEach(function (part) {
+      var fingerprint = JSON.stringify(part);
+      if (!unique.some(function (candidate) { return candidate.fingerprint === fingerprint; })) {
+        unique.push({ fingerprint: fingerprint, coordinates: part });
+      }
+    });
+    if (unique.length === 1) return { type: 'Polygon', coordinates: unique[0].coordinates };
+    return { type: 'MultiPolygon', coordinates: unique.map(function (part) { return part.coordinates; }) };
+  }
+
+  function structureBaseName(raw) {
+    return String(raw || '').toLowerCase()
+      .replace(/[’']/g, '').replace(/[^a-z0-9]+/g, ' ').trim()
+      .split(' ').filter(function (token) {
+        return token && ['bank', 'banks', 'ground', 'grounds', 'area', 'reef', 'reefs',
+          'rock', 'rocks', 'shoal', 'shoals', 'buoy', 'bed', 'beds', 'lump', 'lumps']
+          .indexOf(token) < 0;
+      }).map(function (token) {
+        return token.length > 4 && token.endsWith('s') ? token.slice(0, -1) : token;
+      }).join(' ');
+  }
+
+  function hasProtectedSubarea(raw) {
+    // Directional and explicitly numbered blocks/sites are separate catalog
+    // entities. A leading depth/count such as “17 Fathoms” is not a subarea.
+    return /(^|\s)(block|site|north|south|east|west|southeast|southwest|northeast|northwest)(\s|$)/i.test(String(raw || '')) ||
+      /\b(block|site)\s*[-#]?\s*\d+/i.test(String(raw || ''));
+  }
+
+  function samePhysicalStructure(a, b) {
+    if (!a || !b || !a.point || !b.point || hasProtectedSubarea(a.name) || hasProtectedSubarea(b.name)) return false;
+    var dx = (a.point[0] - b.point[0]) * Math.cos((a.point[1] + b.point[1]) * Math.PI / 360);
+    var dy = a.point[1] - b.point[1];
+    var distance = Math.sqrt(dx * dx + dy * dy);
+    return distance <= 0.02 && structureBaseName(a.name) === structureBaseName(b.name);
+  }
+
+  function structureId(item) {
+    var point = item.point || [0, 0];
+    return canonicalName(item.name).toLowerCase().replace(/[^a-z0-9]+/g, '-') + ':' +
+      Number(point[0]).toFixed(4) + ':' + Number(point[1]).toFixed(4);
   }
 
   function mergeNamedFeatures(features) {
     var merged = [];
     features.forEach(function (item) {
       var displayName = canonicalName(item.name);
-      var existing = merged.find(function (candidate) { return candidate.name === displayName; });
+      var existing = merged.find(function (candidate) {
+        return candidate.name === displayName || samePhysicalStructure(candidate, item);
+      });
       if (!existing) {
-        merged.push(Object.assign({}, item, { name: displayName }));
+        merged.push(Object.assign({}, item, { name: displayName, id: structureId(item) }));
       } else {
         existing.geometry = mergeGeometry(existing.geometry, item.geometry);
       }
@@ -535,12 +571,13 @@
           } catch (err) { logErr('polygon geometry skipped', item.name, err); }
         }
         geometry = geometry || new ol.geom.Point(ol.proj.fromLonLat(item.point));
-        geometryFeatures.push(new ol.Feature({ geometry: geometry, name: item.name, type: item.type,
-          region: item.region, system: item.system, source: item.source || SOURCE_LABEL }));
+        geometryFeatures.push(new ol.Feature({ geometry: geometry, id: item.id || structureId(item),
+          name: item.name, type: item.type, region: item.region, system: item.system,
+          source: item.source || SOURCE_LABEL }));
         if (Array.isArray(item.point) && item.name) {
           labelFeatures.push(new ol.Feature({
             geometry: new ol.geom.Point(ol.proj.fromLonLat(item.point)),
-            name: item.name, type: item.type, region: item.region,
+            id: item.id || structureId(item), name: item.name, type: item.type, region: item.region,
           }));
         }
       });
