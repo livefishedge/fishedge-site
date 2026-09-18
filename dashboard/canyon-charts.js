@@ -48,6 +48,7 @@
 
   var state = {
     layers: new Map(),
+    labelLayers: new Map(),
     items: new Map(),
     data: new Map(),
     cache: new Map(),
@@ -451,7 +452,7 @@
     return localMerged.length ? localMerged : mergeNamedFeatures(gebco.concat(boem));
   }
 
-  function styleFor(feature) {
+  function styleForGeometry(feature) {
     var polygon = feature.getGeometry() && feature.getGeometry().getType() !== 'Point';
     var underwaterColor = '#62e6c5';
     return new ol.style.Style({
@@ -464,6 +465,17 @@
         fill: new ol.style.Fill({ color: underwaterColor }),
         stroke: new ol.style.Stroke({ color: '#08131b', width: 1.2 }),
       }),
+    });
+  }
+
+  // One label anchor per logical feature. Polygon components never get
+  // their own text, so MultiPolygons cannot repeat a name several times.
+  function styleForLabel(feature, resolution) {
+    var isCanyon = feature.get('type') === 'Canyon';
+    var mobile = window.innerWidth && window.innerWidth < 700;
+    var maxResolution = isCanyon ? 3000 : (mobile ? 350 : 550);
+    if (resolution > maxResolution) return null;
+    return new ol.style.Style({
       text: new ol.style.Text({
         text: feature.get('name'),
         font: '600 11px system-ui, -apple-system, sans-serif',
@@ -472,7 +484,8 @@
         offsetY: -10,
         textAlign: 'center',
         textBaseline: 'bottom',
-        overflow: true,
+        overflow: false,
+        placement: 'point',
       }),
     });
   }
@@ -482,25 +495,39 @@
     var source = new ol.source.Vector({ wrapX: false });
     var layer = new ol.layer.Vector({
       source: source,
-      // Keep every marker visible at wide zooms. Label ordering is handled by
-      // the canonical feature sort; OpenLayers decluttering otherwise hides
-      // the structure marker together with its label.
       declutter: false,
       zIndex: BASEMAP_ZINDEX,
       properties: { 'fish-layer': 'fishing-grounds', 'fish-source': SOURCE_LABEL },
-      style: styleFor,
+      style: styleForGeometry,
+    });
+    var labelSource = new ol.source.Vector({ wrapX: false });
+    var labelLayer = new ol.layer.Vector({
+      source: labelSource,
+      declutter: true,
+      zIndex: BASEMAP_ZINDEX + 1,
+      properties: { 'fish-layer': 'fishing-ground-labels', 'fish-source': SOURCE_LABEL },
+      style: styleForLabel,
+      renderOrder: function (a, b) {
+        return (a.get('type') === 'Canyon' ? 0 : 1) - (b.get('type') === 'Canyon' ? 0 : 1);
+      },
     });
     map.addLayer(layer);
+    map.addLayer(labelLayer);
     layer.setVisible(state.visible);
+    labelLayer.setVisible(state.visible);
     state.layers.set(map, layer);
+    state.labelLayers.set(map, labelLayer);
     var refreshSerial = 0;
     function render(items) {
       if (Array.isArray(items)) state.data.set(map, items);
       items = state.data.get(map) || [];
       source.clear();
-      source.addFeatures((items || []).map(function (item) {
+      labelSource.clear();
+      var geometryFeatures = [];
+      var labelFeatures = [];
+      (items || []).forEach(function (item) {
         var geometry = null;
-  if (state.showPolygons && item.geometry && typeof ol.format !== 'undefined') {
+        if (state.showPolygons && item.geometry && typeof ol.format !== 'undefined') {
           try {
             geometry = new ol.format.GeoJSON().readGeometry(item.geometry, {
               dataProjection: 'EPSG:4326', featureProjection: 'EPSG:3857'
@@ -508,10 +535,19 @@
           } catch (err) { logErr('polygon geometry skipped', item.name, err); }
         }
         geometry = geometry || new ol.geom.Point(ol.proj.fromLonLat(item.point));
-        return new ol.Feature({ geometry: geometry, name: item.name, type: item.type,
-          region: item.region, system: item.system, source: item.source || SOURCE_LABEL });
-      }));
+        geometryFeatures.push(new ol.Feature({ geometry: geometry, name: item.name, type: item.type,
+          region: item.region, system: item.system, source: item.source || SOURCE_LABEL }));
+        if (Array.isArray(item.point) && item.name) {
+          labelFeatures.push(new ol.Feature({
+            geometry: new ol.geom.Point(ol.proj.fromLonLat(item.point)),
+            name: item.name, type: item.type, region: item.region,
+          }));
+        }
+      });
+      source.addFeatures(geometryFeatures);
+      labelSource.addFeatures(labelFeatures);
       layer.setVisible(state.visible);
+      labelLayer.setVisible(state.visible);
     }
     state.items.set(map, render);
     function refresh() {
@@ -604,6 +640,7 @@
   function setVisible(visible) {
     state.visible = Boolean(visible);
     state.layers.forEach(function (layer) { layer.setVisible(state.visible); });
+    state.labelLayers.forEach(function (layer) { layer.setVisible(state.visible); });
     hideAttribution();
     window.dispatchEvent(new CustomEvent('fishedge-underwater-visibility', {
       detail: { visible: state.visible }
