@@ -1,6 +1,5 @@
 /dashboard /dashboard/ 301
 /planner /planner/ 301
-/planner/map.html /dashboard/trip-planner/briefing-viewer.html 200
 /dashboard/trip-planner/briefing-viewer.html /planner/map.html 301
 /dashboard/trip-planner/briefing-viewer /planner/map.html 301
 /trip-planner/briefing-viewer.html /planner/map.html 301
