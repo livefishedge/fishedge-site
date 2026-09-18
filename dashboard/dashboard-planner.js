@@ -138,8 +138,10 @@
       console.warn('[planner] South selection has no regional station/target mapping', { inletKey, targetId });
       return null;
     }
-    const safeInletMeta = inletMeta || { station_id: '8570283', label: 'Ocean City Inlet, MD', lat: 38.3286, lon: -75.0919 };
-    const safeTarget = target || canyonTargets.baltimore_canyon_line;
+    // A missing regional mapping is unavailable data, not permission to use
+    // an Ocean City fixture or another region's station.
+    const safeInletMeta = inletMeta;
+    const safeTarget = target;
     if (!safeInletMeta || !safeTarget || !safeTarget.lookup_points || !safeTarget.lookup_points.length) return null;
 
     // Show "fetching live conditions" message in the 5-day slot while we wait.
@@ -160,7 +162,7 @@
       alerts: alertsRaw && alertsRaw.features ? 'OK (' + alertsRaw.features.length + ')' : 'FAILED',
     });
 
-    // Need at least one source to bother — otherwise fall through to fixture.
+    // Need at least one source; callers fail closed when live data is absent.
     if (!marine && !weather && !tides && !alertsRaw) return null;
 
     const adapter = Tp_buildTripPlannerAdapter({
@@ -368,32 +370,16 @@
       return adapter;
     }
 
-    // Wraps real-data fetch (preferred) + fixture fallback. Strategy:
-    // ALWAYS start with the fixture (so the briefing drawer is never empty
-    // when the fixture has data), then overlay real data on top of any
-    // fields the fixture didn't already fill. Real data wins where present.
+    // Production path is live-data only. Fixtures remain available to the
+    // isolated fixture test harness, but never become geographically false
+    // operational advice when a regional request fails.
     async function buildPlan(fixName, inletKey, targetId) {
-      const activeRegion = global.__FISHEDGE_ACTIVE_REGION || 'usec_md';
-      // South must never inherit the Mid-Atlantic Ocean City fixture. If its
-      // live regional adapters fail, surface an unavailable state instead of
-      // presenting conditions from the wrong geography.
-      if (activeRegion === 'usec_south') {
-        try {
-          const realSouth = await buildRealPlan(inletKey, targetId);
-          return realSouth || null;
-        } catch (e) {
-          console.warn('[planner] South live-data build failed; refusing cross-region fixture fallback:', e && e.message);
-          return null;
-        }
-      }
-      const plan = buildFixturePlan(fixName, inletKey, targetId);
       try {
-        const real = await buildRealPlan(inletKey, targetId);
-        if (real) mergeRealIntoPlan(plan, real);
+        return await buildRealPlan(inletKey, targetId);
       } catch (e) {
-        console.warn('[planner] buildRealPlan failed, fixture only:', e && e.message);
+        console.warn('[planner] live regional data unavailable; refusing fixture fallback:', e && e.message);
+        return null;
       }
-      return plan;
     }
     function mergeRealIntoPlan(plan, real) {
       // Overlay real data onto fixture for any now.* field the real path
@@ -416,33 +402,38 @@
       if (target.alerts && target.alerts.length) planTarget.alerts = target.alerts;
     }
 
-    async function build5DayPlans(fixName, inletKey) {
+    async function build5DayPlans(fixName, inletKey, targetId) {
       // Per Mike's 21:42 spec: today = LIVE realtime, other days = forecast.
       // Each day gets its own forecast (not a perturbed clone of today),
       // and the plan carries a `data_freshness` field so the day card and
       // briefing drawer can render the right badge.
-      const today = await buildPlan(fixName, inletKey);
+      const today = await buildPlan(fixName, inletKey, targetId);
       if (!today) return [];
       today.data_freshness = 'live';
       today.day_offset = 0;
-      const plans = [today];
-      for (let i = 1; i < 5; i++) {
-        const clone = JSON.parse(JSON.stringify(today));
-        clone.data_freshness = 'forecast';
-        clone.day_offset = i;
-        const hourly = clone.segments.target.trip_window.hourly;
-        if (hourly && hourly.length) {
-          const factor = 1.0 + (i * 0.20);
-          for (const r of hourly) {
-            if (r.wave_height != null) r.wave_height = +(r.wave_height * factor).toFixed(1);
-            if (r.wind_gust    != null) r.wind_gust    = +(r.wind_gust * (1 + i * 0.10)).toFixed(0);
-            if (r.wind_speed   != null) r.wind_speed   = +(r.wind_speed   * (1 + i * 0.05)).toFixed(0);
-          }
-          clone.segments.target.trip_window.worst_window = Rec.worstWindow(hourly);
-          clone.segments.target.trip_window.obs_vs_model_disagreement = null; // no realtime obs for future days
-        }
-        Dec.evaluateTripPlan(clone);
-        plans.push(clone);
+      const allHourly = (today.segments.target.trip_window && today.segments.target.trip_window.hourly) || [];
+      const byDate = new Map();
+      for (const row of allHourly) {
+        const iso = row && (row.iso || row.time);
+        const date = typeof iso === 'string' ? iso.slice(0, 10) : '';
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
+        if (!byDate.has(date)) byDate.set(date, []);
+        byDate.get(date).push(row);
+      }
+      const dates = Array.from(byDate.keys()).sort().slice(0, 5);
+      const plans = [];
+      for (let i = 0; i < dates.length; i++) {
+        const rows = byDate.get(dates[i]);
+        const plan = i === 0 ? today : JSON.parse(JSON.stringify(today));
+        plan.data_freshness = i === 0 ? 'live' : 'forecast';
+        plan.day_offset = i;
+        plan.segments.target.trip_window.hourly = rows;
+        plan.segments.target.trip_window.worst_window = Rec.worstWindow(rows);
+        plan.segments.target.trip_window.obs_vs_model_disagreement = i === 0
+          ? plan.segments.target.trip_window.obs_vs_model_disagreement
+          : null;
+        Dec.evaluateTripPlan(plan);
+        plans.push(plan);
       }
       return plans;
     }
