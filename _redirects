@@ -1,7 +1,11 @@
 /dashboard /dashboard/ 301
 /planner /planner/ 301
-/planner/viewer.html /dashboard/trip-planner/briefing-viewer 302
+/planner/map.html /dashboard/trip-planner/briefing-viewer.html 200
+/dashboard/trip-planner/briefing-viewer.html /planner/map.html 301
+/dashboard/trip-planner/briefing-viewer /planner/map.html 301
+/trip-planner/briefing-viewer.html /planner/map.html 301
+/trip-planner/briefing-viewer /planner/map.html 301
+/planner/viewer.html /planner/map.html 301
 /planner/* /dashboard/planner/:splat 200
-/trip-planner/briefing-viewer /dashboard/trip-planner/briefing-viewer.html 200
 /trip-planner/data/* /dashboard/trip-planner/data/:splat 200
 /subsurface-fronts/* /

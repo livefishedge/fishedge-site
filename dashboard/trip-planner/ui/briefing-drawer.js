@@ -282,7 +282,7 @@
     const omBase    = `https://data.fishedge.live/${region}/briefing/raster_`;
     const cmemsBase = `https://data.fishedge.live/${region}/briefing/cmems_raster_`;
     const cards = dates.map((d, i) =>
-      `<a class="bd-raster-day" href="/dashboard/trip-planner/briefing-viewer.html?date=${d}&region=${region}">
+      `<a class="bd-raster-day" href="/planner/map.html?date=${d}&region=${region}">
           <img src="${omBase}${d}.png" alt="Open-Meteo Day ${i+1} (${d})" loading="lazy" onerror="this.style.display='none'">
           <img src="${cmemsBase}${d}.png" alt="CMEMS Day ${i+1} (${d})" loading="lazy" onerror="this.style.display='none'">
           <div class="bd-raster-label">Day ${i+1} · ${d} →</div>

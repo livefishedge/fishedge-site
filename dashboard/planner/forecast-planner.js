@@ -11,7 +11,7 @@
   const html=[];
   for(let i=0;i<7;i++){
     const d=new Date(now.getTime()+i*86400000), date=iso(d);
-    html.push(`<a class="card" href="/dashboard/trip-planner/briefing-viewer?date=${date}&region=${region}&from=planner"><div class="card-map"><span>${region === 'usec_south' ? 'USEC SOUTH' : 'USEC MID-ATLANTIC'}</span><b>Wind · Waves · Swell · SST · Currents</b></div><div class="label"><span>Day ${i+1} · ${label(date)}</span><small>Open full map →</small></div></a>`);
+    html.push(`<a class="card" href="/planner/map.html?date=${date}&region=${region}&from=planner"><div class="card-map"><span>${region === 'usec_south' ? 'USEC SOUTH' : 'USEC MID-ATLANTIC'}</span><b>Wind · Waves · Swell · SST · Currents</b></div><div class="label"><span>Day ${i+1} · ${label(date)}</span><small>Open full map →</small></div></a>`);
   }
   cards.innerHTML=html.join('');
 })();

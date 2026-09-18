@@ -488,7 +488,7 @@
           const date = trip?.departure_iso ? new Date(trip.departure_iso).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10);
           const region = trip?.region === 'usec_south' ? 'usec_south' : activeRegion;
           const params = new URLSearchParams({ date, region, from: 'saved-trip' });
-          window.location.href = `/dashboard/trip-planner/briefing-viewer?${params}`;
+          window.location.href = `/planner/map.html?${params}`;
         },
       });
     }
