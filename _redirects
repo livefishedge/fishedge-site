@@ -5,7 +5,7 @@
 /trip-planner/briefing-viewer.html /planner/map.html 301
 /trip-planner/briefing-viewer /planner/map.html 301
 /planner/viewer.html /planner/map.html 301
-/planner/map.html /dashboard/planner/map.html 200
+/planner/map.html /dashboard/planner/map 200
 /planner/* /dashboard/planner/:splat 200
 /trip-planner/data/* /dashboard/trip-planner/data/:splat 200
 /subsurface-fronts/* /
