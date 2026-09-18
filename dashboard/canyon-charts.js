@@ -443,7 +443,7 @@
   function hasProtectedSubarea(raw) {
     // Directional and explicitly numbered blocks/sites are separate catalog
     // entities. A leading depth/count such as “17 Fathoms” is not a subarea.
-    return /(^|\s)(block|site|north|south|east|west|southeast|southwest|northeast|northwest)(\s|$)/i.test(String(raw || '')) ||
+    return /(^|\s)(block|site|box|north|south|east|west|southeast|southwest|northeast|northwest)(\s|$)/i.test(String(raw || '')) ||
       /\b(block|site)\s*[-#]?\s*\d+/i.test(String(raw || ''));
   }
 
@@ -452,7 +452,7 @@
     var dx = (a.point[0] - b.point[0]) * Math.cos((a.point[1] + b.point[1]) * Math.PI / 360);
     var dy = a.point[1] - b.point[1];
     var distance = Math.sqrt(dx * dx + dy * dy);
-    return distance <= 0.02 && structureBaseName(a.name) === structureBaseName(b.name);
+    return distance <= 0.03 && structureBaseName(a.name) === structureBaseName(b.name);
   }
 
   function structureId(item) {
@@ -561,6 +561,9 @@
       labelSource.clear();
       var geometryFeatures = [];
       var labelFeatures = [];
+      var labelGroups = new Set();
+      var mapResolution = map.getView() && map.getView().getResolution();
+      var groupLabels = Number.isFinite(mapResolution) && mapResolution > 180;
       (items || []).forEach(function (item) {
         var geometry = null;
         if (state.showPolygons && item.geometry && typeof ol.format !== 'undefined') {
@@ -575,6 +578,16 @@
           name: item.name, type: item.type, region: item.region, system: item.system,
           source: item.source || SOURCE_LABEL }));
         if (Array.isArray(item.point) && item.name) {
+          // At regional scale, collapse nearby equivalent names to one
+          // representative label. Geometry and markers are never removed;
+          // close zoom reveals every canonical structure again.
+          var cellLon = Math.round(item.point[0] / 0.05);
+          var cellLat = Math.round(item.point[1] / 0.05);
+          var labelKey = groupLabels
+            ? structureBaseName(item.name) + ':' + cellLon + ':' + cellLat
+            : (item.id || structureId(item));
+          if (labelGroups.has(labelKey)) return;
+          labelGroups.add(labelKey);
           labelFeatures.push(new ol.Feature({
             geometry: new ol.geom.Point(ol.proj.fromLonLat(item.point)),
             id: item.id || structureId(item), name: item.name, type: item.type, region: item.region,
