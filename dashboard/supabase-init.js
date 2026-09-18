@@ -36,6 +36,7 @@
   const APP_BASE_URL = 'https://app.fishedge.live/dashboard/signup-success.html';
   const STORAGE_KEY = 'ocean-mvp-auth'; // stable, app-wide
   const ACTIVITY_REFRESH_MIN_MS = 30 * 60 * 1000; // 30 min
+  const LAST_SEEN_TOUCH_MIN_MS = 5 * 60 * 1000; // server-side activity heartbeat
   const EXPIRY_WARN_MS = 30 * 60 * 1000; // 30 min — toast appears at ~23.5h into a 24h session
   const TAB_CHANNEL = 'ocean-mvp-auth-tab';
 
@@ -94,6 +95,40 @@
   // ---------- Activity-based keep-alive ----------
   let lastActivityRefresh = 0;
   let activityTimer = null;
+  let lastSeenTouch = 0;
+  let lastSeenTouchInFlight = false;
+
+  // Application activity is intentionally separate from auth.users.last_sign_in_at.
+  // The RPC derives auth.uid() and uses database now(); the browser never supplies
+  // a user id or timestamp. Missing RPCs are fail-soft so auth is never blocked.
+  async function touchLastSeen() {
+    if (document.hidden || lastSeenTouchInFlight ||
+        Date.now() - lastSeenTouch < LAST_SEEN_TOUCH_MIN_MS) return null;
+    lastSeenTouchInFlight = true;
+    try {
+      const { data: sessionData } = await sb.auth.getSession();
+      if (!sessionData || !sessionData.session) return null;
+      const { data, error } = await sb.rpc('touch_last_seen');
+      if (error) {
+        // The migration may be applied after this frontend is deployed.
+        // Do not turn an optional telemetry field into an auth outage.
+        console.debug('[supabase-init] last_seen unavailable:', error.message);
+        return null;
+      }
+      lastSeenTouch = Date.now();
+      return data || null;
+    } catch (e) {
+      console.debug('[supabase-init] last_seen touch failed:', e && e.message);
+      return null;
+    } finally {
+      lastSeenTouchInFlight = false;
+    }
+  }
+
+  function scheduleLastSeenTouch() {
+    if (document.hidden) return;
+    window.setTimeout(() => { touchLastSeen(); }, 0);
+  }
 
   function scheduleActivityRefresh(reason) {
     if (activityTimer) return; // debounced
@@ -113,6 +148,16 @@
 
   ['click', 'keydown', 'scroll', 'touchstart', 'mousemove'].forEach((evt) => {
     window.addEventListener(evt, () => scheduleActivityRefresh(evt), { passive: true });
+  });
+
+  // Only foreground bootstrap and meaningful foreground interaction count as
+  // approximate app activity. Refresh timers, hidden-tab events, and token
+  // refreshes do not advance last_seen_at.
+  ['pointerdown', 'keydown'].forEach((evt) => {
+    window.addEventListener(evt, scheduleLastSeenTouch, { passive: true });
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) scheduleLastSeenTouch();
   });
 
   // ---------- Background tick (safety net) ----------
@@ -194,6 +239,7 @@
   // Watch session expiry and toggle toast.
   sb.auth.onAuthStateChange((_event, session) => {
     if (!session) {
+      lastSeenTouch = 0;
       hideToast();
       // Clear the cross-subdomain login marker so fishedge.live falls back
       // to the "Join the Pilot" landing CTAs.
@@ -201,6 +247,11 @@
         document.cookie = 'fishedge_logged_in=; Path=/; Domain=.fishedge.live; Max-Age=0; SameSite=Lax';
       } catch (_) {}
       return;
+    }
+    // Bootstrap/session restoration is app activity, not a claim of fresh
+    // login. Token refreshes are explicitly excluded.
+    if (_event === 'INITIAL_SESSION' || _event === 'SIGNED_IN') {
+      scheduleLastSeenTouch();
     }
     const msToExp = (session.expires_at ? session.expires_at * 1000 : 0) - Date.now();
     if (msToExp > 0 && msToExp < EXPIRY_WARN_MS) showToast();
@@ -226,5 +277,6 @@
     refresh: safeRefresh,
     showExpiryWarning: showToast,
     hideExpiryWarning: hideToast,
+    touchLastSeen,
   };
 })();
