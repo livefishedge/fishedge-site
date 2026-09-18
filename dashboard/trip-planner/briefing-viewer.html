@@ -3423,10 +3423,26 @@
         });
         if (match) tiles = match;
       }
-      // Do not display a stale native phase image after the native HTP horizon;
-      // the legacy grid remains the honest fallback for later forecast frames.
-      if (frameIdx >= tiles.frames) return false;
-      const frame = Math.max(0, frameIdx);
+      // Match phase by valid UTC timestamp, not array position. The native
+      // HTP horizon can be shorter than the seven-day forecast and a rebuilt
+      // source can start at a different forecast index. If no timestamp is
+      // close enough, leave the native layer transparent and let the legacy
+      // product path decide whether an honest fallback exists.
+      let frame = frameIdx;
+      const phaseTimes = Array.isArray(tiles.frame_times) ? tiles.frame_times : [];
+      const forecastTime = currentFrame?.time || currentFrame?.valid_time;
+      if (phaseTimes.length && forecastTime) {
+        const targetMs = Date.parse(/[zZ]|[+-]\d\d:\d\d$/.test(forecastTime) ? forecastTime : `${forecastTime}Z`);
+        let best = -1, bestDelta = Infinity;
+        phaseTimes.forEach((value, index) => {
+          const ms = Date.parse(/[zZ]|[+-]\d\d:\d\d$/.test(value) ? value : `${value}Z`);
+          const delta = Math.abs(ms - targetMs);
+          if (Number.isFinite(delta) && delta < bestDelta) { best = index; bestDelta = delta; }
+        });
+        if (best < 0 || bestDelta > 30 * 60 * 1000) return false;
+        frame = best;
+      }
+      if (frame < 0 || frame >= tiles.frames) return false;
       const tileMode = Number.isFinite(tiles.tile_zoom) && Array.isArray(tiles.tile_indices);
       const key = String(frame);
       if (tileMode) {

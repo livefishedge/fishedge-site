@@ -159,11 +159,11 @@ def main():
         [95,159,69,255], [69,117,180,255], [155,214,106,255],
         [255,240,138,255], [255,173,114,255], [215,48,39,255]
     ], dtype=np.uint8)
-    # A coastal face may straddle wet/dry native nodes. Requiring all three
-    # nodes to have a full-horizon range removes valid shoreline/inlet water.
-    # Retain faces with at least two valid native nodes; the transparent image
-    # plus the browser shoreline mask remains the land-safety boundary.
-    tri_valid = valid[tri].sum(axis=1) >= 2
+    # A coastal face may straddle wet/dry native nodes. Do not paint an entire
+    # face from partial validity: that colors dry embankments and inlets. A
+    # face is eligible only when all three native nodes have a valid complete
+    # horizon. Missing/indeterminate faces remain transparent.
+    tri_valid = valid[tri].all(axis=1)
     tri_indices = tri[tri_valid]
     # Anchor the raster to the same valid native wet-face envelope used by
     # the contour product. The full mesh cache includes a narrow outer frame
@@ -217,8 +217,13 @@ def main():
         # native triangle in unit-vector space and paint one face value. This
         # removes the false bands caused by linear interpolation through 0.5.
         values = phase[k][tri_indices]
-        face_phase = np.mod(np.arctan2(np.nansum(np.sin(values * 2*np.pi), axis=1),
-                                       np.nansum(np.cos(values * 2*np.pi), axis=1)) / (2*np.pi), 1.0)
+        finite_values = np.isfinite(values).all(axis=1)
+        face_phase = np.full(len(values), np.nan, dtype=np.float32)
+        if finite_values.any():
+            face_phase[finite_values] = np.mod(
+                np.arctan2(np.sum(np.sin(values[finite_values] * 2*np.pi), axis=1),
+                           np.sum(np.cos(values[finite_values] * 2*np.pi), axis=1))
+                / (2*np.pi), 1.0)
         buckets = np.full(len(face_phase), -1, dtype=np.int32)
         finite_faces = np.isfinite(face_phase)
         buckets[finite_faces] = np.minimum(8, (face_phase[finite_faces] * 9).astype(np.int32))
@@ -247,6 +252,16 @@ def main():
         if k % 4 == 3:
             gc.collect()
     payload = forecast_payload
+    frame_times = []
+    frame_manifest = payload.get('frames_manifest') or {}
+    chunks_dir = args.forecast.parent / str(frame_manifest.get('dir', 'frames/'))
+    for chunk in frame_manifest.get('chunks', []):
+        chunk_path = chunks_dir / chunk
+        if not chunk_path.is_file():
+            continue
+        chunk_payload = json.loads(chunk_path.read_text())
+        frame_times.extend(str(item.get('time')) for item in chunk_payload.get('frames', [])
+                           if item.get('time'))
     phase_manifest = {
         'pattern': f'native_phase_tiles/z{args.tile_zoom}/{{x}}/{{y}}/frame-{{frame:03d}}.png',
         'frames': count, 'tile_zoom': args.tile_zoom, 'tile_size': args.tile_size,
@@ -255,6 +270,7 @@ def main():
         'bbox_mercator': [xmin, ymin, xmax, ymax],
         'definition': 'combined-signal stage from total HTP value and edge-safe time derivative; circular native-triangle phase averaging; high/falling/low/rising; same native triangles as co-range',
         'source_frames': source_count, 'extended_frames': extension_hours,
+        'frame_times': frame_times[:count],
         'extension_method': ('eight-constituent least-squares continuation of native HTP'
                              if extension_hours else 'none')
     }
