@@ -440,6 +440,22 @@
       }).join(' ');
   }
 
+  // A family is a display hierarchy, not a destructive merge. In particular,
+  // distance-suffixed NJ blocks are child polygons of one named fishing area.
+  // Keep East and Southeast (and other explicit parents) separate.
+  function structureFamilyName(raw) {
+    var name = String(raw || '').trim();
+    var distanceBlock = name.match(/^(.*?\bblock)\s*(?:[-—]\s*)?(?:\d+(?:\.\d+)?\s*nm)(?:\s+\d+)?$/i);
+    if (distanceBlock) return distanceBlock[1].replace(/\s+/g, ' ').trim();
+    var numberedBlock = name.match(/^(.*?\bblock)\s*[-—]?\s*\d+$/i);
+    return numberedBlock ? numberedBlock[1].replace(/\s+/g, ' ').trim() : name;
+  }
+
+  function structureFamilyId(item) {
+    return String(item && item.source || SOURCE_LABEL).toLowerCase().replace(/[^a-z0-9]+/g, '-') + ':' +
+      structureFamilyName(item && item.name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  }
+
   function hasProtectedSubarea(raw) {
     // Directional and explicitly numbered blocks/sites are separate catalog
     // entities. A leading depth/count such as “17 Fathoms” is not a subarea.
@@ -469,7 +485,7 @@
         return candidate.name === displayName || samePhysicalStructure(candidate, item);
       });
       if (!existing) {
-        merged.push(Object.assign({}, item, { name: displayName, id: structureId(item) }));
+        merged.push(Object.assign({}, item, { name: displayName, id: structureId(item), family_id: structureFamilyId(item), family_name: structureFamilyName(displayName) }));
       } else {
         existing.geometry = mergeGeometry(existing.geometry, item.geometry);
       }
@@ -564,6 +580,22 @@
       var labelGroups = new Set();
       var mapResolution = map.getView() && map.getView().getResolution();
       var groupLabels = Number.isFinite(mapResolution) && mapResolution > 180;
+      var familyCandidates = new Map();
+      if (groupLabels) (items || []).forEach(function (item) {
+        var familyId = item.family_id || structureFamilyId(item);
+        var bucket = familyCandidates.get(familyId) || { items: [], lon: 0, lat: 0 };
+        if (Array.isArray(item.point)) { bucket.items.push(item); bucket.lon += item.point[0]; bucket.lat += item.point[1]; }
+        familyCandidates.set(familyId, bucket);
+      });
+      var familyRepresentatives = new Map();
+      familyCandidates.forEach(function (bucket, familyId) {
+        if (!bucket.items.length) return;
+        var center = [bucket.lon / bucket.items.length, bucket.lat / bucket.items.length];
+        var representative = bucket.items.slice().sort(function (a, b) {
+          return Math.hypot(a.point[0] - center[0], a.point[1] - center[1]) - Math.hypot(b.point[0] - center[0], b.point[1] - center[1]);
+        })[0];
+        familyRepresentatives.set(familyId, representative);
+      });
       (items || []).forEach(function (item) {
         var geometry = null;
         if (state.showPolygons && item.geometry && typeof ol.format !== 'undefined') {
@@ -581,16 +613,16 @@
           // At regional scale, collapse nearby equivalent names to one
           // representative label. Geometry and markers are never removed;
           // close zoom reveals every canonical structure again.
-          var cellLon = Math.round(item.point[0] / 0.05);
-          var cellLat = Math.round(item.point[1] / 0.05);
-          var labelKey = groupLabels
-            ? structureBaseName(item.name) + ':' + cellLon + ':' + cellLat
-            : (item.id || structureId(item));
+          var familyId = item.family_id || structureFamilyId(item);
+          var representative = groupLabels ? familyRepresentatives.get(familyId) : item;
+          var labelKey = groupLabels ? familyId : (item.id || structureId(item));
           if (labelGroups.has(labelKey)) return;
           labelGroups.add(labelKey);
           labelFeatures.push(new ol.Feature({
-            geometry: new ol.geom.Point(ol.proj.fromLonLat(item.point)),
-            id: item.id || structureId(item), name: item.name, type: item.type, region: item.region,
+            geometry: new ol.geom.Point(ol.proj.fromLonLat(representative.point)),
+            id: representative.id || structureId(representative),
+            name: groupLabels ? (representative.family_name || structureFamilyName(representative.name)) : representative.name,
+            type: representative.type, region: representative.region, family_id: familyId,
           }));
         }
       });
