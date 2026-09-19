@@ -23,6 +23,7 @@
   // on every map attach/refresh.
   var STATIC_LOCAL_GROUNDS_URL = '/dashboard/data/fishing-grounds.json';
   var STATIC_LOCAL_POINTS_URL = '/dashboard/data/fishing-grounds-points.json';
+  var STATIC_MD_LEGACY_URL = '/dashboard/data/fishing-grounds-md-legacy.json';
   var MD_FISHING_ROOT =
     'https://mdgeodata.md.gov/imap/rest/services/Biota/MD_Finfish/FeatureServer/10/query';
   var MD_REEF_ROOT =
@@ -59,6 +60,8 @@
     staticLocalPromise: null,
     staticLocalPointsPromise: null,
     staticLocalPolygonsPromise: null,
+    staticLocalPointsPromises: new Map(),
+    staticLocalPolygonsPromises: new Map(),
   };
 
   function log() {
@@ -293,16 +296,18 @@
     var cached = state.cache.get(key);
     if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) return Promise.resolve(cached.features);
     if (state.inflight.has(key)) return state.inflight.get(key);
-    if (!state.staticLocalPointsPromise) {
-      state.staticLocalPointsPromise = fetch(STATIC_LOCAL_POINTS_URL + '?v=1')
+    var mdLegacy = selectedRegionBbox() === REGION_BBOXES.usec_md;
+    var pointsUrl = (mdLegacy ? STATIC_MD_LEGACY_URL : STATIC_LOCAL_POINTS_URL) + '?v=20260919-md-legacy';
+    if (!state.staticLocalPointsPromises.has(pointsUrl)) {
+      state.staticLocalPointsPromises.set(pointsUrl, fetch(pointsUrl)
         .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
         .then(function (j) { return Array.isArray(j.features) ? j.features : []; })
         .catch(function (err) {
           logErr('static fishing-ground asset failed', err && err.message ? err.message : err);
           return [];
-        });
+        }));
     }
-    var promise = state.staticLocalPointsPromise.then(function (allFeatures) {
+    var promise = state.staticLocalPointsPromises.get(pointsUrl).then(function (allFeatures) {
       var features = allFeatures.filter(function (item) { return featureIntersectsBbox(item, bbox); });
       state.cache.set(key, { features: features, fetchedAt: Date.now() });
       return features;
@@ -319,16 +324,18 @@
     var cached = state.cache.get(key);
     if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) return Promise.resolve(cached.features);
     if (state.inflight.has(key)) return state.inflight.get(key);
-    if (!state.staticLocalPolygonsPromise) {
-      state.staticLocalPolygonsPromise = fetch(STATIC_LOCAL_GROUNDS_URL + '?v=1')
+    var mdLegacy = selectedRegionBbox() === REGION_BBOXES.usec_md;
+    var polygonsUrl = (mdLegacy ? STATIC_MD_LEGACY_URL : STATIC_LOCAL_GROUNDS_URL) + '?v=20260919-md-legacy';
+    if (!state.staticLocalPolygonsPromises.has(polygonsUrl)) {
+      state.staticLocalPolygonsPromises.set(polygonsUrl, fetch(polygonsUrl)
         .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
         .then(function (j) { return Array.isArray(j.features) ? j.features : []; })
         .catch(function (err) {
           logErr('static fishing-ground polygon asset failed', err && err.message ? err.message : err);
           return [];
-        });
+        }));
     }
-    var promise = state.staticLocalPolygonsPromise.then(function (allFeatures) {
+    var promise = state.staticLocalPolygonsPromises.get(polygonsUrl).then(function (allFeatures) {
       var features = allFeatures.filter(function (item) { return featureIntersectsBbox(item, bbox); });
       state.cache.set(key, { features: features, fetchedAt: Date.now() });
       return features;
