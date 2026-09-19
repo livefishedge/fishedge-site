@@ -463,6 +463,25 @@
       structureFamilyName(item && item.name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
   }
 
+  function isMdRegion() {
+    return selectedRegionBbox() === REGION_BBOXES.usec_md;
+  }
+
+  // MD's legacy source catalog contains many useful polygons but also
+  // provisional NJ distance/block labels. Keep those records in the geometry
+  // layer; they are not default captain-facing labels.
+  function mdLabelEligible(item) {
+    if (!isMdRegion()) return true;
+    return !(item && item.source === 'NJ DEP / Shore Guide' && /\b(block|offshore|deep\s*water)\b/i.test(String(item.name || '')));
+  }
+
+  function mdLabelPriority(item) {
+    if (!item) return 9;
+    if (item.type === 'Canyon' || /canyon/i.test(String(item.name || ''))) return 0;
+    if (item.source === 'BOEM Atlantic Fishing Atlas' || item.source === 'Maryland DNR') return 1;
+    return 2;
+  }
+
   function hasProtectedSubarea(raw) {
     // Directional and explicitly numbered blocks/sites are separate catalog
     // entities. A leading depth/count such as “17 Fathoms” is not a subarea.
@@ -583,10 +602,10 @@
       source.clear();
       labelSource.clear();
       var geometryFeatures = [];
-      var labelFeatures = [];
+      var labelCandidates = [];
       var labelGroups = new Set();
       var mapResolution = map.getView() && map.getView().getResolution();
-      var groupLabels = Number.isFinite(mapResolution) && mapResolution > 180;
+      var groupLabels = isMdRegion() || (Number.isFinite(mapResolution) && mapResolution > 180);
       var familyCandidates = new Map();
       if (groupLabels) (items || []).forEach(function (item) {
         var familyId = item.family_id || structureFamilyId(item);
@@ -620,21 +639,25 @@
           // At regional scale, collapse nearby equivalent names to one
           // representative label. Geometry and markers are never removed;
           // close zoom reveals every canonical structure again.
+          if (!mdLabelEligible(item)) return;
           var familyId = item.family_id || structureFamilyId(item);
           var representative = groupLabels ? familyRepresentatives.get(familyId) : item;
           var labelKey = groupLabels ? familyId : (item.id || structureId(item));
           if (labelGroups.has(labelKey)) return;
           labelGroups.add(labelKey);
-          labelFeatures.push(new ol.Feature({
+          labelCandidates.push({ priority: mdLabelPriority(representative), feature: new ol.Feature({
             geometry: new ol.geom.Point(ol.proj.fromLonLat(representative.point)),
             id: representative.id || structureId(representative),
             name: groupLabels ? (representative.family_name || structureFamilyName(representative.name)) : representative.name,
             type: representative.type, region: representative.region, family_id: familyId,
-          }));
+          }) });
         }
       });
       source.addFeatures(geometryFeatures);
-      labelSource.addFeatures(labelFeatures);
+      var mobile = window.innerWidth && window.innerWidth < 700;
+      var labelBudget = isMdRegion() ? (mobile ? 18 : 32) : labelCandidates.length;
+      labelCandidates.sort(function (a, b) { return a.priority - b.priority; });
+      labelSource.addFeatures(labelCandidates.slice(0, labelBudget).map(function (candidate) { return candidate.feature; }));
       layer.setVisible(state.visible);
       labelLayer.setVisible(state.visible);
     }
