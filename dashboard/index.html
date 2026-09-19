@@ -1,7 +1,6 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <script src="/planner-spa-router.js?v=20260901-tide-route"></script>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <title>Captain's Dashboard</title>
@@ -40,26 +39,6 @@
   <script src="supabase-init.js?v=20260918-user-activity"></script>
 <script src="canyon-charts.js?v=20260919-md-legacy-v1"></script>
   <script src="loran-td.js?v=20260818-3"></script>
-  <!-- 2026-08-19: Trip Planner as a Map | Planner tab inside the dashboard.
-       Tab bar lives in the existing #toolbar (top row). Planner overlay
-       mounts lazily when the Planner tab is clicked. -->
-  <script src="trip-planner/adapters/index.js?v=20260819-1"></script>
-  <script src="trip-planner/adapters/ndbc-realtime.js?v=20260819-1"></script>
-  <script src="trip-planner/adapters/open-meteo-marine.js?v=20260819-1"></script>
-  <script src="trip-planner/adapters/open-meteo-weather.js?v=20260819-1"></script>
-  <script src="trip-planner/adapters/coops-tides.js?v=20260901-2"></script>
-  <script src="trip-planner/adapters/nws-alerts.js?v=20260819-1"></script>
-  <script src="trip-planner/reconciler.js?v=20260819-1"></script>
-  <script src="trip-planner/decision-engine.js?v=20260819-1"></script>
-  <script src="trip-planner/storage.js?v=20260819-1"></script>
-  <script src="trip-planner/fixtures/ocean-city-normal.js?v=20260819-1"></script>
-  <script src="trip-planner/ui/inlet-picker.js?v=20260918-regional-catalog-v2"></script>
-  <script src="trip-planner/ui/compact-strip.js?v=20260819-1"></script>
-  <script src="trip-planner/ui/briefing-drawer.js?v=20260820-raster-viewer-1"></script>
-  <script src="trip-planner/ui/five-day-outlook.js?v=20260819-1"></script>
-  <script src="trip-planner/ui/my-trips-sidebar.js?v=20260819-1"></script>
-  <link rel="stylesheet" href="trip-planner/ui/planner-shell.css?v=20260819-1">
-  <script src="dashboard-planner.js?v=20260918-regional-safety-v2"></script>
   <script src="https://cdn.jsdelivr.net/npm/posthog-js@1.200.0/dist/array.js"></script>
 
 
@@ -1110,51 +1089,6 @@
     }
     #hamburger-btn{ z-index:1000; }
 
-    /* ======= Trip Planner: Map | Planner tab bar (top row of toolbar) ======= */
-    #fishedge-view-tabs{
-      display:inline-flex; align-items:center; gap:4px;
-      margin-right:8px; padding-right:8px; border-right:1px solid var(--border);
-    }
-    .vt-tab{
-      min-height:24px; padding:0 10px;
-      border:1px solid transparent; border-radius:4px;
-      background:transparent; color:var(--fg);
-      font-weight:700; font-size:11px;
-      display:inline-flex; align-items:center; gap:4px;
-      cursor:pointer; font-family:inherit;
-    }
-    .vt-tab:hover{ background:rgba(255,255,255,0.05); }
-    .vt-tab.active{
-      background:#0c1723; border-color:#273649;
-      box-shadow:inset 0 0 0 1px var(--accent); color:var(--accent);
-    }
-    .vt-icon{ font-size:13px; }
-
-    /* ======= Planner overlay (full-screen, hidden by default) ======= */
-    #fishedge-planner-overlay{
-      position:fixed; top:0; left:0; right:0; bottom:0;
-      z-index:850;
-      background:var(--bg,#050b10); color:var(--fg,#e0e6ee);
-      display:none; overflow:auto;
-      padding-top:38px; /* sit below the toolbar */
-    }
-    body.fishedge-view-planner #fishedge-planner-overlay{ display:block; }
-
-    /* When planner is active, hide all map-only chrome so the overlay owns the screen. */
-    body.fishedge-view-planner #map,
-    body.fishedge-view-planner #plot,
-    body.fishedge-view-planner #modebar-host,
-    body.fishedge-view-planner #readout,
-    body.fishedge-view-planner #feedback-float,
-    body.fishedge-view-planner #hamburger-btn,
-    body.fishedge-view-planner #combined-readout,
-    body.fishedge-view-planner #combined-hover-tip,
-    body.fishedge-view-planner #combined-overlay,
-    body.fishedge-view-planner #captain-tools,
-    body.fishedge-view-planner #thermal-hover-tip,
-    body.fishedge-view-planner #mobile-time-badge,
-    body.fishedge-view-planner #nav-bar,
-    body.fishedge-view-planner #fishedge-locate-host{ display:none !important; }
   </style>
 
 <!-- locate-me cache-buster: 20260806 (force CDN revalidate after 47412bc01e stuck) -->
@@ -1351,10 +1285,6 @@
   </script>
 
   <div id="toolbar">
-    <span id="fishedge-view-tabs" role="tablist" aria-label="Dashboard views">
-      <button class="vt-tab active" data-view="map" type="button" role="tab" aria-selected="true"><span class="vt-icon">🗺️</span><span>Map</span></button>
-      <button class="vt-tab" data-view="planner" type="button" role="tab" aria-selected="false"><span class="vt-icon">⚓</span><span>Planner</span></button>
-    </span>
     <span id="nav-bar">
       <button id="prev-btn" type="button" title="Previous frame" aria-label="Previous frame">&#8592;</button>
       <input id="frame-slider" type="range" min="0" max="0" step="1" value="0" aria-label="Frame progress" />
@@ -1385,15 +1315,6 @@
   </div>
   <button id="hamburger-btn" aria-label="Open product menu">☰</button>
   <div id="map"></div>
-  <div id="fishedge-planner-overlay" aria-hidden="true">
-    <header id="fishedge-inlet-picker"></header>
-    <main class="planner-shell">
-      <section id="fishedge-five-day-outlook" aria-label="5-day outlook"></section>
-      <aside id="fishedge-my-trips" aria-label="Saved trips"></aside>
-    </main>
-    <div id="fishedge-compact-strip-host"></div>
-    <div id="fishedge-briefing-host"></div>
-  </div>
   <div id="combined-readout">—, —</div>
   <div id="combined-hover-tip"></div>
   <div id="thermal-hover-tip"></div>
@@ -2562,6 +2483,9 @@ let thermalFrontState = {
   initialized: false,
   loading: false,
   loadedRegion: null,
+  frameSignature: "",
+  latestSourceMs: null,
+  stale: false,
   // v4.1: Set of date strings (YYYY-MM-DD) the user has selected for
   // the "All days this period" overlay in daily mode. Empty set after
   // a "None" preset. Default behavior: on first build of dailyFrames
@@ -9552,6 +9476,12 @@ function thermalUpdateLegendAndStatus() {
   if (currentVar !== "thermal_fronts") return;
   const legendEl = document.getElementById("legend");
   const list = thermalActiveFrameList();
+  const freshness = Number.isFinite(thermalFrontState.latestSourceMs)
+    ? Math.max(0, (Date.now() - thermalFrontState.latestSourceMs) / 3600000)
+    : Infinity;
+  const freshnessText = Number.isFinite(freshness)
+    ? (freshness > 72 ? `Stale thermal-front source (${(freshness / 24).toFixed(freshness / 24 < 10 ? 1 : 0)}d old)` : `Thermal-front source ${Math.round(freshness)}h old`)
+    : "Thermal-front source time unavailable";
   if (thermalFrontState.mode === "daily") {
     const dayItem = thermalFrontState.dailyFrames[thermalFrontState.frameIdx];
     const count = dayItem ? thermalFramesForDate(dayItem.date).length : 0;
@@ -9599,7 +9529,7 @@ function thermalUpdateLegendAndStatus() {
         statsText += ` | mean ΔSST: ${displaySst.toFixed(2)}${sstLabel}`;
       }
     }
-    if (toolbarStatus) toolbarStatus.textContent = "";
+    if (toolbarStatus) toolbarStatus.textContent = freshnessText;
     if (legendEl) {
       legendEl.style.display = "";
       const allDays = !!thermalAllDayCb?.checked;
@@ -9612,7 +9542,7 @@ function thermalUpdateLegendAndStatus() {
     }
   } else {
     const total = thermalAllDayCb?.checked ? list.length : 1;
-    if (toolbarStatus) toolbarStatus.textContent = "";
+    if (toolbarStatus) toolbarStatus.textContent = freshnessText;
     const displayedCount = thermalDisplayedFrontItems().length;
     if (legendEl) {
       legendEl.style.display = displayedCount > 1 ? "" : "none";
@@ -9662,7 +9592,9 @@ function thermalSetFrame(idx) {
 
 async function thermalLoadData() {
   if (thermalFrontState.loading) return;
-  if (thermalFrontState.initialized && thermalFrontState.loadedRegion === REGION_ID) return;
+  const existingFrames = framesByVar.thermal_fronts || [];
+  const existingSignature = existingFrames.map(f => `${f.id || f.frame_id || f.json_path || f.path || ""}:${epochMsForFrame("thermal_fronts", f) ?? epochMsForFrame("sst_front", f) ?? ""}`).join("|");
+  if (thermalFrontState.initialized && thermalFrontState.loadedRegion === REGION_ID && existingSignature === thermalFrontState.frameSignature) return;
   thermalFrontState.loading = true;
   // Thermal fronts load in the background; do not replace the shared toolbar
   // with a redundant status sentence on every product page.
@@ -9676,6 +9608,9 @@ async function thermalLoadData() {
       .filter(f => Number.isFinite(f.t))
       .sort((a, b) => a.t - b.t);
     const latest = thermalFrontState.frames.at(-1)?.t;
+    thermalFrontState.latestSourceMs = Number.isFinite(latest) ? latest : null;
+    thermalFrontState.stale = !Number.isFinite(latest) || (Date.now() - latest > 72 * 3600000);
+    thermalFrontState.frameSignature = sourceFrames.map(f => `${f.id || f.frame_id || f.json_path || f.path || ""}:${epochMsForFrame("thermal_fronts", f) ?? epochMsForFrame("sst_front", f) ?? ""}`).join("|");
     if (latest) thermalFrontState.frames = thermalFrontState.frames.filter(f => latest - f.t <= 21 * 864e5);
     thermalFrontState.frameData = await Promise.all(thermalFrontState.frames.map(async f => {
       const res = await fetch(framePathOf(f) + "?t=" + Date.now());
@@ -10803,14 +10738,21 @@ async function pollForUpdates() {
       // Reload the index in the background and rebuild framesByVar; preserve current view state.
       // Reload THIS region's index (not the hardcoded ma index)
       const regionIndexUrl = REGIONS[REGION_ID]?.index || `index-${REGION_ID}.json`;
+      const wasFollowingLatest = currentFrameIdx >= Math.max(0, (frameTimesByVar[currentVar] || []).length - 1);
       loadIndex().then(idx => {
         // loadIndex() already updates framesByVar, frameTimesByVar, and BBOX in place.
         // If user was on the last available frame, advance to new latest automatically;
         // otherwise just make new data available without disrupting navigation.
         const maxIdx = frameTimesByVar[currentVar].length - 1;
-        if (currentFrameIdx >= maxIdx && maxIdx >= 0) {
+        if (wasFollowingLatest && maxIdx >= 0) {
           currentFrameIdx = maxIdx;
           showFrame(currentFrameIdx);
+        }
+        if (thermalFrontState.initialized && (currentVar === "thermal_fronts" || currentVar === "combined")) {
+          thermalFrontState.initialized = false;
+          thermalLoadData().then(() => {
+            if (currentVar === "thermal_fronts") renderThermalFrontsNative();
+          }).catch(e => console.error("Thermal-front refresh failed:", e));
         }
       }).catch(e => {
         console.error("Silent index refresh failed:", e);
