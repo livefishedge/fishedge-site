@@ -1,6 +1,6 @@
 {
   "region": "usec_south",
-  "last_updated": "2026-09-20T23:06:55.751972Z",
+  "last_updated": "2026-09-20T23:37:00.753684Z",
   "vars": [
     "chl",
     "sst",
@@ -2033,6 +2033,16 @@
         "grid_file": "goes_sst_1000_grid.json",
         "product_level": null,
         "stitched": false
+      },
+      {
+        "var": "sst",
+        "id": "sst_usec_south_2026263_20260920_21_g19",
+        "label": "2026-09-20 21:00 UTC",
+        "time_iso": "2026-09-20T21:00:00Z",
+        "json_path": "https://data.fishedge.live/usec_south/sst/sst_usec_south_2026263_20260920_21_g19.json",
+        "grid_file": "goes_sst_1000_grid.json",
+        "product_level": null,
+        "stitched": false
       }
     ],
     "uv": [
@@ -2646,6 +2656,16 @@
         "label": "2026-09-20 18:12 UTC | VJ2",
         "time_iso": "2026-09-20T18:12:00Z",
         "json_path": "https://data.fishedge.live/usec_south/chl_front/chlfront_usec_south_2026263.1812_VJ2.json",
+        "grid_file": "frame_bbox",
+        "product_level": null,
+        "stitched": false
+      },
+      {
+        "var": "chl_front",
+        "id": "chlfront_usec_south_2026263.1848_VNP",
+        "label": "2026-09-20 18:48 UTC | VNP",
+        "time_iso": "2026-09-20T18:48:00Z",
+        "json_path": "https://data.fishedge.live/usec_south/chl_front/chlfront_usec_south_2026263.1848_VNP.json",
         "grid_file": "frame_bbox",
         "product_level": null,
         "stitched": false
@@ -4561,6 +4581,16 @@
         "grid_file": "frame_bbox",
         "product_level": null,
         "stitched": false
+      },
+      {
+        "var": "sst_front",
+        "id": "sstfront_usec_south_2026263_20260920_21_g19",
+        "label": "2026-09-20 21:00 UTC",
+        "time_iso": "2026-09-20T21:00:00Z",
+        "json_path": "https://data.fishedge.live/usec_south/sst_front/sstfront_usec_south_2026263_20260920_21_g19.json",
+        "grid_file": "frame_bbox",
+        "product_level": null,
+        "stitched": false
       }
     ]
   },
@@ -4568,11 +4598,11 @@
     "online_retention_days": 45
   },
   "_dashboard_rewrite": {
-    "rewritten_at": "2026-09-20T23:08:04.796453+00:00",
+    "rewritten_at": "2026-09-20T23:38:03.831306+00:00",
     "r2_base": "https://data.fishedge.live",
     "retention_days": 45,
     "cutoff_doy": 218,
-    "frames_kept": 552,
+    "frames_kept": 555,
     "frames_dropped_outside_retention": 0
   }
 }
