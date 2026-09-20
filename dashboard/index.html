@@ -4200,7 +4200,11 @@ function filterFramesForVar(varKey, frames) {
     if (varKey === "chl_front" && !fn.startsWith("chlfront_")) continue;
     if (varKey === "sst_front" && !fn.startsWith("sstfront_")) continue;
     if (varKey === "uv"  && !fn.startsWith("uv_")) continue;
-    if (varKey === "sla" && !fn.startsWith("sla_")) continue;
+    // DUACS SLA frames are published in the shared UV namespace (uv_...),
+    // while the manifest still identifies them explicitly as var=sla. Keep
+    // the product identity authoritative and retain compatibility with older
+    // sla_-named assets.
+    if (varKey === "sla" && f?.var !== "sla" && !fn.startsWith("sla_") && !fn.startsWith("uv_")) continue;
     if (varKey === "thermal_fronts" && !fn.startsWith("sstfront_")) continue;
     out.push(f);
   }
@@ -5655,6 +5659,51 @@ function updateBathyContours(map, bd, layer) {
   }
 }
 
+// Join marching-squares segments that share an endpoint. Segments are kept
+// separate by contour level; a small geographic tolerance absorbs floating
+// point differences at shared cell edges without bridging nearby contours.
+function stitchContourSegments(segments, tolerance = 1e-7) {
+  const groups = new Map();
+  for (const item of (segments || [])) {
+    const level = Number(item?.level);
+    const segment = item?.segment;
+    if (!Number.isFinite(level) || !Array.isArray(segment) || segment.length < 2) continue;
+    const points = segment.filter(p => Array.isArray(p) && p.length >= 2 && Number.isFinite(Number(p[0])) && Number.isFinite(Number(p[1])))
+      .map(p => [Number(p[0]), Number(p[1])]);
+    if (points.length < 2) continue;
+    const key = String(level);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(points);
+  }
+  const close = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]) <= tolerance;
+  const out = [];
+  for (const [levelKey, input] of groups) {
+    const pending = input.map(points => ({ level: Number(levelKey), points: points.slice() }));
+    while (pending.length) {
+      const path = pending.shift();
+      let extended = true;
+      while (extended) {
+        extended = false;
+        for (let i = pending.length - 1; i >= 0; i--) {
+          const candidate = pending[i];
+          const first = path.points[0], last = path.points[path.points.length - 1];
+          const cFirst = candidate.points[0], cLast = candidate.points[candidate.points.length - 1];
+          if (close(last, cFirst)) path.points.push(...candidate.points.slice(1));
+          else if (close(last, cLast)) path.points.push(...candidate.points.slice(0, -1).reverse());
+          else if (close(first, cLast)) path.points.unshift(...candidate.points.slice(0, -1));
+          else if (close(first, cFirst)) path.points.unshift(...candidate.points.slice(1).reverse());
+          else continue;
+          pending.splice(i, 1);
+          extended = true;
+          break;
+        }
+      }
+      out.push(path);
+    }
+  }
+  return out;
+}
+
 function depthMaxInExtent(bd, extent, sx, sy) {
   const [vx0, vy0, vx1, vy1] = extent;
   let maxD = 0;
@@ -5705,6 +5754,7 @@ function extractContourSegments(bd, level, sx, sy, extent) {
       const tr = bd.depth[row][Math.min(col + sx, bd.nx - 1)];
       const br = bd.depth[Math.min(row + sy, bd.ny - 1)][Math.min(col + sx, bd.nx - 1)];
       const bl = bd.depth[Math.min(row + sy, bd.ny - 1)][col];
+      if (![tl, tr, br, bl].every(value => Number.isFinite(Number(value)))) continue;
       const crossings = [];
       if ((tl < level) !== (tr < level)) {
         const t = (level - tl) / (tr - tl);
