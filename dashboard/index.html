@@ -1722,9 +1722,9 @@ var BBOX = [...(REGION_FALLBACKS[REGION_ID]?.bbox ?? REGION_FALLBACKS.usec_south
 // Declared before setActiveRegion() so the initial call can assign to it
 // without hitting a Temporal Dead Zone ReferenceError.
 var BATHY_JSON_URL = `https://data.fishedge.live/${REGION_ID}/gebco_bath_latest/gebco_bathy.json`;
-var SURVEY_BATHY_TILE_TEMPLATE = REGION_ID === "usec_md"
-  ? "data/survey_bathy/offshore_composite/color/{z}/{x}/{y}.png"
-  : "";
+// Survey bathymetry is unreleased. It must be enabled by explicit published
+// region metadata; never infer release status from the active region.
+var SURVEY_BATHY_TILE_TEMPLATE = "";
 var SURVEY_BATHY_TILE_VERSION = "20260823_h13095_h13480_v2";
 
 /**
@@ -1742,8 +1742,9 @@ function setActiveRegion(regionId, regionMeta) {
     : [...(REGION_FALLBACKS[regionId]?.bbox ?? REGION_FALLBACKS.usec_south.bbox)];
   const bathyPath = regionMeta?.bathy_path || "gebco_bath_latest/gebco_bathy.json";
   BATHY_JSON_URL = `https://data.fishedge.live/${regionId}/${bathyPath}`;
-  SURVEY_BATHY_TILE_TEMPLATE = regionMeta?.survey_bathy_tile_template
-    || (regionId === "usec_md" ? "data/survey_bathy/offshore_composite/color/{z}/{x}/{y}.png" : "");
+  SURVEY_BATHY_TILE_TEMPLATE = regionMeta?.survey_bathy_enabled === true
+    ? String(regionMeta?.survey_bathy_tile_template || "")
+    : "";
   // Invalidate layer caches on region switch so old data doesn't bleed through
   if (prevRegion !== regionId) {
     window._bathyData = null;
