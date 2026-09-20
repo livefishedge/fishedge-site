@@ -5653,7 +5653,9 @@ function updateBathyContours(map, bd, layer) {
   // old single-product path added each cell independently, which looked like
   // a dashed contour even though the stroke itself was solid.
   for (const path of stitchContourSegments(segments)) {
-    const feat = new ol.Feature({ geometry: new ol.geom.LineString(path.segment), depth: path.level });
+    const coordinates = Array.isArray(path?.points) ? path.points : [];
+    if (coordinates.length < 2 || coordinates.some(point => !Array.isArray(point) || point.length < 2)) continue;
+    const feat = new ol.Feature({ geometry: new ol.geom.LineString(coordinates), depth: path.level });
     feat.getGeometry().transform("EPSG:4326", "EPSG:3857");
     source.addFeature(feat);
   }
