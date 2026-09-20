@@ -3527,6 +3527,21 @@ if (thermalHoursSelect) {
   });
 }
 
+async function rebuildCombinedThermalLayers() {
+  const m = window._combinedMap;
+  if (!m) return;
+  if (window._combinedFrontLineLayer) { m.removeLayer(window._combinedFrontLineLayer); window._combinedFrontLineLayer = null; }
+  if (window._combinedFrontDensityLayer) { m.removeLayer(window._combinedFrontDensityLayer); window._combinedFrontDensityLayer = null; }
+  const hours = parseInt(thermalHoursSelect?.value || "24", 10);
+  const composite = buildThermalHoursComposite(m, hours);
+  if (composite.pointLayer) { m.addLayer(composite.pointLayer); window._combinedFrontLineLayer = composite.pointLayer; }
+  if (composite.densityLayer) { m.addLayer(composite.densityLayer); window._combinedFrontDensityLayer = composite.densityLayer; }
+  if (thermalScanTimeDiv) {
+    const source = composite.scanTime || "No thermal-front scan";
+    thermalScanTimeDiv.textContent = thermalFrontState.stale ? `${source} · STALE SOURCE` : source;
+  }
+}
+
 /* Combined dropdown: CHL hours composite */
 const chlCompositeSelect = document.getElementById("combined-chl-composite");
 const chlScanTimeDiv = document.getElementById("combined-chl-scan-time");
@@ -10751,7 +10766,8 @@ async function pollForUpdates() {
         if (thermalFrontState.initialized && (currentVar === "thermal_fronts" || currentVar === "combined")) {
           thermalFrontState.initialized = false;
           thermalLoadData().then(() => {
-            if (currentVar === "thermal_fronts") renderThermalFrontsNative();
+            if (currentVar === "thermal_fronts") return renderThermalFrontsNative();
+            if (currentVar === "combined") return rebuildCombinedThermalLayers();
           }).catch(e => console.error("Thermal-front refresh failed:", e));
         }
       }).catch(e => {
