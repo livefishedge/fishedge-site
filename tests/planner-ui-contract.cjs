@@ -25,6 +25,9 @@ assert(html.includes("key === 'surface_height_m' && unitModes[key] === 'imperial
 assert(html.includes("displayUnit('surface_height_m', 'm')"), 'SLA contour labels must honor the selected unit');
 assert(html.includes("mapFields:[['sea_surface_temperature_f','Sea-surface temperature']]"), 'SST must remain the only Currents color-map field');
 assert(html.includes('const currentParticles = []'), 'currents must have an animated particle layer');
+assert(html.includes('function currentParticleViewBox('), 'current particle seeding must be viewport-scoped');
+assert(html.includes('function resetCurrentParticlesForViewport()'), 'current particle pool must reset after view changes');
+assert(html.includes('if (layerVisibility.current) resetCurrentParticlesForViewport();'), 'settled map views must rebuild current particles');
 assert(html.includes('const dt = vec.speed * 0.00035'), 'current particles must move slower than wind particles');
 assert(html.includes('CURRENT_VISUAL_SPEED_MULTIPLIER = 2.5'), 'current particle display speed must be halved to 2.5x');
 assert(html.includes('maxAge: 840 + Math.random() * 600'), 'current particle lifetime must be doubled');
