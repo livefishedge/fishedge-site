@@ -3141,8 +3141,7 @@
       // for older payloads without phase tiles.
       if (scalarKey === 'astronomical_tide_ft' && drawNativeTidePhaseOverlay()) return;
       const grid = scalarKey && currentFrame[scalarKey];
-      const axes = vectorField === 'current' ? currentGridAxes(frame) : { lons: forecastData.lons, lats: forecastData.lats };
-      const lons = axes.lons, lats = axes.lats;
+      const lons = forecastData.lons, lats = forecastData.lats;
       if (!grid || !lons || !lats) return;
       const scale = PRODUCTS[scalarKey]?.scale || 'UV';
       const r = activeRange || { vmin: 0, vmax: scalarKey === 'temperature_f' ? 90 : 6 };
@@ -4154,7 +4153,8 @@
 
     function bilinearVec(frame, lon, lat, vectorField = 'wind') {
       if (!forecastData || !frame) return null;
-      const lons = forecastData.lons, lats = forecastData.lats;
+      const axes = vectorField === 'current' ? currentGridAxes(frame) : { lons: forecastData.lons, lats: forecastData.lats };
+      const lons = axes.lons, lats = axes.lats;
       const explicitCurrent = vectorField === 'current' && frame.current_u_ms && frame.current_v_ms;
       const speedGrid = vectorField === 'current' ? frame.current_speed_kn :
         vectorField === 'gust' ? frame.wind_gust_kn : frame.wind_speed_kn;
