@@ -252,6 +252,26 @@ def merge_forecast(path, tidal):
             chunk_path = base / str(name)
             chunk = json.loads(chunk_path.read_text())
             frame_sets.append((chunk, chunk.get("frames", []), chunk_path))
+    def nearest_regrid(grid, src_lats, src_lons, dst_lats, dst_lons):
+        """Regrid an OFS display grid onto the forecast artifact grid.
+
+        OFS is published at its own 0.25-degree display grid while the marine
+        forecast is commonly 0.5-degree.  Never attach the OFS array to a
+        frame without first making its coordinate contract match the frame.
+        """
+        if not isinstance(grid, list) or not src_lats or not src_lons:
+            return None
+        out = []
+        for lat in dst_lats:
+            yi = min(range(len(src_lats)), key=lambda i: abs(float(src_lats[i]) - float(lat)))
+            row = []
+            for lon in dst_lons:
+                xi = min(range(len(src_lons)), key=lambda i: abs(float(src_lons[i]) - float(lon)))
+                value = grid[yi][xi] if yi < len(grid) and xi < len(grid[yi]) else None
+                row.append(value if isinstance(value, (int, float)) and np.isfinite(value) else None)
+            out.append(row)
+        return out
+
     merged = 0
     total = 0
     for container, frames, chunk_path in frame_sets:
@@ -267,8 +287,37 @@ def merge_forecast(path, tidal):
             frame["surface_height_m"] = ofs["surface_height_m"]
             frame["tide_model_source"] = ofs["model_source"]
             frame["tide_model_coverage_cells"] = ofs["coverage_cells"]
-            for key in ("current_u_ms", "current_v_ms", "current_speed_kn", "current_lats", "current_lons", "current_source", "current_depth_contract"):
-                frame[key] = ofs[key]
+            dst_lats = payload.get("lats") or []
+            dst_lons = payload.get("lons") or []
+            src_lats = ofs.get("current_lats") or tidal.get("lats") or []
+            src_lons = ofs.get("current_lons") or tidal.get("lons") or []
+            ofs_u = nearest_regrid(ofs.get("current_u_ms"), src_lats, src_lons, dst_lats, dst_lons)
+            ofs_v = nearest_regrid(ofs.get("current_v_ms"), src_lats, src_lons, dst_lats, dst_lons)
+            marine_u = frame.get("current_u_ms")
+            marine_v = frame.get("current_v_ms")
+            # OFS is authoritative where it has a finite paired vector. Keep
+            # the marine field in uncovered cells instead of exposing a
+            # partial OFS footprint as the whole regional current product.
+            merged_u, merged_v = [], []
+            for yi in range(len(dst_lats)):
+                ru, rv = [], []
+                for xi in range(len(dst_lons)):
+                    ou = ofs_u[yi][xi] if ofs_u else None
+                    ov = ofs_v[yi][xi] if ofs_v else None
+                    mu = marine_u[yi][xi] if marine_u and yi < len(marine_u) and xi < len(marine_u[yi]) else None
+                    mv = marine_v[yi][xi] if marine_v and yi < len(marine_v) and xi < len(marine_v[yi]) else None
+                    use_ofs = isinstance(ou, (int, float)) and isinstance(ov, (int, float)) and np.isfinite(ou) and np.isfinite(ov)
+                    ru.append(ou if use_ofs else mu)
+                    rv.append(ov if use_ofs else mv)
+                merged_u.append(ru); merged_v.append(rv)
+            frame["current_u_ms"] = merged_u
+            frame["current_v_ms"] = merged_v
+            frame["current_speed_kn"] = [[None if not (isinstance(u, (int, float)) and isinstance(v, (int, float)) and np.isfinite(u) and np.isfinite(v)) else float(np.hypot(u, v) * 1.943844492) for u, v in zip(ru, rv)] for ru, rv in zip(merged_u, merged_v)]
+            frame["current_lats"] = dst_lats
+            frame["current_lons"] = dst_lons
+            frame["current_water_cells"] = [[bool(isinstance(u, (int, float)) and isinstance(v, (int, float)) and np.isfinite(u) and np.isfinite(v)) for u, v in zip(ru, rv)] for ru, rv in zip(merged_u, merged_v)]
+            frame["current_source"] = "NOAA OFS where valid; Open-Meteo Marine fallback elsewhere"
+            frame["current_depth_contract"] = "mixed: NOAA OFS depth-averaged ROMS u/v plus Open-Meteo Marine current"
             merged += 1
       if chunk_path is not None:
           chunk_path.write_text(json.dumps(container, allow_nan=False, separators=(",", ":")))
