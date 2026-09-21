@@ -2543,6 +2543,10 @@
       const frames = forecastData.frames;
       frameIdx = Math.max(0, Math.min(frames.length - 1, i));
       currentFrame = frames[frameIdx];
+      // Particle histories are geographic state tied to one frame/source.
+      // Never carry tracks across a source/grid change.
+      currentParticles.length = 0;
+      currentWaterSeeds.length = 0;
       renderSunMoon(currentFrame && (currentFrame.valid_time || currentFrame.time));
       updateLayerAvailability();
       document.getElementById('bv-slider').value = String(frameIdx);
@@ -3011,16 +3015,37 @@
       return waveMaskCtx.getImageData(x, y, 1, 1).data[3] >= 128;
     }
 
+    function currentGridAxes(frame = currentFrame) {
+      const explicitLons = frame?.current_lons;
+      const explicitLats = frame?.current_lats;
+      if (Array.isArray(explicitLons) && Array.isArray(explicitLats) && explicitLons.length > 1 && explicitLats.length > 1) {
+        return { lons: explicitLons, lats: explicitLats };
+      }
+      const grid = frame?.current_u_ms || frame?.current_v_ms;
+      const ny = Array.isArray(grid) ? grid.length : 0;
+      const nx = ny && Array.isArray(grid[0]) ? grid[0].length : 0;
+      const fallbackBbox = forecastData?.display_bbox || forecastData?.bbox || bbox;
+      if (ny > 1 && nx > 1 && (ny !== forecastData?.lats?.length || nx !== forecastData?.lons?.length)) {
+        const linspace = (a, b, n) => Array.from({length:n}, (_, i) => a + (b - a) * i / (n - 1));
+        return { lons: linspace(fallbackBbox[0], fallbackBbox[2], nx), lats: linspace(fallbackBbox[1], fallbackBbox[3], ny) };
+      }
+      return { lons: forecastData?.lons || [], lats: forecastData?.lats || [] };
+    }
+
     function isCurrentWaterPoint(lon, lat) {
-      const lons = forecastData?.lons || [], lats = forecastData?.lats || [];
+      const axes = currentGridAxes();
+      const lons = axes.lons, lats = axes.lats;
       if (lons.length < 2 || lats.length < 2) return false;
       const xi = Math.max(0, Math.min(lons.length - 2, Math.floor((lon - lons[0]) / (lons[1] - lons[0]))));
       const yi = Math.max(0, Math.min(lats.length - 2, Math.floor((lat - lats[0]) / (lats[1] - lats[0]))));
       // Current validity is owned by the current product, not the wave mask.
       const u = currentFrame?.current_u_ms?.[yi]?.[xi];
       const v = currentFrame?.current_v_ms?.[yi]?.[xi];
-      if (Number.isFinite(u) && Number.isFinite(v)) return true;
-      return forecastData?.tide_water_cells?.[yi]?.[xi] === true;
+      if (!Number.isFinite(u) || !Number.isFinite(v)) return false;
+      // Keep the source current mask and the coastline mask conjunctive when
+      // the latter is available; neither source alone is a complete contract.
+      if (waveMaskImage?.complete && waveMaskImage.naturalWidth && !isCoastWaterPoint(lon, lat)) return false;
+      return true;
     }
 
     function isCurrentWaterSegment(lon1, lat1, lon2, lat2) {
@@ -3116,7 +3141,8 @@
       // for older payloads without phase tiles.
       if (scalarKey === 'astronomical_tide_ft' && drawNativeTidePhaseOverlay()) return;
       const grid = scalarKey && currentFrame[scalarKey];
-      const lons = forecastData.lons, lats = forecastData.lats;
+      const axes = vectorField === 'current' ? currentGridAxes(frame) : { lons: forecastData.lons, lats: forecastData.lats };
+      const lons = axes.lons, lats = axes.lats;
       if (!grid || !lons || !lats) return;
       const scale = PRODUCTS[scalarKey]?.scale || 'UV';
       const r = activeRange || { vmin: 0, vmax: scalarKey === 'temperature_f' ? 90 : 6 };
@@ -4896,8 +4922,9 @@
         }
         const dprInv = flowCanvas.width / rect.width;
         flowCtx.setTransform(dprInv, 0, 0, dprInv, 0, 0);
-        // trail decay (hint.fm recipe)
-        flowCtx.globalCompositeOperation = 'source-over';
+        // Fade only existing pixels. Painting a dark source-over rectangle
+        // made the map opaque and produced different results by mode.
+        flowCtx.globalCompositeOperation = 'destination-out';
         flowCtx.globalAlpha = 1;
         // Wind trails are intentionally transient. Current trails are
         // redrawn from geographic histories, so they receive the slower
@@ -4906,8 +4933,9 @@
         // Current histories are redrawn from geographic state below, so the
         // faster wash removes passed wind marks without shortening currents.
         const windActive = layerVisibility.wind || layerVisibility.wind_gust;
-        flowCtx.fillStyle = windActive ? 'rgba(7, 17, 29, 0.24)' : 'rgba(7, 17, 29, 0.06)';
+        flowCtx.fillStyle = windActive ? 'rgba(0, 0, 0, 0.24)' : 'rgba(0, 0, 0, 0.06)';
         flowCtx.fillRect(0, 0, rect.width, rect.height);
+        flowCtx.globalCompositeOperation = 'source-over';
         // Advect sustained-wind particles only when the Wind + Gust layer is
         // enabled. Currents owns a separate, slower particle field and must
         // never inherit wind particles from another mode.

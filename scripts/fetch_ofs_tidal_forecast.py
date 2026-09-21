@@ -206,6 +206,10 @@ def build_payload(date, hours, cycle=None):
             "current_u_ms": np.where(np.isfinite(merged_u), merged_u, None).tolist(),
             "current_v_ms": np.where(np.isfinite(merged_v), merged_v, None).tolist(),
             "current_speed_kn": np.where(np.isfinite(merged_u) & np.isfinite(merged_v), np.hypot(merged_u, merged_v) * 1.943844492, None).tolist(),
+            "current_lats": target_lats,
+            "current_lons": target_lons,
+            "current_source": "NOAA NOS Operational Forecast Systems",
+            "current_depth_contract": "depth-averaged ROMS u/v",
             "model_source": sorted(set(sources.ravel()) - {""}),
             "coverage_cells": int(np.isfinite(merged).sum()),
         }
@@ -263,7 +267,7 @@ def merge_forecast(path, tidal):
             frame["surface_height_m"] = ofs["surface_height_m"]
             frame["tide_model_source"] = ofs["model_source"]
             frame["tide_model_coverage_cells"] = ofs["coverage_cells"]
-            for key in ("current_u_ms", "current_v_ms", "current_speed_kn"):
+            for key in ("current_u_ms", "current_v_ms", "current_speed_kn", "current_lats", "current_lons", "current_source", "current_depth_contract"):
                 frame[key] = ofs[key]
             merged += 1
       if chunk_path is not None:
