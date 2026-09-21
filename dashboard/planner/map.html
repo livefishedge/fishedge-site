@@ -1058,7 +1058,7 @@
     // instead of reusing an older cached JSON response.
     // Bump whenever the JSON artifact changes; otherwise a Pages/browser
     // cache can keep serving a pre-calibration tide field after HTML deploy.
-    const FORECAST_DATA_BUILD = 'planner-current-coverage-v46';
+    const FORECAST_DATA_BUILD = 'planner-current-render-v47';
     const DEV_FORECAST_URL = `/trip-planner/data/${region}/briefing/forecast.json?v=${FORECAST_DATA_BUILD}`;
     const WAVE_MASK_URL = `/trip-planner/data/${region}/briefing/native_wave_mask.png?v=${FORECAST_DATA_BUILD}`;
     const CORS_PROXY = 'https://corsproxy.io/?';
@@ -2078,9 +2078,10 @@
     const particles = [];
     const currentParticles = [];
     const currentWaterSeeds = [];
-    // The source vectors are in m/s. This bounded display multiplier is only
-    // for legibility; it is not a claim about physical travel distance.
-    const CURRENT_VISUAL_SPEED_MULTIPLIER = 30;
+    // The source vectors are in m/s. This display multiplier is calibrated so
+    // roughly 0.5 kn renders at ~6 CSS px/s in the regional mobile view. It is
+    // explicitly visual acceleration, not physical travel distance.
+    const CURRENT_VISUAL_SPEED_MULTIPLIER = 140;
     const gustParticles = [];
 
     function hasVisibleRasterVariable() {
@@ -3282,6 +3283,12 @@
     // coastline visibility are intentionally separate: a valid calm-water
     // value of zero is retained, while null/NaN corners are never invented.
     function drawFineWaveHeatGrid(key, grid, lons, lats, scale, range, subdivisions = 4, alpha = 0.62) {
+      // All projected map pixels are CSS-pixel coordinates. The backing
+      // canvas may be larger on HiDPI/mobile; establish the transform here,
+      // at the scalar entry point, so Sea State cannot inherit identity scale
+      // from a prior animation/clear path.
+      const canvasDpr = streamlineCanvas.width / Math.max(1, mapEl.clientWidth);
+      streamlineCtx.setTransform(canvasDpr, 0, 0, canvasDpr, 0, 0);
       const projected = lats.map((lat, yi) => lons.map((lon, xi) =>
         map.getPixelFromCoordinate(ol.proj.fromLonLat([lon, lat], mapProjection))));
       const finite = v => Number.isFinite(v);

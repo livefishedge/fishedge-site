@@ -263,9 +263,11 @@ def merge_forecast(path, tidal):
             return None
         out = []
         for lat in dst_lats:
-            yi = min(range(len(src_lats)), key=lambda i: abs(float(src_lats[i]) - float(lat)))
             row = []
             for lon in dst_lons:
+                if not (min(src_lats) <= lat <= max(src_lats) and min(src_lons) <= lon <= max(src_lons)):
+                    row.append(None); continue
+                yi = min(range(len(src_lats)), key=lambda i: abs(float(src_lats[i]) - float(lat)))
                 xi = min(range(len(src_lons)), key=lambda i: abs(float(src_lons[i]) - float(lon)))
                 value = grid[yi][xi] if yi < len(grid) and xi < len(grid[yi]) else None
                 row.append(value if isinstance(value, (int, float)) and np.isfinite(value) else None)
@@ -293,31 +295,21 @@ def merge_forecast(path, tidal):
             src_lons = ofs.get("current_lons") or tidal.get("lons") or []
             ofs_u = nearest_regrid(ofs.get("current_u_ms"), src_lats, src_lons, dst_lats, dst_lons)
             ofs_v = nearest_regrid(ofs.get("current_v_ms"), src_lats, src_lons, dst_lats, dst_lons)
-            marine_u = frame.get("current_u_ms")
-            marine_v = frame.get("current_v_ms")
-            # OFS is authoritative where it has a finite paired vector. Keep
-            # the marine field in uncovered cells instead of exposing a
-            # partial OFS footprint as the whole regional current product.
-            merged_u, merged_v = [], []
-            for yi in range(len(dst_lats)):
-                ru, rv = [], []
-                for xi in range(len(dst_lons)):
-                    ou = ofs_u[yi][xi] if ofs_u else None
-                    ov = ofs_v[yi][xi] if ofs_v else None
-                    mu = marine_u[yi][xi] if marine_u and yi < len(marine_u) and xi < len(marine_u[yi]) else None
-                    mv = marine_v[yi][xi] if marine_v and yi < len(marine_v) and xi < len(marine_v[yi]) else None
-                    use_ofs = isinstance(ou, (int, float)) and isinstance(ov, (int, float)) and np.isfinite(ou) and np.isfinite(ov)
-                    ru.append(ou if use_ofs else mu)
-                    rv.append(ov if use_ofs else mv)
-                merged_u.append(ru); merged_v.append(rv)
-            frame["current_u_ms"] = merged_u
-            frame["current_v_ms"] = merged_v
-            frame["current_speed_kn"] = [[None if not (isinstance(u, (int, float)) and isinstance(v, (int, float)) and np.isfinite(u) and np.isfinite(v)) else float(np.hypot(u, v) * 1.943844492) for u, v in zip(ru, rv)] for ru, rv in zip(merged_u, merged_v)]
-            frame["current_lats"] = dst_lats
-            frame["current_lons"] = dst_lons
-            frame["current_water_cells"] = [[bool(isinstance(u, (int, float)) and isinstance(v, (int, float)) and np.isfinite(u) and np.isfinite(v)) for u, v in zip(ru, rv)] for ru, rv in zip(merged_u, merged_v)]
-            frame["current_source"] = "NOAA OFS where valid; Open-Meteo Marine fallback elsewhere"
-            frame["current_depth_contract"] = "mixed: NOAA OFS depth-averaged ROMS u/v plus Open-Meteo Marine current"
+            # Keep the forecast's Open-Meteo current field authoritative and
+            # source-consistent. Publish OFS as a separate, coordinate-aligned
+            # diagnostic; never overwrite marine arrays and then reuse them as
+            # a supposed fallback on a later merge.
+            frame["ofs_current_u_ms"] = ofs_u
+            frame["ofs_current_v_ms"] = ofs_v
+            frame["ofs_current_lats"] = dst_lats
+            frame["ofs_current_lons"] = dst_lons
+            frame["ofs_current_source"] = "NOAA NOS Operational Forecast Systems"
+            frame["ofs_current_depth_contract"] = "depth-averaged ROMS u/v"
+            marine_u = frame.get("current_u_ms") or []
+            marine_v = frame.get("current_v_ms") or []
+            frame["current_water_cells"] = [[bool(isinstance(u, (int, float)) and isinstance(v, (int, float)) and np.isfinite(u) and np.isfinite(v)) for u, v in zip(ru, rv)] for ru, rv in zip(marine_u, marine_v)]
+            frame["current_source"] = "Open-Meteo Marine"
+            frame["current_depth_contract"] = "provider-selected marine current; depth/reference level not exposed"
             merged += 1
       if chunk_path is not None:
           chunk_path.write_text(json.dumps(container, allow_nan=False, separators=(",", ":")))
