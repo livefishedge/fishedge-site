@@ -569,7 +569,11 @@
   }
 
   function attachToMap(map) {
-    if (!map || state.layers.has(map) || typeof ol === 'undefined') return;
+    // Fishing Grounds is a Captain's Dashboard layer. Product-specific maps
+    // (SST/CHL/SLA/Bathymetry/thermal) must never receive these layers.
+    // Previously scoutMaps() attached one shared layer pair to every map and
+    // the global visibility flag made a Dashboard toggle leak across views.
+    if (!map || map !== window._combinedMap || state.layers.has(map) || typeof ol === 'undefined') return;
     var source = new ol.source.Vector({ wrapX: false });
     var layer = new ol.layer.Vector({
       source: source,
@@ -730,11 +734,6 @@
     // they are not available as window properties. Its map instrumentation
     // exposes the live OpenLayers instances here; use those as the primary
     // attachment path and retain the older globals for compatibility.
-    if (window.__fishedgeMaps && window.__fishedgeMaps.length) {
-      window.__fishedgeMaps.forEach(attachToMap);
-    }
-    if (window.desktopMapState && window.desktopMapState.map) attachToMap(window.desktopMapState.map);
-    if (window.mobileMapState && window.mobileMapState.map) attachToMap(window.mobileMapState.map);
     if (window._combinedMap) attachToMap(window._combinedMap);
   }
 

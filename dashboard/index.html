@@ -37,7 +37,7 @@
   <!-- Auth + Analytics -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-init.js?v=20260918-user-activity"></script>
-<script src="canyon-charts.js?v=20260919-md-legacy-v1"></script>
+<script src="canyon-charts.js?v=20260920-layer-ownership-v1"></script>
   <script src="loran-td.js?v=20260818-3"></script>
   <script src="https://cdn.jsdelivr.net/npm/posthog-js@1.200.0/dist/array.js"></script>
 
@@ -8011,6 +8011,12 @@ async function buildThermalFrontDensityCanvas(frontData, grid) {
 }
 
 async function renderMobileFrame(frameMeta) {
+  // Bathymetry contours belong only to the active single-product bathymetry
+  // view. They are retained for fast toggling, but must be hidden whenever
+  // the mobile map switches to another product.
+  if (currentVar !== "bathy" && mobileMapState.bathyContourLayer) {
+    mobileMapState.bathyContourLayer.setVisible(false);
+  }
   if (currentVar === "chl_front" || currentVar === "sst_front" || currentVar === "thermal_fronts" || currentVar === "combined") {
     document.body.classList.remove("mobile-map-ready");
     detachInactiveMapTargets(null);
@@ -8101,6 +8107,7 @@ async function renderMobileFrame(frameMeta) {
   ensureMobilePlaceLayer(map);
   if (currentVar === "bathy") {
     await ensureMobileBathyContourLayer(map, dataObj, gridInfo);
+    if (mobileMapState.bathyContourLayer) mobileMapState.bathyContourLayer.setVisible(true);
   }
   installMobileReadoutOnce(map);
   installCaptainToolHandler(map);
