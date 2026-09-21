@@ -2013,7 +2013,7 @@
         ['wind', 'Wind+Gust', 'Sustained wind and gust particles'],
         ['wave_motion', 'Wave', 'Animate wind-wave crests'],
         ['swell_motion', 'Swell', 'Animate swell crests'],
-        ['current', 'Currents', 'Surface current particles'],
+        ['current', 'Currents', 'Modeled depth-averaged current particles'],
       ];
       for (const [key, text, title] of animationControls) {
         const label = document.createElement('label'); label.title = title;
@@ -2078,9 +2078,9 @@
     const particles = [];
     const currentParticles = [];
     const currentWaterSeeds = [];
-    // Display multiplier only: forecast current values/readouts remain in
-    // physical units, while slow modeled currents remain visually legible.
-    const CURRENT_VISUAL_SPEED_MULTIPLIER = 2.5;
+    // The source vectors are in m/s. This bounded display multiplier is only
+    // for legibility; it is not a claim about physical travel distance.
+    const CURRENT_VISUAL_SPEED_MULTIPLIER = 6;
     const gustParticles = [];
 
     function hasVisibleRasterVariable() {
@@ -3012,11 +3012,14 @@
     }
 
     function isCurrentWaterPoint(lon, lat) {
-      if (waveMaskImage?.complete && waveMaskImage.naturalWidth) return isCoastWaterPoint(lon, lat);
       const lons = forecastData?.lons || [], lats = forecastData?.lats || [];
       if (lons.length < 2 || lats.length < 2) return false;
       const xi = Math.max(0, Math.min(lons.length - 2, Math.floor((lon - lons[0]) / (lons[1] - lons[0]))));
       const yi = Math.max(0, Math.min(lats.length - 2, Math.floor((lat - lats[0]) / (lats[1] - lats[0]))));
+      // Current validity is owned by the current product, not the wave mask.
+      const u = currentFrame?.current_u_ms?.[yi]?.[xi];
+      const v = currentFrame?.current_v_ms?.[yi]?.[xi];
+      if (Number.isFinite(u) && Number.isFinite(v)) return true;
       return forecastData?.tide_water_cells?.[yi]?.[xi] === true;
     }
 
@@ -4165,6 +4168,17 @@
       };
       const c00 = corner(y0, x0), c10 = corner(y0, x0 + 1);
       const c01 = corner(y0 + 1, x0), c11 = corner(y0 + 1, x0 + 1);
+      if (vectorField === 'current') {
+        // Coastal current grids contain null corners. Renormalize finite
+        // corner weights instead of making an otherwise valid sample vanish.
+        const corners = [[c00, (1-tx)*(1-ty)], [c10, tx*(1-ty)], [c01, (1-tx)*ty], [c11, tx*ty]]
+          .filter(([corner, weight]) => corner && weight > 0);
+        if (!corners.length) return null;
+        const total = corners.reduce((sum, [, weight]) => sum + weight, 0);
+        const blend = key => corners.reduce((sum, [corner, weight]) => sum + corner[key] * weight, 0) / total;
+        const uu = blend('u'), vv = blend('v');
+        return { u: uu, v: vv, speed: Math.sqrt(uu * uu + vv * vv) };
+      }
       if (!c00 || !c10 || !c01 || !c11) return null;
       const blend = key => c00[key] * (1-tx)*(1-ty) + c10[key] * tx*(1-ty) + c01[key] * (1-tx)*ty + c11[key] * tx*ty;
       const uu = blend('u'), vv = blend('v');
@@ -4959,7 +4973,8 @@
               currentParticles[i] = randomCurrentParticle();
               continue;
             }
-            const dt = vec.speed * 0.00035 * CURRENT_VISUAL_SPEED_MULTIPLIER * (elapsedS / 0.032);
+            const speedMs = vec.speed / 1.943844492;
+            const dt = speedMs * 0.00004 * CURRENT_VISUAL_SPEED_MULTIPLIER * (elapsedS / 0.032);
             const oldLon = p.lon, oldLat = p.lat;
             // Midpoint (RK2) advection keeps long geographic trails smooth
             // through the coarse field instead of producing angular, wind-like

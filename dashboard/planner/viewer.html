@@ -168,6 +168,11 @@
   //   - Static context: Baltimore Canyon + 6 inlets as OL vector
   //     layers (anchors the visualization to the captain's world)
   // ============================================================
+  // This legacy route is retained only as a compatibility URL. The canonical
+  // Planner map owns the current data contract and particle renderer.
+  if (location.pathname.endsWith('/planner/viewer.html')) {
+    location.replace('/planner/map.html' + location.search + location.hash);
+  }
   const qs = new URLSearchParams(location.search);
   const date = qs.get('date') || new Date().toISOString().slice(0,10);
   const region = qs.get('region') === 'usec_south' ? 'usec_south' : 'usec_md';
