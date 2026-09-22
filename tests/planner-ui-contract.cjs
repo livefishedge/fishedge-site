@@ -9,7 +9,7 @@ assert(html.includes('id="bv-mode-list"'), 'viewing modes must live in the hambu
 assert(!html.includes('id="bv-top-modes"'), 'viewing modes must not remain in the toolbar');
 assert(!html.includes('id="bv-mode-summary"'), 'toolbar context row must be removed');
 assert(!html.includes('id="bv-region-summary"'), 'toolbar context row must be removed');
-assert(html.includes('.bv-toolbar { height:0; min-height:0; padding:0; border:0; background:transparent; pointer-events:none; }'), 'empty toolbar wrapper must not reserve vertical space');
+assert(html.includes('.bv-toolbar { height:0; min-height:0; padding:0; border:0; background:transparent; pointer-events:none; z-index:10000; }'), 'empty toolbar wrapper must not reserve vertical space');
 assert(html.includes('top:4px; left:auto; right:6px; z-index:10001;'), 'hamburger must occupy the upper-right top layer');
 assert(html.includes('z-index:10000;'), 'toolbar stacking context must sit above the layer strip');
 assert(html.includes('padding: 6px 54px 6px 14px;'), 'desktop timeline must reserve the hamburger slot');
