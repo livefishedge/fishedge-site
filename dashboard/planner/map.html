@@ -23,6 +23,10 @@
     .bv-title { margin: 0; font-size: 15px; font-weight: 600; color: #e3f2fd; }
     .bv-time { font-size: 12px; color: #9fb0c3; margin-left: 4px; font-family: monospace; }
     .bv-time[hidden] { display: none !important; }
+    .bv-toolbar-context{ display:flex; align-items:center; gap:8px; min-width:0; flex:1; color:#d6e5f2; white-space:nowrap; overflow:hidden; }
+    .bv-toolbar-context strong{ color:#fff; font-size:12px; }
+    .bv-toolbar-context span{ overflow:hidden; text-overflow:ellipsis; }
+    .bv-toolbar-context .bv-region-context{ color:#4fc3f7; font:700 11px monospace; }
 
     .bv-products { display: none; }
     .bv-products button {
@@ -338,7 +342,11 @@
 </head>
 <body>
   <div class="bv-toolbar">
-    <div class="bv-time" id="bv-time" hidden aria-hidden="true"></div>
+    <div class="bv-toolbar-context" aria-label="Current planner context">
+      <strong id="bv-mode-summary">Sea State</strong>
+      <span class="bv-region-context" id="bv-region-summary">USEC MD</span>
+      <span class="bv-time" id="bv-time">Forecast loading…</span>
+    </div>
     <button id="bv-hamburger-btn" aria-label="Open layer menu">☰</button>
     <div id="captain-tools" role="toolbar" aria-label="Captain tools">
       <span class="captain-drag-handle" title="Drag Captain tools" aria-label="Drag Captain tools"></span>
@@ -2197,6 +2205,14 @@
         defaults:['tide_range'], heat:'astronomical_tide_ft'
       },
     };
+    const PLANNER_MODE_LABELS = { sea:'Sea State', weather:'Weather', tides:'Tides', fishing:'Currents', moon:'Moon' };
+    const REGION_LABELS = { usec_md:'USEC MD', usec_south:'USEC South' };
+    function updateToolbarContext() {
+      const mode = document.getElementById('bv-mode-summary');
+      const regionEl = document.getElementById('bv-region-summary');
+      if (mode) mode.textContent = PLANNER_MODE_LABELS[activePlannerPreset] || activePlannerPreset;
+      if (regionEl) regionEl.textContent = REGION_LABELS[region] || region.toUpperCase();
+    }
     function applyPlannerPreset(name, reset = false) {
       const preset = PLANNER_PRESETS[name];
       if (!preset) return;
@@ -2208,6 +2224,7 @@
       if (modeTidePanel) { modeTidePanel.hidden = true; modeTidePanel.dataset.active = '0'; }
       if (!reset) viewSettings[activePlannerPreset] = {layers:{...layerVisibility}, heat:selectedHeatKey};
       activePlannerPreset = name;
+      updateToolbarContext();
       // A preset owns the base renderer as well as the visible checkboxes.
       // Leaving currentProduct on the previous mode allows its storm/wave
       // composite to be painted over Tidal Stage.
