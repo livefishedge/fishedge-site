@@ -305,11 +305,16 @@
     /* Planner controls are a deliberate vertical stack: view modes, playback,
        forecast time, layer controls, then the colorbar. They must not overlap
        the map or one another on small screens. */
-    .bv-framebar { top:20px; bottom:auto; }
-    .bv-active-layer-strip { top:64px !important; }
+    /* The toolbar is now an empty structural wrapper; its fixed children
+       (hamburger and Captain tools) position themselves independently. Do not
+       reserve a blank row above the map controls. */
+    .bv-toolbar { height:0; min-height:0; padding:0; border:0; background:transparent; pointer-events:none; }
+    .bv-toolbar > * { pointer-events:auto; }
+    .bv-framebar { top:0; bottom:auto; min-height:44px; }
+    .bv-active-layer-strip { top:44px !important; height:84px; min-height:84px; }
     .bv-ranges { top:auto; bottom:auto; }
-    .bv-map { top:148px !important; bottom:0; }
-    .bv-active-layer-strip { right:0 !important; flex-direction:column; align-items:stretch; gap:3px; overflow:hidden; min-height:84px; box-sizing:border-box; }
+    .bv-map { top:128px !important; bottom:0; }
+    .bv-active-layer-strip { right:0 !important; flex-direction:column; align-items:stretch; gap:3px; overflow:hidden; box-sizing:border-box; }
     .bv-layer-selector-row { display:flex; flex-wrap:nowrap; align-items:center; gap:3px; width:100%; min-width:0; box-sizing:border-box; min-height:36px; overflow:hidden; }
     .bv-layer-selector-row > .bv-map-field-shell{ flex:1 1 100%; width:100%; }
     .bv-layer-checkbox-row { display:flex; align-items:center; gap:5px; min-height:36px; overflow-x:auto; overflow-y:hidden; scrollbar-width:none; }
@@ -318,16 +323,15 @@
     .bv-ranges { box-sizing:border-box; border:0; z-index:2101; }
     #bv-wave-key { bottom:8px; cursor:grab; touch-action:none; }
     @media(max-width:640px){
-      .bv-framebar { top:20px; gap:5px; padding-left:8px; padding-right:8px; min-height:40px; }
+      .bv-framebar { top:0; gap:5px; padding-left:8px; padding-right:8px; min-height:40px; }
       .bv-frame-date { font-size:9px; }
-      .bv-active-layer-strip { top:56px !important; padding-left:8px; padding-right:8px; }
-      .bv-active-layer-strip { right:0 !important; min-height:84px; overflow-y:hidden; }
+      .bv-active-layer-strip { top:40px !important; padding-left:8px; padding-right:8px; height:84px; min-height:84px; overflow-y:hidden; }
       .bv-layer-selector-row { width:100%; max-width:none; overflow:hidden; gap:2px; }
       .bv-map-field-shell{ font-size:9px; gap:2px; }
       .bv-map-field-shell select{ width:clamp(58px,24vw,92px); flex-basis:clamp(58px,24vw,92px); font-size:9px; }
       .bv-map-field-shell .bv-ranges{ width:0; min-width:0; flex-basis:0; margin-left:2px; }
-      .bv-map { top:140px !important; }
-      .bv-details-panel { top:121px; }
+      .bv-map { top:124px !important; }
+      .bv-details-panel { top:105px; }
       .bv-map-field select { max-width:105px; }
     }
   </style>

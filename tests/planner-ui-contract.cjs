@@ -9,8 +9,10 @@ assert(html.includes('id="bv-mode-list"'), 'viewing modes must live in the hambu
 assert(!html.includes('id="bv-top-modes"'), 'viewing modes must not remain in the toolbar');
 assert(!html.includes('id="bv-mode-summary"'), 'toolbar context row must be removed');
 assert(!html.includes('id="bv-region-summary"'), 'toolbar context row must be removed');
-assert(html.includes('.bv-framebar { top:20px; bottom:auto; }'), 'frame controls must move up after removing the toolbar row');
-assert(html.includes('.bv-map { top:148px !important; bottom:0; }'), 'map must move up to reclaim the removed toolbar row');
+assert(html.includes('.bv-toolbar { height:0; min-height:0; padding:0; border:0; background:transparent; pointer-events:none; }'), 'empty toolbar wrapper must not reserve vertical space');
+assert(html.includes('.bv-framebar { top:0; bottom:auto; min-height:44px; }'), 'frame controls must begin at the top of the viewing area');
+assert(html.includes('.bv-active-layer-strip { top:44px !important; height:84px; min-height:84px; }'), 'layer/colorbar band must sit below the time controls');
+assert(html.includes('.bv-map { top:128px !important; bottom:0; }'), 'map must begin below the non-overlapping control bands');
 for (const label of ['Swell Height', 'Wave Height', 'Surface Steepness', 'Visibility', 'Feels Like', 'Humidity']) {
   assert(html.includes(label), `canonical label missing: ${label}`);
 }
