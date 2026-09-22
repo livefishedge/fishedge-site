@@ -37,7 +37,7 @@
     /* Hamburger button + menu panel (port of dashboard/index.html #hamburger-btn
        + #menu-panel styles so the briefing viewer feels native to FishEdge). */
     #bv-hamburger-btn{
-      position:fixed; top:6px; left:6px; right:auto; z-index:10000;
+      position:fixed; top:4px; left:auto; right:6px; z-index:10001;
       width:36px; height:36px; border:2px solid rgba(255,255,255,0.72); border-radius:7px;
       background:rgba(9,74,132,0.96); color:#fff; font-size:21px; font-weight:900; cursor:pointer;
       box-shadow:0 4px 16px rgba(0,0,0,0.62); padding:0;
@@ -48,7 +48,7 @@
     #bv-menu-panel{
       /* Open upward from above the timeline so the layer menu never covers
          the time-progress controls at the bottom of the viewport. */
-      position:fixed; top:auto; bottom:116px; left:8px; right:auto; z-index:9999;
+      position:fixed; top:auto; bottom:116px; left:auto; right:8px; z-index:10000;
       width:clamp(280px, 82vw, 360px); max-width:calc(100vw - 16px); min-width:280px;
       display:none; flex-direction:column; gap:10px; padding:12px;
       background:rgba(5,11,16,0.94); border:1px solid rgba(255,255,255,0.22); border-radius:8px;
@@ -237,7 +237,7 @@
     .bv-framebar {
       position: fixed; top: 44px; left: 0; right: 0; z-index: 15;
       display: flex; flex-direction:row; align-items:center; gap:10px; min-height:44px; box-sizing:border-box;
-      padding: 6px 14px 6px 54px; background: rgba(5, 11, 16, 0.95);
+      padding: 6px 54px 6px 14px; background: rgba(5, 11, 16, 0.95);
       border-top: 1px solid #1b2836;
     }
     .bv-frame-controls { display:contents; }
@@ -308,7 +308,7 @@
     /* The toolbar is now an empty structural wrapper; its fixed children
        (hamburger and Captain tools) position themselves independently. Do not
        reserve a blank row above the map controls. */
-    .bv-toolbar { height:0; min-height:0; padding:0; border:0; background:transparent; pointer-events:none; }
+    .bv-toolbar { height:0; min-height:0; padding:0; border:0; background:transparent; pointer-events:none; z-index:10000; }
     .bv-toolbar > * { pointer-events:auto; }
     .bv-framebar { top:0; bottom:auto; min-height:44px; }
     .bv-active-layer-strip { top:44px !important; height:84px; min-height:84px; }
@@ -323,7 +323,7 @@
     .bv-ranges { box-sizing:border-box; border:0; z-index:2101; }
     #bv-wave-key { bottom:8px; cursor:grab; touch-action:none; }
     @media(max-width:640px){
-      .bv-framebar { top:0; gap:5px; padding-left:52px; padding-right:8px; min-height:40px; }
+      .bv-framebar { top:0; gap:5px; padding-left:8px; padding-right:52px; min-height:40px; }
       .bv-frame-date { font-size:9px; }
       .bv-active-layer-strip { top:40px !important; padding-left:8px; padding-right:8px; height:84px; min-height:84px; overflow-y:hidden; }
       .bv-layer-selector-row { width:100%; max-width:none; overflow:hidden; gap:2px; }
