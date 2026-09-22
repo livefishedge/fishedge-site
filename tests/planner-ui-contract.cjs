@@ -10,6 +10,9 @@ assert(!html.includes('id="bv-top-modes"'), 'viewing modes must not remain in th
 assert(!html.includes('id="bv-mode-summary"'), 'toolbar context row must be removed');
 assert(!html.includes('id="bv-region-summary"'), 'toolbar context row must be removed');
 assert(html.includes('.bv-toolbar { height:0; min-height:0; padding:0; border:0; background:transparent; pointer-events:none; }'), 'empty toolbar wrapper must not reserve vertical space');
+assert(html.includes('top:6px; left:6px; right:auto; z-index:10000;'), 'hamburger must occupy the upper-left top layer');
+assert(html.includes('padding: 6px 14px 6px 54px;'), 'desktop timeline must reserve the hamburger slot');
+assert(html.includes('padding-left:52px; padding-right:8px;'), 'mobile timeline must reserve the hamburger slot');
 assert(html.includes('.bv-framebar { top:0; bottom:auto; min-height:44px; }'), 'frame controls must begin at the top of the viewing area');
 assert(html.includes('.bv-active-layer-strip { top:44px !important; height:84px; min-height:84px; }'), 'layer/colorbar band must sit below the time controls');
 assert(html.includes('.bv-map { top:128px !important; bottom:0; }'), 'map must begin below the non-overlapping control bands');
