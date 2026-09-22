@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 
-const html = fs.readFileSync('dashboard/trip-planner/briefing-viewer.html', 'utf8');
+const html = fs.readFileSync('dashboard/planner/map.html', 'utf8');
 assert(!html.includes('new ol.control.ScaleLine()'), 'planner must not show the generic distance scale bar');
 assert(!html.includes('>View Mode:</span>'), 'planner must not show the redundant View Mode label');
 for (const mode of ['Sea State', 'Weather', 'Currents', 'Tides']) assert(html.includes(`>${mode}</button>`), `mode missing: ${mode}`);
@@ -28,8 +28,11 @@ assert(html.includes('const currentParticles = []'), 'currents must have an anim
 assert(html.includes('function currentParticleViewBox('), 'current particle seeding must be viewport-scoped');
 assert(html.includes('function resetCurrentParticlesForViewport()'), 'current particle pool must reset after view changes');
 assert(html.includes('if (layerVisibility.current) resetCurrentParticlesForViewport();'), 'settled map views must rebuild current particles');
-assert(html.includes('const dt = vec.speed * 0.00035'), 'current particles must move slower than wind particles');
-assert(html.includes('CURRENT_VISUAL_SPEED_MULTIPLIER = 2.5'), 'current particle display speed must be halved to 2.5x');
+assert(html.includes('function currentParticleViewBox('), 'current particle seeding must be viewport-scoped');
+assert(html.includes('function resetCurrentParticlesForViewport()'), 'current particle pool must reset after view changes');
+assert(html.includes('if (layerVisibility.current) resetCurrentParticlesForViewport();'), 'settled map views must rebuild current particles');
+assert(html.includes('const dt = speedMs * 0.00004 * CURRENT_VISUAL_SPEED_MULTIPLIER'), 'current particles must use the calibrated advection path');
+assert(html.includes('CURRENT_VISUAL_SPEED_MULTIPLIER = 140'), 'current particle display speed must use the calibrated multiplier');
 assert(html.includes('maxAge: 840 + Math.random() * 600'), 'current particle lifetime must be doubled');
 assert(html.includes('maxTrailPoints = mapEl.clientWidth < 600 ? 72 : 112'), 'current trails must remain long geographic histories');
 assert(html.includes('traceCurrentDirection(lon0, lat0, direction, maxSteps = 96)'), 'current streamlines must use bounded bidirectional geographic tracing');

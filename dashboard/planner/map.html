@@ -3039,6 +3039,33 @@
       return [Math.min(...axes.lons), Math.min(...axes.lats), Math.max(...axes.lons), Math.max(...axes.lats)];
     }
 
+    // Particle density belongs to the settled viewport. Keeping a pool seeded
+    // for a zoomed-in view causes that small area to remain overpopulated when
+    // the user zooms back out. Rebuild both the seed lattice and particle
+    // histories whenever the map view changes.
+    function currentParticleViewBox(paddingDeg = 0.05) {
+      const coverage = currentCoverageBbox();
+      if (!map || !mapEl) return coverage;
+      const rect = mapEl.getBoundingClientRect();
+      const points = [[0, 0], [rect.width, 0], [0, rect.height], [rect.width, rect.height]]
+        .map(pixel => map.getCoordinateFromPixel(pixel))
+        .filter(Boolean)
+        .map(coord => ol.proj.toLonLat(coord, mapProjection));
+      if (points.length < 4) return coverage;
+      const viewBox = [
+        Math.max(coverage[0], Math.min(...points.map(point => point[0])) - paddingDeg),
+        Math.max(coverage[1], Math.min(...points.map(point => point[1])) - paddingDeg),
+        Math.min(coverage[2], Math.max(...points.map(point => point[0])) + paddingDeg),
+        Math.min(coverage[3], Math.max(...points.map(point => point[1])) + paddingDeg),
+      ];
+      return viewBox[2] > viewBox[0] && viewBox[3] > viewBox[1] ? viewBox : coverage;
+    }
+
+    function resetCurrentParticlesForViewport() {
+      currentWaterSeeds.length = 0;
+      currentParticles.length = 0;
+    }
+
     function isCurrentWaterPoint(lon, lat) {
       const axes = currentGridAxes();
       const lons = axes.lons, lats = axes.lats;
@@ -4809,7 +4836,7 @@
     function seedCurrentParticles() {
       currentParticles.length = 0;
       if (!forecastData || !mapEl) return;
-      const currentBbox = currentCoverageBbox();
+      const currentBbox = currentParticleViewBox();
       if (!currentWaterSeeds.length) {
         // Build a fine seed lattice once. This avoids probing the canvas mask
         // hundreds of thousands of times while still distributing particles
@@ -5287,12 +5314,20 @@
       }, 80);
     }
     function settleMapGesture() {
-      if (!mapPointerDragging) { scheduleOverlayRedraw(); setTimeout(replenishVisibleCurrentParticles, 120); return; }
+      // Zoom buttons can emit moveend without pointerdrag. They still require
+      // a full particle reset for the new viewport.
+      if (!mapPointerDragging) {
+        if (layerVisibility.current) resetCurrentParticlesForViewport();
+        scheduleOverlayRedraw();
+        setTimeout(replenishVisibleCurrentParticles, 120);
+        return;
+      }
       if (overlayRedrawTimer) { clearTimeout(overlayRedrawTimer); overlayRedrawTimer = 0; }
       viewportTransitioning = false;
       // Keep the translated frame in place until the geographic redraw has
       // completed. Clearing the transform first exposes a stale frame.
       try {
+        if (layerVisibility.current) resetCurrentParticlesForViewport();
         drawOverlaysForProduct();
         replenishVisibleCurrentParticles();
       } catch (error) {
@@ -5362,6 +5397,7 @@
     map.on('change:size', () => {
       // re-seed particles to new viewport area, redraw
       seedWindParticles();
+      if (layerVisibility.current) resetCurrentParticlesForViewport();
       replenishVisibleCurrentParticles();
       scheduleOverlayRedraw();
     });
