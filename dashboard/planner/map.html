@@ -396,11 +396,11 @@
   <div id="bv-waypoint-list" aria-live="polite" aria-label="Waypoints" hidden></div>
   <div id="bv-active-layer-strip" class="bv-active-layer-strip" aria-label="Active map layers"></div>
   <details id="bv-wave-key" hidden style="position:fixed;bottom:8px;left:12px;z-index:19;max-width:min(330px,85vw);padding:7px 10px;border-radius:5px;background:rgba(255,255,255,.94);color:#101820;font:12px/1.5 sans-serif">
-    <summary>Wave motion · schematic · 2× time</summary>
+    <summary>Wave motion · schematic · ×6 estimated physics</summary>
     <div><b>━ Swell</b> · <b style="color:#ad1762">┄ Wind waves</b> · <b>│ Short chop texture</b><br>
-    Crests move toward wave travel. Longer period → faster motion, wider spacing, fewer crests passing.<br>
+    Crests move toward wave travel. Speed uses deep-water physics ×6 for visibility; longer period → faster propagation.<br>
     Line weight shows height; line length identifies the wave type, not wavelength. Very short waves use a texture when individual crests are below screen resolution.
-    Distances are exaggerated, not map scale. Deep-water approximation; no shoaling, refraction, or current interaction. Missing period: no moving crests.</div>
+    Distances are exaggerated, not map scale. Currents use a calibrated regional display target (0.5 kn ≈ 6 CSS px/s), not a literal physical-distance scale. Deep-water approximation; no shoaling, refraction, or current interaction. Missing period: schematic motion.</div>
   </details>
   <div id="bv-mode-context" class="bv-mode-context" aria-live="polite"></div>
     <div id="bv-menu-panel" aria-label="Layer and briefing menu">
@@ -2085,6 +2085,10 @@
     // roughly 0.5 kn renders at ~6 CSS px/s in the regional mobile view. It is
     // explicitly visual acceleration, not physical travel distance.
     const CURRENT_VISUAL_SPEED_MULTIPLIER = 140;
+    // Wave phase speed is derived from period, then accelerated for visible
+    // motion. This is a display multiplier, not a change to physical readouts.
+    const WAVE_VISUAL_SPEED_MULTIPLIER = 6;
+    const WAVE_FALLBACK_CYCLE_S = 8;
     const gustParticles = [];
 
     function hasVisibleRasterVariable() {
@@ -3677,17 +3681,31 @@
     let wavePacketRaf = 0;
     let wavePacketLastTs = 0;
     // Schematic deep-water crest phase, NOT energy-packet advection.
-    // c = gT/(2π), λ = cT. A shared space/time scale preserves λ = cT
-    // across BOTH partitions. Screen distances are not geographic distances.
+    // c = gT/(2π), λ = cT. Physical speed is later multiplied explicitly for
+    // display; screen distances are not geographic distances.
     function wavePhaseMetrics(period, pixelsPerMeter = 0.25) {
       if (!Number.isFinite(period) || period <= 0) return null;
       const phaseSpeedMps = 9.81 * period / (2 * Math.PI);
       const wavelengthM = phaseSpeedMps * period;
-      const timeScale = 2;
       return { gapPx: wavelengthM * pixelsPerMeter,
         wavelengthM, phaseSpeedMps,
-        speedPxS: phaseSpeedMps * pixelsPerMeter * timeScale,
-        intervalS: period / timeScale };
+        speedPxS: phaseSpeedMps * pixelsPerMeter * WAVE_VISUAL_SPEED_MULTIPLIER,
+        intervalS: period };
+    }
+
+    function waveCellTravelMeters(packet) {
+      const lons = forecastData?.lons || [], lats = forecastData?.lats || [];
+      const xi = Math.max(0, Math.min(lons.length - 2, packet.xi ?? 0));
+      const yi = Math.max(0, Math.min(lats.length - 2, packet.yi ?? 0));
+      if (!Number.isFinite(lons[xi]) || !Number.isFinite(lons[xi + 1]) ||
+          !Number.isFinite(lats[yi]) || !Number.isFinite(lats[yi + 1])) return 0;
+      const rad = Math.PI / 180, earthRadiusM = 6371008.8;
+      const latMid = (lats[yi] + lats[yi + 1]) * 0.5 * rad;
+      const widthM = Math.abs(lons[xi + 1] - lons[xi]) * rad * earthRadiusM * Math.max(0.01, Math.cos(latMid));
+      const heightM = Math.abs(lats[yi + 1] - lats[yi]) * rad * earthRadiusM;
+      // drawWavePackets traverses approximately 75% of the smaller cell
+      // dimension from one faded edge to the other.
+      return 0.75 * Math.min(widthM, heightM);
     }
 
     function ensureWavePackets() {
@@ -3905,13 +3923,15 @@
             if (!swellSupportedAt(packet.lon, packet.lat) || !swellExposureAt(packet.lon, packet.lat, exposureVec)) continue;
           }
           const vec = bilinearPartitionVec(currentFrame, packet.kind, packet.lon, packet.lat);
-          // Some Currents forecast frames carry wave height/direction but no
-          // period. Keep the checked motion visibly animated with a bounded
-          // schematic phase in that case; Sea State still requires real period
-          // metadata for its physically scaled crest spacing.
-          const metrics = wavePhaseMetrics(vec?.period) ||
-            (anyWaveMotionRequested() ? { intervalS: 4 } : null);
-          if (metrics) packet.phase = (packet.phase + dt / 1000 / metrics.intervalS) % 1;
+          const metrics = wavePhaseMetrics(vec?.period);
+          const travelM = waveCellTravelMeters(packet);
+          if (metrics && travelM > 0) {
+            packet.phase = (packet.phase + metrics.phaseSpeedMps * WAVE_VISUAL_SPEED_MULTIPLIER * (dt / 1000) / (2 * travelM)) % 1;
+          } else if (anyWaveMotionRequested()) {
+            // No period means no physical propagation speed. Keep the visual
+            // alive with an explicitly schematic, fixed cycle instead.
+            packet.phase = (packet.phase + dt / 1000 / WAVE_FALLBACK_CYCLE_S) % 1;
+          }
         }
         // The wind particle animator owns flowCtx and its trail decay.  The
         // wave animator must clear only the streamline canvas, otherwise it
