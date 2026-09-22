@@ -2057,6 +2057,7 @@
             // layer is toggled; the next RAF reseeds from validated water.
             currentParticles.length = 0;
             currentWaterSeeds.length = 0;
+            currentSeedLattice.length = 0;
           }
         }
         else return;
@@ -2078,6 +2079,8 @@
     const particles = [];
     const currentParticles = [];
     const currentWaterSeeds = [];
+    const currentSeedLattice = [];
+    let currentSeedLatticeKey = '';
     // The source vectors are in m/s. This display multiplier is calibrated so
     // roughly 0.5 kn renders at ~6 CSS px/s in the regional mobile view. It is
     // explicitly visual acceleration, not physical travel distance.
@@ -2548,6 +2551,7 @@
       // Never carry tracks across a source/grid change.
       currentParticles.length = 0;
       currentWaterSeeds.length = 0;
+      currentSeedLattice.length = 0;
       renderSunMoon(currentFrame && (currentFrame.valid_time || currentFrame.time));
       updateLayerAvailability();
       document.getElementById('bv-slider').value = String(frameIdx);
@@ -3066,6 +3070,20 @@
       currentParticles.length = 0;
     }
 
+    function ensureCurrentSeedLattice() {
+      const axes = currentGridAxes();
+      const coverage = currentCoverageBbox();
+      const key = `${frameIdx}:${axes.lons.length}x${axes.lats.length}:${waveMaskImage?.complete ? 1 : 0}:${coverage.join(',')}`;
+      if (currentSeedLatticeKey === key && currentSeedLattice.length) return;
+      currentSeedLattice.length = 0;
+      currentSeedLatticeKey = key;
+      for (let lat = coverage[1] + 0.025; lat < coverage[3]; lat += 0.05) {
+        for (let lon = coverage[0] + 0.025; lon < coverage[2]; lon += 0.05) {
+          if (currentIsValidAt(lon, lat)) currentSeedLattice.push([lon, lat]);
+        }
+      }
+    }
+
     function isCurrentWaterPoint(lon, lat) {
       const axes = currentGridAxes();
       const lons = axes.lons, lats = axes.lats;
@@ -3437,6 +3455,7 @@
         // fallback mask. They must be rebuilt against this exact shoreline.
         currentWaterSeeds.length = 0;
         currentParticles.length = 0;
+        currentSeedLattice.length = 0;
         // Rebuild packet anchors now that the projected mask is available.
         // Center-water cells use one packet; only land-centered coastal cells
         // get quarter anchors for valid water coverage.
@@ -4837,15 +4856,11 @@
       currentParticles.length = 0;
       if (!forecastData || !mapEl) return;
       const currentBbox = currentParticleViewBox();
+      ensureCurrentSeedLattice();
       if (!currentWaterSeeds.length) {
-        // Build a fine seed lattice once. This avoids probing the canvas mask
-        // hundreds of thousands of times while still distributing particles
-        // continuously across water instead of a sparse coarse grid.
-        for (let lat = currentBbox[1] + 0.025; lat < currentBbox[3]; lat += 0.05) {
-          for (let lon = currentBbox[0] + 0.025; lon < currentBbox[2]; lon += 0.05) {
-            if (currentIsValidAt(lon, lat)) currentWaterSeeds.push([lon, lat]);
-          }
-        }
+        currentWaterSeeds.push(...currentSeedLattice.filter(([lon, lat]) =>
+          lon >= currentBbox[0] && lon <= currentBbox[2] && lat >= currentBbox[1] && lat <= currentBbox[3]
+        ));
       }
       if (!currentWaterSeeds.length) return;
       const rect = mapEl.getBoundingClientRect();
@@ -5273,6 +5288,7 @@
     // one redraw after the gesture settles instead of rebuilding all overlay
     // canvases repeatedly in the same burst.
     let overlayRedrawTimer = 0;
+    let currentViewGeneration = 0;
     // Browser page magnification is independent of OpenLayers view zoom.
     // Keep the chart readable without continuously repainting large canvas
     // layers behind it on mobile WebKit.
@@ -5307,9 +5323,10 @@
     }
     function scheduleOverlayRedraw() {
       if (overlayRedrawTimer) clearTimeout(overlayRedrawTimer);
+      const scheduledGeneration = currentViewGeneration;
       overlayRedrawTimer = setTimeout(() => {
         overlayRedrawTimer = 0;
-        if (viewportTransitioning || pageIsMagnified()) return;
+        if (viewportTransitioning || pageIsMagnified() || scheduledGeneration !== currentViewGeneration) return;
         drawOverlaysForProduct();
       }, 80);
     }
@@ -5319,7 +5336,6 @@
       if (!mapPointerDragging) {
         if (layerVisibility.current) resetCurrentParticlesForViewport();
         scheduleOverlayRedraw();
-        setTimeout(replenishVisibleCurrentParticles, 120);
         return;
       }
       if (overlayRedrawTimer) { clearTimeout(overlayRedrawTimer); overlayRedrawTimer = 0; }
@@ -5329,7 +5345,6 @@
       try {
         if (layerVisibility.current) resetCurrentParticlesForViewport();
         drawOverlaysForProduct();
-        replenishVisibleCurrentParticles();
       } catch (error) {
         // A transient overlay failure must never strand the map in gesture
         // mode. OpenLayers still owns the real view, so release our canvas
@@ -5374,6 +5389,7 @@
     function beginMapGesture() {
       if (mapPointerDragging) return;
       mapPointerDragging = true;
+      currentViewGeneration += 1;
       mapGestureOriginCenter = map.getView().getCenter()?.slice() || null;
       pauseParticleAnimationForMapGesture();
       stopWavePacketAnimation();
@@ -5398,7 +5414,6 @@
       // re-seed particles to new viewport area, redraw
       seedWindParticles();
       if (layerVisibility.current) resetCurrentParticlesForViewport();
-      replenishVisibleCurrentParticles();
       scheduleOverlayRedraw();
     });
 

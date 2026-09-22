@@ -28,6 +28,9 @@ assert(html.includes('const currentParticles = []'), 'currents must have an anim
 assert(html.includes('function currentParticleViewBox('), 'current particle seeding must be viewport-scoped');
 assert(html.includes('function resetCurrentParticlesForViewport()'), 'current particle pool must reset after view changes');
 assert(html.includes('if (layerVisibility.current) resetCurrentParticlesForViewport();'), 'settled map views must rebuild current particles');
+assert(html.includes('function ensureCurrentSeedLattice()'), 'current seed eligibility must be cached across zooms');
+assert(html.includes('scheduledGeneration !== currentViewGeneration'), 'stale settled-view redraws must be cancelled');
+assert(!html.includes('setTimeout(replenishVisibleCurrentParticles, 120)'), 'zoom settle must not schedule duplicate replenishment');
 assert(html.includes('function currentParticleViewBox('), 'current particle seeding must be viewport-scoped');
 assert(html.includes('function resetCurrentParticlesForViewport()'), 'current particle pool must reset after view changes');
 assert(html.includes('if (layerVisibility.current) resetCurrentParticlesForViewport();'), 'settled map views must rebuild current particles');
