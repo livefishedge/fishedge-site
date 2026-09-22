@@ -266,7 +266,7 @@
     #bv-cbar { width: 100%; height: 22px; display:block; }
     .bv-ranges-ticks { display: flex; justify-content: space-between; font-size: 9px; line-height: 1; color: #9fb0c3; font-family: monospace; margin-top: 1px; }
     .bv-map-field-shell{ align-items:center; max-width:none; min-width:0; overflow:hidden; white-space:nowrap; flex:1 1 0; }
-    .bv-map-field-shell select{ flex:0 1 clamp(72px,25vw,155px); width:clamp(72px,25vw,155px); min-width:0; max-width:100%; }
+    .bv-map-field-shell select{ flex:0 1 clamp(160px,30vw,280px); width:clamp(160px,30vw,280px); min-width:0; max-width:100%; }
     .bv-map-field-shell .bv-ranges{ position:static; display:grid; grid-template-columns:1fr; gap:0; width:0; min-width:0; flex:1 1 0; height:28px; margin-left:4px; pointer-events:auto; }
     .bv-map-field-shell .bv-ranges #bv-cbar{ min-width:0; width:100%; height:13px; }
     .bv-map-field-shell .bv-ranges .bv-ranges-ticks{ width:100%; height:9px; margin-top:0; font-size:8px; }
@@ -329,7 +329,7 @@
       .bv-active-layer-strip { top:40px !important; padding-left:8px; padding-right:8px; height:84px; min-height:84px; overflow-y:hidden; }
       .bv-layer-selector-row { width:100%; max-width:none; overflow:hidden; gap:2px; }
       .bv-map-field-shell{ font-size:9px; gap:2px; }
-      .bv-map-field-shell select{ width:clamp(58px,24vw,92px); flex-basis:clamp(58px,24vw,92px); font-size:9px; }
+      .bv-map-field-shell select{ width:clamp(130px,42vw,220px); flex-basis:clamp(130px,42vw,220px); font-size:9px; }
       .bv-map-field-shell .bv-ranges{ width:0; min-width:0; flex-basis:0; margin-left:2px; }
       .bv-map { top:124px !important; }
       .bv-details-panel { top:105px; }
@@ -1989,7 +1989,7 @@
       strip.append(selectorRow, checkboxRow);
       document.getElementById('bv-wave-key').hidden = !(waveKindVisible('swell') || waveKindVisible('wind_wave'));
       const preset = PLANNER_PRESETS[activePlannerPreset];
-      const label = document.createElement('label'); label.className = 'bv-map-field bv-map-field-shell'; label.append('Color map: ');
+      const label = document.createElement('label'); label.className = 'bv-map-field bv-map-field-shell';
       const select = document.createElement('select'); select.dataset.mapField = 'true';
       const fields = new Set([...preset.mapFields.map(pair => pair[0]), ...preset.layers.map(k => SCALAR_LAYERS[k]).filter(Boolean), selectedHeatKey].filter(Boolean));
       select.add(new Option('None', ''));
