@@ -7,9 +7,10 @@ assert(!html.includes('>View Mode:</span>'), 'planner must not show the redundan
 for (const mode of ['Sea State', 'Weather', 'Currents', 'Tides']) assert(html.includes(`>${mode}<small>`), `mode missing from hamburger menu: ${mode}`);
 assert(html.includes('id="bv-mode-list"'), 'viewing modes must live in the hamburger menu');
 assert(!html.includes('id="bv-top-modes"'), 'viewing modes must not remain in the toolbar');
-assert(html.includes('id="bv-mode-summary"'), 'toolbar must show the active mode after mode buttons move into the menu');
-assert(html.includes('id="bv-region-summary"'), 'toolbar must show the active region context');
-assert(html.includes('function updateToolbarContext()'), 'toolbar context must update when the mode changes');
+assert(!html.includes('id="bv-mode-summary"'), 'toolbar context row must be removed');
+assert(!html.includes('id="bv-region-summary"'), 'toolbar context row must be removed');
+assert(html.includes('.bv-framebar { top:20px; bottom:auto; }'), 'frame controls must move up after removing the toolbar row');
+assert(html.includes('.bv-map { top:148px !important; bottom:0; }'), 'map must move up to reclaim the removed toolbar row');
 for (const label of ['Swell Height', 'Wave Height', 'Surface Steepness', 'Visibility', 'Feels Like', 'Humidity']) {
   assert(html.includes(label), `canonical label missing: ${label}`);
 }

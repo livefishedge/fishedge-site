@@ -21,12 +21,6 @@
     }
     .bv-view-mode-label { color: #9fb0c3; font-size: 11px; font-weight: 800; letter-spacing: .04em; white-space: nowrap; }
     .bv-title { margin: 0; font-size: 15px; font-weight: 600; color: #e3f2fd; }
-    .bv-time { font-size: 12px; color: #9fb0c3; margin-left: 4px; font-family: monospace; }
-    .bv-time[hidden] { display: none !important; }
-    .bv-toolbar-context{ display:flex; align-items:center; gap:8px; min-width:0; flex:1; color:#d6e5f2; white-space:nowrap; overflow:hidden; }
-    .bv-toolbar-context strong{ color:#fff; font-size:12px; }
-    .bv-toolbar-context span{ overflow:hidden; text-overflow:ellipsis; }
-    .bv-toolbar-context .bv-region-context{ color:#4fc3f7; font:700 11px monospace; }
 
     .bv-products { display: none; }
     .bv-products button {
@@ -295,7 +289,6 @@
       .bv-toolbar { padding: 6px 8px; gap: 6px; }
       .bv-view-mode-label { font-size: 9px; }
       .bv-title { font-size: 13px; }
-      .bv-time { display: none; }
       .bv-top-modes { flex:1 1 0; min-width:0; overflow-x:auto; scrollbar-width:none; }
       .bv-top-modes::-webkit-scrollbar { display:none; }
       .bv-top-modes .bv-preset { flex:0 0 auto; padding:5px 6px; font-size:9px; }
@@ -312,11 +305,10 @@
     /* Planner controls are a deliberate vertical stack: view modes, playback,
        forecast time, layer controls, then the colorbar. They must not overlap
        the map or one another on small screens. */
-    .bv-framebar { top:44px; bottom:auto; }
-    .bv-active-layer-strip { top:88px !important; }
+    .bv-framebar { top:20px; bottom:auto; }
+    .bv-active-layer-strip { top:64px !important; }
     .bv-ranges { top:auto; bottom:auto; }
-    .bv-map { top:172px !important; bottom:0; }
-    .bv-time { display:none !important; }
+    .bv-map { top:148px !important; bottom:0; }
     .bv-active-layer-strip { right:0 !important; flex-direction:column; align-items:stretch; gap:3px; overflow:hidden; min-height:84px; box-sizing:border-box; }
     .bv-layer-selector-row { display:flex; flex-wrap:nowrap; align-items:center; gap:3px; width:100%; min-width:0; box-sizing:border-box; min-height:36px; overflow:hidden; }
     .bv-layer-selector-row > .bv-map-field-shell{ flex:1 1 100%; width:100%; }
@@ -326,27 +318,22 @@
     .bv-ranges { box-sizing:border-box; border:0; z-index:2101; }
     #bv-wave-key { bottom:8px; cursor:grab; touch-action:none; }
     @media(max-width:640px){
-      .bv-framebar { top:40px; gap:5px; padding-left:8px; padding-right:8px; min-height:40px; }
+      .bv-framebar { top:20px; gap:5px; padding-left:8px; padding-right:8px; min-height:40px; }
       .bv-frame-date { font-size:9px; }
-      .bv-active-layer-strip { top:80px !important; padding-left:8px; padding-right:8px; }
+      .bv-active-layer-strip { top:56px !important; padding-left:8px; padding-right:8px; }
       .bv-active-layer-strip { right:0 !important; min-height:84px; overflow-y:hidden; }
       .bv-layer-selector-row { width:100%; max-width:none; overflow:hidden; gap:2px; }
       .bv-map-field-shell{ font-size:9px; gap:2px; }
       .bv-map-field-shell select{ width:clamp(58px,24vw,92px); flex-basis:clamp(58px,24vw,92px); font-size:9px; }
       .bv-map-field-shell .bv-ranges{ width:0; min-width:0; flex-basis:0; margin-left:2px; }
-      .bv-map { top:164px !important; }
-      .bv-details-panel { top:145px; }
+      .bv-map { top:140px !important; }
+      .bv-details-panel { top:121px; }
       .bv-map-field select { max-width:105px; }
     }
   </style>
 </head>
 <body>
   <div class="bv-toolbar">
-    <div class="bv-toolbar-context" aria-label="Current planner context">
-      <strong id="bv-mode-summary">Sea State</strong>
-      <span class="bv-region-context" id="bv-region-summary">USEC MD</span>
-      <span class="bv-time" id="bv-time">Forecast loading…</span>
-    </div>
     <button id="bv-hamburger-btn" aria-label="Open layer menu">☰</button>
     <div id="captain-tools" role="toolbar" aria-label="Captain tools">
       <span class="captain-drag-handle" title="Drag Captain tools" aria-label="Drag Captain tools"></span>
@@ -2205,14 +2192,6 @@
         defaults:['tide_range'], heat:'astronomical_tide_ft'
       },
     };
-    const PLANNER_MODE_LABELS = { sea:'Sea State', weather:'Weather', tides:'Tides', fishing:'Currents', moon:'Moon' };
-    const REGION_LABELS = { usec_md:'USEC MD', usec_south:'USEC South' };
-    function updateToolbarContext() {
-      const mode = document.getElementById('bv-mode-summary');
-      const regionEl = document.getElementById('bv-region-summary');
-      if (mode) mode.textContent = PLANNER_MODE_LABELS[activePlannerPreset] || activePlannerPreset;
-      if (regionEl) regionEl.textContent = REGION_LABELS[region] || region.toUpperCase();
-    }
     function applyPlannerPreset(name, reset = false) {
       const preset = PLANNER_PRESETS[name];
       if (!preset) return;
@@ -2224,7 +2203,6 @@
       if (modeTidePanel) { modeTidePanel.hidden = true; modeTidePanel.dataset.active = '0'; }
       if (!reset) viewSettings[activePlannerPreset] = {layers:{...layerVisibility}, heat:selectedHeatKey};
       activePlannerPreset = name;
-      updateToolbarContext();
       // A preset owns the base renderer as well as the visible checkboxes.
       // Leaving currentProduct on the previous mode allows its storm/wave
       // composite to be painted over Tidal Stage.
@@ -5559,7 +5537,8 @@
         const ageLabel = ageHours > maxAgeHours
           ? `STALE · ${ageHours.toFixed(1)}h old · limit ${maxAgeHours}h`
           : `fresh · ${ageHours.toFixed(1)}h old`;
-        document.getElementById('bv-time').textContent = `7-Day Outlook · ${ageLabel}`;
+        const forecastTime = document.getElementById('bv-time');
+        if (forecastTime) forecastTime.textContent = `7-Day Outlook · ${ageLabel}`;
         if (ageHours > maxAgeHours) {
           console.warn(`[forecast] rendering stale data: ${ageLabel}`);
         }
