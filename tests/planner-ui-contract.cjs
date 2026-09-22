@@ -32,9 +32,11 @@ assert(html.includes('function ensureCurrentSeedLattice()'), 'current seed eligi
 assert(html.includes('scheduledGeneration !== currentViewGeneration'), 'stale settled-view redraws must be cancelled');
 assert(!html.includes('setTimeout(replenishVisibleCurrentParticles, 120)'), 'zoom settle must not schedule duplicate replenishment');
 assert(html.includes('function wavePhaseMetrics(period, pixelsPerMeter = 0.25)'), 'wave phase metrics must accept projected scale');
-assert(html.includes('const WAVE_VISUAL_SPEED_MULTIPLIER = 6'), 'wave display speed must have an explicit multiplier');
+assert(html.includes('const WAVE_REFERENCE_PERIOD_S = 10'), 'wave display speed must have an explicit reference period');
+assert(html.includes('const WAVE_TARGET_PX_S = 5'), 'wave display speed must have an explicit screen-speed target');
 assert(html.includes('function waveCellTravelMeters(packet)'), 'wave speed must use geographic source-cell distance');
-assert(html.includes('metrics.phaseSpeedMps * WAVE_VISUAL_SPEED_MULTIPLIER'), 'wave phase must use physical speed times display multiplier');
+assert(html.includes('function waveDisplayMultiplier()'), 'wave display multiplier must adapt to current view scale');
+assert(html.includes('metrics.phaseSpeedMps * displayMultiplier'), 'wave phase must use physical speed times view multiplier');
 assert(html.includes('const WAVE_FALLBACK_CYCLE_S = 8'), 'missing-period wave motion must be explicitly schematic');
 assert(html.includes('const pixelsPerMeter = Math.max(1e-7'), 'wave geometry must derive pixels-per-meter from the current view');
 assert(html.includes('wavePhaseMetrics(vec?.period, cellBounds.pixelsPerMeter)'), 'wave packet spacing must use current zoom scale');

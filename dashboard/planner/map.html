@@ -396,9 +396,9 @@
   <div id="bv-waypoint-list" aria-live="polite" aria-label="Waypoints" hidden></div>
   <div id="bv-active-layer-strip" class="bv-active-layer-strip" aria-label="Active map layers"></div>
   <details id="bv-wave-key" hidden style="position:fixed;bottom:8px;left:12px;z-index:19;max-width:min(330px,85vw);padding:7px 10px;border-radius:5px;background:rgba(255,255,255,.94);color:#101820;font:12px/1.5 sans-serif">
-    <summary>Wave motion · schematic · ×6 estimated physics</summary>
+    <summary>Wave motion · schematic · view-calibrated</summary>
     <div><b>━ Swell</b> · <b style="color:#ad1762">┄ Wind waves</b> · <b>│ Short chop texture</b><br>
-    Crests move toward wave travel. Speed uses deep-water physics ×6 for visibility; longer period → faster propagation.<br>
+    Crests move toward wave travel. Speed uses deep-water physics, calibrated to ~5 CSS px/s for a 10-second wave in the current view; longer period → faster propagation.<br>
     Line weight shows height; line length identifies the wave type, not wavelength. Very short waves use a texture when individual crests are below screen resolution.
     Distances are exaggerated, not map scale. Currents use a calibrated regional display target (0.5 kn ≈ 6 CSS px/s), not a literal physical-distance scale. Deep-water approximation; no shoaling, refraction, or current interaction. Missing period: schematic motion.</div>
   </details>
@@ -2087,7 +2087,9 @@
     const CURRENT_VISUAL_SPEED_MULTIPLIER = 140;
     // Wave phase speed is derived from period, then accelerated for visible
     // motion. This is a display multiplier, not a change to physical readouts.
-    const WAVE_VISUAL_SPEED_MULTIPLIER = 6;
+    const WAVE_REFERENCE_PERIOD_S = 10;
+    const WAVE_TARGET_PX_S = 5;
+    const WAVE_FALLBACK_DISPLAY_MULTIPLIER = 100;
     const WAVE_FALLBACK_CYCLE_S = 8;
     const gustParticles = [];
 
@@ -3689,8 +3691,20 @@
       const wavelengthM = phaseSpeedMps * period;
       return { gapPx: wavelengthM * pixelsPerMeter,
         wavelengthM, phaseSpeedMps,
-        speedPxS: phaseSpeedMps * pixelsPerMeter * WAVE_VISUAL_SPEED_MULTIPLIER,
+        speedPxS: phaseSpeedMps * pixelsPerMeter,
         intervalS: period };
+    }
+
+    function waveDisplayMultiplier() {
+      const referencePhaseSpeed = 9.81 * WAVE_REFERENCE_PERIOD_S / (2 * Math.PI);
+      const representative = wavePackets?.find(packet => {
+        const bounds = sourceCellPixelBounds(packet);
+        return bounds && Number.isFinite(bounds.pixelsPerMeter) && bounds.pixelsPerMeter > 0;
+      });
+      if (!representative) return WAVE_FALLBACK_DISPLAY_MULTIPLIER;
+      const bounds = sourceCellPixelBounds(representative);
+      const physicalPxS = referencePhaseSpeed * bounds.pixelsPerMeter;
+      return WAVE_TARGET_PX_S / Math.max(1e-7, physicalPxS);
     }
 
     function waveCellTravelMeters(packet) {
@@ -3916,6 +3930,7 @@
         const dt = wavePacketLastTs ? Math.min(250, ts - wavePacketLastTs) : 16;
         wavePacketLastTs = ts;
         ensureWavePackets();
+        const displayMultiplier = waveDisplayMultiplier();
         for (const packet of wavePackets) {
           if (!waveKindVisible(packet.kind) || !waveMotionEnabled(packet.kind)) continue;
           if (packet.kind === 'swell') {
@@ -3926,7 +3941,7 @@
           const metrics = wavePhaseMetrics(vec?.period);
           const travelM = waveCellTravelMeters(packet);
           if (metrics && travelM > 0) {
-            packet.phase = (packet.phase + metrics.phaseSpeedMps * WAVE_VISUAL_SPEED_MULTIPLIER * (dt / 1000) / (2 * travelM)) % 1;
+            packet.phase = (packet.phase + metrics.phaseSpeedMps * displayMultiplier * (dt / 1000) / (2 * travelM)) % 1;
           } else if (anyWaveMotionRequested()) {
             // No period means no physical propagation speed. Keep the visual
             // alive with an explicitly schematic, fixed cycle instead.
