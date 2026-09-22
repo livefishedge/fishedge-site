@@ -3866,12 +3866,18 @@
         const bandSpacing = bandCount === 1
           ? 0
           : Math.max(6, Math.min(18, cellPx * 0.12));
-        const phaseOffset = metrics && gap >= 3
-          ? ((packet.phase % 1) + 1) % 1 * Math.min(8, Math.max(3, extent * 0.12))
-          : 0;
+        const phase = ((packet.phase % 1) + 1) % 1;
+        // Phase moves the existing bands through the source-cell window. It
+        // must never create more bands, and it must remain active when the
+        // physical wavelength is below screen resolution.
+        const phaseTravel = Math.min(12, Math.max(4, extent * 0.2));
+        const phaseOffset = (phase - 0.5) * phaseTravel;
         const offsets = bandCount === 1
           ? [phaseOffset]
           : [-bandSpacing + phaseOffset, bandSpacing + phaseOffset];
+        // A dashed chop crest also needs animated dash phase; geometry alone
+        // is insufficient because the dash pattern can otherwise look frozen.
+        streamlineCtx.lineDashOffset = isSwell ? 0 : -phase * 8;
         for (const offset of offsets) {
           const fade = Math.pow(Math.cos(Math.PI * offset / (2 * extent)), 2);
           streamlineCtx.globalAlpha = (metrics && gap < 3 ? 0.32 : 0.45) + 0.4 * Math.min(1, vec.height / 5);
@@ -3883,6 +3889,7 @@
         streamlineCtx.restore();
       }
       streamlineCtx.setLineDash([]);
+      streamlineCtx.lineDashOffset = 0;
       streamlineCtx.globalAlpha = 1;
     }
 
