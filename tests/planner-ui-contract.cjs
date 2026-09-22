@@ -33,7 +33,7 @@ assert(html.includes('scheduledGeneration !== currentViewGeneration'), 'stale se
 assert(!html.includes('setTimeout(replenishVisibleCurrentParticles, 120)'), 'zoom settle must not schedule duplicate replenishment');
 assert(html.includes('function wavePhaseMetrics(period, pixelsPerMeter = 0.25)'), 'wave phase metrics must accept projected scale');
 assert(html.includes('const WAVE_REFERENCE_PERIOD_S = 10'), 'wave display speed must have an explicit reference period');
-assert(html.includes('const WAVE_TARGET_PX_S = 5'), 'wave display speed must have an explicit screen-speed target');
+assert(html.includes('const WAVE_TARGET_PX_S = 10'), 'wave display speed must have an explicit screen-speed target');
 assert(html.includes('function waveCellTravelMeters(packet)'), 'wave speed must use geographic source-cell distance');
 assert(html.includes('function waveDisplayMultiplier()'), 'wave display multiplier must adapt to current view scale');
 assert(html.includes('metrics.phaseSpeedMps * displayMultiplier'), 'wave phase must use physical speed times view multiplier');
