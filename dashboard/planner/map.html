@@ -3679,12 +3679,13 @@
     // Schematic deep-water crest phase, NOT energy-packet advection.
     // c = gT/(2π), λ = cT. A shared space/time scale preserves λ = cT
     // across BOTH partitions. Screen distances are not geographic distances.
-    function wavePhaseMetrics(period) {
+    function wavePhaseMetrics(period, pixelsPerMeter = 0.25) {
       if (!Number.isFinite(period) || period <= 0) return null;
       const phaseSpeedMps = 9.81 * period / (2 * Math.PI);
       const wavelengthM = phaseSpeedMps * period;
-      const pixelsPerMeter = 0.25, timeScale = 2;
+      const timeScale = 2;
       return { gapPx: wavelengthM * pixelsPerMeter,
+        wavelengthM, phaseSpeedMps,
         speedPxS: phaseSpeedMps * pixelsPerMeter * timeScale,
         intervalS: period / timeScale };
     }
@@ -3729,7 +3730,13 @@
       if (corners.some(p => !p)) return null;
       const width = Math.hypot(corners[1][0] - corners[0][0], corners[1][1] - corners[0][1]);
       const height = Math.hypot(corners[3][0] - corners[0][0], corners[3][1] - corners[0][1]);
-      return { corners, cellPx: Math.max(8, Math.min(width, height)) };
+      const toRad = degrees => degrees * Math.PI / 180;
+      const earthRadiusM = 6371008.8;
+      const latMid = toRad((lats[yi] + lats[yi + 1]) / 2);
+      const cellWidthM = Math.abs(toRad(lons[xi + 1] - lons[xi])) * earthRadiusM * Math.max(0.01, Math.cos(latMid));
+      const cellHeightM = Math.abs(toRad(lats[yi + 1] - lats[yi])) * earthRadiusM;
+      const pixelsPerMeter = Math.max(1e-7, Math.min(width / Math.max(1, cellWidthM), height / Math.max(1, cellHeightM)));
+      return { corners, cellPx: Math.max(8, Math.min(width, height)), pixelsPerMeter };
     }
 
     // Clip each crest's travel segment against the coastline, not just the
@@ -3803,7 +3810,6 @@
         const vec = bilinearPartitionVec(currentFrame, packet.kind, packet.lon, packet.lat);
         // Height gates visibility, not phase velocity. Missing periods do not
         // silently acquire an invented eight-second animation.
-        const metrics = wavePhaseMetrics(vec?.period);
         if (!vec || vec.height < 0.05 || vec.speed < 1e-6) continue;
         const c = map.getPixelFromCoordinate(ol.proj.fromLonLat([packet.lon, packet.lat], mapProjection));
         const cosLat = Math.max(0.35, Math.cos(packet.lat * Math.PI / 180));
@@ -3821,8 +3827,12 @@
         const isSwell = packet.kind === 'swell';
         const cellBounds = sourceCellPixelBounds(packet);
         if (!cellBounds) continue;
+        // Convert the physical wavelength using the current view's projected
+        // scale. A fixed pixels-per-meter value makes crests stay the same
+        // screen size after zooming.
+        const metrics = wavePhaseMetrics(vec?.period, cellBounds.pixelsPerMeter);
         const cellPx = cellBounds.cellPx;
-        const half = Math.max(5, Math.min(isSwell ? 22 : 12, cellPx * 0.32));
+        const half = Math.max(5, cellPx * 0.32);
         const extent = Math.max(8, cellPx * 0.42);
         streamlineCtx.strokeStyle = '#0b0f14';
         streamlineCtx.lineWidth = 1.2 + 0.7 * Math.min(1, vec.height / 5);

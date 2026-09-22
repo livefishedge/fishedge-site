@@ -31,6 +31,10 @@ assert(html.includes('if (layerVisibility.current) resetCurrentParticlesForViewp
 assert(html.includes('function ensureCurrentSeedLattice()'), 'current seed eligibility must be cached across zooms');
 assert(html.includes('scheduledGeneration !== currentViewGeneration'), 'stale settled-view redraws must be cancelled');
 assert(!html.includes('setTimeout(replenishVisibleCurrentParticles, 120)'), 'zoom settle must not schedule duplicate replenishment');
+assert(html.includes('function wavePhaseMetrics(period, pixelsPerMeter = 0.25)'), 'wave phase metrics must accept projected scale');
+assert(html.includes('const pixelsPerMeter = Math.max(1e-7'), 'wave geometry must derive pixels-per-meter from the current view');
+assert(html.includes('wavePhaseMetrics(vec?.period, cellBounds.pixelsPerMeter)'), 'wave packet spacing must use current zoom scale');
+assert(html.includes('const half = Math.max(5, cellPx * 0.32)'), 'wave crest size must scale with projected source cells');
 assert(html.includes('function currentParticleViewBox('), 'current particle seeding must be viewport-scoped');
 assert(html.includes('function resetCurrentParticlesForViewport()'), 'current particle pool must reset after view changes');
 assert(html.includes('if (layerVisibility.current) resetCurrentParticlesForViewport();'), 'settled map views must rebuild current particles');
