@@ -240,7 +240,7 @@
       padding: 6px 54px 6px 14px; background: rgba(5, 11, 16, 0.95);
       border-top: 1px solid #1b2836;
     }
-    .bv-frame-controls { display:contents; }
+    .bv-frame-controls { display:flex; flex:1 1 auto; min-width:0; align-items:center; gap:10px; }
     .bv-framebar button {
       background: #1b2836; color: #b3e5fc; border: 1px solid #2a3a4d;
       width: 32px; height: 32px; border-radius: 4px; font-size: 16px; cursor: pointer;
@@ -248,7 +248,8 @@
     }
     .bv-framebar button:hover { background: #2a3a4d; }
     .bv-framebar button.playing { background: #4fc3f7; color: #050b10; border-color: #4fc3f7; }
-    #bv-slider { flex: 1; min-width: 100px; accent-color: #4fc3f7; height: 6px; }
+    .bv-slider-wrap { position:relative; display:flex; align-items:center; flex:1 1 auto; min-width:100px; }
+    #bv-slider { flex:1; width:100%; min-width:0; accent-color:#4fc3f7; height:6px; }
     #bv-speed { width: 52px; height: 30px; padding: 0 2px; background: #1b2836; color: #b3e5fc; border: 1px solid #2a3a4d; border-radius: 4px; font: 700 11px monospace; }
     .bv-frame-label { display:flex; justify-content:center; font-size: 10px; color: #e3f2fd; font-family: monospace; min-width: 0; text-align: center; }
     .bv-frame-date { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); z-index:2; display:flex; align-items:center; justify-content:center; padding:1px 6px; box-sizing:border-box; color:#e3f2fd; font:10px monospace; background:rgba(5,11,16,.78); border-radius:3px; pointer-events:none; white-space:nowrap; }
@@ -297,7 +298,7 @@
       .bv-map { top:72px; bottom:108px; }
       .bv-framebar { gap: 2px; padding-left: 8px; padding-right: 8px; }
       .bv-frame-controls { gap:5px; }
-      #bv-slider { min-width: 60px; }
+      .bv-slider-wrap { min-width:60px; }
       #bv-speed { width: 48px; }
       .bv-frame-label { min-width: auto; font-size: 10px; }
     }
@@ -480,11 +481,13 @@
   </div>
 
   <div class="bv-framebar">
-    <div class="bv-frame-date"><span class="bv-frame-label" id="bv-frame-label">—</span></div>
     <div class="bv-frame-controls">
     <button id="bv-prev" aria-label="Previous frame">‹</button>
     <button id="bv-play" aria-label="Play">▶</button>
-    <input id="bv-slider" type="range" min="0" max="0" step="1" value="0" aria-label="Frame">
+    <div class="bv-slider-wrap">
+      <input id="bv-slider" type="range" min="0" max="0" step="1" value="0" aria-label="Frame">
+      <div class="bv-frame-date"><span class="bv-frame-label" id="bv-frame-label">—</span></div>
+    </div>
     <button id="bv-next" aria-label="Next frame">›</button>
     <select id="bv-speed" aria-label="Forecast playback speed" title="Forecast playback speed (not crest motion)">
       <option value="0.5">0.5×</option>

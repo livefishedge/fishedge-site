@@ -14,6 +14,8 @@ assert(html.includes('top:4px; left:auto; right:6px; z-index:10001;'), 'hamburge
 assert(html.includes('z-index:10000;'), 'toolbar stacking context must sit above the layer strip');
 assert(html.includes('padding: 6px 54px 6px 14px;'), 'desktop timeline must reserve the hamburger slot');
 assert(html.includes('padding-left:8px; padding-right:52px;'), 'mobile timeline must reserve the hamburger slot');
+assert(html.includes('<div class="bv-slider-wrap">'), 'datetime label must have a slider positioning context');
+assert(html.includes('<div class="bv-frame-date"><span class="bv-frame-label" id="bv-frame-label">'), 'datetime label must be centered inside the progress track');
 assert(html.includes('.bv-framebar { top:0; bottom:auto; min-height:44px; }'), 'frame controls must begin at the top of the viewing area');
 assert(html.includes('.bv-active-layer-strip { top:44px !important; height:84px; min-height:84px; }'), 'layer/colorbar band must sit below the time controls');
 assert(html.includes('.bv-map { top:128px !important; bottom:0; }'), 'map must begin below the non-overlapping control bands');
