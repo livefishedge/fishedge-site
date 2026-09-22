@@ -335,7 +335,9 @@
       .bv-map-field-shell .bv-ranges{ width:0; min-width:0; flex-basis:0; margin-left:2px; }
       .bv-map { top:124px !important; }
       .bv-details-panel { top:105px; }
-      .bv-map-field select { max-width:105px; }
+      /* Do not let the legacy mobile cap override the widened variable
+         selector; the colorbar remains the flexible remainder. */
+      .bv-map-field-shell select { max-width:100%; }
     }
   </style>
 </head>

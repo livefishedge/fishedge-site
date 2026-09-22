@@ -19,6 +19,8 @@ assert(html.includes('<div class="bv-frame-date"><span class="bv-frame-label" id
 assert(!html.includes("label.append('Color map: '"), 'color-map selector must not show a redundant prefix');
 assert(html.includes('flex:0 0 clamp(130px,25vw,220px)'), 'desktop variable selector must use the former prefix space without widening the colorbar');
 assert(html.includes('clamp(110px,34vw,155px)'), 'mobile variable selector must use the former prefix space without widening the colorbar');
+assert(!html.includes('.bv-map-field select { max-width:105px; }'), 'legacy mobile selector cap must not truncate variable names');
+assert(html.includes('.bv-map-field-shell select { max-width:100%; }'), 'mobile selector must retain its widened allocation');
 assert(html.includes('.bv-framebar { top:0; bottom:auto; min-height:44px; }'), 'frame controls must begin at the top of the viewing area');
 assert(html.includes('.bv-active-layer-strip { top:44px !important; height:84px; min-height:84px; }'), 'layer/colorbar band must sit below the time controls');
 assert(html.includes('.bv-map { top:128px !important; bottom:0; }'), 'map must begin below the non-overlapping control bands');
