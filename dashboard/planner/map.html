@@ -87,6 +87,8 @@
     .bv-top-modes .bv-preset:hover{ background:#17456a; border-color:#4fc3f7; color:#fff; }
     .bv-top-modes .bv-preset.active{ background:linear-gradient(180deg,#159bd8,#075b9a); border:2px solid #c6f3ff; color:#fff; box-shadow:0 0 0 2px rgba(79,195,247,.38),0 2px 8px rgba(0,0,0,.45); text-shadow:0 1px 2px #04243b; }
     .bv-top-modes .bv-preset small{ display:none; }
+    #bv-menu-panel .bv-mode-list{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:5px; }
+    #bv-menu-panel .bv-mode-list .bv-preset{ min-width:0; }
     .bv-active-layer-strip{ position:fixed; top:44px; left:0; right:0; z-index:2100; display:flex; align-items:center; gap:5px; min-height:28px; padding:3px 12px; overflow-x:auto; background:rgba(5,11,16,.9); border-bottom:1px solid rgba(255,255,255,.12); scrollbar-width:none; }
     .bv-active-layer-strip[hidden]{ display:none !important; }
     .bv-active-layer-strip::-webkit-scrollbar{ display:none; }
@@ -336,13 +338,6 @@
 </head>
 <body>
   <div class="bv-toolbar">
-    <div class="bv-top-modes" id="bv-top-modes" aria-label="Planning view">
-      <button class="bv-preset" type="button" data-preset="weather" title="Weather: visibility, precipitation, crew exposure, clouds, and pressure" aria-label="Weather">Weather</button>
-      <button class="bv-preset active" type="button" data-preset="sea" title="Sea state: wave height, swell, chop, steepness, and ride harshness" aria-label="Sea State">Sea State</button>
-      <button class="bv-preset" type="button" data-preset="tides" title="Tides: tidal stage and tidal range" aria-label="Tides">Tides</button>
-      <button class="bv-preset" type="button" data-preset="fishing" title="Currents: SST, surface current, and surface height when available" aria-label="Currents">Currents</button>
-      <button class="bv-preset" type="button" data-preset="moon" title="Moon and sun: phase, illumination, sunrise, and sunset" aria-label="Moon">Moon</button>
-    </div>
     <div class="bv-time" id="bv-time" hidden aria-hidden="true"></div>
     <button id="bv-hamburger-btn" aria-label="Open layer menu">☰</button>
     <div id="captain-tools" role="toolbar" aria-label="Captain tools">
@@ -404,6 +399,16 @@
   </details>
   <div id="bv-mode-context" class="bv-mode-context" aria-live="polite"></div>
     <div id="bv-menu-panel" aria-label="Layer and briefing menu">
+    <div class="bv-section">
+      <div class="bv-section-title">Viewing mode</div>
+      <div class="bv-mode-list" id="bv-mode-list" role="listbox" aria-label="Viewing mode">
+        <button class="bv-preset" type="button" data-preset="weather" title="Weather: visibility, precipitation, crew exposure, clouds, and pressure" aria-label="Weather">Weather<small>Weather &amp; exposure</small></button>
+        <button class="bv-preset active" type="button" data-preset="sea" title="Sea state: wave height, swell, chop, steepness, and ride harshness" aria-label="Sea State">Sea State<small>Waves &amp; ride</small></button>
+        <button class="bv-preset" type="button" data-preset="tides" title="Tides: tidal stage and tidal range" aria-label="Tides">Tides<small>Stage &amp; range</small></button>
+        <button class="bv-preset" type="button" data-preset="fishing" title="Currents: SST, surface current, and surface height when available" aria-label="Currents">Currents<small>SST &amp; flow</small></button>
+        <button class="bv-preset" type="button" data-preset="moon" title="Moon and sun: phase, illumination, sunrise, and sunset" aria-label="Moon">Moon<small>Sun &amp; moon</small></button>
+      </div>
+    </div>
     <div class="bv-section">
       <div class="bv-layers" id="bv-layers">
         <div class="bv-layer-group">
@@ -2195,6 +2200,12 @@
     function applyPlannerPreset(name, reset = false) {
       const preset = PLANNER_PRESETS[name];
       if (!preset) return;
+      // Do not let the previous mode's values or tide chart remain visible
+      // while the new mode is rebuilding its layer/readout contract.
+      const modeReadout = document.getElementById('bv-wave-readout');
+      const modeTidePanel = modeReadout?.querySelector('[data-tide-chart]');
+      if (modeReadout) modeReadout.style.display = 'none';
+      if (modeTidePanel) { modeTidePanel.hidden = true; modeTidePanel.dataset.active = '0'; }
       if (!reset) viewSettings[activePlannerPreset] = {layers:{...layerVisibility}, heat:selectedHeatKey};
       activePlannerPreset = name;
       // A preset owns the base renderer as well as the visible checkboxes.
@@ -2235,6 +2246,7 @@
       document.querySelectorAll('.bv-preset').forEach(button => button.classList.toggle('active', button.dataset.preset === name));
       renderActiveLayerStrip();
       renderModeContext();
+      document.getElementById('bv-menu-panel')?.classList.remove('open');
       syncStationVisibility();
       updateLayerAvailability();
       computeActiveRange();
@@ -2242,7 +2254,7 @@
       drawOverlaysForProduct();
       refreshPlanner();
       if (name === 'tides') openTideStation(activeTideStation);
-      if (lastWaveReadoutCoordinate) renderWaveReadout(lastWaveReadoutCoordinate, {preserveTideChart:true});
+      if (lastWaveReadoutCoordinate) renderWaveReadout(lastWaveReadoutCoordinate, {preserveTideChart:name === 'tides'});
     }
     function setupPlannerPresets() {
       document.querySelectorAll('.bv-preset').forEach(button => {

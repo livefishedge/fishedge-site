@@ -4,7 +4,9 @@ const fs = require('node:fs');
 const html = fs.readFileSync('dashboard/planner/map.html', 'utf8');
 assert(!html.includes('new ol.control.ScaleLine()'), 'planner must not show the generic distance scale bar');
 assert(!html.includes('>View Mode:</span>'), 'planner must not show the redundant View Mode label');
-for (const mode of ['Sea State', 'Weather', 'Currents', 'Tides']) assert(html.includes(`>${mode}</button>`), `mode missing: ${mode}`);
+for (const mode of ['Sea State', 'Weather', 'Currents', 'Tides']) assert(html.includes(`>${mode}<small>`), `mode missing from hamburger menu: ${mode}`);
+assert(html.includes('id="bv-mode-list"'), 'viewing modes must live in the hamburger menu');
+assert(!html.includes('id="bv-top-modes"'), 'viewing modes must not remain in the toolbar');
 for (const label of ['Swell Height', 'Wave Height', 'Surface Steepness', 'Visibility', 'Feels Like', 'Humidity']) {
   assert(html.includes(label), `canonical label missing: ${label}`);
 }
@@ -72,4 +74,6 @@ assert(html.includes("const forecastSources = isStaging ? [DEV_FORECAST_URL] : [
 assert(html.includes('forecast region mismatch'), 'forecast loader must reject a mismatched region');
 assert(html.includes('forecast frame chunks incomplete'), 'forecast loader must reject incomplete frame chunks');
 assert(html.includes('forecast unavailable for ${region}'), 'forecast loader must report both regional source failures');
+assert(html.includes('modeReadout.style.display = \'none\''), 'mode changes must clear the old readout before rebuilding');
+assert(html.includes("preserveTideChart:name === 'tides'"), 'mode changes must not preserve a stale tide chart');
 console.log('PASS: planner scale, labels, gust behavior, and progressive-detail contracts');
