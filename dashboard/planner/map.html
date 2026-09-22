@@ -3850,38 +3850,26 @@
         for (const corner of cellBounds.corners.slice(1)) streamlineCtx.lineTo(corner[0], corner[1]);
         streamlineCtx.closePath();
         streamlineCtx.clip();
-        if (!metrics) {
-          streamlineCtx.globalAlpha = 0.35 + 0.45 * Math.min(1, vec.height / 5);
-          streamlineCtx.setLineDash([2, 3]);
-          strokeCrest(packet, c[0] - uy * half, c[1] + ux * half, c[0] + uy * half, c[1] - ux * half, 6);
-          streamlineCtx.setLineDash(isSwell ? [] : [4, 3]);
-          streamlineCtx.restore();
-          continue;
-        }
         // Zoom must lengthen each crest, not multiply the number of parallel
         // lines. The old gap/extent loop did both: projected cells became
         // larger, so more offsets fit inside each cell. Keep a bounded visual
-        // band count and use phase only to animate the bands along the flow.
+        // band count and animate each band forward through the cell.
         const bandCount = isSwell ? 1 : 2;
-        const bandSpacing = bandCount === 1
-          ? 0
-          : Math.max(6, Math.min(18, cellPx * 0.12));
         const phase = ((packet.phase % 1) + 1) % 1;
-        // Phase moves the existing bands through the source-cell window. It
-        // must never create more bands, and it must remain active when the
-        // physical wavelength is below screen resolution.
-        const phaseTravel = Math.min(12, Math.max(4, extent * 0.2));
-        const phaseOffset = (phase - 0.5) * phaseTravel;
-        const offsets = bandCount === 1
-          ? [phaseOffset]
-          : [-bandSpacing + phaseOffset, bandSpacing + phaseOffset];
-        // A dashed chop crest also needs animated dash phase; geometry alone
-        // is insufficient because the dash pattern can otherwise look frozen.
-        streamlineCtx.lineDashOffset = isSwell ? 0 : -phase * 8;
-        for (const offset of offsets) {
-          const fade = Math.pow(Math.cos(Math.PI * offset / (2 * extent)), 2);
-          streamlineCtx.globalAlpha = (metrics && gap < 3 ? 0.32 : 0.45) + 0.4 * Math.min(1, vec.height / 5);
-          streamlineCtx.globalAlpha *= fade;
+        // Move each existing band from outside one edge to outside the other.
+        // Its opacity is zero at both edges, so modulo-1 phase recycling is
+        // invisible instead of teleporting a nearly opaque line backward.
+        const travel = Math.max(extent + half, cellPx * 0.75);
+        const bandPhases = bandCount === 1 ? [phase] : [phase, (phase + 0.5) % 1];
+        for (const bandPhase of bandPhases) {
+          const offset = -travel + bandPhase * 2 * travel;
+          const visibility = Math.sin(Math.PI * bandPhase);
+          const fade = visibility * visibility;
+          const baseAlpha = metrics && gap < 3 ? 0.32 : 0.45;
+          streamlineCtx.globalAlpha = (baseAlpha + 0.4 * Math.min(1, vec.height / 5)) * fade;
+          // Dash phase follows the moving crest. It also reaches zero at the
+          // recycle boundary, so it cannot introduce a second discontinuity.
+          streamlineCtx.lineDashOffset = isSwell ? 0 : -bandPhase * 7;
           strokeCrest(packet,
             c[0] + ux*offset - uy*half, c[1] + uy*offset + ux*half,
             c[0] + ux*offset + uy*half, c[1] + uy*offset - ux*half, 6);
