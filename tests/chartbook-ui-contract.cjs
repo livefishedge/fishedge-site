@@ -5,7 +5,7 @@ const dashboard = fs.readFileSync('dashboard/index.html', 'utf8');
 const locate = fs.readFileSync('dashboard/locate-me.js', 'utf8');
 const chartbook = fs.readFileSync('dashboard/chartbook.js', 'utf8');
 
-assert(dashboard.includes('src="/dashboard/chartbook.js"'), 'dashboard must load shared LogBook client');
+assert(/src="\/dashboard\/chartbook\.js(?:\?[^" ]+)?"/.test(dashboard), 'dashboard must load shared LogBook client');
 assert(dashboard.includes('id="captain-fs-btn"'), 'dashboard must expose fullscreen');
 assert(dashboard.includes('id="captain-chartbook-tool"'), 'dashboard must expose LogBook');
 assert(dashboard.includes('Save to LogBook'), 'dashboard waypoint save must use LogBook');

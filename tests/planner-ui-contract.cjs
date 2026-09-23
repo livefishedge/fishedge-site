@@ -95,7 +95,7 @@ assert(html.includes('modeReadout.style.display = \'none\''), 'mode changes must
 assert(html.includes("preserveTideChart:name === 'tides'"), 'mode changes must not preserve a stale tide chart');
 assert(html.includes('href="/dashboard/assets/css/captain-tools.css"'), 'planner must load Captain tool CSS from the canonical absolute path');
 assert(html.includes('src="/dashboard/locate-me.js"'), 'planner must load Locate Me from the canonical absolute path');
-assert(html.includes('src="/dashboard/chartbook.js"'), 'planner must load the shared Captain\'s Chartbook client');
+assert(/src="\/dashboard\/chartbook\.js(?:\?[^" ]+)?"/.test(html), 'planner must load the shared Captain\'s Chartbook client');
 assert(html.includes('id="captain-fs-btn"'), 'planner must expose the shared fullscreen tool');
 assert(html.includes('>LogBook</div>'), 'planner must use the shared LogBook name');
 assert(!html.includes('Saved on this device'), 'planner must not advertise browser-only saved storage');

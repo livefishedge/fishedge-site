@@ -6,8 +6,8 @@
   <title>Briefing Viewer</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@10.2.1/ol.css">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="/dashboard/chartbook.js"></script>
-  <script src="/dashboard/fullscreen.js"></script>
+  <script src="/dashboard/chartbook.js?v=20260923d"></script>
+  <script src="/dashboard/fullscreen.js?v=20260923d"></script>
   <link rel="stylesheet" href="/dashboard/assets/css/captain-tools.css">
   <script src="/dashboard/locate-me.js" defer></script>
   <style>
@@ -108,7 +108,16 @@
     .captain-saved-empty{ color:#7a8fa8; font-style:italic; }
     .captain-saved-row{ padding:4px 0; border-bottom:1px solid rgba(255,255,255,.06); font:11px/1.35 ui-monospace,monospace; }
     body.fishedge-planner-fullscreen{ overflow:hidden !important; }
-    body.fishedge-planner-fullscreen .bv-map{ top:0 !important; }
+    body.fishedge-planner-fullscreen .bv-framebar,
+    body.fishedge-planner-fullscreen .bv-active-layer-strip,
+    body.fishedge-planner-fullscreen .bv-details-panel,
+    body.fishedge-planner-fullscreen #bv-menu-panel,
+    body.fishedge-planner-fullscreen #bv-wave-readout,
+    body.fishedge-planner-fullscreen .bv-mode-context{ display:none !important; }
+    body.fishedge-planner-fullscreen .bv-map{ position:fixed !important; inset:0 !important; top:0 !important; width:100vw !important; height:100dvh !important; z-index:2000 !important; }
+    body.fishedge-planner-fullscreen #captain-tools,
+    body.fishedge-planner-fullscreen #bv-hamburger-btn{ z-index:2200 !important; top:env(safe-area-inset-top,8px) !important; }
+    body.fishedge-planner-fullscreen #captain-saved-panel{ z-index:2210 !important; }
     .bv-active-layer-strip button{background:#132333;color:#d6e5f2;border:1px solid #456;border-radius:4px;min-height:32px;cursor:pointer}
     .bv-active-layer-strip button[aria-pressed=true]{border-color:#4fc3f7;background:#184763}
     .bv-active-layer-strip button:disabled{opacity:.45;cursor:default}
@@ -1638,6 +1647,7 @@
       renderSavedPlannerItems();
     }
     const distancePoints = [];
+    const plannerLogBookRows = { waypoints: [], distances: [] };
     let distanceMode = false;
     let plannerTool = 'browse';
     function persistPlannerWaypoints() {
@@ -1657,29 +1667,32 @@
     async function loadPlannerLogBook() {
       if (!window.FishEdgeLogBook) return;
       const [waypoints, distances] = await Promise.all([FishEdgeLogBook.list('waypoint'), FishEdgeLogBook.list('distance')]);
-      (waypoints.data || []).forEach(item => { const c = item.geometry?.coordinates; if (item.geometry?.type === 'Point' && Array.isArray(c) && c.length === 2 && !plannerWaypoints.some(p => Math.abs(p.lon - c[0]) < 1e-8 && Math.abs(p.lat - c[1]) < 1e-8)) plannerWaypoints.push({ lon: Number(c[0]), lat: Number(c[1]), logbookId: item.id }); });
-      (distances.data || []).forEach(item => { const c = item.geometry?.coordinates; if (item.geometry?.type === 'LineString' && Array.isArray(c) && c.length >= 2) { const a = c[0], b = c[1]; if (!distancePoints.some(p => Math.abs(p[0] - a[0]) < 1e-8 && Math.abs(p[1] - a[1]) < 1e-8 && Math.abs(distancePoints[distancePoints.length - 1]?.[0] - b[0]) < 1e-8)) distancePoints.push([a[0], a[1]], [b[0], b[1]]); } });
-      renderPlannerWaypoints(); renderPlannerDistanceLayer(); renderPlannerDistances(); renderSavedPlannerItems();
+      plannerLogBookRows.waypoints = waypoints.data || [];
+      plannerLogBookRows.distances = distances.data || [];
+      renderSavedPlannerItems();
     }
     function renderSavedPlannerItems() {
       const waypointList = document.getElementById('captain-saved-waypoints');
       const distanceList = document.getElementById('captain-saved-distances');
       if (waypointList) {
         waypointList.replaceChildren();
-        if (!plannerWaypoints.length) {
+        if (!plannerLogBookRows.waypoints.length) {
           const empty = document.createElement('div'); empty.className = 'captain-saved-empty'; empty.textContent = 'No saved waypoints'; waypointList.append(empty);
-        } else plannerWaypoints.forEach((point, index) => {
-          const row = document.createElement('div'); row.className = 'captain-saved-row'; row.textContent = `${index + 1} · ${point.lat.toFixed(4)}°, ${point.lon.toFixed(4)}°`; waypointList.append(row);
+        } else plannerLogBookRows.waypoints.forEach((item, index) => {
+          const c = item.geometry?.coordinates || [];
+          const row = document.createElement('div'); row.className = 'captain-saved-row'; row.textContent = `${index + 1} · ${item.title || 'Waypoint'} · ${Number(c[1]).toFixed(4)}°, ${Number(c[0]).toFixed(4)}°`; waypointList.append(row);
         });
       }
       if (distanceList) {
         distanceList.replaceChildren();
-        const pairs = Math.floor(distancePoints.length / 2);
+        const pairs = plannerLogBookRows.distances.length;
         if (!pairs) {
           const empty = document.createElement('div'); empty.className = 'captain-saved-empty'; empty.textContent = 'No saved distances'; distanceList.append(empty);
-        } else for (let i = 0; i < pairs; i++) {
-          const row = document.createElement('div'); row.className = 'captain-saved-row'; row.textContent = `${i + 1} · ${distanceNm(distancePoints[i * 2], distancePoints[i * 2 + 1]).toFixed(2)} nm`; distanceList.append(row);
-        }
+        } else plannerLogBookRows.distances.forEach((item, i) => {
+          const c = item.geometry?.coordinates || [];
+          const distance = c.length >= 2 ? distanceNm(c[0], c[1]) : Number(item.metadata?.distance_nm);
+          const row = document.createElement('div'); row.className = 'captain-saved-row'; row.textContent = `${i + 1} · ${item.title || 'Distance'} · ${Number.isFinite(distance) ? distance.toFixed(2) + ' nm' : 'saved measurement'}`; distanceList.append(row);
+        });
       }
     }
     function setPlannerTool(next) {
@@ -1737,7 +1750,7 @@
         renderSavedPlannerItems();
         const status = document.getElementById('bv-mode-context');
         if (status) { status.textContent = 'Saving to LogBook…'; status.classList.add('visible'); }
-        savePlannerDistancesToLogBook().then(result => { if (status) { status.textContent = result.ok ? (result.synced === false ? 'Saved to LogBook · sync pending' : 'Saved to LogBook') : result.reason === 'signed_out' ? 'Saved to LogBook · sync pending' : 'LogBook save failed'; status.classList.add('visible'); } });
+        savePlannerDistancesToLogBook().then(result => { if (status) { status.textContent = result.ok ? (result.synced === false ? 'Saved to LogBook · sync pending' : 'Saved to LogBook') : result.reason === 'signed_out' ? 'Saved to LogBook · sync pending' : 'LogBook save failed'; status.classList.add('visible'); } return loadPlannerLogBook(); }).catch(error => console.warn('[planner] LogBook distance refresh failed:', error));
         document.getElementById('captain-dist-panel')?.classList.add('collapsed');
       } catch (error) {
         const status = document.getElementById('bv-mode-context');
@@ -1774,7 +1787,7 @@
         renderSavedPlannerItems();
         const status = document.getElementById('bv-mode-context');
         if (status) { status.textContent = 'Saving to LogBook…'; status.classList.add('visible'); }
-        savePlannerWaypointsToLogBook().then(result => { if (status) { status.textContent = result.ok ? (result.synced === false ? 'Saved to LogBook · sync pending' : 'Saved to LogBook') : result.reason === 'signed_out' ? 'Saved to LogBook · sync pending' : 'LogBook save failed'; status.classList.add('visible'); } });
+        savePlannerWaypointsToLogBook().then(result => { if (status) { status.textContent = result.ok ? (result.synced === false ? 'Saved to LogBook · sync pending' : 'Saved to LogBook') : result.reason === 'signed_out' ? 'Saved to LogBook · sync pending' : 'LogBook save failed'; status.classList.add('visible'); } return loadPlannerLogBook(); }).catch(error => console.warn('[planner] LogBook waypoint refresh failed:', error));
       } catch (error) {
         const status = document.getElementById('bv-mode-context');
         if (status) { status.textContent = 'Unable to save waypoints'; status.classList.add('visible'); }
@@ -1783,8 +1796,23 @@
     });
     document.getElementById('captain-dist-exit')?.addEventListener('click', event => { event.stopPropagation(); savePlannerDistance(); });
     document.getElementById('captain-dist-tool')?.addEventListener('click', () => setPlannerTool(distanceMode ? 'browse' : 'distance'));
-    document.getElementById('captain-saved-tool')?.addEventListener('click', () => setPlannerTool(plannerTool === 'saved' ? 'browse' : 'saved'));
-    document.getElementById('captain-fs-btn')?.addEventListener('click', () => window.FishEdgeFullscreen?.toggle());
+    document.getElementById('captain-saved-tool')?.addEventListener('click', () => { const next = plannerTool === 'saved' ? 'browse' : 'saved'; setPlannerTool(next); if (next === 'saved') loadPlannerLogBook().catch(error => console.warn('[planner] LogBook refresh failed:', error)); });
+    function updatePlannerFsIcon() {
+      const button = document.getElementById('captain-fs-btn');
+      if (!button) return;
+      const isFs = Boolean(window.FishEdgeFullscreen?.active?.());
+      button.title = isFs ? 'Exit fullscreen' : 'Fullscreen';
+      button.setAttribute('aria-label', button.title);
+      button.setAttribute('aria-pressed', String(isFs));
+    }
+    document.getElementById('captain-fs-btn')?.addEventListener('click', () => window.FishEdgeFullscreen?.toggle().finally?.(updatePlannerFsIcon));
+    window.addEventListener('fishedge-fullscreen-change', () => { updatePlannerFsIcon(); map.updateSize(); });
+    document.addEventListener('fullscreenchange', updatePlannerFsIcon);
+    document.addEventListener('webkitfullscreenchange', updatePlannerFsIcon);
+    window.addEventListener('fishedge-logbook-change', () => loadPlannerLogBook().catch(error => console.warn('[planner] LogBook event refresh failed:', error)));
+    window.addEventListener('pageshow', () => loadPlannerLogBook().catch(error => console.warn('[planner] LogBook pageshow refresh failed:', error)));
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) loadPlannerLogBook().catch(error => console.warn('[planner] LogBook foreground refresh failed:', error)); });
+    updatePlannerFsIcon();
     document.addEventListener('keydown', event => { if (event.key === 'Escape' && plannerTool !== 'browse') setPlannerTool('browse'); });
     document.getElementById('captain-loran-td-tool')?.addEventListener('click', async event => {
       const button = event.currentTarget;
