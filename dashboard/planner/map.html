@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@10.2.1/ol.css">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="/dashboard/chartbook.js"></script>
+  <script src="/dashboard/fullscreen.js"></script>
   <link rel="stylesheet" href="/dashboard/assets/css/captain-tools.css">
   <script src="/dashboard/locate-me.js" defer></script>
   <style>
@@ -1736,7 +1737,7 @@
         renderSavedPlannerItems();
         const status = document.getElementById('bv-mode-context');
         if (status) { status.textContent = 'Saving to LogBook…'; status.classList.add('visible'); }
-        savePlannerDistancesToLogBook().then(result => { if (status) { status.textContent = result.ok ? 'Saved to LogBook' : result.reason === 'signed_out' ? 'Sign in to save to LogBook' : 'LogBook storage unavailable'; status.classList.add('visible'); } });
+        savePlannerDistancesToLogBook().then(result => { if (status) { status.textContent = result.ok ? (result.synced === false ? 'Saved to LogBook · sync pending' : 'Saved to LogBook') : result.reason === 'signed_out' ? 'Saved to LogBook · sync pending' : 'LogBook save failed'; status.classList.add('visible'); } });
         document.getElementById('captain-dist-panel')?.classList.add('collapsed');
       } catch (error) {
         const status = document.getElementById('bv-mode-context');
@@ -1773,7 +1774,7 @@
         renderSavedPlannerItems();
         const status = document.getElementById('bv-mode-context');
         if (status) { status.textContent = 'Saving to LogBook…'; status.classList.add('visible'); }
-        savePlannerWaypointsToLogBook().then(result => { if (status) { status.textContent = result.ok ? 'Saved to LogBook' : result.reason === 'signed_out' ? 'Sign in to save to LogBook' : 'LogBook storage unavailable'; status.classList.add('visible'); } });
+        savePlannerWaypointsToLogBook().then(result => { if (status) { status.textContent = result.ok ? (result.synced === false ? 'Saved to LogBook · sync pending' : 'Saved to LogBook') : result.reason === 'signed_out' ? 'Saved to LogBook · sync pending' : 'LogBook save failed'; status.classList.add('visible'); } });
       } catch (error) {
         const status = document.getElementById('bv-mode-context');
         if (status) { status.textContent = 'Unable to save waypoints'; status.classList.add('visible'); }
@@ -1783,13 +1784,7 @@
     document.getElementById('captain-dist-exit')?.addEventListener('click', event => { event.stopPropagation(); savePlannerDistance(); });
     document.getElementById('captain-dist-tool')?.addEventListener('click', () => setPlannerTool(distanceMode ? 'browse' : 'distance'));
     document.getElementById('captain-saved-tool')?.addEventListener('click', () => setPlannerTool(plannerTool === 'saved' ? 'browse' : 'saved'));
-    document.getElementById('captain-fs-btn')?.addEventListener('click', () => {
-      const active = !!(document.fullscreenElement || document.webkitFullscreenElement || document.body.classList.contains('fishedge-planner-fullscreen'));
-      if (active) { document.exitFullscreen?.().catch?.(() => {}); document.webkitExitFullscreen?.(); document.body.classList.remove('fishedge-planner-fullscreen'); return; }
-      const request = document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen;
-      if (request) { try { Promise.resolve(request.call(document.documentElement)).catch(() => document.body.classList.add('fishedge-planner-fullscreen')); } catch (_) { document.body.classList.add('fishedge-planner-fullscreen'); } }
-      else document.body.classList.add('fishedge-planner-fullscreen');
-    });
+    document.getElementById('captain-fs-btn')?.addEventListener('click', () => window.FishEdgeFullscreen?.toggle());
     document.addEventListener('keydown', event => { if (event.key === 'Escape' && plannerTool !== 'browse') setPlannerTool('browse'); });
     document.getElementById('captain-loran-td-tool')?.addEventListener('click', async event => {
       const button = event.currentTarget;

@@ -38,6 +38,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-init.js?v=20260918-user-activity"></script>
   <script src="/dashboard/chartbook.js"></script>
+  <script src="/dashboard/fullscreen.js"></script>
 <script src="canyon-charts.js?v=20260920-layer-ownership-v1"></script>
   <script src="loran-td.js?v=20260818-3"></script>
   <script src="https://cdn.jsdelivr.net/npm/posthog-js@1.200.0/dist/array.js"></script>
@@ -10926,7 +10927,7 @@ function saveDistMeasurement() {
     localStorage.setItem('fishedge_last_distance_measurement', JSON.stringify({ pairs, savedAt: Date.now() }));
   } catch (_) {}
   Promise.resolve(window.FishEdgeLogBook?.save('distance', pairs.map(pair => ({ geometry: { type: 'LineString', coordinates: [[pair.start.lon, pair.start.lat], [pair.end.lon, pair.end.lat]] }, metadata: pair })), 'Distance') || { ok: false, reason: 'unavailable' }).then(result => {
-    showCopyToast(result?.ok ? 'Saved to LogBook' : result?.reason === 'signed_out' ? 'Sign in to save to LogBook' : 'LogBook storage unavailable');
+    showCopyToast(result?.ok ? (result.synced === false ? 'Saved to LogBook · sync pending' : 'Saved to LogBook') : 'LogBook save failed');
   }).catch(() => showCopyToast('LogBook storage unavailable'));
   persistDistancePoints();
   captainDistTool.active = false;
@@ -11218,7 +11219,7 @@ function showSaveMenu() {
   chartbookBtn.style.cssText = 'background:#1d4f91;border:1px solid #4d7dff;border-radius:6px;color:#fff;cursor:pointer;font-size:12px;padding:7px 10px;text-align:left;width:100%;font-weight:700;';
   chartbookBtn.addEventListener('click', async () => {
     const result = await window.FishEdgeLogBook?.save('waypoint', captainAddTool.points.map(p => ({ geometry: { type: 'Point', coordinates: [p.lon, p.lat] }, metadata: p })), 'Waypoint') || { ok: false, reason: 'unavailable' };
-    showCopyToast(result?.ok ? 'Saved to LogBook' : result?.reason === 'signed_out' ? 'Sign in to save to LogBook' : 'LogBook storage unavailable');
+    showCopyToast(result?.ok ? (result.synced === false ? 'Saved to LogBook · sync pending' : 'Saved to LogBook') : 'LogBook save failed');
     closeSaveMenu();
   });
   menu.appendChild(chartbookBtn);
@@ -11592,31 +11593,7 @@ document.getElementById('captain-chartbook-tool')?.addEventListener('click', () 
   }).catch(() => { if (waypoints) waypoints.textContent = 'LogBook unavailable'; if (distances) distances.textContent = 'LogBook unavailable'; });
 });
 
-document.getElementById('captain-fs-btn')?.addEventListener('click', () => {
-  const nativeActive = !!(document.fullscreenElement || document.webkitFullscreenElement || document.webkitIsFullScreen);
-  const appActive = document.body.classList.contains('fishedge-app-fullscreen');
-  if (nativeActive || appActive) {
-    if (document.exitFullscreen) document.exitFullscreen().catch?.(() => {});
-    else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
-    else if (document.webkitCancelFullScreen) document.webkitCancelFullScreen();
-    document.body.classList.remove('fishedge-app-fullscreen');
-    updateFsIcon();
-    return;
-  }
-  // iOS Safari does not expose the Fullscreen API for ordinary DOM elements.
-  // Use the native API where available, with a viewport-filling app mode as a
-  // reliable fallback on mobile browsers.
-  const request = document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen;
-  if (request) {
-    try {
-      const result = request.call(document.documentElement);
-      if (result?.catch) result.catch(() => document.body.classList.add('fishedge-app-fullscreen'));
-    } catch (_) { document.body.classList.add('fishedge-app-fullscreen'); }
-  } else {
-    document.body.classList.add('fishedge-app-fullscreen');
-  }
-  updateFsIcon();
-});
+document.getElementById('captain-fs-btn')?.addEventListener('click', () => window.FishEdgeFullscreen?.toggle());
 
 document.getElementById('captain-underwater-tool')?.addEventListener('click', () => {
   const visible = window.fishedgeUnderwater?.toggle?.();
@@ -11668,6 +11645,7 @@ function updateFsIcon() {
 }
 document.addEventListener('fullscreenchange', updateFsIcon);
 document.addEventListener('webkitfullscreenchange', updateFsIcon);
+window.addEventListener('fishedge-fullscreen-change', updateFsIcon);
 window.addEventListener('resize', updateFsIcon);
 if (!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen)) {
   // iOS Safari cannot fullscreen arbitrary DOM content. Hide the control
