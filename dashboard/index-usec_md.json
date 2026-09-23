@@ -1,6 +1,6 @@
 {
   "region": "usec_md",
-  "last_updated": "2026-09-23T19:53:40.738813Z",
+  "last_updated": "2026-09-23T20:23:37.927647Z",
   "vars": [
     "chl",
     "sst",
@@ -156,16 +156,6 @@
       }
     ],
     "sst": [
-      {
-        "var": "sst",
-        "id": "sst_usec_md_2026235_20260823_20_g19",
-        "label": "2026-08-23 20:00 UTC",
-        "time_iso": "2026-08-23T20:00:00Z",
-        "json_path": "https://data.fishedge.live/usec_md/sst/sst_usec_md_2026235_20260823_20_g19.json",
-        "grid_file": "goes_sst_1000_grid.json",
-        "product_level": null,
-        "stitched": false
-      },
       {
         "var": "sst",
         "id": "sst_usec_md_2026235_20260823_21_g19",
@@ -2041,19 +2031,19 @@
         "grid_file": "frame_bbox",
         "product_level": null,
         "stitched": false
-      }
-    ],
-    "sst_front": [
+      },
       {
-        "var": "sst_front",
-        "id": "sstfront_usec_md_2026235_20260823_20_g19",
-        "label": "2026-08-23 20:00 UTC",
-        "time_iso": "2026-08-23T20:00:00Z",
-        "json_path": "https://data.fishedge.live/usec_md/sst_front/sstfront_usec_md_2026235_20260823_20_g19.json",
+        "var": "chl_front",
+        "id": "chlfront_usec_md_2026266.1715_VJ2",
+        "label": "2026-09-23 17:15 UTC | VJ2",
+        "time_iso": "2026-09-23T17:15:00Z",
+        "json_path": "https://data.fishedge.live/usec_md/chl_front/chlfront_usec_md_2026266.1715_VJ2.json",
         "grid_file": "frame_bbox",
         "product_level": null,
         "stitched": false
-      },
+      }
+    ],
+    "sst_front": [
       {
         "var": "sst_front",
         "id": "sstfront_usec_md_2026235_20260823_21_g19",
@@ -3140,11 +3130,11 @@
     "online_retention_days": 45
   },
   "_dashboard_rewrite": {
-    "rewritten_at": "2026-09-23T20:08:03.572744+00:00",
+    "rewritten_at": "2026-09-23T20:38:02.238412+00:00",
     "r2_base": "https://data.fishedge.live",
     "retention_days": 45,
     "cutoff_doy": 221,
-    "frames_kept": 404,
+    "frames_kept": 403,
     "frames_dropped_outside_retention": 0
   }
 }
