@@ -93,4 +93,12 @@ assert(html.includes('forecast frame chunks incomplete'), 'forecast loader must 
 assert(html.includes('forecast unavailable for ${region}'), 'forecast loader must report both regional source failures');
 assert(html.includes('modeReadout.style.display = \'none\''), 'mode changes must clear the old readout before rebuilding');
 assert(html.includes("preserveTideChart:name === 'tides'"), 'mode changes must not preserve a stale tide chart');
+assert(html.includes('href="/dashboard/assets/css/captain-tools.css"'), 'planner must load Captain tool CSS from the canonical absolute path');
+assert(html.includes('src="/dashboard/locate-me.js"'), 'planner must load Locate Me from the canonical absolute path');
+assert(html.includes('id="captain-saved-tool"'), 'planner must expose a saved-items tool');
+assert(html.includes('function setPlannerTool(next)'), 'planner tools must share one authoritative mode transition');
+assert(html.includes("setPlannerTool(waypointMode ? 'browse' : 'waypoint')"), 'waypoint and browse states must be mutually exclusive');
+assert(html.includes("setPlannerTool(distanceMode ? 'browse' : 'distance')"), 'distance and browse states must be mutually exclusive');
+assert(html.includes('if (waypointMode || distanceMode) return;'), 'environment readouts must not fire during tool editing');
+assert(html.includes('Complete the current distance measurement before saving'), 'incomplete distance drafts must not be saved');
 console.log('PASS: planner scale, labels, gust behavior, and progressive-detail contracts');

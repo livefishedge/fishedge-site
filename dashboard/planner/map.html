@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Briefing Viewer</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@10.2.1/ol.css">
-  <link rel="stylesheet" href="../assets/css/captain-tools.css">
-  <script src="../locate-me.js" defer></script>
+  <link rel="stylesheet" href="/dashboard/assets/css/captain-tools.css">
+  <script src="/dashboard/locate-me.js" defer></script>
   <style>
     /* Shared toolbar placement is calculated from the complete header stack. */
     :root { color-scheme: dark; }
@@ -97,6 +97,13 @@
     .bv-details-panel fieldset{display:flex;flex-wrap:wrap;gap:7px;border:1px solid #345;padding:8px;margin:0 0 10px}
     .bv-details-panel legend{font-size:12px;color:#ccddec}
     .bv-details-panel p{font-size:12px;line-height:1.5}
+    #captain-saved-panel{ display:none; position:fixed; top:96px; left:8px; z-index:10002; width:min(320px,calc(100vw - 16px)); max-height:calc(100dvh - 150px); overflow:auto; box-sizing:border-box; padding:12px 14px; background:#0a1929; border:1px solid #31546b; border-radius:10px; box-shadow:0 5px 20px #0008; color:#edfaff; font-size:12px; }
+    #captain-saved-panel.visible{ display:block; }
+    .captain-saved-title{ margin-bottom:10px; color:#edfaff; font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; }
+    .captain-saved-section{ padding:8px 0; border-top:1px solid rgba(255,255,255,.1); }
+    .captain-saved-section > b{ display:block; margin-bottom:5px; color:#7a8fa8; font-size:10px; text-transform:uppercase; letter-spacing:.06em; }
+    .captain-saved-empty{ color:#7a8fa8; font-style:italic; }
+    .captain-saved-row{ padding:4px 0; border-bottom:1px solid rgba(255,255,255,.06); font:11px/1.35 ui-monospace,monospace; }
     .bv-active-layer-strip button{background:#132333;color:#d6e5f2;border:1px solid #456;border-radius:4px;min-height:32px;cursor:pointer}
     .bv-active-layer-strip button[aria-pressed=true]{border-color:#4fc3f7;background:#184763}
     .bv-active-layer-strip button:disabled{opacity:.45;cursor:default}
@@ -108,7 +115,7 @@
     .bv-map-field{ display:flex; align-items:center; gap:4px; flex:0 0 auto; color:#9fb0c3; font-size:10px; font-weight:800; white-space:nowrap; }
     .bv-map-unit{ color:#e3f2fd; font:700 10px monospace; min-width:18px; }
     .bv-map-field select{ max-width:155px; padding:3px 5px; border:1px solid rgba(79,195,247,.45); border-radius:4px; background:#132333; color:#d6e5f2; font:700 10px sans-serif; }
-    .bv-mode-context{ position:fixed; top:73px; left:0; right:0; z-index:20; display:none; align-items:center; gap:8px; min-height:24px; padding:3px 12px; overflow-x:auto; background:rgba(5,11,16,.82); border-bottom:1px solid rgba(255,255,255,.08); color:#d6e5f2; font:700 10px monospace; white-space:nowrap; }
+    .bv-mode-context{ position:fixed; top:50px; left:50%; transform:translateX(-50%); z-index:10020; display:none; align-items:center; gap:8px; min-height:24px; max-width:calc(100vw - 24px); padding:5px 10px; overflow:hidden; background:rgba(5,11,16,.96); border:1px solid rgba(79,195,247,.55); border-radius:5px; color:#d6e5f2; font:700 10px monospace; white-space:nowrap; box-shadow:0 4px 14px rgba(0,0,0,.45); }
     .bv-mode-context.visible{ display:flex; }
     .bv-mode-context span{ padding:2px 5px; border:1px solid rgba(255,255,255,.18); border-radius:3px; }
     #bv-side-panel{ display:flex; flex-direction:column; gap:8px; font-size:11px; color:#d6e5f2; }
@@ -365,6 +372,11 @@
           <line x1="16" y1="11" x2="20" y2="11" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
         </svg>
       </button>
+      <button id="captain-saved-tool" class="captain-tool-btn" title="Saved waypoints and distances" aria-label="Saved waypoints and distances" data-tool="saved" aria-pressed="false">
+        <svg width="18" height="18" viewBox="0 0 22 22" fill="none" aria-hidden="true">
+          <path d="M5 3.5h12a1.5 1.5 0 0 1 1.5 1.5v13l-7.5-3.8-7.5 3.8V5A1.5 1.5 0 0 1 5 3.5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+        </svg>
+      </button>
       <button id="captain-loran-td-tool" class="captain-tool-btn" title="Loran-C TD Grid (GRI 9960)" aria-label="Loran-C TD Grid (GRI 9960)" aria-pressed="false">
         <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
           <circle cx="10" cy="2" r="1.1" fill="currentColor"/>
@@ -390,6 +402,11 @@
       </div>
       <div id="captain-dist-list"></div>
       <div id="captain-dist-total"></div>
+    </div>
+    <div id="captain-saved-panel" aria-label="Saved planner items">
+      <div class="captain-saved-title">Saved on this device</div>
+      <div class="captain-saved-section"><b>Waypoints</b><div id="captain-saved-waypoints"></div></div>
+      <div class="captain-saved-section"><b>Distances</b><div id="captain-saved-distances"></div></div>
     </div>
   </div>
   <div id="bv-waypoint-list" aria-live="polite" aria-label="Waypoints" hidden></div>
@@ -1255,7 +1272,7 @@
       // rectangle so this remains true after dragging, rotation, or resize.
       const rect = tools.getBoundingClientRect();
       const panelTop = Math.ceil(rect.bottom + 6);
-      ['captain-pts-panel', 'captain-dist-panel'].forEach(id => {
+      ['captain-pts-panel', 'captain-dist-panel', 'captain-saved-panel'].forEach(id => {
         const panel = document.getElementById(id);
         if (!panel) return;
         panel.style.top = `${Math.min(panelTop, Math.max(8, window.innerHeight - 80))}px`;
@@ -1550,9 +1567,10 @@
       panel.replaceChildren();
       const wrapper = panel.parentElement;
       clearPlannerWaypointOverlays();
-      if (!plannerWaypoints.length) {
+      if (!plannerWaypoints.length || !waypointMode) {
         wrapper?.style.setProperty('display', 'none'); wrapper?.classList.remove('visible');
         document.getElementById('captain-save-btn')?.style.setProperty('display', 'none');
+        renderSavedPlannerItems();
         return;
       }
       plannerWaypoints.forEach((point, index) => {
@@ -1567,6 +1585,7 @@
         const label = document.createElement('span'); label.textContent = `${index + 1}  ${point.lat.toFixed(4)}°, ${point.lon.toFixed(4)}°`;
         const remove = document.createElement('button'); remove.type = 'button'; remove.textContent = 'Remove'; remove.addEventListener('click', () => {
           plannerWaypoints.splice(index, 1);
+          try { persistPlannerWaypoints(); } catch (error) { console.warn('[planner] waypoint deletion not persisted', error); }
           renderPlannerWaypoints();
         });
         row.append(label, remove); panel.appendChild(row);
@@ -1574,6 +1593,7 @@
       wrapper?.classList.add('visible');
       wrapper?.style.setProperty('display', 'block');
       document.getElementById('captain-save-btn')?.style.setProperty('display', 'inline-block');
+      renderSavedPlannerItems();
     }
     function renderPlannerDistances() {
       const list = document.getElementById('captain-dist-list');
@@ -1591,6 +1611,7 @@
         const label = document.createElement('span'); label.textContent = `${i + 1}  ${a[1].toFixed(4)}°, ${a[0].toFixed(4)}° → ${b[1].toFixed(4)}°, ${b[0].toFixed(4)}°  ·  ${d.toFixed(2)} nm`;
         const remove = document.createElement('button'); remove.type = 'button'; remove.textContent = '×'; remove.addEventListener('click', () => {
           distancePoints.splice(i * 2, 2);
+          try { persistPlannerDistance(); } catch (error) { console.warn('[planner] distance deletion not persisted', error); }
           renderPlannerDistanceLayer();
           renderPlannerDistances();
         });
@@ -1604,10 +1625,58 @@
         row.append(label); list.appendChild(row);
       }
       total.textContent = pairs ? `Total · ${totalNm.toFixed(2)} nm` : '';
-      panel.classList.toggle('visible', distancePoints.length > 0);
+      panel.classList.toggle('visible', distanceMode && distancePoints.length > 0);
+      renderSavedPlannerItems();
     }
     const distancePoints = [];
     let distanceMode = false;
+    let plannerTool = 'browse';
+    function persistPlannerWaypoints() {
+      localStorage.setItem('fishedge:planner:waypoints', JSON.stringify(plannerWaypoints));
+    }
+    function persistPlannerDistance() {
+      localStorage.setItem('fishedge:planner:distance:v1', JSON.stringify(distancePoints.map(([lon, lat]) => ({ lon, lat }))));
+    }
+    function renderSavedPlannerItems() {
+      const waypointList = document.getElementById('captain-saved-waypoints');
+      const distanceList = document.getElementById('captain-saved-distances');
+      if (waypointList) {
+        waypointList.replaceChildren();
+        if (!plannerWaypoints.length) {
+          const empty = document.createElement('div'); empty.className = 'captain-saved-empty'; empty.textContent = 'No saved waypoints'; waypointList.append(empty);
+        } else plannerWaypoints.forEach((point, index) => {
+          const row = document.createElement('div'); row.className = 'captain-saved-row'; row.textContent = `${index + 1} · ${point.lat.toFixed(4)}°, ${point.lon.toFixed(4)}°`; waypointList.append(row);
+        });
+      }
+      if (distanceList) {
+        distanceList.replaceChildren();
+        const pairs = Math.floor(distancePoints.length / 2);
+        if (!pairs) {
+          const empty = document.createElement('div'); empty.className = 'captain-saved-empty'; empty.textContent = 'No saved distances'; distanceList.append(empty);
+        } else for (let i = 0; i < pairs; i++) {
+          const row = document.createElement('div'); row.className = 'captain-saved-row'; row.textContent = `${i + 1} · ${distanceNm(distancePoints[i * 2], distancePoints[i * 2 + 1]).toFixed(2)} nm`; distanceList.append(row);
+        }
+      }
+    }
+    function setPlannerTool(next) {
+      plannerTool = ['browse', 'waypoint', 'distance', 'saved'].includes(next) ? next : 'browse';
+      waypointMode = plannerTool === 'waypoint';
+      distanceMode = plannerTool === 'distance';
+      const waypointButton = document.getElementById('captain-add-tool');
+      const distanceButton = document.getElementById('captain-dist-tool');
+      const savedButton = document.getElementById('captain-saved-tool');
+      [[waypointButton, waypointMode], [distanceButton, distanceMode], [savedButton, plannerTool === 'saved']].forEach(([button, active]) => {
+        button?.classList.toggle('active', active); button?.setAttribute('aria-pressed', String(active));
+      });
+      document.getElementById('captain-pts-panel')?.classList.toggle('visible', waypointMode && plannerWaypoints.length > 0);
+      document.getElementById('captain-dist-panel')?.classList.toggle('visible', distanceMode && distancePoints.length > 0);
+      document.getElementById('captain-saved-panel')?.classList.toggle('visible', plannerTool === 'saved');
+      const status = document.getElementById('bv-mode-context');
+      if (status) { status.textContent = ''; status.classList.remove('visible'); }
+      if (status && plannerTool === 'waypoint') { status.textContent = 'Waypoint mode · click map to add'; status.classList.add('visible'); }
+      if (status && plannerTool === 'distance') { status.textContent = 'Distance mode · tap two points'; status.classList.add('visible'); }
+      renderPlannerWaypoints(); renderPlannerDistances(); renderSavedPlannerItems();
+    }
     const distanceSource = new ol.source.Vector();
     const distanceLayer = new ol.layer.Vector({ source: distanceSource, zIndex: 2200, style: new ol.style.Style({ stroke: new ol.style.Stroke({ color: '#4fc3f7', width: 3 }), image: new ol.style.Circle({ radius: 5, fill: new ol.style.Fill({ color: '#4fc3f7' }), stroke: new ol.style.Stroke({ color: '#071017', width: 2 }) }) }) });
     map.addLayer(distanceLayer);
@@ -1639,9 +1708,11 @@
     }
     function savePlannerDistance() {
       try {
-        localStorage.setItem('fishedge:planner:distance:v1', JSON.stringify(distancePoints.map(([lon, lat]) => ({ lon, lat }))));
+        if (distancePoints.length % 2) throw new Error('Complete the current distance measurement before saving');
+        persistPlannerDistance();
+        renderSavedPlannerItems();
         const status = document.getElementById('bv-mode-context');
-        if (status) { status.textContent = 'Distance measurements saved'; status.classList.add('visible'); }
+        if (status) { status.textContent = 'Distance measurements saved · open Saved to view'; status.classList.add('visible'); }
         document.getElementById('captain-dist-panel')?.classList.add('collapsed');
       } catch (error) {
         const status = document.getElementById('bv-mode-context');
@@ -1653,6 +1724,8 @@
     renderPlannerWaypoints();
     renderPlannerDistanceLayer();
     renderPlannerDistances();
+    renderSavedPlannerItems();
+    setPlannerTool('browse');
     // locate-me.js owns both the button and geolocation flow. Planner only
     // registers its map above; a second handler here would request location
     // twice and bypass the shared accuracy marker/error reporting.
@@ -1668,28 +1741,13 @@
     };
     captainPanelTitle('captain-pts-drag-handle', 'captain-pts-panel');
     captainPanelTitle('captain-dist-drag-handle', 'captain-dist-panel');
-    document.getElementById('captain-add-tool')?.addEventListener('click', event => {
-      waypointMode = !waypointMode;
-      if (waypointMode) {
-        distanceMode = false;
-        const distanceButton = document.getElementById('captain-dist-tool');
-        distanceButton?.classList.remove('active');
-        distanceButton?.setAttribute('aria-pressed', 'false');
-        document.getElementById('captain-dist-panel')?.classList.remove('visible');
-      }
-      event.currentTarget.setAttribute('aria-pressed', String(waypointMode));
-      event.currentTarget.classList.toggle('active', waypointMode);
-      const panel = document.getElementById('captain-pts-panel');
-      panel?.classList.toggle('visible', waypointMode || plannerWaypoints.length > 0);
-      if (waypointMode) panel?.classList.remove('collapsed');
-      document.getElementById('captain-save-btn')?.style.setProperty('display', plannerWaypoints.length ? 'inline-block' : 'none');
-      document.getElementById('bv-mode-context').textContent = waypointMode ? 'Waypoint mode · click map to add' : '';
-    });
+    document.getElementById('captain-add-tool')?.addEventListener('click', () => setPlannerTool(waypointMode ? 'browse' : 'waypoint'));
     document.getElementById('captain-save-btn')?.addEventListener('click', () => {
       try {
-        localStorage.setItem('fishedge:planner:waypoints', JSON.stringify(plannerWaypoints));
+        persistPlannerWaypoints();
+        renderSavedPlannerItems();
         const status = document.getElementById('bv-mode-context');
-        if (status) { status.textContent = 'Waypoints saved'; status.classList.add('visible'); }
+        if (status) { status.textContent = 'Waypoints saved · open Saved to view'; status.classList.add('visible'); }
       } catch (error) {
         const status = document.getElementById('bv-mode-context');
         if (status) { status.textContent = 'Unable to save waypoints'; status.classList.add('visible'); }
@@ -1697,23 +1755,9 @@
       }
     });
     document.getElementById('captain-dist-exit')?.addEventListener('click', event => { event.stopPropagation(); savePlannerDistance(); });
-    document.getElementById('captain-dist-tool')?.addEventListener('click', event => {
-      distanceMode = !distanceMode;
-      if (distanceMode) {
-        waypointMode = false;
-        const waypointButton = document.getElementById('captain-add-tool');
-        waypointButton?.classList.remove('active');
-        waypointButton?.setAttribute('aria-pressed', 'false');
-        document.getElementById('captain-pts-panel')?.classList.remove('visible');
-      }
-      event.currentTarget.setAttribute('aria-pressed', String(distanceMode));
-      event.currentTarget.classList.toggle('active', distanceMode);
-      const status = document.getElementById('bv-mode-context');
-      if (status) { status.textContent = distanceMode ? 'Distance mode · tap two points' : ''; status.classList.toggle('visible', distanceMode); }
-      const panel = document.getElementById('captain-dist-panel');
-      if (distanceMode) panel?.classList.remove('collapsed');
-      renderPlannerDistances();
-    });
+    document.getElementById('captain-dist-tool')?.addEventListener('click', () => setPlannerTool(distanceMode ? 'browse' : 'distance'));
+    document.getElementById('captain-saved-tool')?.addEventListener('click', () => setPlannerTool(plannerTool === 'saved' ? 'browse' : 'saved'));
+    document.addEventListener('keydown', event => { if (event.key === 'Escape' && plannerTool !== 'browse') setPlannerTool('browse'); });
     document.getElementById('captain-loran-td-tool')?.addEventListener('click', async event => {
       const button = event.currentTarget;
       const controller = window.LoranTdController || globalThis.LoranTdController;
@@ -1776,6 +1820,7 @@
     // when a hidden/inactive station feature participates in hit testing.
     map.getViewport().addEventListener('click', event => {
       if (event.target.closest('.ol-zoom, .ol-rotate, .bv-station-marker')) return;
+      if (waypointMode || distanceMode) return;
       if (activePlannerPreset !== 'tides') renderWaveReadout(map.getEventCoordinate(event));
     });
 
