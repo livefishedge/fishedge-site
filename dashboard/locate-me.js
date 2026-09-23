@@ -539,7 +539,7 @@
       btnCombined.setAttribute('data-tool', 'locate');
       btnCombined.innerHTML = btn.innerHTML;
       btnCombined.addEventListener('click', hooks.onLocateClick || function () {});
-      captainTools.appendChild(btnCombined);
+      captainTools.insertBefore(btnCombined, captainTools.querySelector('.captain-tool-btn') || null);
     }
 
     console.info('[fishedge-locate] button mounted at #fishedge-locate-host' +

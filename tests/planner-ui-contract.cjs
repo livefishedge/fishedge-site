@@ -95,6 +95,12 @@ assert(html.includes('modeReadout.style.display = \'none\''), 'mode changes must
 assert(html.includes("preserveTideChart:name === 'tides'"), 'mode changes must not preserve a stale tide chart');
 assert(html.includes('href="/dashboard/assets/css/captain-tools.css"'), 'planner must load Captain tool CSS from the canonical absolute path');
 assert(html.includes('src="/dashboard/locate-me.js"'), 'planner must load Locate Me from the canonical absolute path');
+assert(html.includes('src="/dashboard/chartbook.js"'), 'planner must load the shared Captain\'s Chartbook client');
+assert(html.includes('id="captain-fs-btn"'), 'planner must expose the shared fullscreen tool');
+assert(html.includes("Captain's Chartbook"), 'planner must use the shared Captain\'s Chartbook name');
+assert(!html.includes('Saved on this device'), 'planner must not advertise browser-only saved storage');
+assert(html.includes('savePlannerWaypointsToChartbook'), 'planner waypoint save must use Captain\'s Chartbook');
+assert(html.includes('savePlannerDistancesToChartbook'), 'planner distance save must use Captain\'s Chartbook');
 assert(html.includes('id="captain-saved-tool"'), 'planner must expose a saved-items tool');
 assert(html.includes('function setPlannerTool(next)'), 'planner tools must share one authoritative mode transition');
 assert(html.includes("setPlannerTool(waypointMode ? 'browse' : 'waypoint')"), 'waypoint and browse states must be mutually exclusive');

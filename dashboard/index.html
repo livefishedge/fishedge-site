@@ -37,6 +37,7 @@
   <!-- Auth + Analytics -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-init.js?v=20260918-user-activity"></script>
+  <script src="/dashboard/chartbook.js"></script>
 <script src="canyon-charts.js?v=20260920-layer-ownership-v1"></script>
   <script src="loran-td.js?v=20260818-3"></script>
   <script src="https://cdn.jsdelivr.net/npm/posthog-js@1.200.0/dist/array.js"></script>
@@ -1345,6 +1346,9 @@
         <line x1="16" y1="11" x2="20" y2="11" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
       </svg>
     </button>
+    <button id="captain-chartbook-tool" class="captain-tool-btn" title="Open Captain's Chartbook" aria-label="Open Captain's Chartbook" data-tool="chartbook">
+      <svg width="18" height="18" viewBox="0 0 22 22" fill="none" aria-hidden="true"><path d="M5 3.5h12a1.5 1.5 0 0 1 1.5 1.5v13l-7.5-3.8-7.5 3.8V5A1.5 1.5 0 0 1 5 3.5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+    </button>
     <button id="captain-loran-td-tool" class="captain-tool-btn" title="Loran-C TD Grid (GRI 9960)" aria-label="Loran-C TD Grid (GRI 9960)" aria-pressed="false">
       <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
         <circle cx="10" cy="2" r="1.1" fill="currentColor"/>
@@ -1358,8 +1362,8 @@
   </div>
   <div id="captain-pts-panel" style="display:none;position:fixed;top:80px;left:8px;z-index:1150;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;width:280px;max-height:320px;overflow-y:auto;font-size:12px;color:var(--fg);">
     <div id="captain-pts-drag-handle" style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;">
-      <div id="captain-pts-title" style="font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:0.6px;color:#7a8fa8;">My Waypoints</div>
-      <button id="captain-save-btn" title="Save waypoints">Save Waypoints</button>
+      <div id="captain-pts-title" style="font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:0.6px;color:#7a8fa8;">Captain's Chartbook · Waypoints</div>
+      <button id="captain-save-btn" title="Save to Captain's Chartbook or export">Save / Export</button>
     </div>
     <div id="captain-pts-list"></div>
   </div>
@@ -10912,6 +10916,9 @@ function saveDistMeasurement() {
   try {
     localStorage.setItem('fishedge_last_distance_measurement', JSON.stringify({ pairs, savedAt: Date.now() }));
   } catch (_) {}
+  Promise.resolve(window.FishEdgeChartbook?.save('distance', pairs.map(pair => ({ id: pair.chartbookId || (pair.chartbookId = window.FishEdgeChartbook?.makeId?.()), geometry: { type: 'LineString', coordinates: [[pair.start.lon, pair.start.lat], [pair.end.lon, pair.end.lat]] }, metadata: pair })), 'Distance') || { ok: false, reason: 'unavailable' }).then(result => {
+    showCopyToast(result?.ok ? "Saved to Captain's Chartbook" : result?.reason === 'signed_out' ? "Sign in to save to Captain's Chartbook" : 'Chartbook save unavailable');
+  }).catch(() => showCopyToast('Chartbook save unavailable'));
   persistDistancePoints();
   captainDistTool.active = false;
   document.getElementById('captain-dist-tool')?.classList.remove('active');
@@ -11197,6 +11204,16 @@ function showSaveMenu() {
     { label: 'GeoJSON (Digital)', ext: 'geojson', fn: () => waypointsToGeoJSON(captainAddTool.points) },
     { label: 'KML (Google Earth)', ext: 'kml', fn: () => waypointsToKML(captainAddTool.points) },
   ];
+  const chartbookBtn = document.createElement('button');
+  chartbookBtn.textContent = "Save to Captain's Chartbook";
+  chartbookBtn.style.cssText = 'background:#1d4f91;border:1px solid #4d7dff;border-radius:6px;color:#fff;cursor:pointer;font-size:12px;padding:7px 10px;text-align:left;width:100%;font-weight:700;';
+  chartbookBtn.addEventListener('click', async () => {
+    const result = await window.FishEdgeChartbook?.save('waypoint', captainAddTool.points.map(p => ({ id: p.chartbookId || (p.chartbookId = window.FishEdgeChartbook?.makeId?.()), geometry: { type: 'Point', coordinates: [p.lon, p.lat] }, metadata: p })), 'Waypoint') || { ok: false, reason: 'unavailable' };
+    showCopyToast(result?.ok ? "Saved to Captain's Chartbook" : result?.reason === 'signed_out' ? "Sign in to save to Captain's Chartbook" : 'Chartbook save unavailable');
+    closeSaveMenu();
+  });
+  menu.appendChild(chartbookBtn);
+  const exportLabel = document.createElement('div'); exportLabel.textContent = 'Export'; exportLabel.style.cssText = 'color:#7a8fa8;font-size:10px;font-weight:800;text-transform:uppercase;padding:6px 2px 2px;'; menu.appendChild(exportLabel);
   formats.forEach(f => {
     const btn = document.createElement('button');
     btn.textContent = f.label;
@@ -11550,6 +11567,11 @@ document.getElementById('captain-save-btn')?.addEventListener('click', (e) => {
   const menu = document.getElementById('captain-save-menu');
   if (menu) { closeSaveMenu(); return; }
   showSaveMenu();
+});
+
+document.getElementById('captain-chartbook-tool')?.addEventListener('click', () => {
+  if (captainAddTool.points.length) showSaveMenu();
+  else showCopyToast("Add a waypoint first, then save it to Captain's Chartbook");
 });
 
 document.getElementById('captain-fs-btn')?.addEventListener('click', () => {
