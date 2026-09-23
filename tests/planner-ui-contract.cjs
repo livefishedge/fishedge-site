@@ -102,6 +102,8 @@ assert(!html.includes('Saved on this device'), 'planner must not advertise brows
 assert(html.includes('savePlannerWaypointsToChartbook'), 'planner waypoint save must use Captain\'s Chartbook');
 assert(html.includes('savePlannerDistancesToChartbook'), 'planner distance save must use Captain\'s Chartbook');
 assert(html.includes('id="captain-saved-tool"'), 'planner must expose a saved-items tool');
+assert(html.includes("title=\"Captain's Chartbook\""), 'planner saved tool must be labeled Captain\'s Chartbook');
+assert(!html.includes('`<span>Moon: ${val(\'bv-moon-phase\')'), 'planner must not render the Moon/sun summary band');
 assert(html.includes('function setPlannerTool(next)'), 'planner tools must share one authoritative mode transition');
 assert(html.includes("setPlannerTool(waypointMode ? 'browse' : 'waypoint')"), 'waypoint and browse states must be mutually exclusive');
 assert(html.includes("setPlannerTool(distanceMode ? 'browse' : 'distance')"), 'distance and browse states must be mutually exclusive');

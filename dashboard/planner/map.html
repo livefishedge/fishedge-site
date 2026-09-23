@@ -379,7 +379,7 @@
           <line x1="16" y1="11" x2="20" y2="11" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
         </svg>
       </button>
-      <button id="captain-saved-tool" class="captain-tool-btn" title="Saved waypoints and distances" aria-label="Saved waypoints and distances" data-tool="saved" aria-pressed="false">
+      <button id="captain-saved-tool" class="captain-tool-btn" title="Captain's Chartbook" aria-label="Open Captain's Chartbook" data-tool="saved" aria-pressed="false">
         <svg width="18" height="18" viewBox="0 0 22 22" fill="none" aria-hidden="true">
           <path d="M5 3.5h12a1.5 1.5 0 0 1 1.5 1.5v13l-7.5-3.8-7.5 3.8V5A1.5 1.5 0 0 1 5 3.5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
         </svg>
@@ -838,11 +838,12 @@
     function renderModeContext() {
       const el = document.getElementById('bv-mode-context');
       if (!el) return;
-      const show = activePlannerPreset === 'weather' || activePlannerPreset === 'tides';
-      el.classList.toggle('visible', show);
-      if (!show) { el.replaceChildren(); return; }
-      const val = id => document.getElementById(id)?.textContent || '—';
-      el.innerHTML = `<span>Moon: ${val('bv-moon-phase')} · ${val('bv-moon-illum')}</span><span>Sunrise: ${val('bv-sun-rise')}</span><span>Sunset: ${val('bv-sun-set')}</span>`;
+      // Moon/sun context used to be rendered as a floating band across the
+      // Planner. It obscured map content and duplicated the dedicated Moon
+      // panel. Keep this node available for save feedback, but never inject
+      // the summary band automatically.
+      el.replaceChildren();
+      el.classList.remove('visible');
     }
 
     // ---- tides (CO-OPS harmonic predictions, rendered when station id present) ----
