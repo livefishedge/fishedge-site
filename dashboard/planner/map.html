@@ -379,7 +379,7 @@
           <line x1="16" y1="11" x2="20" y2="11" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
         </svg>
       </button>
-      <button id="captain-saved-tool" class="captain-tool-btn" title="Captain's Chartbook" aria-label="Open Captain's Chartbook" data-tool="saved" aria-pressed="false">
+      <button id="captain-saved-tool" class="captain-tool-btn" title="LogBook" aria-label="Open LogBook" data-tool="saved" aria-pressed="false">
         <svg width="18" height="18" viewBox="0 0 22 22" fill="none" aria-hidden="true">
           <path d="M5 3.5h12a1.5 1.5 0 0 1 1.5 1.5v13l-7.5-3.8-7.5 3.8V5A1.5 1.5 0 0 1 5 3.5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
         </svg>
@@ -397,21 +397,21 @@
     </div>
     <div id="captain-pts-panel">
       <div id="captain-pts-drag-handle">
-        <div id="captain-pts-title">Captain's Chartbook · Waypoints</div>
-        <button id="captain-save-btn" title="Save waypoints to Captain's Chartbook">Save</button>
+        <div id="captain-pts-title">LogBook · Waypoints</div>
+        <button id="captain-save-btn" title="Save waypoints to LogBook">Save</button>
       </div>
       <div id="captain-pts-list"></div>
     </div>
     <div id="captain-dist-panel">
       <div id="captain-dist-drag-handle">
         <span>Distance</span>
-        <button id="captain-dist-exit" type="button" title="Save distance to Captain's Chartbook">Save</button>
+        <button id="captain-dist-exit" type="button" title="Save distance to LogBook">Save</button>
       </div>
       <div id="captain-dist-list"></div>
       <div id="captain-dist-total"></div>
     </div>
     <div id="captain-saved-panel" aria-label="Saved planner items">
-      <div class="captain-saved-title">Captain's Chartbook</div>
+      <div class="captain-saved-title">LogBook</div>
       <div class="captain-saved-section"><b>Waypoints</b><div id="captain-saved-waypoints"></div></div>
       <div class="captain-saved-section"><b>Distances</b><div id="captain-saved-distances"></div></div>
     </div>
@@ -1645,18 +1645,18 @@
     function persistPlannerDistance() {
       localStorage.setItem('fishedge:planner:distance:v1', JSON.stringify(distancePoints.map(([lon, lat]) => ({ lon, lat }))));
     }
-    async function savePlannerWaypointsToChartbook() {
-      if (!window.FishEdgeChartbook || !plannerWaypoints.length) return { ok: false, reason: 'empty' };
-      return FishEdgeChartbook.save('waypoint', plannerWaypoints.map(point => ({ id: point.chartbookId || (point.chartbookId = FishEdgeChartbook.makeId()), geometry: { type: 'Point', coordinates: [point.lon, point.lat] }, metadata: point })), 'Waypoint');
+    async function savePlannerWaypointsToLogBook() {
+      if (!window.FishEdgeLogBook || !plannerWaypoints.length) return { ok: false, reason: 'empty' };
+      return FishEdgeLogBook.save('waypoint', plannerWaypoints.map(point => ({ id: point.logbookId, geometry: { type: 'Point', coordinates: [point.lon, point.lat] }, metadata: point })), 'Waypoint');
     }
-    async function savePlannerDistancesToChartbook() {
-      if (!window.FishEdgeChartbook || !distancePoints.length || distancePoints.length % 2) return { ok: false, reason: 'incomplete' };
-      return FishEdgeChartbook.save('distance', Array.from({ length: distancePoints.length / 2 }, (_, i) => ({ id: `planner-distance-${i}`, geometry: { type: 'LineString', coordinates: [distancePoints[i * 2], distancePoints[i * 2 + 1]] }, metadata: { distance_nm: distanceNm(distancePoints[i * 2], distancePoints[i * 2 + 1]) } })), 'Distance');
+    async function savePlannerDistancesToLogBook() {
+      if (!window.FishEdgeLogBook || !distancePoints.length || distancePoints.length % 2) return { ok: false, reason: 'incomplete' };
+      return FishEdgeLogBook.save('distance', Array.from({ length: distancePoints.length / 2 }, (_, i) => ({ geometry: { type: 'LineString', coordinates: [distancePoints[i * 2], distancePoints[i * 2 + 1]] }, metadata: { distance_nm: distanceNm(distancePoints[i * 2], distancePoints[i * 2 + 1]) } })), 'Distance');
     }
-    async function loadPlannerChartbook() {
-      if (!window.FishEdgeChartbook) return;
-      const [waypoints, distances] = await Promise.all([FishEdgeChartbook.list('waypoint'), FishEdgeChartbook.list('distance')]);
-      (waypoints.data || []).forEach(item => { const c = item.geometry?.coordinates; if (item.geometry?.type === 'Point' && Array.isArray(c) && c.length === 2 && !plannerWaypoints.some(p => Math.abs(p.lon - c[0]) < 1e-8 && Math.abs(p.lat - c[1]) < 1e-8)) plannerWaypoints.push({ lon: Number(c[0]), lat: Number(c[1]) }); });
+    async function loadPlannerLogBook() {
+      if (!window.FishEdgeLogBook) return;
+      const [waypoints, distances] = await Promise.all([FishEdgeLogBook.list('waypoint'), FishEdgeLogBook.list('distance')]);
+      (waypoints.data || []).forEach(item => { const c = item.geometry?.coordinates; if (item.geometry?.type === 'Point' && Array.isArray(c) && c.length === 2 && !plannerWaypoints.some(p => Math.abs(p.lon - c[0]) < 1e-8 && Math.abs(p.lat - c[1]) < 1e-8)) plannerWaypoints.push({ lon: Number(c[0]), lat: Number(c[1]), logbookId: item.id }); });
       (distances.data || []).forEach(item => { const c = item.geometry?.coordinates; if (item.geometry?.type === 'LineString' && Array.isArray(c) && c.length >= 2) { const a = c[0], b = c[1]; if (!distancePoints.some(p => Math.abs(p[0] - a[0]) < 1e-8 && Math.abs(p[1] - a[1]) < 1e-8 && Math.abs(distancePoints[distancePoints.length - 1]?.[0] - b[0]) < 1e-8)) distancePoints.push([a[0], a[1]], [b[0], b[1]]); } });
       renderPlannerWaypoints(); renderPlannerDistanceLayer(); renderPlannerDistances(); renderSavedPlannerItems();
     }
@@ -1735,8 +1735,8 @@
         persistPlannerDistance();
         renderSavedPlannerItems();
         const status = document.getElementById('bv-mode-context');
-        if (status) { status.textContent = 'Saving to Captain\'s Chartbook…'; status.classList.add('visible'); }
-        savePlannerDistancesToChartbook().then(result => { if (status) { status.textContent = result.ok ? 'Saved to Captain\'s Chartbook' : result.reason === 'signed_out' ? 'Sign in to save to Captain\'s Chartbook' : 'Draft kept; Chartbook save unavailable'; status.classList.add('visible'); } });
+        if (status) { status.textContent = 'Saving to LogBook…'; status.classList.add('visible'); }
+        savePlannerDistancesToLogBook().then(result => { if (status) { status.textContent = result.ok ? 'Saved to LogBook' : result.reason === 'signed_out' ? 'Sign in to save to LogBook' : 'LogBook storage unavailable'; status.classList.add('visible'); } });
         document.getElementById('captain-dist-panel')?.classList.add('collapsed');
       } catch (error) {
         const status = document.getElementById('bv-mode-context');
@@ -1750,7 +1750,7 @@
     renderPlannerDistances();
     renderSavedPlannerItems();
     setPlannerTool('browse');
-    loadPlannerChartbook().catch(error => console.warn('[planner] Chartbook load failed:', error));
+    loadPlannerLogBook().catch(error => console.warn('[planner] LogBook load failed:', error));
     // locate-me.js owns both the button and geolocation flow. Planner only
     // registers its map above; a second handler here would request location
     // twice and bypass the shared accuracy marker/error reporting.
@@ -1772,8 +1772,8 @@
         persistPlannerWaypoints();
         renderSavedPlannerItems();
         const status = document.getElementById('bv-mode-context');
-        if (status) { status.textContent = 'Saving to Captain\'s Chartbook…'; status.classList.add('visible'); }
-        savePlannerWaypointsToChartbook().then(result => { if (status) { status.textContent = result.ok ? 'Saved to Captain\'s Chartbook' : result.reason === 'signed_out' ? 'Sign in to save to Captain\'s Chartbook' : 'Draft kept; Chartbook save unavailable'; status.classList.add('visible'); } });
+        if (status) { status.textContent = 'Saving to LogBook…'; status.classList.add('visible'); }
+        savePlannerWaypointsToLogBook().then(result => { if (status) { status.textContent = result.ok ? 'Saved to LogBook' : result.reason === 'signed_out' ? 'Sign in to save to LogBook' : 'LogBook storage unavailable'; status.classList.add('visible'); } });
       } catch (error) {
         const status = document.getElementById('bv-mode-context');
         if (status) { status.textContent = 'Unable to save waypoints'; status.classList.add('visible'); }

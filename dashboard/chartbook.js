@@ -1,9 +1,9 @@
-/* FishEdge Captain's Chartbook — shared account-backed waypoint/measurement API. */
+/* FishEdge LogBook — shared account-backed waypoint/measurement API. */
 (function (global) {
   'use strict';
   const URL = 'https://wfdpfeptmyiqifgwqpzu.supabase.co';
   const KEY = 'sb_publishable_W6wnJkT70jb69JUZgM1dow_nabPZycR';
-  const TABLE = 'chartbook_items';
+  const TABLE = 'logbook_items';
   let client = null;
   function getClient() {
     if (global.sb) return global.sb;
@@ -33,5 +33,5 @@
     const c = getClient(); const { data, error } = await c.from(TABLE).select('*').eq('user_id', s.user.id).eq('kind', kind).order('updated_at', { ascending: false });
     return error ? { ok: false, reason: 'server', data: [], error } : { ok: true, data: data || [] };
   }
-  global.FishEdgeChartbook = { makeId, stableId, save, list };
+  global.FishEdgeLogBook = { makeId, stableId, save, list };
 })(window);

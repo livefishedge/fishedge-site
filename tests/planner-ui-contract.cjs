@@ -97,12 +97,12 @@ assert(html.includes('href="/dashboard/assets/css/captain-tools.css"'), 'planner
 assert(html.includes('src="/dashboard/locate-me.js"'), 'planner must load Locate Me from the canonical absolute path');
 assert(html.includes('src="/dashboard/chartbook.js"'), 'planner must load the shared Captain\'s Chartbook client');
 assert(html.includes('id="captain-fs-btn"'), 'planner must expose the shared fullscreen tool');
-assert(html.includes("Captain's Chartbook"), 'planner must use the shared Captain\'s Chartbook name');
+assert(html.includes('>LogBook</div>'), 'planner must use the shared LogBook name');
 assert(!html.includes('Saved on this device'), 'planner must not advertise browser-only saved storage');
-assert(html.includes('savePlannerWaypointsToChartbook'), 'planner waypoint save must use Captain\'s Chartbook');
-assert(html.includes('savePlannerDistancesToChartbook'), 'planner distance save must use Captain\'s Chartbook');
+assert(html.includes('savePlannerWaypointsToLogBook'), 'planner waypoint save must use LogBook');
+assert(html.includes('savePlannerDistancesToLogBook'), 'planner distance save must use LogBook');
 assert(html.includes('id="captain-saved-tool"'), 'planner must expose a saved-items tool');
-assert(html.includes("title=\"Captain's Chartbook\""), 'planner saved tool must be labeled Captain\'s Chartbook');
+assert(html.includes('title="LogBook"'), 'planner saved tool must be labeled LogBook');
 assert(!html.includes('`<span>Moon: ${val(\'bv-moon-phase\')'), 'planner must not render the Moon/sun summary band');
 assert(html.includes('function setPlannerTool(next)'), 'planner tools must share one authoritative mode transition');
 assert(html.includes("setPlannerTool(waypointMode ? 'browse' : 'waypoint')"), 'waypoint and browse states must be mutually exclusive');
