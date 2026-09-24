@@ -6,13 +6,20 @@
   const TABLE = 'logbook_items';
   const REQUEST_TIMEOUT_MS = 8000;
   let client = null;
+  let authHooked = false;
   function bounded(promise, label) {
     return Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(Object.assign(new Error(`${label} timed out`), { code: 'TIMEOUT' })), REQUEST_TIMEOUT_MS))]);
   }
   function getClient() {
-    if (global.sb) return global.sb;
-    if (!global.supabase?.createClient) return null;
-    client ||= global.supabase.createClient(URL, KEY, { auth: { persistSession: true, autoRefreshToken: true, storageKey: 'ocean-mvp-auth' } });
+    if (global.sb) client = global.sb;
+    else {
+      if (!global.supabase?.createClient) return null;
+      client ||= global.supabase.createClient(URL, KEY, { auth: { persistSession: true, autoRefreshToken: true, storageKey: 'ocean-mvp-auth' } });
+    }
+    if (client?.auth?.onAuthStateChange && !authHooked) {
+      authHooked = true;
+      client.auth.onAuthStateChange(() => dispatchChange());
+    }
     return client;
   }
   function makeId() { return global.crypto?.randomUUID ? global.crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`; }
@@ -33,7 +40,18 @@
     } catch (_) { return []; }
   }
   function allLocalRows() { try { const rows = JSON.parse(global.localStorage.getItem(LOCAL_KEY) || '[]'); return Array.isArray(rows) ? rows : []; } catch (_) { return []; } }
-  function writeLocal(rows) { try { global.localStorage.setItem(LOCAL_KEY, JSON.stringify(rows)); dispatchChange(); return true; } catch (_) { return false; } }
+  function writeLocal(rows, notify = true) { try { global.localStorage.setItem(LOCAL_KEY, JSON.stringify(rows)); if (notify) dispatchChange(); return true; } catch (_) { return false; } }
+  function claimUnsignedLocalRows(userId) {
+    if (!userId) return;
+    const rows = allLocalRows();
+    let changed = false;
+    const claimed = rows.map(row => {
+      if ((row.owner_scope || 'local') !== 'local') return row;
+      changed = true;
+      return { ...row, owner_scope: userId, user_id: userId, pending_sync: true };
+    });
+    if (changed) writeLocal(claimed, false);
+  }
   async function retryPending(scope, client, userId) {
     const pending = localRows(scope).filter(row => row.pending_sync);
     if (!pending.length || !client || !userId) return [];
@@ -47,6 +65,7 @@
   async function save(kind, items, title) {
     const s = await session();
     const scope = s?.user?.id || 'local';
+    claimUnsignedLocalRows(s?.user?.id);
     const rows = items.map(item => ({ id: item.id || stableId(kind, item.geometry, scope), user_id: s?.user?.id || null, owner_scope: scope, kind, title: item.title || title || (kind === 'waypoint' ? 'Waypoint' : 'Distance'), geometry: item.geometry, metadata: item.metadata || {}, updated_at: new Date().toISOString(), pending_sync: false }));
     const serverRows = rows.map(({ owner_scope, pending_sync, ...row }) => row);
     const c = getClient();
@@ -63,6 +82,7 @@
   async function list(kind) {
     const s = await session(); const c = getClient();
     if (s && c) {
+      claimUnsignedLocalRows(s.user.id);
       await retryPending(s.user.id, c, s.user.id);
       let response; try { response = await bounded(c.from(TABLE).select('*').eq('user_id', s.user.id).eq('kind', kind).order('updated_at', { ascending: false }), 'LogBook list'); } catch (error) { response = { data: [], error: { code: error?.code === 'TIMEOUT' ? 'TIMEOUT' : 'NETWORK', message: error?.message } }; }
       const { data, error } = response;
