@@ -1772,6 +1772,7 @@ function setActiveRegion(regionId, regionMeta) {
     window._combinedUvLayer = null;
     window._combinedHeightLayer = null;
     gridCache.__bathy_json = null; // invalidate stale bathy cache for new region
+    gridCache.__bathy_json_url = null;
     // Drop OL land layers so the next render rebuilds them with the new region's
     // bathy. Without this, ensureMobileLandLayer / ensureDesktopLandLayer early-return
     // on `if (landLayer) return;` and the old region's beige land canvas is painted
@@ -4805,11 +4806,19 @@ function frontLabelTrace(frontData, label) {
 /* ===== Bathymetry (.nc) ===== */
 /* ===== Improved Bathymetry Loader ===== */
 async function loadBathymetryJson(url) {
-  if (gridCache.__bathy_json) return gridCache.__bathy_json;
+  const requestRegion = REGION_ID;
+  if (gridCache.__bathy_json && gridCache.__bathy_json_url === url) return gridCache.__bathy_json;
 
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Failed to load bathy JSON: ${url}`);
   const data = await res.json();
+
+  // Region selection can change while the first request is in flight (the
+  // auth/profile callback commonly resolves after the default South load).
+  // Never allow that stale response to populate or paint the active region.
+  if (requestRegion !== REGION_ID || url !== BATHY_JSON_URL) {
+    throw new Error(`Stale bathymetry response ignored for ${requestRegion}`);
+  }
 
   // Validate structure
   if (!data.xAxis || !data.yAxis || !data.depth) {
@@ -4826,6 +4835,7 @@ async function loadBathymetryJson(url) {
   };
 
   gridCache.__bathy_json = out;
+  gridCache.__bathy_json_url = url;
   return out;
 }
 
