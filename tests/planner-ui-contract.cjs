@@ -97,6 +97,8 @@ assert(html.includes('href="/dashboard/assets/css/captain-tools.css"'), 'planner
 assert(/src="\/dashboard\/locate-me\.js(?:\?[^" ]+)?"/.test(html), 'planner must load Locate Me from the canonical absolute path');
 assert(/src="\/dashboard\/chartbook\.js(?:\?[^" ]+)?"/.test(html), 'planner must load the shared Captain\'s Chartbook client');
 assert(html.includes('id="captain-fs-btn"'), 'planner must expose the shared fullscreen tool');
+assert(html.includes('body.fishedge-planner-fullscreen #bv-hamburger-btn{ display:none !important; }'), 'planner fullscreen must hide the hamburger');
+assert(html.includes('.ol-zoom { display:none !important; }'), 'planner must remove the +/- zoom control');
 assert(html.includes('>LogBook</div>'), 'planner must use the shared LogBook name');
 assert(!html.includes('Saved on this device'), 'planner must not advertise browser-only saved storage');
 assert(html.includes('savePlannerWaypointsToLogBook'), 'planner waypoint save must use LogBook');
@@ -105,7 +107,10 @@ assert(html.includes('id="captain-saved-tool"'), 'planner must expose a saved-it
 assert(html.includes('title="LogBook"'), 'planner saved tool must be labeled LogBook');
 assert(html.includes('href="/dashboard/">Dashboard</a>'), 'planner menu must link to Dashboard');
 assert(html.includes('class="bv-menu-footer"'), 'planner menu must use a dedicated navigation footer');
-assert(html.includes("textContent = 'Load'"), 'planner LogBook rows must expose Load actions');
+assert(html.includes("? 'Unload' : 'Load'"), 'planner LogBook rows must expose Load/Unload actions');
+assert(html.includes('const plannerLoadedLogBookIds = new Set()'), 'planner must track loaded LogBook records');
+assert(html.includes("textContent = 'Edit'"), 'planner LogBook rows must expose Edit actions');
+assert(html.includes('const plannerLoadedDistanceIds = new Map()'), 'planner must retain distance record IDs for edits');
 assert(!html.includes('id="bv-mode-context"'), 'planner must not show blocking mode banners');
 assert(!html.includes('`<span>Moon: ${val(\'bv-moon-phase\')'), 'planner must not render the Moon/sun summary band');
 assert(html.includes('function setPlannerTool(next)'), 'planner tools must share one authoritative mode transition');

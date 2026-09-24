@@ -7,12 +7,16 @@ const chartbook = fs.readFileSync('dashboard/chartbook.js', 'utf8');
 
 assert(/src="\/dashboard\/chartbook\.js(?:\?[^" ]+)?"/.test(dashboard), 'dashboard must load shared LogBook client');
 assert(dashboard.includes('id="captain-fs-btn"'), 'dashboard must expose fullscreen');
+assert(dashboard.includes('body.fishedge-app-fullscreen #combined-menu-btn{ display:none !important; }'), 'dashboard fullscreen must hide both hamburger controls');
 assert(dashboard.includes('id="captain-chartbook-tool"'), 'dashboard must expose LogBook');
 assert(dashboard.includes('Save to LogBook'), 'dashboard waypoint save must use LogBook');
 assert(!dashboard.includes('Saved on this device'), 'dashboard must not advertise browser-only saved storage');
 assert(locate.includes("captainTools.querySelector('#captain-fs-btn')"), 'Locate Me must mount relative to fullscreen');
 assert(dashboard.includes('href="/planner/">PLANNER</a>'), 'dashboard menu must link to Planner');
 assert(dashboard.includes("loadDashboardLogBookItem(item)"), 'dashboard LogBook rows must load records onto the map');
+assert(dashboard.includes('const dashboardLoadedLogBookIds = new Set()'), 'dashboard must track loaded LogBook records');
+assert(dashboard.includes('unloadDashboardLogBookItem'), 'dashboard LogBook rows must unload records from the map');
+assert(dashboard.includes("edit.textContent = 'Edit'"), 'dashboard LogBook rows must expose Edit actions');
 assert(dashboard.includes('Number.isFinite(p.chl)'), 'loaded waypoints must tolerate missing sampled values');
 assert(dashboard.includes('id="home-link-wrap"><a href="/planner/">PLANNER</a>'), 'dashboard footer must expose Planner and Home buttons');
 assert(dashboard.includes('id="combined-page-links"'), 'combined dashboard footer must expose the correct navigation buttons');

@@ -108,6 +108,7 @@
     .captain-saved-empty{ color:#7a8fa8; font-style:italic; }
     .captain-saved-row{ display:flex; align-items:flex-start; justify-content:space-between; gap:8px; padding:4px 0; border-bottom:1px solid rgba(255,255,255,.06); font:11px/1.35 ui-monospace,monospace; }
     .captain-saved-row button{ flex:0 0 auto; padding:2px 6px; border:1px solid #4d7dff; border-radius:4px; background:#1d4f91; color:#fff; font-size:10px; cursor:pointer; }
+    .captain-saved-row span:last-child{ display:flex; gap:4px; flex:0 0 auto; }
     body.fishedge-planner-fullscreen{ overflow:hidden !important; }
     body.fishedge-planner-fullscreen .bv-framebar,
     body.fishedge-planner-fullscreen .bv-active-layer-strip,
@@ -115,6 +116,7 @@
     body.fishedge-planner-fullscreen #bv-menu-panel,
     body.fishedge-planner-fullscreen #bv-wave-readout,
     body.fishedge-planner-fullscreen .bv-mode-context{ display:none !important; }
+    body.fishedge-planner-fullscreen #bv-hamburger-btn{ display:none !important; }
     body.fishedge-planner-fullscreen .bv-map{ position:fixed !important; inset:0 !important; top:0 !important; width:100vw !important; height:100dvh !important; z-index:2000 !important; }
     body.fishedge-planner-fullscreen #captain-tools,
     body.fishedge-planner-fullscreen #bv-hamburger-btn{ z-index:2200 !important; top:env(safe-area-inset-top,8px) !important; }
@@ -308,7 +310,7 @@
 
     .ol-attribution { color: #6b7d92 !important; background: rgba(5, 11, 16, 0.8) !important; font-size: 10px !important; pointer-events: none; }
     .ol-control button { background-color: rgba(5, 11, 16, 0.8) !important; color: #b3e5fc !important; }
-    .ol-zoom { top: auto; bottom: auto; right: 0.5em; left: auto; }
+    .ol-zoom { display:none !important; }
     .ol-scale-line { pointer-events: none; }
 
     @media (max-width: 640px) {
@@ -1652,6 +1654,8 @@
     }
     const distancePoints = [];
     const plannerLogBookRows = { waypoints: [], distances: [] };
+    const plannerLoadedLogBookIds = new Set();
+    const plannerLoadedDistanceIds = new Map();
     let distanceMode = false;
     let plannerTool = 'browse';
     function persistPlannerWaypoints() {
@@ -1666,7 +1670,7 @@
     }
     async function savePlannerDistancesToLogBook() {
       if (!window.FishEdgeLogBook || !distancePoints.length || distancePoints.length % 2) return { ok: false, reason: 'incomplete' };
-      return FishEdgeLogBook.save('distance', Array.from({ length: distancePoints.length / 2 }, (_, i) => ({ geometry: { type: 'LineString', coordinates: [distancePoints[i * 2], distancePoints[i * 2 + 1]] }, metadata: { distance_nm: distanceNm(distancePoints[i * 2], distancePoints[i * 2 + 1]) } })), 'Distance');
+      return FishEdgeLogBook.save('distance', Array.from({ length: distancePoints.length / 2 }, (_, i) => { const a = distancePoints[i * 2], b = distancePoints[i * 2 + 1]; const key = `${a[0]},${a[1]}|${b[0]},${b[1]}`; return { id: plannerLoadedDistanceIds.get(key), geometry: { type: 'LineString', coordinates: [a, b] }, metadata: { distance_nm: distanceNm(a, b) } }; }), 'Distance');
     }
     async function loadPlannerLogBook() {
       if (!window.FishEdgeLogBook) return;
@@ -1685,9 +1689,10 @@
         } else plannerLogBookRows.waypoints.forEach((item, index) => {
           const c = item.geometry?.coordinates || [];
           const label = document.createElement('span'); label.textContent = `${index + 1} · ${item.title || 'Waypoint'} · ${Number(c[1]).toFixed(4)}°, ${Number(c[0]).toFixed(4)}°`;
-          const load = document.createElement('button'); load.type = 'button'; load.textContent = 'Load'; load.title = 'Show this waypoint on the map';
-          load.addEventListener('click', () => { if (c.length !== 2) return; if (!plannerWaypoints.some(point => Math.abs(point.lon - c[0]) < 1e-8 && Math.abs(point.lat - c[1]) < 1e-8)) plannerWaypoints.push({ lon: Number(c[0]), lat: Number(c[1]), logbookId: item.id }); setPlannerTool('waypoint'); });
-          const row = document.createElement('div'); row.className = 'captain-saved-row'; row.append(label, load); waypointList.append(row);
+          const load = document.createElement('button'); load.type = 'button'; load.textContent = plannerLoadedLogBookIds.has(item.id) ? 'Unload' : 'Load'; load.title = plannerLoadedLogBookIds.has(item.id) ? 'Remove this waypoint from the map' : 'Show this waypoint on the map';
+          load.addEventListener('click', () => { if (c.length !== 2) return; const existing = plannerWaypoints.findIndex(point => point.logbookId === item.id || (Math.abs(point.lon - c[0]) < 1e-8 && Math.abs(point.lat - c[1]) < 1e-8)); if (plannerLoadedLogBookIds.has(item.id)) { if (existing >= 0) plannerWaypoints.splice(existing, 1); plannerLoadedLogBookIds.delete(item.id); setPlannerTool('browse'); } else { if (existing < 0) plannerWaypoints.push({ lon: Number(c[0]), lat: Number(c[1]), logbookId: item.id }); plannerLoadedLogBookIds.add(item.id); setPlannerTool('waypoint'); } });
+          const edit = document.createElement('button'); edit.type = 'button'; edit.textContent = 'Edit'; edit.title = 'Load this waypoint into the editor'; edit.addEventListener('click', () => { if (c.length !== 2) return; if (!plannerWaypoints.some(point => point.logbookId === item.id)) plannerWaypoints.push({ lon: Number(c[0]), lat: Number(c[1]), logbookId: item.id }); plannerLoadedLogBookIds.add(item.id); setPlannerTool('waypoint'); });
+          const actions = document.createElement('span'); actions.append(load, edit); const row = document.createElement('div'); row.className = 'captain-saved-row'; row.append(label, actions); waypointList.append(row);
         });
       }
       if (distanceList) {
@@ -1699,9 +1704,10 @@
           const c = item.geometry?.coordinates || [];
           const distance = c.length >= 2 ? distanceNm(c[0], c[1]) : Number(item.metadata?.distance_nm);
           const label = document.createElement('span'); label.textContent = `${i + 1} · ${item.title || 'Distance'} · ${c.length >= 2 ? `${Number(c[0][1]).toFixed(4)}°, ${Number(c[0][0]).toFixed(4)}° → ${Number(c[1][1]).toFixed(4)}°, ${Number(c[1][0]).toFixed(4)}° · ` : ''}${Number.isFinite(distance) ? distance.toFixed(2) + ' nm' : 'saved measurement'}`;
-          const load = document.createElement('button'); load.type = 'button'; load.textContent = 'Load'; load.title = 'Show this measurement on the map';
-          load.addEventListener('click', () => { if (c.length < 2) return; distancePoints.push([Number(c[0][0]), Number(c[0][1])], [Number(c[1][0]), Number(c[1][1])]); setPlannerTool('distance'); });
-          const row = document.createElement('div'); row.className = 'captain-saved-row'; row.append(label, load); distanceList.append(row);
+          const load = document.createElement('button'); load.type = 'button'; load.textContent = plannerLoadedLogBookIds.has(item.id) ? 'Unload' : 'Load'; load.title = plannerLoadedLogBookIds.has(item.id) ? 'Remove this measurement from the map' : 'Show this measurement on the map';
+          load.addEventListener('click', () => { if (c.length < 2) return; const a = [Number(c[0][0]), Number(c[0][1])], b = [Number(c[1][0]), Number(c[1][1])]; const start = distancePoints.findIndex(point => Math.abs(point[0] - a[0]) < 1e-8 && Math.abs(point[1] - a[1]) < 1e-8); const key = `${a[0]},${a[1]}|${b[0]},${b[1]}`; if (plannerLoadedLogBookIds.has(item.id)) { if (start >= 0 && distancePoints[start + 1] && Math.abs(distancePoints[start + 1][0] - b[0]) < 1e-8) distancePoints.splice(start, 2); plannerLoadedDistanceIds.delete(key); plannerLoadedLogBookIds.delete(item.id); setPlannerTool('browse'); } else { if (start < 0) distancePoints.push(a, b); plannerLoadedDistanceIds.set(key, item.id); plannerLoadedLogBookIds.add(item.id); setPlannerTool('distance'); } });
+          const edit = document.createElement('button'); edit.type = 'button'; edit.textContent = 'Edit'; edit.title = 'Load this measurement into the editor'; edit.addEventListener('click', () => { if (c.length < 2) return; const a = [Number(c[0][0]), Number(c[0][1])], b = [Number(c[1][0]), Number(c[1][1])]; const key = `${a[0]},${a[1]}|${b[0]},${b[1]}`; const start = distancePoints.findIndex(point => Math.abs(point[0] - a[0]) < 1e-8 && Math.abs(point[1] - a[1]) < 1e-8); if (!(start >= 0 && distancePoints[start + 1] && Math.abs(distancePoints[start + 1][0] - b[0]) < 1e-8 && Math.abs(distancePoints[start + 1][1] - b[1]) < 1e-8)) distancePoints.push(a, b); plannerLoadedDistanceIds.set(key, item.id); plannerLoadedLogBookIds.add(item.id); setPlannerTool('distance'); });
+          const actions = document.createElement('span'); actions.append(load, edit); const row = document.createElement('div'); row.className = 'captain-saved-row'; row.append(label, actions); distanceList.append(row);
         });
       }
     }
