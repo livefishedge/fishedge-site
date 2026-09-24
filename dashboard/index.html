@@ -2939,7 +2939,7 @@ async function renderDesktopFrame(frameMeta) {
   if (mapDivEl) {
     attachMapToUnifiedTarget(map);
   }
-  if (captainAddTool.points.length) renderPtsLayer(map);
+  renderCaptainOverlays(map);
 
   // Ensure desktop land layer is present (persists across product switches)
   if (landTrace && desktopMapState.landLayer) {
@@ -6394,7 +6394,7 @@ async function renderCombinedMode() {
   if (fishingToggle) fishingToggle.checked = true;
   attachMapToUnifiedTarget(map);
   installCaptainToolHandler(map);
-  if (captainAddTool.points.length) renderPtsLayer(map);
+  renderCaptainOverlays(map);
   map.on("moveend", () => syncViewStateFromOlMap(map));
   console.log("[combined] OL map created, target:", !!map.getTargetElement(), "size:", map.getSize());
   const cv0 = map.getTargetElement()?.querySelector("canvas");
@@ -8148,7 +8148,7 @@ async function renderMobileFrame(frameMeta) {
   installMobileReadoutOnce(map);
   installCaptainToolHandler(map);
   map.updateSize();
-  if (captainAddTool.points.length) renderPtsLayer(map);
+  renderCaptainOverlays(map);
 
   const regionKey = `${REGION_ID}:${currentVar}`;
   if (mobileMapState.fittedRegion !== regionKey) {
@@ -9198,7 +9198,7 @@ async function thermalInitMap() {
   await ensureDesktopLandLayer(map);
   await ensureDesktopPlaceLayer(map);
   installCaptainToolHandler(map);
-  if (captainAddTool.points.length) renderPtsLayer(map);
+  renderCaptainOverlays(map);
   thermalEnsureCursorLayer(map);
   if (thermalFrontState.cursorLayer) thermalFrontState.cursorLayer.setVisible(true);
   if (!map.__thermalReadoutInstalled) {
@@ -11026,7 +11026,15 @@ window.removeDistancePair = function (pairIndex) {
 };
 
 function renderDistLayer(map) {
+  if (!map) return;
+  // Dashboard swaps between several OpenLayers map instances. Re-home the
+  // overlay before drawing so lines do not remain attached to the old view.
+  if (captainDistTool.lineLayer && captainDistTool.mapRef && captainDistTool.mapRef !== map) {
+    try { captainDistTool.mapRef.removeLayer(captainDistTool.lineLayer); } catch (_) {}
+    captainDistTool.lineLayer = null;
+  }
   clearDistLayer();
+  captainDistTool.mapRef = map;
   if (captainDistTool.points.length < 1) return;
   const projected = captainDistTool.points.map(p => toMapProjection([p.lon, p.lat]));
   const features = [];
@@ -11051,6 +11059,12 @@ function renderDistLayer(map) {
   });
   map.addLayer(layer);
   captainDistTool.lineLayer = layer;
+}
+
+function renderCaptainOverlays(map) {
+  if (!map) return;
+  renderPtsLayer(map);
+  renderDistLayer(map);
 }
 
 function addDistPoint(lon, lat, map) {
@@ -11626,10 +11640,13 @@ document.getElementById('captain-save-btn')?.addEventListener('click', (e) => {
 
 const dashboardLoadedLogBookIds = new Set();
 function reconcileDashboardLoadedLogBookState(waypoints, distances) {
+  dashboardLoadedLogBookIds.clear();
+  let matchedWaypoint = false;
+  let matchedDistance = false;
   (waypoints || []).forEach(item => {
     const c = item.geometry?.coordinates || [];
     const point = captainAddTool.points.find(next => Math.abs(next.lon - Number(c[0])) < 1e-8 && Math.abs(next.lat - Number(c[1])) < 1e-8);
-    if (point) { point.logbookId = item.id; dashboardLoadedLogBookIds.add(item.id); }
+    if (point) { point.logbookId = item.id; dashboardLoadedLogBookIds.add(item.id); matchedWaypoint = true; }
   });
   (distances || []).forEach(item => {
     const c = item.geometry?.coordinates || [];
@@ -11639,8 +11656,12 @@ function reconcileDashboardLoadedLogBookState(waypoints, distances) {
       captainDistTool.points[start].logbookId = item.id;
       captainDistTool.points[start + 1].logbookId = item.id;
       dashboardLoadedLogBookIds.add(item.id);
+      matchedDistance = true;
     }
   });
+  if (matchedWaypoint) captainAddTool.saved = true;
+  if (matchedDistance) captainDistTool.saved = true;
+  updateCaptainSaveState();
 }
 function loadDashboardLogBookItem(item, edit = false) {
   const geometry = item?.geometry;
