@@ -10,7 +10,9 @@ assert(dashboard.includes('id="captain-fs-btn"'), 'dashboard must expose fullscr
 assert(dashboard.includes('id="captain-chartbook-tool"'), 'dashboard must expose LogBook');
 assert(dashboard.includes('Save to LogBook'), 'dashboard waypoint save must use LogBook');
 assert(!dashboard.includes('Saved on this device'), 'dashboard must not advertise browser-only saved storage');
-assert(locate.includes("insertBefore(btnCombined, captainTools.querySelector('.captain-tool-btn') || null)"), 'Locate Me must be first in the shared tool row');
+assert(locate.includes("captainTools.querySelector('#captain-fs-btn')"), 'Locate Me must mount relative to fullscreen');
+assert(dashboard.includes('href="/planner/">PLANNER</a>'), 'dashboard menu must link to Planner');
+assert(dashboard.includes("loadDashboardLogBookItem(item)"), 'dashboard LogBook rows must load records onto the map');
 assert(chartbook.includes("const TABLE = 'logbook_items'"), 'LogBook client must use the shared account table');
 assert(chartbook.includes('stableId'), 'LogBook records must have stable geometry-derived IDs');
 console.log('PASS: dashboard and planner share LogBook tool contracts');
