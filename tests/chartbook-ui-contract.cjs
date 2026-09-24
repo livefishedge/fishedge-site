@@ -20,6 +20,7 @@ assert(dashboard.includes("edit.textContent = 'Edit'"), 'dashboard LogBook rows 
 assert(dashboard.includes('async function editDashboardLogBookItem'), 'dashboard LogBook Edit must expose editable fields');
 assert(dashboard.includes('await refreshDashboardLogBook()'), 'dashboard Load/Unload must refresh row state');
 assert(dashboard.includes('html.fishedge-native-fullscreen #combined-menu-btn'), 'dashboard must hide the hamburger in native fullscreen');
+assert(dashboard.includes('z-index:12000'), 'dashboard LogBook editor must be above map panels');
 assert(dashboard.includes('Number.isFinite(p.chl)'), 'loaded waypoints must tolerate missing sampled values');
 assert(dashboard.includes('id="home-link-wrap"><a href="/planner/">PLANNER</a>'), 'dashboard footer must expose Planner and Home buttons');
 assert(dashboard.includes('id="combined-page-links"'), 'combined dashboard footer must expose the correct navigation buttons');
