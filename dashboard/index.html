@@ -38,7 +38,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-init.js?v=20260918-user-activity"></script>
   <script src="/dashboard/chartbook.js?v=20260924-logbook2"></script>
-  <script src="/dashboard/fullscreen.js?v=20260923d"></script>
+  <script src="/dashboard/fullscreen.js?v=20260924e"></script>
 <script src="canyon-charts.js?v=20260920-layer-ownership-v1"></script>
   <script src="loran-td.js?v=20260818-3"></script>
   <script src="https://cdn.jsdelivr.net/npm/posthog-js@1.200.0/dist/array.js"></script>
@@ -11641,12 +11641,12 @@ document.getElementById('captain-save-btn')?.addEventListener('click', (e) => {
 const dashboardLoadedLogBookIds = new Set();
 function reconcileDashboardLoadedLogBookState(waypoints, distances) {
   dashboardLoadedLogBookIds.clear();
-  let matchedWaypoint = false;
-  let matchedDistance = false;
+  const waypointIds = new Set((waypoints || []).map(item => item.id));
+  const distanceIds = new Set((distances || []).map(item => item.id));
   (waypoints || []).forEach(item => {
     const c = item.geometry?.coordinates || [];
     const point = captainAddTool.points.find(next => Math.abs(next.lon - Number(c[0])) < 1e-8 && Math.abs(next.lat - Number(c[1])) < 1e-8);
-    if (point) { point.logbookId = item.id; dashboardLoadedLogBookIds.add(item.id); matchedWaypoint = true; }
+    if (point) { point.logbookId = item.id; dashboardLoadedLogBookIds.add(item.id); }
   });
   (distances || []).forEach(item => {
     const c = item.geometry?.coordinates || [];
@@ -11656,11 +11656,10 @@ function reconcileDashboardLoadedLogBookState(waypoints, distances) {
       captainDistTool.points[start].logbookId = item.id;
       captainDistTool.points[start + 1].logbookId = item.id;
       dashboardLoadedLogBookIds.add(item.id);
-      matchedDistance = true;
     }
   });
-  if (matchedWaypoint) captainAddTool.saved = true;
-  if (matchedDistance) captainDistTool.saved = true;
+  captainAddTool.saved = captainAddTool.points.length > 0 && captainAddTool.points.every(point => point.logbookId && waypointIds.has(point.logbookId));
+  captainDistTool.saved = captainDistTool.points.length > 0 && captainDistTool.points.length % 2 === 0 && Array.from({ length: captainDistTool.points.length / 2 }, (_, i) => captainDistTool.points[i * 2].logbookId && captainDistTool.points[i * 2].logbookId === captainDistTool.points[i * 2 + 1].logbookId && distanceIds.has(captainDistTool.points[i * 2].logbookId)).every(Boolean);
   updateCaptainSaveState();
 }
 function loadDashboardLogBookItem(item, edit = false) {
@@ -11842,6 +11841,10 @@ function updateFsIcon() {
 document.addEventListener('fullscreenchange', updateFsIcon);
 document.addEventListener('webkitfullscreenchange', updateFsIcon);
 window.addEventListener('fishedge-fullscreen-change', updateFsIcon);
+window.addEventListener('fishedge-fullscreen-change', () => {
+  const map = activeCaptainToolMap();
+  if (map) { map.updateSize?.(); map.render?.(); renderCaptainOverlays?.(map); }
+});
 window.addEventListener('resize', updateFsIcon);
 if (!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen)) {
   // iOS Safari cannot fullscreen arbitrary DOM content; the shared controller

@@ -8,11 +8,24 @@
     document.documentElement.classList.toggle('fishedge-native-fullscreen', native);
     global.dispatchEvent(new Event('fishedge-fullscreen-change'));
   }
+  function waitForNativeState(expected) {
+    return new Promise(resolve => {
+      const deadline = Date.now() + 900;
+      const check = () => {
+        const isNative = Boolean(document.fullscreenElement || document.webkitFullscreenElement || document.webkitIsFullScreen);
+        if (isNative === expected || Date.now() >= deadline) return resolve(isNative === expected);
+        requestAnimationFrame(check);
+      };
+      check();
+    });
+  }
   async function toggle() {
     const className = fallbackClass();
     if (active()) {
       try { if (document.exitFullscreen) await document.exitFullscreen(); else document.webkitExitFullscreen?.(); } catch (_) {}
       document.body.classList.remove('fishedge-app-fullscreen', 'fishedge-planner-fullscreen');
+      notify();
+      await waitForNativeState(false);
       notify();
       return false;
     }
@@ -20,10 +33,12 @@
     if (request) {
       try {
         await request.call(document.documentElement);
-        if (active()) { notify(); return true; }
+        if (await waitForNativeState(true)) { notify(); return true; }
       } catch (_) {}
     }
     document.body.classList.add(className);
+    notify();
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     notify();
     return true;
   }
