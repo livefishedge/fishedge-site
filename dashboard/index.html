@@ -11654,6 +11654,30 @@ function unloadDashboardLogBookItem(item) {
   }
 }
 
+function restoreDashboardAfterLogBookEdit() {
+  // Loading a record must not leave either drawing tool owning map clicks.
+  // This is especially important on iPhone, where a stale tool/fallback
+  // state makes the map appear frozen after the modal closes.
+  if (!document.fullscreenElement && !document.webkitFullscreenElement && !document.webkitIsFullScreen) {
+    document.body.classList.remove('fishedge-app-fullscreen');
+    document.documentElement.classList.remove('fishedge-native-fullscreen');
+    window.dispatchEvent(new Event('fishedge-fullscreen-change'));
+  }
+  const map = activeCaptainToolMap();
+  if (captainDistTool.active) deactivateDistTool();
+  captainAddTool.active = false;
+  document.getElementById('captain-add-tool')?.classList.remove('active');
+  document.getElementById('captain-add-tool')?.setAttribute('aria-pressed', 'false');
+  if (map) {
+    map.getTargetElement()?.style.setProperty('cursor', 'default');
+    map.getInteractions?.().forEach(interaction => {
+      if (interaction instanceof ol.interaction.DragPan) interaction.setActive(true);
+    });
+    map.updateSize?.();
+    map.render?.();
+  }
+}
+
 async function editDashboardLogBookItem(item) {
   const geometry = item?.geometry;
   if (!geometry) return;
@@ -11673,9 +11697,9 @@ async function editDashboardLogBookItem(item) {
   const remove = document.createElement('button'); remove.type = 'button'; remove.textContent = 'Remove record'; remove.style.cssText = 'background:#702b32;color:#fff;border:1px solid #b34b55;border-radius:5px;padding:6px 8px;';
   const save = document.createElement('button'); save.type = 'submit'; save.textContent = 'Save changes'; save.style.cssText = 'background:#1d4f91;color:#fff;border:1px solid #4d7dff;border-radius:5px;padding:6px 8px;';
   actions.append(cancel, remove, save); box.append(actions); modal.append(box); document.body.append(modal);
-  cancel.onclick = () => modal.remove(); modal.onclick = event => { if (event.target === modal) modal.remove(); };
-  remove.onclick = async () => { remove.disabled = true; if (dashboardLoadedLogBookIds.has(item.id)) unloadDashboardLogBookItem(item); const result = await window.FishEdgeLogBook?.remove(item.kind, item.id); modal.remove(); showCopyToast(result?.ok ? 'Removed from LogBook' : 'Unable to remove LogBook record'); await refreshDashboardLogBook(); };
-  box.onsubmit = async event => { event.preventDefault(); try { const nums = inputs.map(input => Number(input.value)); const valid = nums.every(Number.isFinite) && (item.kind === 'waypoint' ? Math.abs(nums[0]) <= 180 && Math.abs(nums[1]) <= 90 : Math.abs(nums[0]) <= 180 && Math.abs(nums[2]) <= 180 && Math.abs(nums[1]) <= 90 && Math.abs(nums[3]) <= 90); if (!valid) { showCopyToast('Check the numeric fields'); return; } const nextGeometry = item.kind === 'waypoint' ? { type: 'Point', coordinates: [nums[0], nums[1]] } : { type: 'LineString', coordinates: [[nums[0], nums[1]], [nums[2], nums[3]]] }; const metadata = { ...(item.metadata || {}), notes: notes.value }; save.disabled = true; const result = await window.FishEdgeLogBook?.save(item.kind, [{ id: item.id, title: title.value.trim() || item.title, geometry: nextGeometry, metadata }], title.value.trim() || item.title); if (!result?.ok) { save.disabled = false; showCopyToast('LogBook edit failed'); return; } modal.remove(); if (dashboardLoadedLogBookIds.has(item.id)) { unloadDashboardLogBookItem(item); loadDashboardLogBookItem({ ...item, title: title.value, geometry: nextGeometry, metadata }); } showCopyToast(result.synced === false ? 'LogBook edit saved · sync pending' : 'LogBook edit saved'); await refreshDashboardLogBook(); } catch (_) { save.disabled = false; showCopyToast('LogBook save failed · try again'); } finally { save.disabled = false; } };
+  cancel.onclick = () => { modal.remove(); restoreDashboardAfterLogBookEdit(); }; modal.onclick = event => { if (event.target === modal) { modal.remove(); restoreDashboardAfterLogBookEdit(); } };
+  remove.onclick = async () => { remove.disabled = true; try { if (dashboardLoadedLogBookIds.has(item.id)) unloadDashboardLogBookItem(item); const result = await window.FishEdgeLogBook?.remove(item.kind, item.id); modal.remove(); restoreDashboardAfterLogBookEdit(); showCopyToast(result?.ok ? 'Removed from LogBook' : 'Unable to remove LogBook record'); await refreshDashboardLogBook(); } catch (_) { remove.disabled = false; showCopyToast('Unable to remove LogBook record'); } };
+  box.onsubmit = async event => { event.preventDefault(); try { const nums = inputs.map(input => Number(input.value)); const valid = nums.every(Number.isFinite) && (item.kind === 'waypoint' ? Math.abs(nums[0]) <= 180 && Math.abs(nums[1]) <= 90 : Math.abs(nums[0]) <= 180 && Math.abs(nums[2]) <= 180 && Math.abs(nums[1]) <= 90 && Math.abs(nums[3]) <= 90); if (!valid) { showCopyToast('Check the numeric fields'); return; } const nextGeometry = item.kind === 'waypoint' ? { type: 'Point', coordinates: [nums[0], nums[1]] } : { type: 'LineString', coordinates: [[nums[0], nums[1]], [nums[2], nums[3]]] }; const metadata = { ...(item.metadata || {}), notes: notes.value }; save.disabled = true; const result = await window.FishEdgeLogBook?.save(item.kind, [{ id: item.id, title: title.value.trim() || item.title, geometry: nextGeometry, metadata }], title.value.trim() || item.title); if (!result?.ok) { showCopyToast('LogBook edit failed'); return; } modal.remove(); restoreDashboardAfterLogBookEdit(); if (dashboardLoadedLogBookIds.has(item.id)) { unloadDashboardLogBookItem(item); loadDashboardLogBookItem({ ...item, title: title.value, geometry: nextGeometry, metadata }); } showCopyToast(result.synced === false ? 'LogBook edit saved · sync pending' : 'LogBook edit saved'); await refreshDashboardLogBook(); } catch (_) { showCopyToast('LogBook save failed · try again'); } finally { save.disabled = false; } };
 }
 
 async function refreshDashboardLogBook() {
