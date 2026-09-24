@@ -608,8 +608,9 @@
     #menu-panel #hamburger-product-select[data-product="bathy"], #combined-product-select[data-product="bathy"]{ color:#c59bff; }
     #account-link-wrap{ margin-top:auto !important; padding-top:12px; border-top:1px solid rgba(255,255,255,.18); }
     #account-link-wrap a, #combined-account-link a{ color:#ffd166 !important; font-size:13px !important; font-weight:900 !important; letter-spacing:.08em; }
-    #home-link-wrap, #combined-home-link{ text-align:center; padding-top:4px; }
-    #home-link-wrap a, #combined-home-link a{ color:#8ed0ff !important; font-size:12px !important; font-weight:900 !important; letter-spacing:.08em; text-decoration:none; }
+    #home-link-wrap, #combined-home-link{ display:flex; justify-content:center; gap:7px; padding-top:8px; }
+    #home-link-wrap a, #combined-home-link a{ display:inline-block; padding:7px 10px; border:1px solid rgba(142,208,255,.45); border-radius:6px; background:rgba(18,52,90,.72); color:#8ed0ff !important; font-size:11px !important; font-weight:900 !important; letter-spacing:.08em; text-decoration:none; }
+    #home-link-wrap a:hover, #combined-home-link a:hover{ background:#1d4f91; color:#fff !important; }
     #menu-panel button.active{ background:#1d4f91; border-color:#4d7dff; }
     #menu-panel .mode-row{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
     #menu-panel #all-day-toggle{ flex-direction:row; align-items:center; justify-content:flex-start; color:var(--fg); }
@@ -11334,8 +11335,8 @@ function updatePtsPanel() {
     return;
   }
   list.innerHTML = captainAddTool.points.map((p, i) => {
-    const chlStr = p.chl !== null ? `${p.chl.toFixed(2)} mg/m³` : '—';
-    const sstStr = p.sst !== null ? formatSstValue(p.sst) : '—';
+    const chlStr = Number.isFinite(p.chl) ? `${p.chl.toFixed(2)} mg/m³` : '—';
+    const sstStr = Number.isFinite(p.sst) ? formatSstValue(p.sst) : '—';
     const heightStr = p.height !== null && p.height !== undefined ? formatSshValue(p.height) : '—';
     const speedStr = p.speed !== null && p.speed !== undefined ? `${p.speed.toFixed(2)} m/s` : '—';
     const directionStr = p.direction !== null && p.direction !== undefined ? `${p.direction.toFixed(0)}°` : '—';
@@ -11587,7 +11588,7 @@ function loadDashboardLogBookItem(item) {
   if (!geometry || !map) { showCopyToast('Open a map view to load this LogBook record'); return; }
   if (item.kind === 'waypoint' && geometry.type === 'Point' && Array.isArray(geometry.coordinates)) {
     const [lon, lat] = geometry.coordinates;
-    if (!captainAddTool.points.some(point => Math.abs(point.lon - lon) < 1e-8 && Math.abs(point.lat - lat) < 1e-8)) captainAddTool.points.push({ lon: Number(lon), lat: Number(lat) });
+    if (!captainAddTool.points.some(point => Math.abs(point.lon - lon) < 1e-8 && Math.abs(point.lat - lat) < 1e-8)) captainAddTool.points.push({ lon: Number(lon), lat: Number(lat), ...sampleAt(Number(lon), Number(lat)), ts: Date.now() });
     captainAddTool.active = true; captainAddTool.mapRef = map; renderPtsLayer(map); updatePtsPanel();
     document.getElementById('captain-pts-panel')?.classList.add('visible');
     showCopyToast('Waypoint loaded onto the map');

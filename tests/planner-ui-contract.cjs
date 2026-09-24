@@ -104,6 +104,7 @@ assert(html.includes('savePlannerDistancesToLogBook'), 'planner distance save mu
 assert(html.includes('id="captain-saved-tool"'), 'planner must expose a saved-items tool');
 assert(html.includes('title="LogBook"'), 'planner saved tool must be labeled LogBook');
 assert(html.includes('href="/dashboard/">Dashboard</a>'), 'planner menu must link to Dashboard');
+assert(html.includes('class="bv-menu-footer"'), 'planner menu must use a dedicated navigation footer');
 assert(html.includes("textContent = 'Load'"), 'planner LogBook rows must expose Load actions');
 assert(!html.includes('id="bv-mode-context"'), 'planner must not show blocking mode banners');
 assert(!html.includes('`<span>Moon: ${val(\'bv-moon-phase\')'), 'planner must not render the Moon/sun summary band');

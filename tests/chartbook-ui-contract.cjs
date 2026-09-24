@@ -13,6 +13,8 @@ assert(!dashboard.includes('Saved on this device'), 'dashboard must not advertis
 assert(locate.includes("captainTools.querySelector('#captain-fs-btn')"), 'Locate Me must mount relative to fullscreen');
 assert(dashboard.includes('href="/planner/">PLANNER</a>'), 'dashboard menu must link to Planner');
 assert(dashboard.includes("loadDashboardLogBookItem(item)"), 'dashboard LogBook rows must load records onto the map');
+assert(dashboard.includes('Number.isFinite(p.chl)'), 'loaded waypoints must tolerate missing sampled values');
+assert(dashboard.includes('id="home-link-wrap"><a href="/planner/">PLANNER</a>'), 'dashboard footer must expose Planner and Home buttons');
 assert(chartbook.includes("const TABLE = 'logbook_items'"), 'LogBook client must use the shared account table');
 assert(chartbook.includes('stableId'), 'LogBook records must have stable geometry-derived IDs');
 console.log('PASS: dashboard and planner share LogBook tool contracts');

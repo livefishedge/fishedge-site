@@ -144,8 +144,9 @@
     #bv-menu-panel .bv-condition{ padding:7px 8px; border:1px solid rgba(255,255,255,.1); border-radius:5px; background:rgba(19,35,51,.65); min-width:0; }
     #bv-menu-panel .bv-condition b{ display:block; color:#fff; font:700 12px/1.2 monospace; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     #bv-menu-panel .bv-condition span{ display:block; color:#8fa6bb; font-size:9px; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    #bv-menu-panel .bv-home{ display:block; margin-top:auto; padding:8px 10px; border-top:1px solid rgba(255,255,255,.12); color:#4fc3f7; text-decoration:none; font-size:12px; font-weight:800; text-align:center; }
-    #bv-menu-panel .bv-home:hover{ background:rgba(77,125,255,.12); color:#fff; }
+    #bv-menu-panel .bv-menu-footer{ display:flex; gap:6px; margin-top:auto; padding-top:8px; border-top:1px solid rgba(255,255,255,.12); }
+    #bv-menu-panel .bv-home{ flex:1; padding:8px 6px; border:1px solid rgba(79,195,247,.45); border-radius:6px; background:rgba(19,35,51,.82); color:#4fc3f7; text-decoration:none; font-size:11px; font-weight:800; text-align:center; }
+    #bv-menu-panel .bv-home:hover{ background:#1d4f91; color:#fff; }
     #bv-menu-panel .bv-trip-recorder{ margin-top:8px; padding:8px; border-top:1px solid rgba(255,255,255,.12); display:grid; gap:6px; font-size:11px; color:#b9d6e5; }
     #bv-menu-panel .bv-trip-recorder label{ padding:0; font-size:11px; }
     #bv-menu-panel .bv-trip-recorder label:hover{ background:none; }
@@ -483,9 +484,11 @@
       </div>
     </div>
     <div class="bv-status" id="bv-menu-status"></div>
-    <a class="bv-home" href="/planner/">Planner</a>
-    <a class="bv-home" href="/dashboard/">Dashboard</a>
-    <a class="bv-home" href="/">Home</a>
+    <div class="bv-menu-footer" aria-label="Page navigation">
+      <a class="bv-home" href="/planner/">Planner</a>
+      <a class="bv-home" href="/dashboard/">Dashboard</a>
+      <a class="bv-home" href="/">Home</a>
+    </div>
   </div>
 
   <details id="bv-moon-mode-panel" class="bv-moon-mode-panel" hidden aria-label="Moon and sun briefing">
