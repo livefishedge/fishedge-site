@@ -529,7 +529,10 @@
       btnCombined.setAttribute('data-tool', 'locate');
       btnCombined.innerHTML = btn.innerHTML;
       btnCombined.addEventListener('click', hooks.onLocateClick || function () {});
-      captainTools.appendChild(btnCombined);
+      const fullscreenButton = captainTools.querySelector('#captain-fs-btn');
+      if (fullscreenButton?.nextSibling) captainTools.insertBefore(btnCombined, fullscreenButton.nextSibling);
+      else if (fullscreenButton) captainTools.appendChild(btnCombined);
+      else captainTools.insertBefore(btnCombined, captainTools.querySelector('.captain-tool-btn') || null);
     }
 
     console.info('[fishedge-locate] button mounted at #fishedge-locate-host' +

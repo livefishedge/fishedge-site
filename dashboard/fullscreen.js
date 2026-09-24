@@ -14,7 +14,10 @@
     }
     const request = document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen;
     if (request) {
-      try { await request.call(document.documentElement); notify(); return true; } catch (_) {}
+      try {
+        await request.call(document.documentElement);
+        if (active()) { notify(); return true; }
+      } catch (_) {}
     }
     document.body.classList.add(className);
     notify();
