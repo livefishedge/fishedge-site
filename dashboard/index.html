@@ -10884,6 +10884,7 @@ setInterval(pollForUpdates, 60000);
 
 let captainDistTool = {
   active: false,
+  saved: false,
   points: [],
   loadedRecordId: null,
   lineLayer: null,
@@ -10901,6 +10902,7 @@ function persistDistancePoints() {
 
 let captainAddTool = {
   active: false,
+  saved: false,
   points: [],
   markerLayer: null,
   mapRef: null
@@ -10923,6 +10925,13 @@ function activateDistTool(map) {
   document.getElementById('captain-dist-panel')?.classList.remove('collapsed');
   updateDistPanel();
   map.getTargetElement()?.style.setProperty('cursor', 'crosshair');
+}
+
+function updateCaptainSaveState() {
+  const waypointSave = document.getElementById('captain-save-btn');
+  if (waypointSave) { waypointSave.textContent = captainAddTool.saved ? 'Saved' : 'Save / Export'; waypointSave.setAttribute('aria-label', captainAddTool.saved ? 'Waypoints saved to LogBook' : 'Save or export waypoints'); }
+  const distanceSave = document.getElementById('captain-dist-exit');
+  if (distanceSave) { distanceSave.textContent = captainDistTool.saved ? 'Saved' : 'Save'; distanceSave.disabled = captainDistTool.saved; distanceSave.setAttribute('aria-label', captainDistTool.saved ? 'Distances saved to LogBook' : 'Save distances to LogBook'); }
 }
 
 function deactivateDistTool() {
@@ -10951,8 +10960,9 @@ function saveDistMeasurement() {
     localStorage.setItem('fishedge_last_distance_measurement', JSON.stringify({ pairs, savedAt: Date.now() }));
   } catch (_) {}
   Promise.resolve(window.FishEdgeLogBook?.save('distance', pairs.map(pair => ({ id: pair.id || undefined, geometry: { type: 'LineString', coordinates: [[pair.start.lon, pair.start.lat], [pair.end.lon, pair.end.lat]] }, metadata: pair })), 'Distance') || { ok: false, reason: 'unavailable' }).then(result => {
+    captainDistTool.saved = Boolean(result?.ok); updateCaptainSaveState();
     showCopyToast(result?.ok ? (result.synced === false ? 'Saved to LogBook · sync pending' : 'Saved to LogBook') : 'LogBook save failed');
-  }).catch(() => showCopyToast('LogBook storage unavailable'));
+  }).catch(() => { captainDistTool.saved = false; updateCaptainSaveState(); showCopyToast('LogBook storage unavailable'); });
   persistDistancePoints();
   captainDistTool.active = false;
   captainDistTool.loadedRecordId = null;
@@ -11006,6 +11016,8 @@ window.removeDistancePair = function (pairIndex) {
   const start = Number(pairIndex) * 2;
   if (!Number.isInteger(start) || start < 0 || start >= captainDistTool.points.length) return;
   captainDistTool.points.splice(start, 2);
+  captainDistTool.saved = false;
+  updateCaptainSaveState();
   persistDistancePoints();
   const map = activeCaptainToolMap() || captainDistTool.mapRef;
   if (map) renderDistLayer(map);
@@ -11044,6 +11056,8 @@ function renderDistLayer(map) {
 function addDistPoint(lon, lat, map) {
   if (!captainDistTool.points.length) captainDistTool.loadedRecordId = null;
   captainDistTool.points.push({ lon, lat });
+  captainDistTool.saved = false;
+  updateCaptainSaveState();
   persistDistancePoints();
   renderDistLayer(map);
   updateDistPanel();
@@ -11245,6 +11259,7 @@ function showSaveMenu() {
   chartbookBtn.style.cssText = 'background:#1d4f91;border:1px solid #4d7dff;border-radius:6px;color:#fff;cursor:pointer;font-size:12px;padding:7px 10px;text-align:left;width:100%;font-weight:700;';
   chartbookBtn.addEventListener('click', async () => {
     const result = await window.FishEdgeLogBook?.save('waypoint', captainAddTool.points.map(p => ({ id: p.logbookId || undefined, geometry: { type: 'Point', coordinates: [p.lon, p.lat] }, metadata: p })), 'Waypoint') || { ok: false, reason: 'unavailable' };
+    captainAddTool.saved = Boolean(result?.ok); updateCaptainSaveState();
     showCopyToast(result?.ok ? (result.synced === false ? 'Saved to LogBook · sync pending' : 'Saved to LogBook') : 'LogBook save failed');
     closeSaveMenu();
   });
@@ -11430,6 +11445,8 @@ function addWaypoint(lon, lat, map) {
     ? ((Date.now() - new Date(window._combinedChlScanTime).getTime()) / 3600000).toFixed(1)
     : null;
   captainAddTool.points.push({ lon, lat, chl, sst, height, speed, direction, depth, freshness, ts: Date.now() });
+  captainAddTool.saved = false;
+  updateCaptainSaveState();
   renderPtsLayer(map);
   updatePtsPanel();
   document.getElementById('captain-save-btn')?.style.setProperty('display', 'inline-block');
@@ -11437,6 +11454,8 @@ function addWaypoint(lon, lat, map) {
 
 window.removeWaypoint = function(idx) {
   captainAddTool.points.splice(idx, 1);
+  captainAddTool.saved = false;
+  updateCaptainSaveState();
   renderPtsLayer(captainAddTool.mapRef);
   updatePtsPanel();
   if (captainAddTool.points.length === 0) {
@@ -11606,6 +11625,23 @@ document.getElementById('captain-save-btn')?.addEventListener('click', (e) => {
 });
 
 const dashboardLoadedLogBookIds = new Set();
+function reconcileDashboardLoadedLogBookState(waypoints, distances) {
+  (waypoints || []).forEach(item => {
+    const c = item.geometry?.coordinates || [];
+    const point = captainAddTool.points.find(next => Math.abs(next.lon - Number(c[0])) < 1e-8 && Math.abs(next.lat - Number(c[1])) < 1e-8);
+    if (point) { point.logbookId = item.id; dashboardLoadedLogBookIds.add(item.id); }
+  });
+  (distances || []).forEach(item => {
+    const c = item.geometry?.coordinates || [];
+    if (c.length < 2) return;
+    const start = captainDistTool.points.findIndex(point => Math.abs(point.lon - Number(c[0][0])) < 1e-8 && Math.abs(point.lat - Number(c[0][1])) < 1e-8);
+    if (start >= 0 && captainDistTool.points[start + 1] && Math.abs(captainDistTool.points[start + 1].lon - Number(c[1][0])) < 1e-8 && Math.abs(captainDistTool.points[start + 1].lat - Number(c[1][1])) < 1e-8) {
+      captainDistTool.points[start].logbookId = item.id;
+      captainDistTool.points[start + 1].logbookId = item.id;
+      dashboardLoadedLogBookIds.add(item.id);
+    }
+  });
+}
 function loadDashboardLogBookItem(item, edit = false) {
   const geometry = item?.geometry;
   const map = activeCaptainToolMap();
@@ -11616,6 +11652,7 @@ function loadDashboardLogBookItem(item, edit = false) {
     if (existing) existing.logbookId = item.id;
     else captainAddTool.points.push({ lon: Number(lon), lat: Number(lat), logbookId: item.id, ...sampleAt(Number(lon), Number(lat)), ts: Date.now() });
     dashboardLoadedLogBookIds.add(item.id); captainAddTool.active = Boolean(edit); captainAddTool.mapRef = map; renderPtsLayer(map); updatePtsPanel();
+    captainAddTool.saved = true; updateCaptainSaveState();
     document.getElementById('captain-pts-panel')?.classList.add('visible');
     showCopyToast('Waypoint loaded onto the map');
     return;
@@ -11625,7 +11662,7 @@ function loadDashboardLogBookItem(item, edit = false) {
     const start = captainDistTool.points.findIndex(point => Math.abs(point.lon - pair[0].lon) < 1e-8 && Math.abs(point.lat - pair[0].lat) < 1e-8 && point.logbookId === item.id);
     if (start < 0) captainDistTool.points.push(...pair);
     captainDistTool.loadedRecordId = item.id;
-    dashboardLoadedLogBookIds.add(item.id); captainDistTool.mapRef = map; captainDistTool.active = Boolean(edit); renderDistLayer(map); updateDistPanel();
+    dashboardLoadedLogBookIds.add(item.id); captainDistTool.mapRef = map; captainDistTool.active = Boolean(edit); captainDistTool.saved = true; renderDistLayer(map); updateDistPanel(); updateCaptainSaveState();
     document.getElementById('captain-dist-panel')?.classList.add('visible', 'collapsed');
     showCopyToast('Distance measurement loaded onto the map');
   }
@@ -11710,6 +11747,9 @@ async function refreshDashboardLogBook() {
   if (!window.FishEdgeLogBook) { if (waypoints) waypoints.textContent = 'LogBook unavailable'; if (distances) distances.textContent = 'LogBook unavailable'; return; }
   try {
     const [wp, dm] = await Promise.all([FishEdgeLogBook.list('waypoint'), FishEdgeLogBook.list('distance')]);
+    reconcileDashboardLoadedLogBookState(wp.data || [], dm.data || []);
+    const activeMap = activeCaptainToolMap();
+    if (activeMap) { renderPtsLayer(activeMap); renderDistLayer(activeMap); }
     if (waypoints) { waypoints.replaceChildren(); (wp.data || []).forEach(item => { const row = document.createElement('div'); row.className = 'captain-logbook-row'; const c = item.geometry?.coordinates || []; const label = document.createElement('span'); label.textContent = `${item.title || 'Waypoint'} · ${Number(c[1]).toFixed(4)}°, ${Number(c[0]).toFixed(4)}°`; const load = document.createElement('button'); load.type = 'button'; load.textContent = dashboardLoadedLogBookIds.has(item.id) ? 'Unload' : 'Load'; load.title = dashboardLoadedLogBookIds.has(item.id) ? 'Remove this waypoint from the map' : 'Show this waypoint on the map'; load.addEventListener('click', async () => { if (dashboardLoadedLogBookIds.has(item.id)) unloadDashboardLogBookItem(item); else loadDashboardLogBookItem(item); await refreshDashboardLogBook(); }); const edit = document.createElement('button'); edit.type = 'button'; edit.textContent = 'Edit'; edit.title = 'Edit this saved waypoint'; edit.addEventListener('click', () => editDashboardLogBookItem(item)); const actions = document.createElement('span'); actions.append(load, edit); row.append(label, actions); waypoints.append(row); }); if (!wp.data?.length) waypoints.textContent = wp.reason === 'signed_out' ? 'Sign in to open LogBook' : 'No saved waypoints'; }
     if (distances) { distances.replaceChildren(); (dm.data || []).forEach(item => { const row = document.createElement('div'); row.className = 'captain-logbook-row'; const c = item.geometry?.coordinates || []; const label = document.createElement('span'); label.textContent = `${item.title || 'Distance'} · ${c.length >= 2 ? `${Number(c[0][1]).toFixed(4)}°, ${Number(c[0][0]).toFixed(4)}° → ${Number(c[1][1]).toFixed(4)}°, ${Number(c[1][0]).toFixed(4)}° · ` : ''}${c.length >= 2 ? formatDist(getDistanceKm({ lon: c[0][0], lat: c[0][1] }, { lon: c[1][0], lat: c[1][1] })) : 'saved measurement'}`; const load = document.createElement('button'); load.type = 'button'; load.textContent = dashboardLoadedLogBookIds.has(item.id) ? 'Unload' : 'Load'; load.title = dashboardLoadedLogBookIds.has(item.id) ? 'Remove this measurement from the map' : 'Show this measurement on the map'; load.addEventListener('click', async () => { if (dashboardLoadedLogBookIds.has(item.id)) unloadDashboardLogBookItem(item); else loadDashboardLogBookItem(item); await refreshDashboardLogBook(); }); const edit = document.createElement('button'); edit.type = 'button'; edit.textContent = 'Edit'; edit.title = 'Edit this saved measurement'; edit.addEventListener('click', () => editDashboardLogBookItem(item)); const actions = document.createElement('span'); actions.append(load, edit); row.append(label, actions); distances.append(row); }); if (!dm.data?.length) distances.textContent = dm.reason === 'signed_out' ? 'Sign in to open LogBook' : 'No saved measurements'; }
   } catch (_) { if (waypoints) waypoints.textContent = 'LogBook unavailable'; if (distances) distances.textContent = 'LogBook unavailable'; } finally { window.__fishedgeLogBookRefresh = null; }

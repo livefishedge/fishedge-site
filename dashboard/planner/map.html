@@ -1616,6 +1616,7 @@
         const label = document.createElement('span'); label.textContent = `${index + 1}  ${point.lat.toFixed(4)}°, ${point.lon.toFixed(4)}°`;
         const remove = document.createElement('button'); remove.type = 'button'; remove.textContent = 'Remove'; remove.addEventListener('click', () => {
           plannerWaypoints.splice(index, 1);
+          plannerWaypointsSaved = false;
           try { persistPlannerWaypoints(); } catch (error) { console.warn('[planner] waypoint deletion not persisted', error); }
           renderPlannerWaypoints();
         });
@@ -1624,6 +1625,7 @@
       wrapper?.classList.toggle('visible', waypointMode);
       wrapper?.style.setProperty('display', waypointMode ? 'block' : 'none');
       document.getElementById('captain-save-btn')?.style.setProperty('display', waypointMode ? 'inline-block' : 'none');
+      updatePlannerSaveButtons();
       renderSavedPlannerItems();
     }
     function renderPlannerDistances() {
@@ -1665,6 +1667,14 @@
     const plannerLoadedDistanceIds = new Map();
     let distanceMode = false;
     let plannerTool = 'browse';
+    let plannerWaypointsSaved = false;
+    let plannerDistancesSaved = false;
+    function updatePlannerSaveButtons() {
+      const waypointSave = document.getElementById('captain-save-btn');
+      if (waypointSave) { waypointSave.textContent = plannerWaypointsSaved ? 'Saved' : 'Save'; waypointSave.disabled = plannerWaypointsSaved; waypointSave.setAttribute('aria-label', plannerWaypointsSaved ? 'Waypoints saved to LogBook' : 'Save waypoints to LogBook'); }
+      const distanceSave = document.getElementById('captain-dist-exit');
+      if (distanceSave) { distanceSave.textContent = plannerDistancesSaved ? 'Saved' : 'Save'; distanceSave.disabled = plannerDistancesSaved; distanceSave.setAttribute('aria-label', plannerDistancesSaved ? 'Distances saved to LogBook' : 'Save distances to LogBook'); }
+    }
     function persistPlannerWaypoints() {
       localStorage.setItem('fishedge:planner:waypoints', JSON.stringify(plannerWaypoints));
     }
@@ -1686,6 +1696,9 @@
       const [waypoints, distances] = await Promise.all([FishEdgeLogBook.list('waypoint'), FishEdgeLogBook.list('distance')]);
       plannerLogBookRows.waypoints = waypoints.data || [];
       plannerLogBookRows.distances = distances.data || [];
+      plannerLogBookRows.waypoints.forEach(item => { if (plannerWaypoints.some(point => point.logbookId === item.id)) plannerLoadedLogBookIds.add(item.id); });
+      plannerLogBookRows.distances.forEach(item => { const c = item.geometry?.coordinates || []; if (c.length < 2) return; const a = c[0], b = c[1]; for (let i = 0; i + 1 < distancePoints.length; i += 2) if (Math.abs(distancePoints[i][0] - a[0]) < 1e-8 && Math.abs(distancePoints[i][1] - a[1]) < 1e-8 && Math.abs(distancePoints[i + 1][0] - b[0]) < 1e-8 && Math.abs(distancePoints[i + 1][1] - b[1]) < 1e-8) { plannerLoadedLogBookIds.add(item.id); plannerLoadedDistanceIds.set(`${a[0]},${a[1]}|${b[0]},${b[1]}`, item.id); } });
+      renderPlannerDistanceLayer();
       renderSavedPlannerItems();
       })().catch(error => { console.warn('[planner] LogBook load failed:', error); }).finally(() => { window.__fishedgePlannerLogBookLoad = null; });
       return window.__fishedgePlannerLogBookLoad;
@@ -1748,7 +1761,7 @@
           const distance = c.length >= 2 ? distanceNm(c[0], c[1]) : Number(item.metadata?.distance_nm);
           const label = document.createElement('span'); label.textContent = `${i + 1} · ${item.title || 'Distance'} · ${c.length >= 2 ? `${Number(c[0][1]).toFixed(4)}°, ${Number(c[0][0]).toFixed(4)}° → ${Number(c[1][1]).toFixed(4)}°, ${Number(c[1][0]).toFixed(4)}° · ` : ''}${Number.isFinite(distance) ? distance.toFixed(2) + ' nm' : 'saved measurement'}`;
           const load = document.createElement('button'); load.type = 'button'; load.textContent = plannerLoadedLogBookIds.has(item.id) ? 'Unload' : 'Load'; load.title = plannerLoadedLogBookIds.has(item.id) ? 'Remove this measurement from the map' : 'Show this measurement on the map';
-          load.addEventListener('click', () => { if (c.length < 2) return; const a = [Number(c[0][0]), Number(c[0][1])], b = [Number(c[1][0]), Number(c[1][1])]; const start = distancePoints.findIndex(point => Math.abs(point[0] - a[0]) < 1e-8 && Math.abs(point[1] - a[1]) < 1e-8); const key = `${a[0]},${a[1]}|${b[0]},${b[1]}`; if (plannerLoadedLogBookIds.has(item.id)) { if (start >= 0 && distancePoints[start + 1] && Math.abs(distancePoints[start + 1][0] - b[0]) < 1e-8 && Math.abs(distancePoints[start + 1][1] - b[1]) < 1e-8) distancePoints.splice(start, 2); plannerLoadedDistanceIds.delete(key); plannerLoadedLogBookIds.delete(item.id); } else { if (start < 0) distancePoints.push(a, b); plannerLoadedDistanceIds.set(key, item.id); plannerLoadedLogBookIds.add(item.id); } setPlannerTool('saved'); });
+          load.addEventListener('click', () => { if (c.length < 2) return; const a = [Number(c[0][0]), Number(c[0][1])], b = [Number(c[1][0]), Number(c[1][1])]; const start = distancePoints.findIndex(point => Math.abs(point[0] - a[0]) < 1e-8 && Math.abs(point[1] - a[1]) < 1e-8); const key = `${a[0]},${a[1]}|${b[0]},${b[1]}`; if (plannerLoadedLogBookIds.has(item.id)) { if (start >= 0 && distancePoints[start + 1] && Math.abs(distancePoints[start + 1][0] - b[0]) < 1e-8 && Math.abs(distancePoints[start + 1][1] - b[1]) < 1e-8) distancePoints.splice(start, 2); plannerLoadedDistanceIds.delete(key); plannerLoadedLogBookIds.delete(item.id); } else { if (start < 0) distancePoints.push(a, b); plannerLoadedDistanceIds.set(key, item.id); plannerLoadedLogBookIds.add(item.id); } persistPlannerDistance(); renderPlannerDistanceLayer(); renderPlannerDistances(); setPlannerTool('saved'); });
           const edit = document.createElement('button'); edit.type = 'button'; edit.textContent = 'Edit'; edit.title = 'Edit this saved measurement'; edit.addEventListener('click', () => editPlannerLogBookItem(item));
           const actions = document.createElement('span'); actions.append(load, edit); const row = document.createElement('div'); row.className = 'captain-saved-row'; row.append(label, actions); distanceList.append(row);
         });
@@ -1772,6 +1785,7 @@
       if (status && plannerTool === 'waypoint') { status.textContent = 'Waypoint mode · click map to add'; status.classList.add('visible'); }
       if (status && plannerTool === 'distance') { status.textContent = 'Distance mode · tap two points'; status.classList.add('visible'); }
       renderPlannerWaypoints(); renderPlannerDistances(); renderSavedPlannerItems();
+      updatePlannerSaveButtons();
     }
     const distanceSource = new ol.source.Vector();
     const distanceLayer = new ol.layer.Vector({ source: distanceSource, zIndex: 2200, style: new ol.style.Style({ stroke: new ol.style.Stroke({ color: '#4fc3f7', width: 3 }), image: new ol.style.Circle({ radius: 5, fill: new ol.style.Fill({ color: '#4fc3f7' }), stroke: new ol.style.Stroke({ color: '#071017', width: 2 }) }) }) });
@@ -1809,7 +1823,7 @@
         renderSavedPlannerItems();
         const status = document.getElementById('bv-mode-context');
         if (status) { status.textContent = 'Saving to LogBook…'; status.classList.add('visible'); }
-        savePlannerDistancesToLogBook().then(result => { if (status) { status.textContent = result.ok ? (result.synced === false ? 'Saved to LogBook · sync pending' : 'Saved to LogBook') : result.reason === 'signed_out' ? 'Saved to LogBook · sync pending' : 'LogBook save failed'; status.classList.add('visible'); } return loadPlannerLogBook(); }).catch(error => console.warn('[planner] LogBook distance refresh failed:', error));
+        savePlannerDistancesToLogBook().then(result => { plannerDistancesSaved = Boolean(result?.ok); updatePlannerSaveButtons(); if (status) { status.textContent = result.ok ? (result.synced === false ? 'Saved to LogBook · sync pending' : 'Saved to LogBook') : result.reason === 'signed_out' ? 'Saved to LogBook · sync pending' : 'LogBook save failed'; status.classList.add('visible'); } return loadPlannerLogBook(); }).catch(error => { plannerDistancesSaved = false; updatePlannerSaveButtons(); console.warn('[planner] LogBook distance refresh failed:', error); });
         document.getElementById('captain-dist-panel')?.classList.add('collapsed');
       } catch (error) {
         const status = document.getElementById('bv-mode-context');
@@ -1846,7 +1860,7 @@
         renderSavedPlannerItems();
         const status = document.getElementById('bv-mode-context');
         if (status) { status.textContent = 'Saving to LogBook…'; status.classList.add('visible'); }
-        savePlannerWaypointsToLogBook().then(result => { if (status) { status.textContent = result.ok ? (result.synced === false ? 'Saved to LogBook · sync pending' : 'Saved to LogBook') : result.reason === 'signed_out' ? 'Saved to LogBook · sync pending' : 'LogBook save failed'; status.classList.add('visible'); } return loadPlannerLogBook(); }).catch(error => console.warn('[planner] LogBook waypoint refresh failed:', error));
+        savePlannerWaypointsToLogBook().then(result => { plannerWaypointsSaved = Boolean(result?.ok); updatePlannerSaveButtons(); if (status) { status.textContent = result.ok ? (result.synced === false ? 'Saved to LogBook · sync pending' : 'Saved to LogBook') : result.reason === 'signed_out' ? 'Saved to LogBook · sync pending' : 'LogBook save failed'; status.classList.add('visible'); } return loadPlannerLogBook(); }).catch(error => { plannerWaypointsSaved = false; updatePlannerSaveButtons(); console.warn('[planner] LogBook waypoint refresh failed:', error); });
       } catch (error) {
         const status = document.getElementById('bv-mode-context');
         if (status) { status.textContent = 'Unable to save waypoints'; status.classList.add('visible'); }
@@ -1908,6 +1922,7 @@
         const clickedCoordinate = event.coordinate;
         const [lon, lat] = ol.proj.toLonLat(clickedCoordinate, mapProjection);
         distancePoints.push([lon, lat]);
+        plannerDistancesSaved = false;
         renderPlannerDistanceLayer();
         const status = document.getElementById('bv-mode-context');
         if (status) status.textContent = distancePoints.length % 2 === 0 ? `Distance · ${distanceNm(distancePoints[distancePoints.length - 2], distancePoints[distancePoints.length - 1]).toFixed(2)} nm` : 'Distance mode · tap one more point';
@@ -1918,6 +1933,7 @@
         const clickedCoordinate = event.coordinate;
         const [lon, lat] = ol.proj.toLonLat(clickedCoordinate, mapProjection);
         plannerWaypoints.push({ lon, lat });
+        plannerWaypointsSaved = false;
         renderPlannerWaypoints();
         return;
       }
