@@ -608,9 +608,9 @@
     #menu-panel #hamburger-product-select[data-product="bathy"], #combined-product-select[data-product="bathy"]{ color:#c59bff; }
     #account-link-wrap{ margin-top:auto !important; padding-top:12px; border-top:1px solid rgba(255,255,255,.18); }
     #account-link-wrap a, #combined-account-link a{ color:#ffd166 !important; font-size:13px !important; font-weight:900 !important; letter-spacing:.08em; }
-    #home-link-wrap, #combined-home-link{ display:flex; justify-content:center; gap:7px; padding-top:8px; }
-    #home-link-wrap a, #combined-home-link a{ display:inline-block; padding:7px 10px; border:1px solid rgba(142,208,255,.45); border-radius:6px; background:rgba(18,52,90,.72); color:#8ed0ff !important; font-size:11px !important; font-weight:900 !important; letter-spacing:.08em; text-decoration:none; }
-    #home-link-wrap a:hover, #combined-home-link a:hover{ background:#1d4f91; color:#fff !important; }
+    #home-link-wrap, #combined-page-links{ display:flex; justify-content:center; gap:7px; padding-top:8px; }
+    #home-link-wrap a, #combined-page-links a{ display:inline-block; flex:1; padding:7px 10px; border:1px solid rgba(142,208,255,.45); border-radius:6px; background:rgba(18,52,90,.72); color:#8ed0ff !important; font-size:11px !important; font-weight:900 !important; letter-spacing:.08em; text-align:center; text-decoration:none; }
+    #home-link-wrap a:hover, #combined-page-links a:hover{ background:#1d4f91; color:#fff !important; }
     #menu-panel button.active{ background:#1d4f91; border-color:#4d7dff; }
     #menu-panel .mode-row{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
     #menu-panel #all-day-toggle{ flex-direction:row; align-items:center; justify-content:flex-start; color:var(--fg); }
@@ -1506,10 +1506,10 @@
       </div>
       <div id="combined-bathy-legend" class="combined-inline-legend"></div>
     </div>
-    <div id="combined-account-link" style="margin-top:auto;padding-top:12px;border-top:1px solid var(--border);text-align:center;">
-      <a href="account.html" style="text-decoration:none;">ACCOUNT</a>
+    <div id="combined-page-links" style="margin-top:auto;border-top:1px solid var(--border);" aria-label="Page navigation">
+      <a href="/planner/">PLANNER</a>
+      <a href="/">HOME</a>
     </div>
-    <div id="combined-home-link"><a href="/">HOME</a></div>
   </div>
   <button id="combined-menu-btn" aria-label="Toggle sidebar" style="display:none;position:fixed;top:8px;right:8px;z-index:40;width:44px;height:44px;background:var(--panel);border:none;border-left:1px solid var(--border);cursor:pointer;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:0;">
     <span style="display:block;width:18px;height:2px;background:var(--fg);border-radius:2px;"></span>

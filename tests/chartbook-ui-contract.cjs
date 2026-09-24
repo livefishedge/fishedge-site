@@ -15,6 +15,8 @@ assert(dashboard.includes('href="/planner/">PLANNER</a>'), 'dashboard menu must 
 assert(dashboard.includes("loadDashboardLogBookItem(item)"), 'dashboard LogBook rows must load records onto the map');
 assert(dashboard.includes('Number.isFinite(p.chl)'), 'loaded waypoints must tolerate missing sampled values');
 assert(dashboard.includes('id="home-link-wrap"><a href="/planner/">PLANNER</a>'), 'dashboard footer must expose Planner and Home buttons');
+assert(dashboard.includes('id="combined-page-links"'), 'combined dashboard footer must expose the correct navigation buttons');
+assert(!dashboard.includes('id="combined-account-link"'), 'combined dashboard footer must not show the old Account button');
 assert(chartbook.includes("const TABLE = 'logbook_items'"), 'LogBook client must use the shared account table');
 assert(chartbook.includes('stableId'), 'LogBook records must have stable geometry-derived IDs');
 console.log('PASS: dashboard and planner share LogBook tool contracts');
