@@ -111,6 +111,9 @@ assert(html.includes("? 'Unload' : 'Load'"), 'planner LogBook rows must expose L
 assert(html.includes('const plannerLoadedLogBookIds = new Set()'), 'planner must track loaded LogBook records');
 assert(html.includes("textContent = 'Edit'"), 'planner LogBook rows must expose Edit actions');
 assert(html.includes('const plannerLoadedDistanceIds = new Map()'), 'planner must retain distance record IDs for edits');
+assert(html.includes('async function editPlannerLogBookItem'), 'planner LogBook Edit must expose editable fields');
+assert(html.includes("setPlannerTool('saved')"), 'planner Load/Unload must preserve the LogBook viewer');
+assert(html.includes('html.fishedge-native-fullscreen #bv-hamburger-btn'), 'planner must hide the hamburger in native fullscreen');
 assert(!html.includes('id="bv-mode-context"'), 'planner must not show blocking mode banners');
 assert(!html.includes('`<span>Moon: ${val(\'bv-moon-phase\')'), 'planner must not render the Moon/sun summary band');
 assert(html.includes('function setPlannerTool(next)'), 'planner tools must share one authoritative mode transition');

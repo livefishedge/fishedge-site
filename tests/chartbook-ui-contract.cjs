@@ -17,6 +17,9 @@ assert(dashboard.includes("loadDashboardLogBookItem(item)"), 'dashboard LogBook 
 assert(dashboard.includes('const dashboardLoadedLogBookIds = new Set()'), 'dashboard must track loaded LogBook records');
 assert(dashboard.includes('unloadDashboardLogBookItem'), 'dashboard LogBook rows must unload records from the map');
 assert(dashboard.includes("edit.textContent = 'Edit'"), 'dashboard LogBook rows must expose Edit actions');
+assert(dashboard.includes('async function editDashboardLogBookItem'), 'dashboard LogBook Edit must expose editable fields');
+assert(dashboard.includes('await refreshDashboardLogBook()'), 'dashboard Load/Unload must refresh row state');
+assert(dashboard.includes('html.fishedge-native-fullscreen #combined-menu-btn'), 'dashboard must hide the hamburger in native fullscreen');
 assert(dashboard.includes('Number.isFinite(p.chl)'), 'loaded waypoints must tolerate missing sampled values');
 assert(dashboard.includes('id="home-link-wrap"><a href="/planner/">PLANNER</a>'), 'dashboard footer must expose Planner and Home buttons');
 assert(dashboard.includes('id="combined-page-links"'), 'combined dashboard footer must expose the correct navigation buttons');

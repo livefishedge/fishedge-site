@@ -117,6 +117,9 @@
     body.fishedge-planner-fullscreen #bv-wave-readout,
     body.fishedge-planner-fullscreen .bv-mode-context{ display:none !important; }
     body.fishedge-planner-fullscreen #bv-hamburger-btn{ display:none !important; }
+    html.fishedge-native-fullscreen #bv-hamburger-btn,
+    html:fullscreen #bv-hamburger-btn,
+    html:-webkit-full-screen #bv-hamburger-btn{ display:none !important; }
     body.fishedge-planner-fullscreen .bv-map{ position:fixed !important; inset:0 !important; top:0 !important; width:100vw !important; height:100dvh !important; z-index:2000 !important; }
     body.fishedge-planner-fullscreen #captain-tools,
     body.fishedge-planner-fullscreen #bv-hamburger-btn{ z-index:2200 !important; top:env(safe-area-inset-top,8px) !important; }
@@ -1679,6 +1682,29 @@
       plannerLogBookRows.distances = distances.data || [];
       renderSavedPlannerItems();
     }
+    async function editPlannerLogBookItem(item) {
+      const geometry = item?.geometry;
+      if (!geometry) return;
+      const title = window.prompt('LogBook name', item.title || (item.kind === 'waypoint' ? 'Waypoint' : 'Distance'));
+      if (title === null) return;
+      let nextGeometry = geometry;
+      const parsePair = value => String(value).split(',').map(Number);
+      if (item.kind === 'waypoint' && geometry.type === 'Point') {
+        const lon = window.prompt('Longitude', String(geometry.coordinates?.[0] ?? ''));
+        const lat = window.prompt('Latitude', String(geometry.coordinates?.[1] ?? ''));
+        if (lon === null || lat === null || !Number.isFinite(Number(lon)) || !Number.isFinite(Number(lat)) || Math.abs(Number(lat)) > 90 || Math.abs(Number(lon)) > 180) { window.alert('Invalid waypoint coordinates'); return; }
+        nextGeometry = { type: 'Point', coordinates: [Number(lon), Number(lat)] };
+      } else if (item.kind === 'distance' && geometry.type === 'LineString' && geometry.coordinates?.length >= 2) {
+        const first = window.prompt('Start longitude, latitude', `${geometry.coordinates[0][0]}, ${geometry.coordinates[0][1]}`);
+        const second = window.prompt('End longitude, latitude', `${geometry.coordinates[1][0]}, ${geometry.coordinates[1][1]}`);
+        const a = first === null ? null : parsePair(first), b = second === null ? null : parsePair(second);
+        if (!a || !b || a.length !== 2 || b.length !== 2 || a.some(v => !Number.isFinite(v)) || b.some(v => !Number.isFinite(v)) || Math.abs(a[1]) > 90 || Math.abs(b[1]) > 90 || Math.abs(a[0]) > 180 || Math.abs(b[0]) > 180) { window.alert('Invalid measurement endpoints'); return; }
+        nextGeometry = { type: 'LineString', coordinates: [a, b] };
+      }
+      const result = await window.FishEdgeLogBook.save(item.kind, [{ id: item.id, title: title.trim() || item.title, geometry: nextGeometry, metadata: item.metadata || {} }], title.trim() || item.title);
+      if (!result?.ok) { window.alert('LogBook edit failed'); return; }
+      await loadPlannerLogBook();
+    }
     function renderSavedPlannerItems() {
       const waypointList = document.getElementById('captain-saved-waypoints');
       const distanceList = document.getElementById('captain-saved-distances');
@@ -1690,8 +1716,8 @@
           const c = item.geometry?.coordinates || [];
           const label = document.createElement('span'); label.textContent = `${index + 1} · ${item.title || 'Waypoint'} · ${Number(c[1]).toFixed(4)}°, ${Number(c[0]).toFixed(4)}°`;
           const load = document.createElement('button'); load.type = 'button'; load.textContent = plannerLoadedLogBookIds.has(item.id) ? 'Unload' : 'Load'; load.title = plannerLoadedLogBookIds.has(item.id) ? 'Remove this waypoint from the map' : 'Show this waypoint on the map';
-          load.addEventListener('click', () => { if (c.length !== 2) return; const existing = plannerWaypoints.findIndex(point => point.logbookId === item.id || (Math.abs(point.lon - c[0]) < 1e-8 && Math.abs(point.lat - c[1]) < 1e-8)); if (plannerLoadedLogBookIds.has(item.id)) { if (existing >= 0) plannerWaypoints.splice(existing, 1); plannerLoadedLogBookIds.delete(item.id); setPlannerTool('browse'); } else { if (existing < 0) plannerWaypoints.push({ lon: Number(c[0]), lat: Number(c[1]), logbookId: item.id }); plannerLoadedLogBookIds.add(item.id); setPlannerTool('waypoint'); } });
-          const edit = document.createElement('button'); edit.type = 'button'; edit.textContent = 'Edit'; edit.title = 'Load this waypoint into the editor'; edit.addEventListener('click', () => { if (c.length !== 2) return; if (!plannerWaypoints.some(point => point.logbookId === item.id)) plannerWaypoints.push({ lon: Number(c[0]), lat: Number(c[1]), logbookId: item.id }); plannerLoadedLogBookIds.add(item.id); setPlannerTool('waypoint'); });
+          load.addEventListener('click', () => { if (c.length !== 2) return; const existing = plannerWaypoints.findIndex(point => point.logbookId === item.id); if (plannerLoadedLogBookIds.has(item.id)) { if (existing >= 0) plannerWaypoints.splice(existing, 1); plannerLoadedLogBookIds.delete(item.id); } else { if (existing < 0) plannerWaypoints.push({ lon: Number(c[0]), lat: Number(c[1]), logbookId: item.id }); plannerLoadedLogBookIds.add(item.id); } setPlannerTool('saved'); });
+          const edit = document.createElement('button'); edit.type = 'button'; edit.textContent = 'Edit'; edit.title = 'Edit this saved waypoint'; edit.addEventListener('click', () => editPlannerLogBookItem(item));
           const actions = document.createElement('span'); actions.append(load, edit); const row = document.createElement('div'); row.className = 'captain-saved-row'; row.append(label, actions); waypointList.append(row);
         });
       }
@@ -1705,8 +1731,8 @@
           const distance = c.length >= 2 ? distanceNm(c[0], c[1]) : Number(item.metadata?.distance_nm);
           const label = document.createElement('span'); label.textContent = `${i + 1} · ${item.title || 'Distance'} · ${c.length >= 2 ? `${Number(c[0][1]).toFixed(4)}°, ${Number(c[0][0]).toFixed(4)}° → ${Number(c[1][1]).toFixed(4)}°, ${Number(c[1][0]).toFixed(4)}° · ` : ''}${Number.isFinite(distance) ? distance.toFixed(2) + ' nm' : 'saved measurement'}`;
           const load = document.createElement('button'); load.type = 'button'; load.textContent = plannerLoadedLogBookIds.has(item.id) ? 'Unload' : 'Load'; load.title = plannerLoadedLogBookIds.has(item.id) ? 'Remove this measurement from the map' : 'Show this measurement on the map';
-          load.addEventListener('click', () => { if (c.length < 2) return; const a = [Number(c[0][0]), Number(c[0][1])], b = [Number(c[1][0]), Number(c[1][1])]; const start = distancePoints.findIndex(point => Math.abs(point[0] - a[0]) < 1e-8 && Math.abs(point[1] - a[1]) < 1e-8); const key = `${a[0]},${a[1]}|${b[0]},${b[1]}`; if (plannerLoadedLogBookIds.has(item.id)) { if (start >= 0 && distancePoints[start + 1] && Math.abs(distancePoints[start + 1][0] - b[0]) < 1e-8) distancePoints.splice(start, 2); plannerLoadedDistanceIds.delete(key); plannerLoadedLogBookIds.delete(item.id); setPlannerTool('browse'); } else { if (start < 0) distancePoints.push(a, b); plannerLoadedDistanceIds.set(key, item.id); plannerLoadedLogBookIds.add(item.id); setPlannerTool('distance'); } });
-          const edit = document.createElement('button'); edit.type = 'button'; edit.textContent = 'Edit'; edit.title = 'Load this measurement into the editor'; edit.addEventListener('click', () => { if (c.length < 2) return; const a = [Number(c[0][0]), Number(c[0][1])], b = [Number(c[1][0]), Number(c[1][1])]; const key = `${a[0]},${a[1]}|${b[0]},${b[1]}`; const start = distancePoints.findIndex(point => Math.abs(point[0] - a[0]) < 1e-8 && Math.abs(point[1] - a[1]) < 1e-8); if (!(start >= 0 && distancePoints[start + 1] && Math.abs(distancePoints[start + 1][0] - b[0]) < 1e-8 && Math.abs(distancePoints[start + 1][1] - b[1]) < 1e-8)) distancePoints.push(a, b); plannerLoadedDistanceIds.set(key, item.id); plannerLoadedLogBookIds.add(item.id); setPlannerTool('distance'); });
+          load.addEventListener('click', () => { if (c.length < 2) return; const a = [Number(c[0][0]), Number(c[0][1])], b = [Number(c[1][0]), Number(c[1][1])]; const start = distancePoints.findIndex(point => Math.abs(point[0] - a[0]) < 1e-8 && Math.abs(point[1] - a[1]) < 1e-8); const key = `${a[0]},${a[1]}|${b[0]},${b[1]}`; if (plannerLoadedLogBookIds.has(item.id)) { if (start >= 0 && distancePoints[start + 1] && Math.abs(distancePoints[start + 1][0] - b[0]) < 1e-8 && Math.abs(distancePoints[start + 1][1] - b[1]) < 1e-8) distancePoints.splice(start, 2); plannerLoadedDistanceIds.delete(key); plannerLoadedLogBookIds.delete(item.id); } else { if (start < 0) distancePoints.push(a, b); plannerLoadedDistanceIds.set(key, item.id); plannerLoadedLogBookIds.add(item.id); } setPlannerTool('saved'); });
+          const edit = document.createElement('button'); edit.type = 'button'; edit.textContent = 'Edit'; edit.title = 'Edit this saved measurement'; edit.addEventListener('click', () => editPlannerLogBookItem(item));
           const actions = document.createElement('span'); actions.append(load, edit); const row = document.createElement('div'); row.className = 'captain-saved-row'; row.append(label, actions); distanceList.append(row);
         });
       }

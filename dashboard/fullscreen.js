@@ -3,7 +3,11 @@
   'use strict';
   function fallbackClass() { return document.getElementById('bv-map') ? 'fishedge-planner-fullscreen' : 'fishedge-app-fullscreen'; }
   function active() { return Boolean(document.fullscreenElement || document.webkitFullscreenElement || document.webkitIsFullScreen || document.body.classList.contains('fishedge-app-fullscreen') || document.body.classList.contains('fishedge-planner-fullscreen')); }
-  function notify() { global.dispatchEvent(new Event('fishedge-fullscreen-change')); }
+  function notify() {
+    const native = Boolean(document.fullscreenElement || document.webkitFullscreenElement || document.webkitIsFullScreen);
+    document.documentElement.classList.toggle('fishedge-native-fullscreen', native);
+    global.dispatchEvent(new Event('fishedge-fullscreen-change'));
+  }
   async function toggle() {
     const className = fallbackClass();
     if (active()) {
