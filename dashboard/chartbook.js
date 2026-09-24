@@ -66,6 +66,19 @@
     }
     return { ok: true, data: localRows(s?.user?.id || 'local').filter(row => row.kind === kind), synced: false, reason: s ? 'server_unavailable' : 'signed_out' };
   }
+  async function remove(kind, id) {
+    if (!id) return { ok: false, reason: 'missing_id' };
+    const s = await session(); const c = getClient();
+    if (s && c) {
+      const result = await c.from(TABLE).delete().eq('id', id).eq('user_id', s.user.id);
+      if (!result.error) { writeLocal(allLocalRows().filter(row => row.id !== id)); return { ok: true, synced: true }; }
+      if (result.error.code !== 'PGRST205') return { ok: false, reason: 'server', error: result.error };
+    }
+    const removed = allLocalRows().filter(row => row.id === id && (row.owner_scope || 'local') === (s?.user?.id || 'local')).length;
+    if (!removed) return { ok: false, reason: 'not_found' };
+    writeLocal(allLocalRows().filter(row => !(row.id === id && (row.owner_scope || 'local') === (s?.user?.id || 'local'))));
+    return { ok: true, synced: false };
+  }
   global.addEventListener?.('storage', event => { if (event.key === LOCAL_KEY) dispatchChange(); });
-  global.FishEdgeLogBook = { makeId, stableId, save, list };
+  global.FishEdgeLogBook = { makeId, stableId, save, list, remove };
 })(window);

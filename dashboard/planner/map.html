@@ -1594,7 +1594,7 @@
       panel.replaceChildren();
       const wrapper = panel.parentElement;
       clearPlannerWaypointOverlays();
-      if (!plannerWaypoints.length || !waypointMode) {
+      if (!plannerWaypoints.length) {
         wrapper?.style.setProperty('display', 'none'); wrapper?.classList.remove('visible');
         document.getElementById('captain-save-btn')?.style.setProperty('display', 'none');
         renderSavedPlannerItems();
@@ -1617,9 +1617,9 @@
         });
         row.append(label, remove); panel.appendChild(row);
       });
-      wrapper?.classList.add('visible');
-      wrapper?.style.setProperty('display', 'block');
-      document.getElementById('captain-save-btn')?.style.setProperty('display', 'inline-block');
+      wrapper?.classList.toggle('visible', waypointMode);
+      wrapper?.style.setProperty('display', waypointMode ? 'block' : 'none');
+      document.getElementById('captain-save-btn')?.style.setProperty('display', waypointMode ? 'inline-block' : 'none');
       renderSavedPlannerItems();
     }
     function renderPlannerDistances() {
@@ -1685,25 +1685,22 @@
     async function editPlannerLogBookItem(item) {
       const geometry = item?.geometry;
       if (!geometry) return;
-      const title = window.prompt('LogBook name', item.title || (item.kind === 'waypoint' ? 'Waypoint' : 'Distance'));
-      if (title === null) return;
-      let nextGeometry = geometry;
-      const parsePair = value => String(value).split(',').map(Number);
-      if (item.kind === 'waypoint' && geometry.type === 'Point') {
-        const lon = window.prompt('Longitude', String(geometry.coordinates?.[0] ?? ''));
-        const lat = window.prompt('Latitude', String(geometry.coordinates?.[1] ?? ''));
-        if (lon === null || lat === null || !Number.isFinite(Number(lon)) || !Number.isFinite(Number(lat)) || Math.abs(Number(lat)) > 90 || Math.abs(Number(lon)) > 180) { window.alert('Invalid waypoint coordinates'); return; }
-        nextGeometry = { type: 'Point', coordinates: [Number(lon), Number(lat)] };
-      } else if (item.kind === 'distance' && geometry.type === 'LineString' && geometry.coordinates?.length >= 2) {
-        const first = window.prompt('Start longitude, latitude', `${geometry.coordinates[0][0]}, ${geometry.coordinates[0][1]}`);
-        const second = window.prompt('End longitude, latitude', `${geometry.coordinates[1][0]}, ${geometry.coordinates[1][1]}`);
-        const a = first === null ? null : parsePair(first), b = second === null ? null : parsePair(second);
-        if (!a || !b || a.length !== 2 || b.length !== 2 || a.some(v => !Number.isFinite(v)) || b.some(v => !Number.isFinite(v)) || Math.abs(a[1]) > 90 || Math.abs(b[1]) > 90 || Math.abs(a[0]) > 180 || Math.abs(b[0]) > 180) { window.alert('Invalid measurement endpoints'); return; }
-        nextGeometry = { type: 'LineString', coordinates: [a, b] };
-      }
-      const result = await window.FishEdgeLogBook.save(item.kind, [{ id: item.id, title: title.trim() || item.title, geometry: nextGeometry, metadata: item.metadata || {} }], title.trim() || item.title);
-      if (!result?.ok) { window.alert('LogBook edit failed'); return; }
-      await loadPlannerLogBook();
+      document.getElementById('fishedge-planner-logbook-editor')?.remove();
+      const modal = document.createElement('div'); modal.id = 'fishedge-planner-logbook-editor'; modal.style.cssText = 'position:fixed;inset:0;z-index:3000;background:#0009;display:grid;place-items:center;padding:16px;';
+      const box = document.createElement('form'); box.style.cssText = 'width:min(380px,100%);background:#0a1929;border:1px solid #31546b;border-radius:10px;padding:16px;color:#edfaff;display:grid;gap:8px;';
+      const add = (label, value, type = 'text') => { const wrap = document.createElement('label'); wrap.textContent = label; wrap.style.cssText = 'display:grid;gap:3px;font-size:11px;color:#9fb0c3;'; const input = document.createElement('input'); input.type = type; input.value = value ?? ''; input.step = 'any'; input.style.cssText = 'background:#0b1724;color:#edfaff;border:1px solid #31546b;border-radius:5px;padding:7px;'; wrap.append(input); box.append(wrap); return input; };
+      const heading = document.createElement('strong'); heading.textContent = `Edit ${item.kind === 'waypoint' ? 'waypoint' : 'distance'}`; box.append(heading);
+      const title = add('Name', item.title || (item.kind === 'waypoint' ? 'Waypoint' : 'Distance'));
+      const inputs = item.kind === 'waypoint' ? [add('Longitude', geometry.coordinates?.[0], 'number'), add('Latitude', geometry.coordinates?.[1], 'number')] : [add('Start longitude', geometry.coordinates?.[0]?.[0], 'number'), add('Start latitude', geometry.coordinates?.[0]?.[1], 'number'), add('End longitude', geometry.coordinates?.[1]?.[0], 'number'), add('End latitude', geometry.coordinates?.[1]?.[1], 'number')];
+      const notes = add('Notes', item.metadata?.notes || '');
+      const actions = document.createElement('div'); actions.style.cssText = 'display:flex;justify-content:flex-end;gap:6px;margin-top:6px;';
+      const cancel = document.createElement('button'); cancel.type = 'button'; cancel.textContent = 'Cancel';
+      const remove = document.createElement('button'); remove.type = 'button'; remove.textContent = 'Remove record'; remove.style.cssText = 'background:#702b32;color:#fff;border:1px solid #b34b55;border-radius:5px;padding:6px 8px;';
+      const save = document.createElement('button'); save.type = 'submit'; save.textContent = 'Save changes'; save.style.cssText = 'background:#1d4f91;color:#fff;border:1px solid #4d7dff;border-radius:5px;padding:6px 8px;';
+      actions.append(cancel, remove, save); box.append(actions); modal.append(box); document.body.append(modal);
+      cancel.onclick = () => modal.remove(); modal.onclick = event => { if (event.target === modal) modal.remove(); };
+      remove.onclick = async () => { remove.disabled = true; plannerLoadedLogBookIds.delete(item.id); if (item.kind === 'waypoint') { for (let i = plannerWaypoints.length - 1; i >= 0; i--) if (plannerWaypoints[i].logbookId === item.id) plannerWaypoints.splice(i, 1); } else { for (let i = distancePoints.length - 2; i >= 0; i -= 2) { const key = `${distancePoints[i][0]},${distancePoints[i][1]}|${distancePoints[i + 1][0]},${distancePoints[i + 1][1]}`; if (plannerLoadedDistanceIds.get(key) === item.id) { distancePoints.splice(i, 2); plannerLoadedDistanceIds.delete(key); } } } const result = await window.FishEdgeLogBook.remove(item.kind, item.id); modal.remove(); const status = document.getElementById('bv-mode-context'); if (status) { status.textContent = result?.ok ? 'Removed from LogBook' : 'Unable to remove LogBook record'; status.classList.add('visible'); } renderPlannerWaypoints(); renderPlannerDistanceLayer(); await loadPlannerLogBook(); };
+      box.onsubmit = async event => { event.preventDefault(); const nums = inputs.map(input => Number(input.value)); const valid = nums.every(Number.isFinite) && (item.kind === 'waypoint' ? Math.abs(nums[0]) <= 180 && Math.abs(nums[1]) <= 90 : Math.abs(nums[0]) <= 180 && Math.abs(nums[2]) <= 180 && Math.abs(nums[1]) <= 90 && Math.abs(nums[3]) <= 90); if (!valid) { const status = document.getElementById('bv-mode-context'); if (status) { status.textContent = 'Check the numeric fields'; status.classList.add('visible'); } return; } const nextGeometry = item.kind === 'waypoint' ? { type: 'Point', coordinates: [nums[0], nums[1]] } : { type: 'LineString', coordinates: [[nums[0], nums[1]], [nums[2], nums[3]]] }; save.disabled = true; const result = await window.FishEdgeLogBook.save(item.kind, [{ id: item.id, title: title.value.trim() || item.title, geometry: nextGeometry, metadata: { ...(item.metadata || {}), notes: notes.value } }], title.value.trim() || item.title); if (!result?.ok) { save.disabled = false; return; } if (item.kind === 'waypoint') { const point = plannerWaypoints.find(next => next.logbookId === item.id); if (point) { point.lon = nums[0]; point.lat = nums[1]; persistPlannerWaypoints(); } } else { for (let i = 0; i + 1 < distancePoints.length; i += 2) { const key = `${distancePoints[i][0]},${distancePoints[i][1]}|${distancePoints[i + 1][0]},${distancePoints[i + 1][1]}`; if (plannerLoadedDistanceIds.get(key) === item.id) { distancePoints.splice(i, 2, [nums[0], nums[1]], [nums[2], nums[3]]); plannerLoadedDistanceIds.delete(key); plannerLoadedDistanceIds.set(`${nums[0]},${nums[1]}|${nums[2]},${nums[3]}`, item.id); persistPlannerDistance(); break; } } } modal.remove(); renderPlannerWaypoints(); renderPlannerDistanceLayer(); await loadPlannerLogBook(); };
     }
     function renderSavedPlannerItems() {
       const waypointList = document.getElementById('captain-saved-waypoints');
