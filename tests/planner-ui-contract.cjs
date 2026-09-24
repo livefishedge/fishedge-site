@@ -115,6 +115,8 @@ assert(html.includes('async function editPlannerLogBookItem'), 'planner LogBook 
 assert(html.includes("setPlannerTool('saved')"), 'planner Load/Unload must preserve the LogBook viewer');
 assert(html.includes('html.fishedge-native-fullscreen #bv-hamburger-btn'), 'planner must hide the hamburger in native fullscreen');
 assert(html.includes('z-index:12000'), 'planner LogBook editor must be above the saved panel');
+assert(html.includes("LogBook save failed · try again"), 'planner editor must recover from save errors');
+assert(html.includes('__fishedgePlannerLogBookLoad'), 'planner LogBook loads must be coalesced');
 assert(!html.includes('id="bv-mode-context"'), 'planner must not show blocking mode banners');
 assert(!html.includes('`<span>Moon: ${val(\'bv-moon-phase\')'), 'planner must not render the Moon/sun summary band');
 assert(html.includes('function setPlannerTool(next)'), 'planner tools must share one authoritative mode transition');

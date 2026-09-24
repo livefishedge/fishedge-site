@@ -4,7 +4,11 @@
   const URL = 'https://wfdpfeptmyiqifgwqpzu.supabase.co';
   const KEY = 'sb_publishable_W6wnJkT70jb69JUZgM1dow_nabPZycR';
   const TABLE = 'logbook_items';
+  const REQUEST_TIMEOUT_MS = 8000;
   let client = null;
+  function bounded(promise, label) {
+    return Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(Object.assign(new Error(`${label} timed out`), { code: 'TIMEOUT' })), REQUEST_TIMEOUT_MS))]);
+  }
   function getClient() {
     if (global.sb) return global.sb;
     if (!global.supabase?.createClient) return null;
@@ -19,7 +23,7 @@
     const hex = (hash >>> 0).toString(16).padStart(8, '0');
     return `${hex}${hex}${hex}${hex}`.replace(/(.{8})(.{4})(.{4})(.{4})(.{12})/, '$1-$2-$3-$4-$5');
   }
-  async function session() { const c = getClient(); if (!c) return null; const { data } = await c.auth.getSession(); return data?.session || null; }
+  async function session() { const c = getClient(); if (!c) return null; try { const { data } = await bounded(c.auth.getSession(), 'LogBook session'); return data?.session || null; } catch (_) { return null; } }
   const LOCAL_KEY = 'fishedge:logbook:v1';
   function dispatchChange() { try { global.dispatchEvent(new Event('fishedge-logbook-change')); } catch (_) {} }
   function localRows(scope) {
@@ -34,7 +38,7 @@
     const pending = localRows(scope).filter(row => row.pending_sync);
     if (!pending.length || !client || !userId) return [];
     const payload = pending.map(({ owner_scope, pending_sync, ...row }) => ({ ...row, user_id: userId }));
-    const result = await client.from(TABLE).upsert(payload, { onConflict: 'id' }).select();
+    let result; try { result = await bounded(client.from(TABLE).upsert(payload, { onConflict: 'id' }).select(), 'LogBook sync'); } catch (_) { return []; }
     if (result.error) return [];
     const ids = new Set(pending.map(row => row.id));
     writeLocal(allLocalRows().filter(row => !ids.has(row.id)));
@@ -47,9 +51,9 @@
     const serverRows = rows.map(({ owner_scope, pending_sync, ...row }) => row);
     const c = getClient();
     if (s && c) {
-      const result = await c.from(TABLE).upsert(serverRows, { onConflict: 'id' }).select();
+      let result; try { result = await bounded(c.from(TABLE).upsert(serverRows, { onConflict: 'id' }).select(), 'LogBook save'); } catch (error) { result = { error: { code: error?.code === 'TIMEOUT' ? 'TIMEOUT' : 'NETWORK', message: error?.message } }; }
       if (!result.error) { writeLocal(allLocalRows().filter(row => !rows.some(next => next.id === row.id))); return { ok: true, data: result.data || serverRows, synced: true }; }
-      if (result.error.code !== 'PGRST205') return { ok: false, reason: 'server', error: result.error };
+      if (result.error.code !== 'PGRST205') return { ok: false, reason: result.error.code === 'TIMEOUT' ? 'timeout' : 'server', error: result.error };
     }
     const pendingRows = rows.map(row => ({ ...row, pending_sync: Boolean(s) }));
     const current = allLocalRows().filter(row => !pendingRows.some(next => next.id === row.id));
@@ -60,9 +64,10 @@
     const s = await session(); const c = getClient();
     if (s && c) {
       await retryPending(s.user.id, c, s.user.id);
-      const { data, error } = await c.from(TABLE).select('*').eq('user_id', s.user.id).eq('kind', kind).order('updated_at', { ascending: false });
+      let response; try { response = await bounded(c.from(TABLE).select('*').eq('user_id', s.user.id).eq('kind', kind).order('updated_at', { ascending: false }), 'LogBook list'); } catch (error) { response = { data: [], error: { code: error?.code === 'TIMEOUT' ? 'TIMEOUT' : 'NETWORK', message: error?.message } }; }
+      const { data, error } = response;
       if (!error) return { ok: true, data: data || [], synced: true };
-      if (error.code !== 'PGRST205') return { ok: false, reason: 'server', data: [], error };
+      if (error.code !== 'PGRST205') return { ok: false, reason: error.code === 'TIMEOUT' ? 'timeout' : 'server', data: [], error };
     }
     return { ok: true, data: localRows(s?.user?.id || 'local').filter(row => row.kind === kind), synced: false, reason: s ? 'server_unavailable' : 'signed_out' };
   }
@@ -70,9 +75,9 @@
     if (!id) return { ok: false, reason: 'missing_id' };
     const s = await session(); const c = getClient();
     if (s && c) {
-      const result = await c.from(TABLE).delete().eq('id', id).eq('user_id', s.user.id);
+      let result; try { result = await bounded(c.from(TABLE).delete().eq('id', id).eq('user_id', s.user.id), 'LogBook delete'); } catch (error) { result = { error: { code: error?.code === 'TIMEOUT' ? 'TIMEOUT' : 'NETWORK', message: error?.message } }; }
       if (!result.error) { writeLocal(allLocalRows().filter(row => row.id !== id)); return { ok: true, synced: true }; }
-      if (result.error.code !== 'PGRST205') return { ok: false, reason: 'server', error: result.error };
+      if (result.error.code !== 'PGRST205') return { ok: false, reason: result.error.code === 'TIMEOUT' ? 'timeout' : 'server', error: result.error };
     }
     const removed = allLocalRows().filter(row => row.id === id && (row.owner_scope || 'local') === (s?.user?.id || 'local')).length;
     if (!removed) return { ok: false, reason: 'not_found' };
