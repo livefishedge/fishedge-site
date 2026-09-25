@@ -3167,11 +3167,23 @@ function closeDashboardMenus() {
   if (combinedOverlay) combinedOverlay.style.display = "none";
 }
 
+function closeDashboardToolPanelForMenu() {
+  const logBookPanel = document.getElementById("captain-logbook-panel");
+  const logBookButton = document.getElementById("captain-chartbook-tool");
+  logBookPanel?.classList.remove("visible");
+  logBookButton?.classList.remove("active");
+  logBookButton?.setAttribute("aria-pressed", "false");
+  if (typeof dashboardActiveTool !== "undefined" && dashboardActiveTool === "logbook") {
+    dashboardActiveTool = "browse";
+  }
+}
+
 function toggleDashboardMenu(kind) {
   const panel = kind === "hamburger" ? hamburgerPanel : combinedControls;
   const shouldOpen = Boolean(panel && !panel.classList.contains("open"));
   closeDashboardMenus();
   if (!shouldOpen || !panel) return;
+  closeDashboardToolPanelForMenu();
   panel.classList.add("open");
   if (kind === "combined" && combinedOverlay) combinedOverlay.style.display = "block";
 }
