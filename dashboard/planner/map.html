@@ -214,8 +214,9 @@
     }
     #captain-pts-list .cp-row,#captain-dist-list .cd-row{
       display:flex; align-items:center; justify-content:space-between; gap:8px;
-      padding:5px 0; border-bottom:1px solid rgba(255,255,255,0.08); font-family:ui-monospace,monospace;
+      padding:4px 0; border-bottom:1px solid rgba(255,255,255,0.08); font:10px ui-monospace,monospace; white-space:nowrap; overflow:hidden;
     }
+    #captain-pts-list .cp-row > span,#captain-dist-list .cd-row > span{ min-width:0; overflow:hidden; text-overflow:ellipsis; }
     #captain-pts-list .cp-row:last-child,#captain-dist-list .cd-row:last-child{ border-bottom:0; }
     #captain-pts-list button,#captain-dist-list button{
       background:transparent; border:1px solid rgba(255,120,100,0.5); color:#ffb4a8;

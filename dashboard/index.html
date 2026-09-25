@@ -837,6 +837,8 @@
     #captain-logbook-distances .captain-logbook-row::before{ content:counter(logbook-distance) ' '; flex:0 0 auto; color:#edfaff; }
     .captain-logbook-row button{ flex:0 0 auto; padding:2px 6px; border:1px solid #4d7dff; border-radius:4px; background:#1d4f91; color:#fff; font-size:10px; cursor:pointer; }
     .captain-logbook-row span:last-child{ display:flex; gap:4px; flex:0 0 auto; }
+    #captain-pts-list > div, #captain-dist-list > div{ white-space:nowrap; overflow:hidden; }
+    #captain-pts-list > div > span, #captain-dist-list > div > span{ min-width:0; overflow:hidden; text-overflow:ellipsis; }
     #captain-pts-panel.visible{ display:block !important; }
     #captain-pts-panel.collapsed{
       width:280px; max-height:none; overflow:hidden; padding-top:7px; padding-bottom:7px;
@@ -10939,6 +10941,7 @@ let captainAddTool = {
   markerLayer: null,
   mapRef: null
 };
+let dashboardActiveTool = 'browse';
 
 function activeCaptainToolMap() {
   if (currentVar === "combined") return window._combinedMapRef || window._combinedMap || null;
@@ -10981,6 +10984,7 @@ function deactivateDistTool() {
 // already-loaded geometry is independent; this state only controls which tool
 // owns clicks and which panel is open.
 function setDashboardTool(next, map = activeCaptainToolMap()) {
+  dashboardActiveTool = ['browse', 'waypoint', 'distance', 'logbook'].includes(next) ? next : 'browse';
   const addButton = document.getElementById('captain-add-tool');
   const distButton = document.getElementById('captain-dist-tool');
   const logBookButton = document.getElementById('captain-chartbook-tool');
@@ -11701,7 +11705,7 @@ function combinedFrontClickInfo(map, coord, pixel) {
 document.getElementById('captain-dist-tool')?.addEventListener('click', () => {
   const map = activeCaptainToolMap();
   if (!map) return;
-  if (captainDistTool.active) {
+  if (dashboardActiveTool === 'distance') {
     setDashboardTool('browse', map);
   } else {
     setDashboardTool('distance', map);
@@ -11717,7 +11721,7 @@ document.getElementById('captain-dist-exit')?.addEventListener('click', (e) => {
 document.getElementById('captain-add-tool')?.addEventListener('click', () => {
   const map = activeCaptainToolMap();
   if (!map) return;
-  if (captainAddTool.active) setDashboardTool('browse', map);
+  if (dashboardActiveTool === 'waypoint') setDashboardTool('browse', map);
   else setDashboardTool('waypoint', map);
 });
 
@@ -11865,7 +11869,7 @@ async function refreshDashboardLogBook() {
 document.getElementById('captain-chartbook-tool')?.addEventListener('click', () => {
   const panel = document.getElementById('captain-logbook-panel');
   if (!panel) return;
-  if (panel.classList.contains('visible')) setDashboardTool('browse');
+  if (dashboardActiveTool === 'logbook') setDashboardTool('browse');
   else { setDashboardTool('logbook'); refreshDashboardLogBook(); }
 });
 window.addEventListener('fishedge-logbook-change', () => refreshDashboardLogBook());
