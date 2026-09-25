@@ -3196,7 +3196,9 @@ function toggleDashboardMenu(kind) {
   const shouldOpen = Boolean(panel && !panel.classList.contains("open"));
   closeDashboardMenus();
   if (!shouldOpen || !panel) return;
-  closeDashboardToolPanelForMenu();
+  // A side menu is browse state: leave loaded features on the map but close
+  // every active tool panel before this menu becomes visible.
+  setDashboardTool("browse");
   panel.classList.add("open");
   if (kind === "combined" && combinedOverlay) combinedOverlay.style.display = "block";
 }
@@ -11108,6 +11110,10 @@ function setDashboardTool(next, map = activeCaptainToolMap()) {
     logBookPanel?.classList.remove('visible');
     logBookButton?.classList.remove('active');
     logBookButton?.setAttribute('aria-pressed', 'false');
+    // Browse owns no panel. Loaded geometry remains on the map, but no
+    // Waypoint, Distance, or LogBook dropdown can survive a menu transition.
+    document.getElementById('captain-pts-panel')?.classList.remove('visible');
+    document.getElementById('captain-dist-panel')?.classList.remove('visible');
   }
 }
 

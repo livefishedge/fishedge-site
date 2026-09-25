@@ -763,7 +763,9 @@
       const closeMenu = () => panel.classList.remove('open');
       btn.addEventListener('click', (ev) => {
         ev.stopPropagation();
-        panel.classList.toggle('open');
+        const opening = !panel.classList.contains('open');
+        if (opening) setPlannerTool('browse');
+        panel.classList.toggle('open', opening);
       });
       document.addEventListener('click', (ev) => {
         if (!panel.contains(ev.target) && ev.target !== btn) closeMenu();
@@ -1819,6 +1821,8 @@
       }
     }
     function setPlannerTool(next) {
+      // Captain-tool panels and the hamburger menu are mutually exclusive.
+      document.getElementById('bv-menu-panel')?.classList.remove('open');
       plannerTool = ['browse', 'waypoint', 'distance', 'saved'].includes(next) ? next : 'browse';
       waypointMode = plannerTool === 'waypoint';
       distanceMode = plannerTool === 'distance';
