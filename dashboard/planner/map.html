@@ -1641,7 +1641,8 @@
         const d = distanceNm(a, b);
         totalNm += d;
         const row = document.createElement('div'); row.className = 'cd-row';
-        const label = document.createElement('span'); label.textContent = `${i + 1}  ${a[1].toFixed(4)}°, ${a[0].toFixed(4)}° → ${b[1].toFixed(4)}°, ${b[0].toFixed(4)}°  ·  ${d.toFixed(2)} nm`;
+        const meta = plannerDistanceMetadata[i] || {};
+        const label = document.createElement('span'); label.textContent = `${i + 1}  ${meta.title ? meta.title + ' · ' : ''}${a[1].toFixed(4)}°, ${a[0].toFixed(4)}° → ${b[1].toFixed(4)}°, ${b[0].toFixed(4)}°  ·  ${d.toFixed(2)} nm`;
         const remove = document.createElement('button'); remove.type = 'button'; remove.textContent = '×'; remove.addEventListener('click', () => {
           distancePoints.splice(i * 2, 2);
           plannerDistanceRecordIds.splice(i, 1); plannerDistanceMetadata.splice(i, 1);
@@ -1761,8 +1762,8 @@
           const label = document.createElement('span'); label.textContent = `${index + 1} · ${item.title || 'Waypoint'} · ${Number(c[1]).toFixed(4)}°, ${Number(c[0]).toFixed(4)}°`;
           const load = document.createElement('button'); load.type = 'button'; load.textContent = plannerLoadedLogBookIds.has(item.id) ? 'Unload' : 'Load'; load.title = plannerLoadedLogBookIds.has(item.id) ? 'Remove this waypoint from the map' : 'Show this waypoint on the map';
           load.addEventListener('click', () => { if (c.length !== 2) return; const existing = plannerWaypoints.findIndex(point => point.logbookId === item.id); if (plannerLoadedLogBookIds.has(item.id)) { if (existing >= 0) plannerWaypoints.splice(existing, 1); plannerLoadedLogBookIds.delete(item.id); } else { if (existing < 0) plannerWaypoints.push({ lon: Number(c[0]), lat: Number(c[1]), logbookId: item.id, title: item.title || 'Waypoint', notes: item.metadata?.notes || '' }); plannerLoadedLogBookIds.add(item.id); } plannerWaypointsSaved = plannerWaypoints.length > 0 && plannerWaypoints.every(point => point.logbookId); persistPlannerWaypoints(); setPlannerTool('saved'); });
-          const edit = document.createElement('button'); edit.type = 'button'; edit.textContent = 'Edit'; edit.title = 'Edit this saved waypoint'; edit.addEventListener('click', () => editPlannerLogBookItem(item));
-          const actions = document.createElement('span'); actions.append(load, edit); const row = document.createElement('div'); row.className = 'captain-saved-row'; row.append(label, actions); waypointList.append(row);
+          label.tabIndex = 0; label.title = 'Click to edit this waypoint'; label.style.cursor = 'text'; label.addEventListener('click', () => editPlannerLogBookItem(item)); label.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); editPlannerLogBookItem(item); } });
+          const actions = document.createElement('span'); actions.append(load); const row = document.createElement('div'); row.className = 'captain-saved-row'; row.append(label, actions); waypointList.append(row);
         });
       }
       if (distanceList) {
@@ -1776,8 +1777,8 @@
           const label = document.createElement('span'); label.textContent = `${i + 1} · ${item.title || 'Distance'} · ${c.length >= 2 ? `${Number(c[0][1]).toFixed(4)}°, ${Number(c[0][0]).toFixed(4)}° → ${Number(c[1][1]).toFixed(4)}°, ${Number(c[1][0]).toFixed(4)}° · ` : ''}${Number.isFinite(distance) ? distance.toFixed(2) + ' nm' : 'saved measurement'}`;
           const load = document.createElement('button'); load.type = 'button'; load.textContent = plannerLoadedLogBookIds.has(item.id) ? 'Unload' : 'Load'; load.title = plannerLoadedLogBookIds.has(item.id) ? 'Remove this measurement from the map' : 'Show this measurement on the map';
           load.addEventListener('click', () => { if (c.length < 2) return; const a = [Number(c[0][0]), Number(c[0][1])], b = [Number(c[1][0]), Number(c[1][1])]; const pairIndex = plannerDistanceRecordIds.indexOf(item.id); if (pairIndex >= 0) { distancePoints.splice(pairIndex * 2, 2); plannerDistanceRecordIds.splice(pairIndex, 1); plannerDistanceMetadata.splice(pairIndex, 1); plannerLoadedLogBookIds.delete(item.id); } else { distancePoints.push(a, b); plannerDistanceRecordIds.push(item.id); plannerDistanceMetadata.push({ ...(item.metadata || {}), title: item.title || 'Distance', notes: item.metadata?.notes || '' }); plannerLoadedLogBookIds.add(item.id); } plannerDistancesSaved = plannerDistanceRecordIds.length > 0 && plannerDistanceRecordIds.length === distancePoints.length / 2 && plannerDistanceRecordIds.every(Boolean); persistPlannerDistance(); renderPlannerDistanceLayer(); renderPlannerDistances(); setPlannerTool('saved'); });
-          const edit = document.createElement('button'); edit.type = 'button'; edit.textContent = 'Edit'; edit.title = 'Edit this saved measurement'; edit.addEventListener('click', () => editPlannerLogBookItem(item));
-          const actions = document.createElement('span'); actions.append(load, edit); const row = document.createElement('div'); row.className = 'captain-saved-row'; row.append(label, actions); distanceList.append(row);
+          label.tabIndex = 0; label.title = 'Click to edit this distance'; label.style.cursor = 'text'; label.addEventListener('click', () => editPlannerLogBookItem(item)); label.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); editPlannerLogBookItem(item); } });
+          const actions = document.createElement('span'); actions.append(load); const row = document.createElement('div'); row.className = 'captain-saved-row'; row.append(label, actions); distanceList.append(row);
         });
       }
     }
