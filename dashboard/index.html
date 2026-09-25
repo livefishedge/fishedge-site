@@ -8,7 +8,7 @@
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@10.4.0/ol.css">
 
-  <script src="https://cdn.plot.ly/plotly-2.34.0.min.js"></script>
+  <script defer src="https://cdn.plot.ly/plotly-2.34.0.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/ol@10.4.0/dist/ol.js"></script>
 <script>
 /* Instrumentation shim for locate-me.js (same pattern as the dashboard).
@@ -839,6 +839,11 @@
     .captain-logbook-row span:last-child{ display:flex; gap:4px; flex:0 0 auto; }
     #captain-pts-list > div, #captain-dist-list > div{ white-space:nowrap; overflow:hidden; }
     #captain-pts-list > div > span, #captain-dist-list > div > span{ min-width:0; overflow:hidden; text-overflow:ellipsis; }
+    #captain-dist-list .dashboard-distance-row{ cursor:zoom-in; }
+    #captain-dist-list > div.dashboard-distance-row.expanded{ white-space:normal; overflow:visible; cursor:zoom-out; }
+    #captain-dist-list > div.dashboard-distance-row.expanded > span{ overflow:visible; white-space:normal; text-overflow:clip; }
+    #captain-dist-list [data-captain-distance-name]{ width:150px !important; flex:0 0 150px; max-width:35vw; }
+    #captain-dist-total{ display:none !important; }
     #captain-pts-panel.visible{ display:block !important; }
     #captain-pts-panel.collapsed{
       width:280px; max-height:none; overflow:hidden; padding-top:7px; padding-bottom:7px;
@@ -3154,6 +3159,12 @@ if (hamburgerToggle && hamburgerPanel) {
       hamburgerPanel.classList.remove("open");
     }
   });
+}
+
+function closeDashboardMenus() {
+  hamburgerPanel?.classList.remove("open");
+  combinedControls?.classList.remove("open");
+  if (combinedOverlay) combinedOverlay.style.display = "none";
 }
 
 if (hamburgerRegionSelect) {
@@ -6520,7 +6531,10 @@ async function renderCombinedMode() {
   const sstFrames = framesByVar.sst || [];
   console.log("[combined] SST frames count:", sstFrames.length);
   const sstScanTimeDiv = document.getElementById("combined-sst-scan-time");
-  if (sstFrames.length) {
+  // SST is opt-in in the combined view. Do not download/build a hidden
+  // 24-hour composite during Dashboard startup; build it on demand when the
+  // user enables SST.
+  if (sstFrames.length && document.getElementById("chk-combined-sst")?.checked) {
     const sorted = [...sstFrames].sort((a, b) => {
       const ta = epochMsForFrame("sst", a) || 0, tb = epochMsForFrame("sst", b) || 0;
       return tb - ta;
@@ -10984,6 +10998,7 @@ function deactivateDistTool() {
 // already-loaded geometry is independent; this state only controls which tool
 // owns clicks and which panel is open.
 function setDashboardTool(next, map = activeCaptainToolMap()) {
+  closeDashboardMenus();
   dashboardActiveTool = ['browse', 'waypoint', 'distance', 'logbook'].includes(next) ? next : 'browse';
   const addButton = document.getElementById('captain-add-tool');
   const distButton = document.getElementById('captain-dist-tool');
@@ -11089,13 +11104,16 @@ function updateDistPanel() {
     if (p2) {
       const d = getDistanceKm(p1, p2);
       running += d;
-      list.innerHTML += `<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;color:var(--fg);margin-bottom:6px;border-bottom:1px solid rgba(255,255,255,.07);padding-bottom:6px;"><span style="display:flex;align-items:center;gap:4px;min-width:0;"><b>${pair}</b><input data-captain-distance-name="${pair - 1}" value="${escapeCaptainText(title === 'Distance' ? '' : title)}" placeholder="Distance" title="Name this distance" style="width:92px;min-width:0;padding:3px 5px;border:1px solid #31546b;border-radius:4px;background:#0b1724;color:var(--fg);font:11px monospace;" /> <span>· ${p1.lat.toFixed(4)}°, ${p1.lon.toFixed(4)}° → ${p2.lat.toFixed(4)}°, ${p2.lon.toFixed(4)}° · ${formatDist(d)}</span></span>${remove}</div>`;
+      list.innerHTML += `<div class="dashboard-distance-row" style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;color:var(--fg);margin-bottom:6px;border-bottom:1px solid rgba(255,255,255,.07);padding-bottom:6px;"><span style="display:flex;align-items:center;gap:4px;min-width:0;"><b>${pair}</b><input data-captain-distance-name="${pair - 1}" value="${escapeCaptainText(title === 'Distance' ? '' : title)}" placeholder="Distance" title="Name this distance" style="width:150px;min-width:0;padding:3px 5px;border:1px solid #31546b;border-radius:4px;background:#0b1724;color:var(--fg);font:11px monospace;" /> <span>· ${p1.lat.toFixed(4)}°, ${p1.lon.toFixed(4)}° → ${p2.lat.toFixed(4)}°, ${p2.lon.toFixed(4)}° · ${formatDist(d)}</span></span>${remove}</div>`;
     } else {
-      list.innerHTML += `<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;color:#7a8fa8;margin-bottom:6px;"><span style="display:flex;align-items:center;gap:4px;min-width:0;"><b>${pair}</b><input data-captain-distance-name="${pair - 1}" value="${escapeCaptainText(title === 'Distance' ? '' : title)}" placeholder="Distance" title="Name this distance" style="width:92px;min-width:0;padding:3px 5px;border:1px solid #31546b;border-radius:4px;background:#0b1724;color:var(--fg);font:11px monospace;" /> <span>· ${p1.lat.toFixed(4)}°, ${p1.lon.toFixed(4)}° · waiting for next point</span></span>${remove}</div>`;
+      list.innerHTML += `<div class="dashboard-distance-row" style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;color:#7a8fa8;margin-bottom:6px;"><span style="display:flex;align-items:center;gap:4px;min-width:0;"><b>${pair}</b><input data-captain-distance-name="${pair - 1}" value="${escapeCaptainText(title === 'Distance' ? '' : title)}" placeholder="Distance" title="Name this distance" style="width:150px;min-width:0;padding:3px 5px;border:1px solid #31546b;border-radius:4px;background:#0b1724;color:var(--fg);font:11px monospace;" /> <span>· ${p1.lat.toFixed(4)}°, ${p1.lon.toFixed(4)}° · waiting for next point</span></span>${remove}</div>`;
     }
   }
-  if (total) total.textContent = captainDistTool.points.length >= 2
-    ? `Total: ${formatDist(running)}` : '';
+  if (total) total.textContent = '';
+  list.querySelectorAll('.dashboard-distance-row').forEach(row => row.addEventListener('click', event => {
+    if (event.target.closest('input,button')) return;
+    row.classList.toggle('expanded');
+  }));
   list.querySelectorAll('[data-captain-distance-name]').forEach(input => input.addEventListener('input', () => {
     const index = Number(input.dataset.captainDistanceName);
     const point = captainDistTool.points[index * 2];

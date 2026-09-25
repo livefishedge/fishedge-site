@@ -217,6 +217,11 @@
       padding:4px 0; border-bottom:1px solid rgba(255,255,255,0.08); font:10px ui-monospace,monospace; white-space:nowrap; overflow:hidden;
     }
     #captain-pts-list .cp-row > span,#captain-dist-list .cd-row > span{ min-width:0; overflow:hidden; text-overflow:ellipsis; }
+    #captain-dist-list .cd-row{ cursor:zoom-in; }
+    #captain-dist-list .cd-row.expanded{ white-space:normal; overflow:visible; cursor:zoom-out; }
+    #captain-dist-list .cd-row.expanded > span{ overflow:visible; white-space:normal; text-overflow:clip; }
+    #captain-dist-list input{ width:150px !important; flex:0 0 150px; max-width:35vw; }
+    #captain-dist-total{ display:none !important; }
     #captain-pts-list .cp-row:last-child,#captain-dist-list .cd-row:last-child{ border-bottom:0; }
     #captain-pts-list button,#captain-dist-list button{
       background:transparent; border:1px solid rgba(255,120,100,0.5); color:#ffb4a8;
@@ -1242,23 +1247,9 @@
       opacity: 0.7,
       zIndex: 0,
     });
-    // Transparent labels/places overlay. Unlike a land-mask paint layer, this
-    // preserves the normal basemap and keeps towns, ports, roads, and names
-    // readable above the data overlays.
-    const placesLayer = new ol.layer.Tile({
-      source: new ol.source.XYZ({
-        url: 'https://{a-c}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png',
-        attributions: '© OpenStreetMap contributors © CARTO',
-        maxZoom: 20,
-        crossOrigin: 'anonymous',
-      }),
-      opacity: 1,
-      zIndex: 10,
-    });
-
     const map = new ol.Map({
       target: 'bv-map',
-      layers: [baseLayer, placesLayer],
+      layers: [baseLayer],
       // The overlay products are authored for a north-up viewport. Disable
       // both touch rotation and Alt/Shift-drag rotation so a gesture cannot
       // put the raster/vector overlays into an unsupported transform state.
@@ -1660,7 +1651,12 @@
           renderPlannerDistanceLayer();
           renderPlannerDistances();
         });
-        row.append(number, name, label, remove); list.appendChild(row);
+        row.append(number, name, label, remove);
+        row.addEventListener('click', event => {
+          if (event.target.closest('input,button')) return;
+          row.classList.toggle('expanded');
+        });
+        list.appendChild(row);
       }
       if (distancePoints.length % 2) {
         const point = distancePoints[distancePoints.length - 1];
@@ -1669,7 +1665,7 @@
         label.textContent = `Point ${distancePoints.length}  ${point[1].toFixed(4)}°, ${point[0].toFixed(4)}° · waiting for next point`;
         row.append(label); list.appendChild(row);
       }
-      total.textContent = pairs ? `Total · ${totalNm.toFixed(2)} nm` : '';
+      total.textContent = '';
       panel.classList.toggle('visible', distanceMode && distancePoints.length > 0);
       updatePlannerSaveButtons();
       renderSavedPlannerItems();
