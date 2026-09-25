@@ -10961,7 +10961,7 @@ function activateDistTool(map) {
 
 function updateCaptainSaveState() {
   const waypointSave = document.getElementById('captain-save-btn');
-  if (waypointSave) { waypointSave.textContent = captainAddTool.saved ? 'Saved' : 'Save / Export'; waypointSave.setAttribute('aria-label', captainAddTool.saved ? 'Waypoints saved to LogBook' : 'Save or export waypoints'); }
+  if (waypointSave) { waypointSave.textContent = captainAddTool.saved ? 'Saved' : 'Save'; waypointSave.setAttribute('aria-label', captainAddTool.saved ? 'Waypoints saved to LogBook' : 'Save waypoints to LogBook'); }
   const distanceSave = document.getElementById('captain-dist-exit');
   if (distanceSave) { distanceSave.textContent = captainDistTool.saved ? 'Saved' : 'Save'; distanceSave.disabled = captainDistTool.saved; distanceSave.setAttribute('aria-label', captainDistTool.saved ? 'Distances saved to LogBook' : 'Save distances to LogBook'); }
 }
@@ -11085,13 +11085,25 @@ function updateDistPanel() {
     if (p2) {
       const d = getDistanceKm(p1, p2);
       running += d;
-      list.innerHTML += `<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;color:var(--fg);margin-bottom:6px;border-bottom:1px solid rgba(255,255,255,.07);padding-bottom:6px;"><span>${pair} ${title} · ${p1.lat.toFixed(4)}°, ${p1.lon.toFixed(4)}° → ${p2.lat.toFixed(4)}°, ${p2.lon.toFixed(4)}° · ${formatDist(d)}</span>${remove}</div>`;
+      list.innerHTML += `<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;color:var(--fg);margin-bottom:6px;border-bottom:1px solid rgba(255,255,255,.07);padding-bottom:6px;"><span style="display:flex;align-items:center;gap:4px;min-width:0;"><b>${pair}</b><input data-captain-distance-name="${pair - 1}" value="${escapeCaptainText(title === 'Distance' ? '' : title)}" placeholder="Distance" title="Name this distance" style="width:92px;min-width:0;padding:3px 5px;border:1px solid #31546b;border-radius:4px;background:#0b1724;color:var(--fg);font:11px monospace;" /> <span>· ${p1.lat.toFixed(4)}°, ${p1.lon.toFixed(4)}° → ${p2.lat.toFixed(4)}°, ${p2.lon.toFixed(4)}° · ${formatDist(d)}</span></span>${remove}</div>`;
     } else {
-      list.innerHTML += `<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;color:#7a8fa8;margin-bottom:6px;"><span>${pair} ${title} · ${p1.lat.toFixed(4)}°, ${p1.lon.toFixed(4)}° · waiting for next point</span>${remove}</div>`;
+      list.innerHTML += `<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;color:#7a8fa8;margin-bottom:6px;"><span style="display:flex;align-items:center;gap:4px;min-width:0;"><b>${pair}</b><input data-captain-distance-name="${pair - 1}" value="${escapeCaptainText(title === 'Distance' ? '' : title)}" placeholder="Distance" title="Name this distance" style="width:92px;min-width:0;padding:3px 5px;border:1px solid #31546b;border-radius:4px;background:#0b1724;color:var(--fg);font:11px monospace;" /> <span>· ${p1.lat.toFixed(4)}°, ${p1.lon.toFixed(4)}° · waiting for next point</span></span>${remove}</div>`;
     }
   }
   if (total) total.textContent = captainDistTool.points.length >= 2
     ? `Total: ${formatDist(running)}` : '';
+  list.querySelectorAll('[data-captain-distance-name]').forEach(input => input.addEventListener('input', () => {
+    const index = Number(input.dataset.captainDistanceName);
+    const point = captainDistTool.points[index * 2];
+    const end = captainDistTool.points[index * 2 + 1];
+    if (!point) return;
+    point.title = input.value;
+    point.notes = point.notes || '';
+    if (end) { end.title = input.value; end.notes = end.notes || ''; }
+    captainDistTool.saved = false;
+    updateCaptainSaveState();
+    persistDistancePoints();
+  }));
 }
 
 window.removeDistancePair = function (pairIndex) {
@@ -11462,6 +11474,8 @@ function sampleAt(lon, lat) {
   return { chl, sst, height, speed, direction, depth };
 }
 
+function escapeCaptainText(value) { return String(value ?? '').replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[ch])); }
+
 function updatePtsPanel() {
   const list = document.getElementById('captain-pts-list');
   if (!list) return;
@@ -11471,10 +11485,17 @@ function updatePtsPanel() {
   }
   list.innerHTML = captainAddTool.points.map((p, i) => {
     return `<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,0.07);">
-      <b style="color:#4d7dff;">${i + 1} ${p.title || 'Waypoint'} · ${p.lat.toFixed(4)}°, ${p.lon.toFixed(4)}°</b>
+      <span style="display:flex;align-items:center;gap:4px;min-width:0;color:#4d7dff;"><b>${i + 1}</b><input data-captain-waypoint-name="${i}" value="${escapeCaptainText(p.title || '')}" placeholder="Name" title="Name this waypoint" style="width:92px;min-width:0;padding:3px 5px;border:1px solid #31546b;border-radius:4px;background:#0b1724;color:var(--fg);font:11px monospace;" /> <span>· ${p.lat.toFixed(4)}°, ${p.lon.toFixed(4)}°</span></span>
       <button onclick="window.removeWaypoint(${i})" style="background:none;border:none;color:#7a8fa8;cursor:pointer;font-size:11px;padding:2px 4px;" title="Remove waypoint">✕</button>
     </div>`;
   }).join('');
+  list.querySelectorAll('[data-captain-waypoint-name]').forEach(input => input.addEventListener('input', () => {
+    const index = Number(input.dataset.captainWaypointName);
+    if (!captainAddTool.points[index]) return;
+    captainAddTool.points[index].title = input.value;
+    captainAddTool.saved = false;
+    updateCaptainSaveState();
+  }));
 }
 
 // The list is useful while choosing points, but it should not permanently

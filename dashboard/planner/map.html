@@ -1615,14 +1615,17 @@
         const overlay = new ol.Overlay({ element: marker, positioning: 'center-center', stopEvent: true });
         overlay.setPosition(coordinate); map.addOverlay(overlay); plannerWaypointOverlays.push(overlay);
         const row = document.createElement('div'); row.className = 'cp-row';
-        const label = document.createElement('span'); label.textContent = `${index + 1}  ${point.title ? point.title + ' · ' : ''}${point.lat.toFixed(4)}°, ${point.lon.toFixed(4)}°`;
+        const number = document.createElement('span'); number.textContent = `${index + 1}`;
+        const name = document.createElement('input'); name.type = 'text'; name.value = point.title || ''; name.placeholder = 'Name'; name.title = 'Name this waypoint'; name.style.cssText = 'min-width:74px;flex:1;padding:3px 5px;border:1px solid #31546b;border-radius:4px;background:#0b1724;color:#edfaff;font:11px monospace;';
+        name.addEventListener('input', () => { point.title = name.value; plannerWaypointsSaved = false; persistPlannerWaypoints(); updatePlannerSaveButtons(); });
+        const label = document.createElement('span'); label.textContent = `· ${point.lat.toFixed(4)}°, ${point.lon.toFixed(4)}°`;
         const remove = document.createElement('button'); remove.type = 'button'; remove.textContent = '×'; remove.title = 'Remove waypoint'; remove.addEventListener('click', () => {
           plannerWaypoints.splice(index, 1);
           plannerWaypointsSaved = false;
           try { persistPlannerWaypoints(); } catch (error) { console.warn('[planner] waypoint deletion not persisted', error); }
           renderPlannerWaypoints();
         });
-        row.append(label, remove); panel.appendChild(row);
+        row.append(number, name, label, remove); panel.appendChild(row);
       });
       wrapper?.classList.toggle('visible', waypointMode);
       wrapper?.style.setProperty('display', waypointMode ? 'block' : 'none');
@@ -1644,7 +1647,10 @@
         totalNm += d;
         const row = document.createElement('div'); row.className = 'cd-row';
         const meta = plannerDistanceMetadata[i] || {};
-        const label = document.createElement('span'); label.textContent = `${i + 1}  ${meta.title ? meta.title + ' · ' : ''}${a[1].toFixed(4)}°, ${a[0].toFixed(4)}° → ${b[1].toFixed(4)}°, ${b[0].toFixed(4)}°  ·  ${d.toFixed(2)} nm`;
+        const number = document.createElement('span'); number.textContent = `${i + 1}`;
+        const name = document.createElement('input'); name.type = 'text'; name.value = meta.title || ''; name.placeholder = 'Distance'; name.title = 'Name this distance'; name.style.cssText = 'min-width:74px;flex:1;padding:3px 5px;border:1px solid #31546b;border-radius:4px;background:#0b1724;color:#edfaff;font:11px monospace;';
+        name.addEventListener('input', () => { plannerDistanceMetadata[i] = { ...meta, title: name.value }; plannerDistancesSaved = false; persistPlannerDistance(); updatePlannerSaveButtons(); });
+        const label = document.createElement('span'); label.textContent = ` · ${a[1].toFixed(4)}°, ${a[0].toFixed(4)}° → ${b[1].toFixed(4)}°, ${b[0].toFixed(4)}°  ·  ${d.toFixed(2)} nm`;
         const remove = document.createElement('button'); remove.type = 'button'; remove.textContent = '×'; remove.addEventListener('click', () => {
           distancePoints.splice(i * 2, 2);
           plannerDistanceRecordIds.splice(i, 1); plannerDistanceMetadata.splice(i, 1);
@@ -1653,7 +1659,7 @@
           renderPlannerDistanceLayer();
           renderPlannerDistances();
         });
-        row.append(label, remove); list.appendChild(row);
+        row.append(number, name, label, remove); list.appendChild(row);
       }
       if (distancePoints.length % 2) {
         const point = distancePoints[distancePoints.length - 1];
