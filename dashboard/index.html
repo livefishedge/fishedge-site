@@ -825,6 +825,9 @@
     #captain-logbook-panel h3{ margin:0 0 10px; font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:#edfaff; }
     #captain-logbook-panel b{ display:block; margin:9px 0 4px; color:#7a8fa8; font-size:10px; text-transform:uppercase; }
     .captain-logbook-row{ display:flex; align-items:flex-start; justify-content:space-between; gap:8px; padding:5px 0; border-top:1px solid rgba(255,255,255,.08); font:11px/1.35 ui-monospace,monospace; }
+    #captain-logbook-distances{ counter-reset: logbook-distance; }
+    #captain-logbook-distances .captain-logbook-row{ counter-increment: logbook-distance; }
+    #captain-logbook-distances .captain-logbook-row::before{ content:counter(logbook-distance) ' '; flex:0 0 auto; color:#edfaff; }
     .captain-logbook-row button{ flex:0 0 auto; padding:2px 6px; border:1px solid #4d7dff; border-radius:4px; background:#1d4f91; color:#fff; font-size:10px; cursor:pointer; }
     .captain-logbook-row span:last-child{ display:flex; gap:4px; flex:0 0 auto; }
     #captain-pts-panel.visible{ display:block !important; }
@@ -10967,6 +10970,61 @@ function deactivateDistTool() {
   updateDistPanel();
 }
 
+// Dashboard uses the same single-owner tool model as Planner. Visibility of
+// already-loaded geometry is independent; this state only controls which tool
+// owns clicks and which panel is open.
+function setDashboardTool(next, map = activeCaptainToolMap()) {
+  const addButton = document.getElementById('captain-add-tool');
+  const distButton = document.getElementById('captain-dist-tool');
+  const logBookButton = document.getElementById('captain-chartbook-tool');
+  const logBookPanel = document.getElementById('captain-logbook-panel');
+  if (next === 'distance') {
+    if (captainAddTool.active) {
+      captainAddTool.active = false;
+      addButton?.classList.remove('active');
+      addButton?.setAttribute('aria-pressed', 'false');
+      document.getElementById('captain-pts-panel')?.classList.remove('visible');
+    }
+    logBookPanel?.classList.remove('visible');
+    logBookButton?.classList.remove('active');
+    logBookButton?.setAttribute('aria-pressed', 'false');
+    if (map && !captainDistTool.active) activateDistTool(map);
+    distButton?.classList.add('active');
+    distButton?.setAttribute('aria-pressed', 'true');
+  } else if (next === 'waypoint') {
+    if (captainDistTool.active) deactivateDistTool();
+    document.getElementById('captain-dist-panel')?.classList.remove('visible');
+    logBookPanel?.classList.remove('visible');
+    logBookButton?.classList.remove('active');
+    logBookButton?.setAttribute('aria-pressed', 'false');
+    if (map && !captainAddTool.active) toggleAddTool(map);
+    addButton?.classList.add('active');
+    addButton?.setAttribute('aria-pressed', 'true');
+  } else if (next === 'logbook') {
+    if (captainDistTool.active) deactivateDistTool();
+    captainAddTool.active = false;
+    addButton?.classList.remove('active');
+    addButton?.setAttribute('aria-pressed', 'false');
+    distButton?.classList.remove('active');
+    distButton?.setAttribute('aria-pressed', 'false');
+    document.getElementById('captain-pts-panel')?.classList.remove('visible');
+    document.getElementById('captain-dist-panel')?.classList.remove('visible');
+    logBookPanel?.classList.add('visible');
+    logBookButton?.classList.add('active');
+    logBookButton?.setAttribute('aria-pressed', 'true');
+  } else {
+    if (captainDistTool.active) deactivateDistTool();
+    captainAddTool.active = false;
+    addButton?.classList.remove('active');
+    addButton?.setAttribute('aria-pressed', 'false');
+    distButton?.classList.remove('active');
+    distButton?.setAttribute('aria-pressed', 'false');
+    logBookPanel?.classList.remove('visible');
+    logBookButton?.classList.remove('active');
+    logBookButton?.setAttribute('aria-pressed', 'false');
+  }
+}
+
 function saveDistMeasurement() {
   if (!captainDistTool.points.length) return;
   const pairs = [];
@@ -11628,13 +11686,10 @@ function combinedFrontClickInfo(map, coord, pixel) {
 document.getElementById('captain-dist-tool')?.addEventListener('click', () => {
   const map = activeCaptainToolMap();
   if (!map) return;
-  const panel = document.getElementById('captain-dist-panel');
   if (captainDistTool.active) {
-    deactivateDistTool();
-    panel?.classList.remove('visible');
+    setDashboardTool('browse', map);
   } else {
-    activateDistTool(map);
-    panel?.classList.add('visible');
+    setDashboardTool('distance', map);
   }
   if (typeof syncDashboardPanels === 'function') syncDashboardPanels();
 });
@@ -11647,7 +11702,8 @@ document.getElementById('captain-dist-exit')?.addEventListener('click', (e) => {
 document.getElementById('captain-add-tool')?.addEventListener('click', () => {
   const map = activeCaptainToolMap();
   if (!map) return;
-  toggleAddTool(map);
+  if (captainAddTool.active) setDashboardTool('browse', map);
+  else setDashboardTool('waypoint', map);
 });
 
 document.getElementById('captain-save-btn')?.addEventListener('click', (e) => {
@@ -11794,8 +11850,8 @@ async function refreshDashboardLogBook() {
 document.getElementById('captain-chartbook-tool')?.addEventListener('click', () => {
   const panel = document.getElementById('captain-logbook-panel');
   if (!panel) return;
-  panel.classList.toggle('visible');
-  refreshDashboardLogBook();
+  if (panel.classList.contains('visible')) setDashboardTool('browse');
+  else { setDashboardTool('logbook'); refreshDashboardLogBook(); }
 });
 window.addEventListener('fishedge-logbook-change', () => refreshDashboardLogBook());
 window.addEventListener('pageshow', () => refreshDashboardLogBook());
@@ -11879,15 +11935,13 @@ document.addEventListener('keydown', (e) => {
   const map = activeCaptainToolMap();
   if (!map) return;
   if (e.key === 'm' || e.key === 'M') {
-    if (captainDistTool.active) deactivateDistTool();
-    else activateDistTool(map);
+    if (captainDistTool.active) setDashboardTool('browse', map);
+    else setDashboardTool('distance', map);
   } else if (e.key === 'a' || e.key === 'A') {
-    toggleAddTool(map);
+    if (captainAddTool.active) setDashboardTool('browse', map);
+    else setDashboardTool('waypoint', map);
   } else if (e.key === 'Escape') {
-    if (captainDistTool.active) deactivateDistTool();
-    captainAddTool.active = false;
-    document.getElementById('captain-add-tool')?.classList.remove('active');
-    document.getElementById('captain-pts-panel')?.classList.remove('visible');
+    setDashboardTool('browse', map);
     closeSaveMenu();
   } else if ((e.key === 's' || e.key === 'S') && !e.metaKey && !e.ctrlKey) {
     if (captainAddTool.points.length) showSaveMenu();
