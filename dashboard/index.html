@@ -8,7 +8,10 @@
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@10.4.0/ol.css">
 
-  <script defer src="https://cdn.plot.ly/plotly-2.34.0.min.js"></script>
+  <script>
+    window.__plotlyReady = new Promise(resolve => { window.__resolvePlotly = resolve; });
+  </script>
+  <script defer src="https://cdn.plot.ly/plotly-2.34.0.min.js" onload="window.__resolvePlotly(true)" onerror="window.__resolvePlotly(false)"></script>
   <script src="https://cdn.jsdelivr.net/npm/ol@10.4.0/dist/ol.js"></script>
 <script>
 /* Instrumentation shim for locate-me.js (same pattern as the dashboard).
@@ -1248,16 +1251,31 @@
     window.__profileReady = new Promise((resolve) => {
       window.__profileReadyResolve = resolve;
     });
+    // Only a validated profile result may release regional data loading.
+    // A timeout is an error, never permission to load the default region.
+    window.__regionStartupSettled = false;
+    function finishRegionStartup(result) {
+      if (window.__regionStartupSettled) return;
+      window.__regionStartupSettled = true;
+      clearTimeout(regionStartupDeadline);
+      window.__profileReadyResolve(result);
+    }
+    const regionStartupDeadline = setTimeout(() => finishRegionStartup({
+      error: 'Account region lookup timed out. Please retry.'
+    }), 12000);
 
     (async function initAuth() {
       // Auth: check session first (handles page refresh with existing session),
       // then listen for changes (handles magic link redirect with new session).
-      const { data: { session } } = await sb.auth.getSession();
+      const { data: { session }, error: sessionError } = await sb.auth.getSession();
+      if (sessionError) throw sessionError;
+      if (window.__regionStartupSettled) return;
       // No session -> redirect to the actual login form on first visit. This
       // replaces the legacy full-screen sign-in/account gate so the
       // first page a visitor sees is the real login/signup form, not an
       // intermediate click-through.
       if (!session) {
+        finishRegionStartup({ redirect: true });
         window.location.replace('login.html');
         return;
       }
@@ -1269,9 +1287,16 @@
         const userId = session.user.id;
         Promise.all([
           fetch(`${SUPABASE_URL}/rest/v1/profiles?user_id=eq.${userId}&select=selected_region,name,phone`,
-                { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${session.access_token}` } }).then(r => r.json()),
+                { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${session.access_token}` } }).then(async r => {
+                  if (!r.ok) throw new Error('Unable to load your account region. Please retry.');
+                  return r.json();
+                }),
           fetch(`${SUPABASE_URL}/rest/v1/user_regions?user_id=eq.${userId}&select=region_id`,
-                { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${session.access_token}` } }).then(r => r.json()),
+                { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${session.access_token}` } }).then(async r => {
+                  const data = await r.json();
+                  if (!r.ok && !(r.status === 404 && data.code === 'PGRST205')) throw new Error('Unable to verify account regions. Please retry.');
+                  return data;
+                }),
         ]).then(([profiles, granted]) => {
           // CRITICAL: delegate to window.__applyAuthRegion, which is defined
           // by the body <script> AFTER it parses. The head <script> lives in
@@ -1287,48 +1312,37 @@
           // before the body <script> finishes parsing), defer the call until
           // the body script's bridge is ready. This avoids a race.
           const delegate = () => {
+            if (window.__regionStartupSettled) return;
             try {
               window.__applyAuthRegion(profiles, granted, session, userId);
+              const region = window.__applyAuthRegionLastResult;
+              if (!region) throw new Error('No valid account region was found. Check your account region and retry.');
+              finishRegionStartup({ region });
             } catch (e) {
               console.error('[auth] __applyAuthRegion threw:', e);
-            }
-            if (window.__profileReadyResolve) {
-              window.__profileReadyResolve(window.__applyAuthRegionLastResult || null);
-              window.__profileReadyResolve = null;
+              finishRegionStartup({ error: e.message });
             }
           };
           if (typeof window.__applyAuthRegion === 'function') {
             delegate();
           } else {
-            // Body script hasn't run yet — wait for it. Poll briefly, then
-            // fall back to a DOMContentLoaded listener, then to a 5s safety net.
-            let waited = 0;
+            // Wait for the body bridge, bounded by the startup deadline.
             const poll = setInterval(() => {
-              waited += 50;
               if (typeof window.__applyAuthRegion === 'function') {
                 clearInterval(poll);
                 delegate();
-              } else if (waited >= 2000) {
+              } else if (window.__regionStartupSettled) {
                 clearInterval(poll);
-                console.error('[auth] body script did not expose __applyAuthRegion within 2s');
+                console.error('[auth] body bridge unavailable before startup deadline');
               }
             }, 50);
           }
         }).catch((err) => {
           console.error('[auth] profile fetch chain failed:', err);
+          finishRegionStartup({ error: err.message });
         });
       }
-      // Safety net: if for any reason the profile fetch chain never resolves
-      // (e.g., profile backend hangs), unblock init() so the page still loads
-      // the default region rather than staying on the splash forever.
-      if (window.__profileReadyResolve) {
-        setTimeout(() => {
-          if (window.__profileReadyResolve) {
-            window.__profileReadyResolve(REGION_ID);
-            window.__profileReadyResolve = null;
-          }
-        }, 5000);
-      }
+      // Region failures are handled by the bounded startup promise above.
       sb.auth.onAuthStateChange(async (event, session) => {
         if (event === 'SIGNED_IN' && session) {
           if (!await enforceEmailVerification(session)) return;
@@ -1338,7 +1352,7 @@
           window.location.replace('login.html');
         }
       });
-    })();
+    })().catch(error => finishRegionStartup({ error: error.message }));
   </script>
 
   <div id="toolbar">
@@ -1945,7 +1959,6 @@ window.__applyAuthRegion = function(profiles, granted, session, userId) {
 
   if (activeRegion && REGIONS[activeRegion] && REGION_ID !== activeRegion) {
     setActiveRegion(activeRegion);
-    if (typeof initializeData === 'function') initializeData();
   }
 
   // Persist active region to profile ONLY when the user explicitly chose
@@ -4396,6 +4409,16 @@ function colorbarFor(varKey) {
 /* ========================= FOOTER COLORBAR ========================= */
 async function renderFooterColorbarToDiv(targetDiv, varKey) {
   if (!targetDiv) return;
+  // Plotly is deferred; inline initialization may run before it is ready.
+  if (!window.Plotly) {
+    let timer;
+    const ready = await Promise.race([
+      window.__plotlyReady,
+      new Promise(resolve => { timer = setTimeout(() => resolve(false), 8000); })
+    ]);
+    clearTimeout(timer);
+    if (!ready || !window.Plotly) return;
+  }
 
   const unit = unitLabelForVar(varKey);
   // Keep the title outside Plotly's SVG as well. The live OL map hides the
@@ -10098,11 +10121,15 @@ function installRegionSelector(){
 
 /* ========================= LOADING ========================= */
 async function loadIndex() {
+  if (!window.__dashboardRegionReady) throw new Error('Account region is not ready');
+  const requestedRegion = REGION_ID;
   // 1. Fetch selected region index ONCE with a cache-buster
   const indexUrl = REGIONS[REGION_ID]?.index || `index-${REGION_ID}.json`;
   const res = await fetch(indexUrl + "?t=" + Date.now());
   if (!res.ok) throw new Error(`Failed to load ${indexUrl}`);
   const data = await res.json();
+  if (requestedRegion !== REGION_ID) throw new Error('Discarded an outdated region index');
+  if (data.region && data.region !== requestedRegion) throw new Error('Regional index does not match the requested region');
 
   // 2. Set the global timestamp if it's the first load
   if (!lastUpdateTimestamp) {
@@ -10111,7 +10138,7 @@ async function loadIndex() {
 
   // 3. Use the data we already fetched instead of looping through CANDIDATES
   const idx = data;
-  if (idx.region) setActiveRegion(idx.region, idx.region_meta ?? null);
+  setActiveRegion(requestedRegion, idx.region_meta ?? null);
 
   const fbv = idx.frames || idx.framesByVar || idx.frames_by_var || framesByVar;
 
@@ -10750,10 +10777,12 @@ async function loadCaptainBriefing() {
     // fetch and may end up loading usec_south frames while the BBOX is
     // usec_md (the "stuck loading dashboard" symptom).
     if (window.__profileReady) {
-      const safeTimeout = new Promise(r => setTimeout(() => r(null), 4000));
-      await Promise.race([window.__profileReady, safeTimeout]);
+      const result = await window.__profileReady;
+      if (result?.redirect) return;
+      if (!result?.region || result.error) throw new Error(result?.error || 'Unable to resolve account region');
+      window.__dashboardRegionReady = true;
     }
-    await Promise.all([ loadIndex(), prepareLandMask() ]);
+    await loadIndex();
     // Start on the latest frame for each variable (not the oldest)
     for (const v of ["chl","sst","uv"]) {
       if (framesByVar[v]?.length) {
@@ -10778,6 +10807,15 @@ async function loadCaptainBriefing() {
     if (typeof syncDashboardChrome === "function") syncDashboardChrome();
   } catch (e) {
     console.error("Init failed:", e);
+    const notice = document.createElement('div');
+    notice.setAttribute('role', 'alert');
+    notice.style.cssText = 'position:fixed;top:70px;left:16px;right:16px;z-index:12000;padding:16px;background:#102030;color:white;border-radius:8px';
+    notice.textContent = e.message + ' ';
+    const retry = document.createElement('button');
+    retry.textContent = 'Retry';
+    retry.onclick = () => location.reload();
+    notice.appendChild(retry);
+    document.body.appendChild(notice);
   }
 })();
 
@@ -10900,6 +10938,7 @@ async function loadCaptainBriefing() {
 })();
 
 async function pollForUpdates() {
+  if (!window.__dashboardRegionReady) return;
   try {
     // Ping index.json with a random string to force GitHub to give us the newest version
     const regionIndexUrl = REGIONS[REGION_ID]?.index || `index-${REGION_ID}.json`;

@@ -6,6 +6,7 @@
   <title>Briefing Viewer</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@10.2.1/ol.css">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/dashboard/supabase-init.js?v=20260918-user-activity"></script>
   <script src="/dashboard/chartbook.js?v=20260924-logbook2"></script>
   <script src="/dashboard/fullscreen.js?v=20260924f"></script>
   <link rel="stylesheet" href="/dashboard/assets/css/captain-tools.css">
@@ -571,7 +572,7 @@
   <script src="/dashboard/loran-td.js?v=20260914-1"></script>
   <script src="/dashboard/trip-planner/trip-recorder.js?v=20260914a"></script>
   <script>
-  (function () {
+  (async function () {
     'use strict';
 
     // ---- params / region ----
@@ -579,7 +580,36 @@
     // Default to the current UTC hour so newly published forecast frames
     // are visible immediately; a ?date=YYYY-MM-DD query still selects a day.
     const targetDate = params.get('date') || new Date().toISOString().slice(0, 13);
-    const region = params.get('region') || 'usec_md';
+    // Direct visits must use the account region, never a different hardcoded
+    // default from Dashboard. Explicit map links retain their requested region.
+    let region = params.get('region');
+    if (!region) {
+      let timer;
+      try {
+        region = await Promise.race([
+          (async () => {
+            const { data, error } = await window.sb.auth.getSession();
+            if (error) throw error;
+            if (!data?.session) throw new Error('Sign in to select your account region.');
+            const result = await window.sb.from('profiles').select('selected_region').eq('user_id', data.session.user.id).maybeSingle();
+            if (result.error) throw result.error;
+            return result.data?.selected_region;
+          })(),
+          new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Account region lookup timed out. Please retry.')), 12000); })
+        ]);
+      } catch (error) {
+        const label = document.getElementById('bv-frame-label');
+        label.textContent = error.message;
+        const retry = document.createElement('button');
+        retry.textContent = 'Retry'; retry.onclick = () => location.reload();
+        label.appendChild(retry);
+        return;
+      } finally { clearTimeout(timer); }
+    }
+    if (!['usec_md', 'usec_south'].includes(region)) {
+      document.getElementById('bv-frame-label').textContent = 'Choose a valid region in your account.';
+      return;
+    }
     // Shared Captain's Dashboard controllers use REGION_ID as their contract.
     globalThis.REGION_ID = region;
 
