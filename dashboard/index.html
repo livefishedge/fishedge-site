@@ -11080,16 +11080,15 @@ function updateDistPanel() {
     const p1 = captainDistTool.points[i];
     const p2 = captainDistTool.points[i + 1];
     const pair = Math.floor(i / 2) + 1;
-    const pairTitle = p1.title ? `${p1.title} · ` : '';
-    list.innerHTML += `<div style="color:#7a8fa8;margin-bottom:4px;"><div style="display:flex;justify-content:space-between;align-items:center;"><b style="color:var(--fg);">${pairTitle}Pair ${pair}</b><button onclick="window.removeDistancePair(${pair - 1})" style="background:none;border:none;color:#7a8fa8;cursor:pointer;font-size:11px;padding:2px 4px;" title="Delete pair">✕</button></div>Pt ${i + 1}: ${p1.lat.toFixed(4)}, ${p1.lon.toFixed(4)}`;
+    const title = p1.title || 'Distance';
+    const remove = `<button onclick="window.removeDistancePair(${pair - 1})" style="background:none;border:none;color:#7a8fa8;cursor:pointer;font-size:11px;padding:2px 4px;" title="Delete distance">✕</button>`;
     if (p2) {
       const d = getDistanceKm(p1, p2);
       running += d;
-      list.innerHTML += `<br>Pt ${i + 2}: ${p2.lat.toFixed(4)}, ${p2.lon.toFixed(4)} &nbsp;<b style="color:var(--fg);">${formatDist(d)}</b>`;
+      list.innerHTML += `<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;color:var(--fg);margin-bottom:6px;border-bottom:1px solid rgba(255,255,255,.07);padding-bottom:6px;"><span>${pair} ${title} · ${p1.lat.toFixed(4)}°, ${p1.lon.toFixed(4)}° → ${p2.lat.toFixed(4)}°, ${p2.lon.toFixed(4)}° · ${formatDist(d)}</span>${remove}</div>`;
     } else {
-      list.innerHTML += ` <span style="color:#7a8fa8;">(waiting for second point)</span>`;
+      list.innerHTML += `<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;color:#7a8fa8;margin-bottom:6px;"><span>${pair} ${title} · ${p1.lat.toFixed(4)}°, ${p1.lon.toFixed(4)}° · waiting for next point</span>${remove}</div>`;
     }
-    list.innerHTML += `</div>`;
   }
   if (total) total.textContent = captainDistTool.points.length >= 2
     ? `Total: ${formatDist(running)}` : '';
@@ -11471,21 +11470,9 @@ function updatePtsPanel() {
     return;
   }
   list.innerHTML = captainAddTool.points.map((p, i) => {
-    const chlStr = Number.isFinite(p.chl) ? `${p.chl.toFixed(2)} mg/m³` : '—';
-    const sstStr = Number.isFinite(p.sst) ? formatSstValue(p.sst) : '—';
-    const heightStr = p.height !== null && p.height !== undefined ? formatSshValue(p.height) : '—';
-    const speedStr = p.speed !== null && p.speed !== undefined ? `${p.speed.toFixed(2)} m/s` : '—';
-    const directionStr = p.direction !== null && p.direction !== undefined ? `${p.direction.toFixed(0)}°` : '—';
-    const depthStr = p.depth !== null && p.depth !== undefined ? formatDepth(p.depth) : '—';
-    const timeStr = p.ts ? fmtPortraitDaytimeLocal(new Date(p.ts)) : '—';
-    return `<div style="margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid rgba(255,255,255,0.07);">
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <b style="color:#4d7dff;">${i + 1}. ${p.title ? `${p.title} · ` : ''}${p.lat.toFixed(4)}°, ${p.lon.toFixed(4)}°</b>
-        <button onclick="window.removeWaypoint(${i})" style="background:none;border:none;color:#7a8fa8;cursor:pointer;font-size:11px;padding:2px 4px;" title="Remove">✕</button>
-      </div>
-      <div style="color:#9fb0c3;font-size:11px;line-height:1.5;">CHL ${chlStr} &nbsp;|&nbsp; SST ${sstStr}</div>
-      <div style="color:#9fb0c3;font-size:11px;line-height:1.5;">Height ${heightStr} &nbsp;|&nbsp; Current ${speedStr} @ ${directionStr}</div>
-      <div style="color:#9fb0c3;font-size:11px;line-height:1.5;">Depth ${depthStr}${p.freshness !== null ? ` &nbsp;|&nbsp; ${p.freshness}h ago` : ''} &nbsp;|&nbsp; ${timeStr}</div>
+    return `<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,0.07);">
+      <b style="color:#4d7dff;">${i + 1} ${p.title || 'Waypoint'} · ${p.lat.toFixed(4)}°, ${p.lon.toFixed(4)}°</b>
+      <button onclick="window.removeWaypoint(${i})" style="background:none;border:none;color:#7a8fa8;cursor:pointer;font-size:11px;padding:2px 4px;" title="Remove waypoint">✕</button>
     </div>`;
   }).join('');
 }
