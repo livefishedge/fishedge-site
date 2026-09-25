@@ -3151,7 +3151,7 @@ const hReset = document.getElementById("hamburger-reset");
 if (hamburgerToggle && hamburgerPanel) {
   hamburgerToggle.addEventListener("click", (e) => {
     e.stopPropagation();
-    hamburgerPanel.classList.toggle("open");
+    toggleDashboardMenu("hamburger");
   });
   // Close when tapping outside
   document.addEventListener("click", (e) => {
@@ -3165,6 +3165,15 @@ function closeDashboardMenus() {
   hamburgerPanel?.classList.remove("open");
   combinedControls?.classList.remove("open");
   if (combinedOverlay) combinedOverlay.style.display = "none";
+}
+
+function toggleDashboardMenu(kind) {
+  const panel = kind === "hamburger" ? hamburgerPanel : combinedControls;
+  const shouldOpen = Boolean(panel && !panel.classList.contains("open"));
+  closeDashboardMenus();
+  if (!shouldOpen || !panel) return;
+  panel.classList.add("open");
+  if (kind === "combined" && combinedOverlay) combinedOverlay.style.display = "block";
 }
 
 if (hamburgerRegionSelect) {
@@ -3329,9 +3338,9 @@ if (combinedProductSelect) {
 }
 if (combinedMenuBtn) {
   combinedMenuBtn.style.display = "flex";
-  combinedMenuBtn.addEventListener("click", () => {
-    combinedControls?.classList.toggle("open");
-    if (combinedOverlay) combinedOverlay.style.display = combinedControls?.classList.contains("open") ? "block" : "none";
+  combinedMenuBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    toggleDashboardMenu("combined");
   });
 }
 if (combinedOverlay) {
