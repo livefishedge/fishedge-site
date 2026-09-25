@@ -1664,6 +1664,7 @@
       }
       total.textContent = pairs ? `Total · ${totalNm.toFixed(2)} nm` : '';
       panel.classList.toggle('visible', distanceMode && distancePoints.length > 0);
+      updatePlannerSaveButtons();
       renderSavedPlannerItems();
     }
     const distancePoints = [];
