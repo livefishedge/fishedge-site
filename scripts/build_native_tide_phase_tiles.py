@@ -8,6 +8,7 @@ mesh to the client.
 """
 import argparse, json
 import gc
+import hashlib
 from pathlib import Path
 import numpy as np
 import cv2
@@ -44,6 +45,7 @@ def main():
                     help='pixel size of each native stage tile')
     ap.add_argument('--hotspot-bbox', type=float, nargs=4, metavar=('WEST','SOUTH','EAST','NORTH'),
                     help='optional WGS84 bbox for a selective high-resolution patch')
+    ap.add_argument('--asset-version', help='immutable phase-asset version; defaults to a source/checkpoint checksum')
     args = ap.parse_args()
 
     mesh = dict(np.load(args.mesh_cache, allow_pickle=False))
@@ -274,6 +276,15 @@ def main():
         'extension_method': ('eight-constituent least-squares continuation of native HTP'
                              if extension_hours else 'none')
     }
+    if args.asset_version:
+        phase_manifest['asset_version'] = str(args.asset_version)
+    elif args.checkpoint_dir:
+        phase_manifest['asset_version'] = hashlib.sha256(
+            ('|'.join(str(p.stat().st_size) + ':' + str(p.stat().st_mtime_ns)
+                      for p in sorted(args.checkpoint_dir.glob('hour-*.npy')))).encode()
+        ).hexdigest()[:20]
+    else:
+        phase_manifest['asset_version'] = hashlib.sha256(str(args.source).encode()).hexdigest()[:20]
     native_payload = payload.setdefault('native_mesh', {})
     if args.hotspot_bbox:
         # Keep the nationwide/base atlas untouched; selective patches are

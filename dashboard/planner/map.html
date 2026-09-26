@@ -1157,7 +1157,7 @@
     // instead of reusing an older cached JSON response.
     // Bump whenever the JSON artifact changes; otherwise a Pages/browser
     // cache can keep serving a pre-calibration tide field after HTML deploy.
-    const FORECAST_DATA_BUILD = 'planner-current-render-v47';
+    const FORECAST_DATA_BUILD = 'planner-tide-phase-v48';
     const DEV_FORECAST_URL = `/trip-planner/data/${region}/briefing/forecast.json?v=${FORECAST_DATA_BUILD}`;
     const WAVE_MASK_URL = `/trip-planner/data/${region}/briefing/native_wave_mask.png?v=${FORECAST_DATA_BUILD}`;
     const CORS_PROXY = 'https://corsproxy.io/?';
@@ -3455,7 +3455,13 @@
       // Tidal stage is rendered from native-mesh tiles generated from the
       // same HTP nodes/elements as co-range. Fall back to the legacy grid only
       // for older payloads without phase tiles.
-      if (scalarKey === 'astronomical_tide_ft' && drawNativeTidePhaseOverlay()) return;
+      if (scalarKey === 'astronomical_tide_ft') {
+        if (forecastData?.native_mesh?.phase_tiles) {
+          if (drawNativeTidePhaseOverlay()) return;
+          const status = document.getElementById('bv-menu-status');
+          if (status) status.textContent = 'Native tidal phase unavailable · verified regional tide grid';
+        }
+      }
       const grid = scalarKey && currentFrame[scalarKey];
       const lons = forecastData.lons, lats = forecastData.lats;
       if (!grid || !lons || !lats) return;
@@ -3795,7 +3801,8 @@
       }
       if (frame < 0 || frame >= tiles.frames) return false;
       const tileMode = Number.isFinite(tiles.tile_zoom) && Array.isArray(tiles.tile_indices);
-      const key = String(frame);
+      const assetVersion = String(tiles.asset_version || tiles.source_object || tiles.frame_times?.[0] || tiles.pattern);
+      const key = `${assetVersion}/${frame}`;
       if (tileMode) {
         resizeOverlayCanvases();
         const dpr = streamlineCanvas.width / Math.max(1, mapEl.clientWidth);
@@ -3822,7 +3829,8 @@
           // time step no longer fetch all 25 base tiles plus the patch.
           for (const tile of atlas.tile_indices) {
           if (tile.x < minX || tile.x > maxX || tile.y < minY || tile.y > maxY) continue;
-          const tileKey = `${frame}/${atlas.tile_zoom}/${tile.x}/${tile.y}`;
+          const atlasVersion = String(atlas.asset_version || atlas.source_object || atlas.frame_times?.[0] || atlas.pattern);
+          const tileKey = `${atlasVersion}/${frame}/${atlas.tile_zoom}/${tile.x}/${tile.y}`;
           let image = nativePhaseImages.get(tileKey);
           if (image === null) continue;
           if (!image) {
@@ -3832,7 +3840,7 @@
             image.onerror = () => nativePhaseImages.set(tileKey, null);
             image.src = new URL(`/trip-planner/data/${region}/briefing/${atlas.pattern
               .replace('{frame:03d}', frameName).replace('{frame}', frameName)
-              .replace('{x}', tile.x).replace('{y}', tile.y).replace('{z}', atlas.tile_zoom)}`, location.origin).href;
+              .replace('{x}', tile.x).replace('{y}', tile.y).replace('{z}', atlas.tile_zoom)}?v=${encodeURIComponent(atlasVersion)}`, location.origin).href;
             cacheNativePhaseImage(tileKey, image);
             pending = true;
             continue;
@@ -3875,7 +3883,7 @@
         const asset = tiles.pattern
           .replace('{frame:03d}', frameName)
           .replace('{frame}', frameName);
-        image.src = new URL(`/trip-planner/data/${region}/briefing/${asset}`, location.origin).href;
+        image.src = new URL(`/trip-planner/data/${region}/briefing/${asset}?v=${encodeURIComponent(assetVersion)}`, location.origin).href;
         cacheNativePhaseImage(key, image);
         return true;
       }

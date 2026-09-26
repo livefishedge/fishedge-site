@@ -80,9 +80,29 @@ def main():
         raise SystemExit(f"{region} missing complete native mesh processing contract")
     if not isinstance(native.get("native_contours"), list) or not native["native_contours"]:
         raise SystemExit(f"{region} missing native tidal contours")
-    phase = native.get("phase_tiles") or {}
-    if not isinstance(phase.get("frames"), int) or phase["frames"] <= 0:
-        raise SystemExit(f"{region} missing native phase-tile contract")
+    phase = native.get("phase_tiles")
+    if phase:
+        if not isinstance(phase.get("frames"), int) or phase["frames"] <= 0:
+            raise SystemExit(f"{region} invalid native phase-tile contract")
+        phase_times = phase.get("frame_times")
+        if not isinstance(phase_times, list) or len(phase_times) != phase["frames"]:
+            raise SystemExit(f"{region} native phase frame_times do not match phase frame count")
+        try:
+            parsed_phase_times = [dt.datetime.fromisoformat(str(value).replace("Z", "+00:00")).astimezone(dt.timezone.utc) for value in phase_times]
+        except ValueError as exc:
+            raise SystemExit(f"{region} native phase has invalid timestamp: {exc}")
+        if any(b <= a for a, b in zip(parsed_phase_times, parsed_phase_times[1:])):
+            raise SystemExit(f"{region} native phase timestamps are not strictly increasing")
+        if not phase.get("asset_version"):
+            raise SystemExit(f"{region} native phase assets lack an immutable version")
+        phase_start, phase_end = parsed_phase_times[0], parsed_phase_times[-1]
+        required_end = now + dt.timedelta(hours=48)
+        if phase_start > now or phase_end < required_end:
+            raise SystemExit(f"{region} native phase coverage {phase_start}..{phase_end} does not cover now through {required_end}")
+    else:
+        regional = payload.get("regional_tide_harmonics") or {}
+        if not regional.get("fields") or not regional.get("reference_time"):
+            raise SystemExit(f"{region} missing verified regional tide fallback")
     print({"path": str(args.path), "frames": len(frames), "window_frames": len(usable),
            "first": min(times).isoformat(), "last": max(times).isoformat(),
            "generated_at": payload["generated_at"]})

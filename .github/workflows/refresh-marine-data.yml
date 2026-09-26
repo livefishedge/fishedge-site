@@ -28,6 +28,13 @@ jobs:
             dashboard/trip-planner/data/usec_md/briefing/forecast.json \
             data/usec_south/briefing/forecast.json \
             dashboard/trip-planner/data/usec_south/briefing/forecast.json
+          # Native phase tiles are a separately published product. Never
+          # preserve an old atlas after new hourly forecast frames arrive.
+          python scripts/disable_stale_native_phase.py \
+            data/usec_md/briefing/forecast.json \
+            dashboard/trip-planner/data/usec_md/briefing/forecast.json \
+            data/usec_south/briefing/forecast.json \
+            dashboard/trip-planner/data/usec_south/briefing/forecast.json
       - name: Merge NOAA OFS currents and sea-surface height when available
         continue-on-error: true
         run: |
