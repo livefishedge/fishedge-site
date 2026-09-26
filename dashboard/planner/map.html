@@ -3460,6 +3460,9 @@
           if (drawNativeTidePhaseOverlay()) return;
           const status = document.getElementById('bv-menu-status');
           if (status) status.textContent = 'Native tidal phase unavailable · verified regional tide grid';
+        } else {
+          const status = document.getElementById('bv-menu-status');
+          if (status) status.textContent = 'Tidal stage · verified regional tide grid';
         }
       }
       const grid = scalarKey && currentFrame[scalarKey];

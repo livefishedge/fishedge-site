@@ -281,7 +281,7 @@ def add_tide_grids(frames, tides, lats, lons, preserve_ofs=True, land_mask=None)
     return frames
 
 
-def add_tide_display_fields(frames):
+def add_tide_display_fields(frames, preserve_model=False):
     """Keep popup prediction, stage raster, and co-range on one series.
 
     The live refresh path creates ``tide_height_ft`` from the current CO-OPS
@@ -291,7 +291,13 @@ def add_tide_display_fields(frames):
     """
     if not frames or not frames[0].get("tide_height_ft"):
         return
-    source = [frame.get("tide_height_ft") for frame in frames]
+    # ``tide_height_ft`` is a CO-OPS station interpolation used for popup
+    # reference values. Once an independent regional model has been applied,
+    # never copy that reference surface into the model field consumed by the
+    # map. The old unconditional copy made the displayed astronomical tide
+    # exactly equal to its own station blend.
+    source_key = "astronomical_tide_ft" if preserve_model else "tide_height_ft"
+    source = [frame.get(source_key) for frame in frames]
     valid_source = [grid for grid in source if grid and grid[0]]
     if not valid_source:
         return
@@ -304,7 +310,10 @@ def add_tide_display_fields(frames):
             row.append(float(max(values) - min(values)) if values else None)
         ranges.append(row)
     for frame in frames:
-        if frame.get("tide_height_ft"):
+        if preserve_model:
+            if frame.get("astronomical_tide_ft"):
+                frame["tide_range_ft"] = ranges
+        elif frame.get("tide_height_ft"):
             frame["astronomical_tide_ft"] = frame["tide_height_ft"]
             frame["tide_range_ft"] = ranges
 
@@ -914,7 +923,7 @@ def main():
             if key in prior_payload:
                 payload[key] = prior_payload[key]
     if prior_payload and apply_regional_tide_harmonics(frames, prior_payload.get("regional_tide_harmonics")):
-        add_tide_display_fields(frames)
+        add_tide_display_fields(frames, preserve_model=True)
     # Keep the manifest below Cloudflare Pages' per-file limit. The frame data
     # dominates the payload; static metadata (including masks and native tide
     # mesh) remains in forecast.json and frame chunks are listed explicitly.
