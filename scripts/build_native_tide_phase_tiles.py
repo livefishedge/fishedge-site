@@ -20,6 +20,7 @@ SCRIPTS = ROOT / 'scripts'
 import sys
 sys.path.insert(0, str(SCRIPTS))
 from build_stofs_native_mesh_artifact import LocalClassicNetCDF, read_zeta
+from fetch_stofs_global_harmonics import RemoteClassicNetCDF
 
 R = 6378137.0
 def mercator(lon, lat):
@@ -29,7 +30,8 @@ def mercator(lon, lat):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--source', type=Path, required=True)
+    ap.add_argument('--source', type=Path)
+    ap.add_argument('--source-url', help='verified NOAA HTP URL; reads only regional byte ranges')
     ap.add_argument('--mesh-cache', type=Path, required=True)
     ap.add_argument('--forecast', type=Path, required=True)
     ap.add_argument('--out-dir', type=Path, required=True)
@@ -46,11 +48,17 @@ def main():
     ap.add_argument('--hotspot-bbox', type=float, nargs=4, metavar=('WEST','SOUTH','EAST','NORTH'),
                     help='optional WGS84 bbox for a selective high-resolution patch')
     ap.add_argument('--asset-version', help='immutable phase-asset version; defaults to a source/checkpoint checksum')
+    ap.add_argument('--source-object', help='immutable NOAA source object key for provenance')
+    ap.add_argument('--source-etag', help='NOAA source ETag/transport identity when remote range-reading')
     args = ap.parse_args()
 
     mesh = dict(np.load(args.mesh_cache, allow_pickle=False))
     x = np.asarray(mesh['x'], float); y = np.asarray(mesh['y'], float)
     tri = np.asarray(mesh['elements'], np.int32)
+    if args.source and args.source_url:
+        raise SystemExit('choose --source or --source-url, not both')
+    if not args.source and not args.source_url:
+        raise SystemExit('one of --source or --source-url is required')
     if args.checkpoint_dir:
         files = sorted(args.checkpoint_dir.glob('hour-*.npy'))
         if not files: raise SystemExit('native checkpoint has no hourly slices')
@@ -58,14 +66,14 @@ def main():
         source_count = z.shape[0]
         depth = None
     else:
-        ds = LocalClassicNetCDF(args.source)
+        ds = RemoteClassicNetCDF(args.source_url) if args.source_url else LocalClassicNetCDF(args.source)
         try:
             source_count = int(ds.ds.variables['zeta'].data.shape[0])
             node_ids = np.asarray(mesh['node_ids'], np.int64)
             z = (read_zeta(ds, node_ids, np.arange(source_count, dtype=int)) * 3.280839895).astype(np.float32)
             depth_var = ds.ds.variables.get('depth')
             if depth_var is None: raise SystemExit('native source lacks depth')
-            depth = np.asarray(depth_var.data[node_ids], float)
+            depth = (None if args.source_url else np.asarray(depth_var.data[node_ids], float))
         finally:
             ds.close()
 
@@ -271,15 +279,21 @@ def main():
         'projection': 'EPSG:3857',
         'bbox_mercator': [xmin, ymin, xmax, ymax],
         'definition': 'combined-signal stage from total HTP value and edge-safe time derivative; circular native-triangle phase averaging; high/falling/low/rising; same native triangles as co-range',
+        'coverage_contract': 'native_mesh_co_range_wet_faces',
+        'native_node_count': int(len(x)),
+        'native_wet_node_count': int(valid.sum()),
+        'native_triangle_count': int(tri_valid.sum()),
         'source_frames': source_count, 'extended_frames': extension_hours,
         'frame_times': frame_times[:count],
         'extension_method': ('eight-constituent least-squares continuation of native HTP'
                              if extension_hours else 'none')
     }
     source_meta = (forecast_payload.get('native_mesh') or {}).get('source') or {}
-    if source_meta.get('object'):
-        phase_manifest['source_object'] = source_meta['object']
-    if source_meta.get('sha256'):
+    if args.source_object or source_meta.get('object'):
+        phase_manifest['source_object'] = args.source_object or source_meta['object']
+    if args.source_etag:
+        phase_manifest['source_etag'] = args.source_etag
+    elif source_meta.get('sha256'):
         phase_manifest['source_sha256'] = source_meta['sha256']
     if args.asset_version:
         phase_manifest['asset_version'] = str(args.asset_version)

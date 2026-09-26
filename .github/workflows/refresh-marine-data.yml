@@ -11,17 +11,21 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: marine-data-publish
+  cancel-in-progress: false
+
 jobs:
   refresh:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
       - name: Install pipeline dependencies
-        run: python -m pip install --disable-pip-version-check requests numpy scipy xarray netcdf4
+        run: python -m pip install --disable-pip-version-check requests numpy scipy xarray netcdf4 pillow opencv-python-headless
       - name: Refresh wave/weather forecast and CO-OPS observations
         run: |
           python scripts/fetch_wave_openmeteo.py
@@ -31,9 +35,8 @@ jobs:
             dashboard/trip-planner/data/usec_md/briefing/forecast.json \
             data/usec_south/briefing/forecast.json \
             dashboard/trip-planner/data/usec_south/briefing/forecast.json
-          # Native phase tiles are a separately published product. Preserve
-          # them only when their explicit UTC frame list still matches the
-          # refreshed forecast; the guard removes genuinely stale atlases.
+          # Preserve a valid native atlas across rolling weather timestamps.
+          # Native regeneration is handled by the dedicated six-hour job.
           python scripts/disable_stale_native_phase.py \
             data/usec_md/briefing/forecast.json \
             dashboard/trip-planner/data/usec_md/briefing/forecast.json \

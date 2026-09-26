@@ -3459,11 +3459,15 @@
         if (forecastData?.native_mesh?.phase_tiles) {
           if (drawNativeTidePhaseOverlay()) return;
           const status = document.getElementById('bv-menu-status');
-          if (status) status.textContent = 'Native tidal phase unavailable · verified regional tide grid';
+          if (status) status.textContent = 'Tidal stage unavailable for this time';
         } else {
           const status = document.getElementById('bv-menu-status');
-          if (status) status.textContent = 'Tidal stage · verified regional tide grid';
+          if (status) status.textContent = 'Tidal stage unavailable for this time';
         }
+        // Native stage and the coarse forecast grid are different spatial
+        // products. Never silently paint the coarse field when native phase
+        // coverage is missing or the selected UTC frame has no tile.
+        return;
       }
       const grid = scalarKey && currentFrame[scalarKey];
       const lons = forecastData.lons, lats = forecastData.lats;
