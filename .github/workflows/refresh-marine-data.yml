@@ -1,6 +1,9 @@
 name: Refresh marine and tidal data
 
 on:
+  push:
+    paths:
+      - '.github/workflows/refresh-marine-data.yml'
   schedule:
     - cron: '17 * * * *'
   workflow_dispatch:
