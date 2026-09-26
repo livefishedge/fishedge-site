@@ -276,6 +276,11 @@ def main():
         'extension_method': ('eight-constituent least-squares continuation of native HTP'
                              if extension_hours else 'none')
     }
+    source_meta = (forecast_payload.get('native_mesh') or {}).get('source') or {}
+    if source_meta.get('object'):
+        phase_manifest['source_object'] = source_meta['object']
+    if source_meta.get('sha256'):
+        phase_manifest['source_sha256'] = source_meta['sha256']
     if args.asset_version:
         phase_manifest['asset_version'] = str(args.asset_version)
     elif args.checkpoint_dir:
@@ -284,7 +289,14 @@ def main():
                       for p in sorted(args.checkpoint_dir.glob('hour-*.npy')))).encode()
         ).hexdigest()[:20]
     else:
-        phase_manifest['asset_version'] = hashlib.sha256(str(args.source).encode()).hexdigest()[:20]
+        # The path is stable across hourly source cycles; hashing it leaves
+        # browsers reusing old phase PNGs after a new NOAA cycle is published.
+        # Use the immutable source content identity for cache invalidation.
+        digest = hashlib.sha256()
+        with args.source.open('rb') as source_file:
+            for block in iter(lambda: source_file.read(8 * 1024 * 1024), b''):
+                digest.update(block)
+        phase_manifest['asset_version'] = digest.hexdigest()[:20]
     native_payload = payload.setdefault('native_mesh', {})
     if args.hotspot_bbox:
         # Keep the nationwide/base atlas untouched; selective patches are

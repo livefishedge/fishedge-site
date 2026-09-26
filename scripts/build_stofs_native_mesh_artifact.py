@@ -147,6 +147,7 @@ def main():
     finite = np.isfinite(ranges)
     if not finite.any(): raise SystemExit('native mesh contains no finite range values')
     payload = json.loads(args.forecast.read_text())
+    prior_native = payload.get('native_mesh') or {}
     source_sha256 = None if not args.local_source else __import__('hashlib').sha256(args.local_source.read_bytes()).hexdigest()
     payload['native_mesh'] = {
         'coordinates': 'WGS84 lon/lat',
@@ -154,6 +155,11 @@ def main():
         'triangles': tris.tolist(),
         'range_ft': [None if not np.isfinite(v) else float(v) for v in ranges],
         'node_count': int(len(x)), 'triangle_count': int(len(tris)),
+        'complete_native_mesh_processed': True,
+        # Preserve the already-published contour representation. It is the
+        # range layer's compact rendering contract and must remain alongside
+        # the refreshed native node/range arrays.
+        'native_contours': prior_native.get('native_contours', []),
         'source': {'provider': 'NOAA', 'model': 'STOFS-2D Global HTP',
                    'object': find_key(args.date, args.cycle),
                    'sha256': source_sha256,
