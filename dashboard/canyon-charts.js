@@ -23,7 +23,6 @@
   // on every map attach/refresh.
   var STATIC_LOCAL_GROUNDS_URL = '/dashboard/data/fishing-grounds.json';
   var STATIC_LOCAL_POINTS_URL = '/dashboard/data/fishing-grounds-points.json';
-  var STATIC_MD_LEGACY_URL = '/dashboard/data/fishing-grounds-md-legacy.json';
   var MD_FISHING_ROOT =
     'https://mdgeodata.md.gov/imap/rest/services/Biota/MD_Finfish/FeatureServer/10/query';
   var MD_REEF_ROOT =
@@ -296,8 +295,9 @@
     var cached = state.cache.get(key);
     if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) return Promise.resolve(cached.features);
     if (state.inflight.has(key)) return state.inflight.get(key);
-    var mdLegacy = selectedRegionBbox() === REGION_BBOXES.usec_md;
-    var pointsUrl = (mdLegacy ? STATIC_MD_LEGACY_URL : STATIC_LOCAL_POINTS_URL) + '?v=20260919-md-legacy';
+    // One compiled catalog is authoritative for both regions. The old MD
+    // legacy asset had a different record set and reintroduced duplicates.
+    var pointsUrl = STATIC_LOCAL_POINTS_URL + '?v=20260927-catalog-v3';
     if (!state.staticLocalPointsPromises.has(pointsUrl)) {
       state.staticLocalPointsPromises.set(pointsUrl, fetch(pointsUrl)
         .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
@@ -324,8 +324,7 @@
     var cached = state.cache.get(key);
     if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) return Promise.resolve(cached.features);
     if (state.inflight.has(key)) return state.inflight.get(key);
-    var mdLegacy = selectedRegionBbox() === REGION_BBOXES.usec_md;
-    var polygonsUrl = (mdLegacy ? STATIC_MD_LEGACY_URL : STATIC_LOCAL_GROUNDS_URL) + '?v=20260919-md-legacy';
+    var polygonsUrl = STATIC_LOCAL_GROUNDS_URL + '?v=20260927-catalog-v3';
     if (!state.staticLocalPolygonsPromises.has(polygonsUrl)) {
       state.staticLocalPolygonsPromises.set(polygonsUrl, fetch(polygonsUrl)
         .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
@@ -413,7 +412,11 @@
       '3 mile 10 mile hill or lump': '3 Mile Hill',
       '3 mile hill': '3 Mile Hill'
     };
-    return aliases[key] || name;
+    var known = aliases[key];
+    if (known) return known;
+    // Normalize harmless spelling/punctuation variants while preserving
+    // meaningful directional, numbered, depth, and distance qualifiers.
+    return name.replace(/[’']/g, '').replace(/\s+/g, ' ').trim();
   }
 
   function mergeGeometry(a, b) {
@@ -435,16 +438,9 @@
     return { type: 'MultiPolygon', coordinates: unique.map(function (part) { return part.coordinates; }) };
   }
 
-  function structureBaseName(raw) {
-    return String(raw || '').toLowerCase()
-      .replace(/[’']/g, '').replace(/[^a-z0-9]+/g, ' ').trim()
-      .split(' ').filter(function (token) {
-        return token && ['bank', 'banks', 'ground', 'grounds', 'area', 'reef', 'reefs',
-          'rock', 'rocks', 'shoal', 'shoals', 'buoy', 'bed', 'beds', 'lump', 'lumps']
-          .indexOf(token) < 0;
-      }).map(function (token) {
-        return token.length > 4 && token.endsWith('s') ? token.slice(0, -1) : token;
-      }).join(' ');
+  function identityName(raw) {
+    return String(raw || '').toLowerCase().replace(/[’']/g, '')
+      .replace(/[^a-z0-9]+/g, '');
   }
 
   // A family is a display hierarchy, not a destructive merge. In particular,
@@ -494,7 +490,10 @@
     var dx = (a.point[0] - b.point[0]) * Math.cos((a.point[1] + b.point[1]) * Math.PI / 360);
     var dy = a.point[1] - b.point[1];
     var distance = Math.sqrt(dx * dx + dy * dy);
-    return distance <= 0.03 && structureBaseName(a.name) === structureBaseName(b.name);
+    // A match requires the same normalized full name and nearby anchors.
+    // Do not strip Reef/Bank/Shoal/etc.; those words can identify distinct
+    // grounds. Do not merge same-name grounds separated by the region.
+    return distance <= 0.03 && identityName(a.name) === identityName(b.name);
   }
 
   function structureId(item) {
@@ -508,7 +507,7 @@
     features.forEach(function (item) {
       var displayName = canonicalName(item.name);
       var existing = merged.find(function (candidate) {
-        return candidate.name === displayName || samePhysicalStructure(candidate, item);
+        return samePhysicalStructure(candidate, Object.assign({}, item, { name: displayName }));
       });
       if (!existing) {
         merged.push(Object.assign({}, item, { name: displayName, id: structureId(item), family_id: structureFamilyId(item), family_name: structureFamilyName(displayName) }));
@@ -609,7 +608,9 @@
       var labelCandidates = [];
       var labelGroups = new Set();
       var mapResolution = map.getView() && map.getView().getResolution();
-      var groupLabels = isMdRegion() || (Number.isFinite(mapResolution) && mapResolution > 180);
+      // Group geometry and labels only at regional scale. The old MD-always-
+      // grouped rule hid the zoom transition while still drawing every marker.
+      var groupLabels = Number.isFinite(mapResolution) && mapResolution > 180;
       var familyCandidates = new Map();
       if (groupLabels) (items || []).forEach(function (item) {
         var familyId = item.family_id || structureFamilyId(item);
@@ -626,7 +627,19 @@
         })[0];
         familyRepresentatives.set(familyId, representative);
       });
-      (items || []).forEach(function (item) {
+      var displayItems = items || [];
+      if (groupLabels && familyRepresentatives.size) {
+        var seenFamilies = new Set();
+        displayItems = displayItems.filter(function (item) {
+          var familyId = item.family_id || structureFamilyId(item);
+          if (seenFamilies.has(familyId)) return false;
+          seenFamilies.add(familyId);
+          return true;
+        }).map(function (item) {
+          return familyRepresentatives.get(item.family_id || structureFamilyId(item)) || item;
+        });
+      }
+      displayItems.forEach(function (item) {
         var geometry = null;
         if (state.showPolygons && item.geometry && typeof ol.format !== 'undefined') {
           try {

@@ -34,7 +34,7 @@ function sourceStatus(source) {
 
 const records = features.map((feature, index) => {
   const point = feature.point || [null, null];
-  const id = `${slug(feature.source)}:${slug(feature.name)}:${Number(point[0]).toFixed(5)}:${Number(point[1]).toFixed(5)}`;
+  const id = feature.id || `${slug(feature.name)}:${Number(point[0]).toFixed(4)}:${Number(point[1]).toFixed(4)}`;
   const family = familyName(feature.name);
   return {
     structure_id: id,
@@ -47,6 +47,7 @@ const records = features.map((feature, index) => {
     review_status: sourceStatus(feature.source).review_status,
     point,
     source_record_index: index,
+    source_record_id: feature.id || null,
   };
 });
 

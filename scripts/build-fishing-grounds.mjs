@@ -25,6 +25,22 @@ function canonicalName(raw) {
   return aliases.get(key) || name;
 }
 
+function identityName(raw) {
+  return String(raw || '').toLowerCase().replace(/[’']/g, '')
+    .replace(/[^a-z0-9]+/g, '');
+}
+
+function stableId(item) {
+  return `${identityName(item.name).replace(/ /g, '-')}:${Number(item.point[0]).toFixed(4)}:${Number(item.point[1]).toFixed(4)}`;
+}
+
+function sameGround(a, b) {
+  if (!a?.point || !b?.point || identityName(a.name) !== identityName(b.name)) return false;
+  const dx = (a.point[0] - b.point[0]) * Math.cos((a.point[1] + b.point[1]) * Math.PI / 360);
+  const dy = a.point[1] - b.point[1];
+  return Math.hypot(dx, dy) <= 0.03;
+}
+
 function ringCentroid(ring) {
   if (!Array.isArray(ring) || ring.length < 3) return null;
   let area = 0, cx = 0, cy = 0;
@@ -64,7 +80,8 @@ async function arcgis(url, type, source) {
     const geometry = feature.geometry?.rings ? { type: 'Polygon', coordinates: feature.geometry.rings } : null;
     const point = geometryPoint(geometry);
     if (!name || !point || !inBbox(point)) return null;
-    return { name: canonicalName(name), type, source, point, geometry };
+    return { id: feature.attributes?.OBJECTID ? `${source}:${feature.attributes.OBJECTID}` : undefined,
+      name: canonicalName(name), type, source, point, geometry };
   }).filter(Boolean);
 }
 
@@ -74,17 +91,17 @@ async function main() {
     const properties = feature.properties || {};
     const point = geometryPoint(feature.geometry);
     if (!properties.name || !point || !inBbox(point)) return null;
-    return { name: canonicalName(properties.name), type: 'Fishing ground', source: 'NJ DEP / Shore Guide', point, geometry: feature.geometry };
+    return { id: properties.id || undefined, name: canonicalName(properties.name), type: 'Fishing ground', source: 'NJ DEP / Shore Guide', point, geometry: feature.geometry };
   }).filter(Boolean);
   const [mdFishing, mdReefs, atlantic] = await Promise.all([
     arcgis(MD_FISHING_URL, 'Fishing ground', 'Maryland DNR'),
     arcgis(MD_REEF_URL, 'Artificial reef', 'Maryland DNR'),
     arcgis(ATLANTIC_URL, 'Fishing ground', 'BOEM Atlantic Fishing Atlas')
   ]);
-  const byName = new Map();
+  const records = [];
   for (const item of [...njItems, ...mdFishing, ...mdReefs, ...atlantic]) {
-    const existing = byName.get(item.name);
-    if (!existing) byName.set(item.name, item);
+    const existing = records.find(candidate => sameGround(candidate, item));
+    if (!existing) records.push({ ...item, id: item.id || stableId(item) });
     else {
       existing.geometry = existing.geometry && item.geometry
         ? { type: 'MultiPolygon', coordinates: [
@@ -93,12 +110,13 @@ async function main() {
           ] }
         : existing.geometry || item.geometry;
     }
-  }
+      existing.id = existing.id || stableId(existing);
+    }
   const output = {
     version: 1,
     generated_at: new Date().toISOString(),
     bbox,
-    features: [...byName.values()]
+    features: records
   };
   await mkdir('dashboard/data', { recursive: true });
   await writeFile('dashboard/data/fishing-grounds.json', JSON.stringify(output));
