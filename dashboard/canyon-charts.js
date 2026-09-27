@@ -440,7 +440,45 @@
 
   function identityName(raw) {
     return String(raw || '').toLowerCase().replace(/[’']/g, '')
-      .replace(/[^a-z0-9]+/g, '');
+      .replace(/[^a-z0-9()]+/g, ' ').trim().replace(/\s+/g, ' ');
+  }
+
+  var identityDescriptors = { canyon:1, valley:1, ridge:1, lump:1, lumps:1,
+    rock:1, rocks:1, reef:1, reefs:1, bank:1, banks:1, shoal:1, shoals:1 };
+  function identityCore(raw) {
+    var value = identityName(raw)
+      .replace(/\((?:north|south|east|west|northeast|northwest|southeast|southwest)\)/g, '')
+      .replace(/(canyon|valley|ridge|lumps?|rocks?|reefs?|banks?|shoals?)$/g, ' $1');
+    return value.split(' ').filter(function (token) {
+      return token && !identityDescriptors[token];
+    });
+  }
+  function identityDirections(raw) {
+    return identityName(raw).replace(/\([^)]*\)/g, '').split(' ').filter(function (token) {
+      return /^(north|south|east|west|northeast|northwest|southeast|southwest)$/.test(token);
+    });
+  }
+  function identitySoundex(raw) {
+    var word = String(raw || '').replace(/[^a-z]/gi, '').toUpperCase();
+    if (!word) return '';
+    var map = { B:1,F:1,P:1,V:1,C:2,G:2,J:2,K:2,Q:2,S:2,X:2,Z:2,D:3,T:3,L:4,M:5,N:5,R:6 };
+    var out = word.charAt(0), previous = map[word.charAt(0)] || 0;
+    for (var i = 1; i < word.length && out.length < 4; i++) {
+      var code = map[word.charAt(i)] || 0;
+      if (code && code !== previous) out += code;
+      previous = code;
+    }
+    return (out + '000').slice(0, 4);
+  }
+  function identityMatch(a, b) {
+    var aa = identityCore(a), bb = identityCore(b);
+    if (!aa.length || aa.length !== bb.length) return false;
+    var da = identityDirections(a), db = identityDirections(b);
+    if (da.length && db.length && da.join('|') !== db.join('|')) return false;
+    var na = identityName(a).split(' ')[0], nb = identityName(b).split(' ')[0];
+    if (/^\d/.test(na) && /^\d/.test(nb) && na !== nb) return false;
+    var left = aa.map(identitySoundex), right = bb.map(identitySoundex);
+    return left.every(function (code, i) { return code && code === right[i]; });
   }
 
   // A family is a display hierarchy, not a destructive merge. In particular,
@@ -479,21 +517,24 @@
   }
 
   function hasProtectedSubarea(raw) {
-    // Directional and explicitly numbered blocks/sites are separate catalog
-    // entities. A leading depth/count such as “17 Fathoms” is not a subarea.
-    return /(^|\s)(block|site|box|north|south|east|west|southeast|southwest|northeast|northwest)(\s|$)/i.test(String(raw || '')) ||
-      /\b(block|site)\s*[-#]?\s*\d+/i.test(String(raw || ''));
+    return /(^|\s)(block|site|box|nm|fathom|fathoms)\b|\b\d+(?:\.\d+)?\s*(?:nm|mile|miles|fathom|fathoms)\b/i.test(String(raw || ''));
   }
 
   function samePhysicalStructure(a, b) {
     if (!a || !b || !a.point || !b.point || hasProtectedSubarea(a.name) || hasProtectedSubarea(b.name)) return false;
+    var da = identityDirections(a.name), db = identityDirections(b.name);
+    if (da.length && db.length && da.join('|') !== db.join('|')) return false;
+    var na = identityName(a.name).split(' ')[0], nb = identityName(b.name).split(' ')[0];
+    if (/^\d/.test(na) && /^\d/.test(nb) && na !== nb) return false;
     var dx = (a.point[0] - b.point[0]) * Math.cos((a.point[1] + b.point[1]) * Math.PI / 360);
     var dy = a.point[1] - b.point[1];
     var distance = Math.sqrt(dx * dx + dy * dy);
-    // A match requires the same normalized full name and nearby anchors.
-    // Do not strip Reef/Bank/Shoal/etc.; those words can identify distinct
-    // grounds. Do not merge same-name grounds separated by the region.
-    return distance <= 0.03 && identityName(a.name) === identityName(b.name);
+    // Descriptor changes and phonetic spelling variants are accepted only
+    // inside a tight geographic neighborhood. Directional/numbered distance
+    // blocks remain protected by hasProtectedSubarea above.
+    var left = identityCore(a.name).join(''), right = identityCore(b.name).join('');
+    return distance <= 0.12 && left.length >= 2 &&
+      (left === right || identityMatch(a.name, b.name));
   }
 
   function structureId(item) {
@@ -510,8 +551,9 @@
         return samePhysicalStructure(candidate, Object.assign({}, item, { name: displayName }));
       });
       if (!existing) {
-        merged.push(Object.assign({}, item, { name: displayName, id: structureId(item), family_id: structureFamilyId(item), family_name: structureFamilyName(displayName) }));
+        merged.push(Object.assign({}, item, { name: displayName, aliases: item.aliases || [], id: item.id || structureId(item), family_id: structureFamilyId(item), family_name: structureFamilyName(displayName) }));
       } else {
+        if (displayName !== existing.name && (existing.aliases || []).indexOf(displayName) < 0) existing.aliases.push(displayName);
         existing.geometry = mergeGeometry(existing.geometry, item.geometry);
       }
     });

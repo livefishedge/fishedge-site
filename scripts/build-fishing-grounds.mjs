@@ -1,4 +1,5 @@
 import { writeFile, mkdir } from 'node:fs/promises';
+import { resolveFeatures } from './fishing-ground-identity.mjs';
 
 // Mid-Atlantic/Delmarva coverage used by the current dashboard region. Keep
 // this bounded: the BOEM atlas is slow on oversized envelopes.
@@ -23,22 +24,6 @@ function canonicalName(raw) {
   const name = String(raw || '').trim();
   const key = name.toLowerCase().replace(/[’']/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
   return aliases.get(key) || name;
-}
-
-function identityName(raw) {
-  return String(raw || '').toLowerCase().replace(/[’']/g, '')
-    .replace(/[^a-z0-9]+/g, '');
-}
-
-function stableId(item) {
-  return `${identityName(item.name).replace(/ /g, '-')}:${Number(item.point[0]).toFixed(4)}:${Number(item.point[1]).toFixed(4)}`;
-}
-
-function sameGround(a, b) {
-  if (!a?.point || !b?.point || identityName(a.name) !== identityName(b.name)) return false;
-  const dx = (a.point[0] - b.point[0]) * Math.cos((a.point[1] + b.point[1]) * Math.PI / 360);
-  const dy = a.point[1] - b.point[1];
-  return Math.hypot(dx, dy) <= 0.03;
 }
 
 function ringCentroid(ring) {
@@ -98,20 +83,7 @@ async function main() {
     arcgis(MD_REEF_URL, 'Artificial reef', 'Maryland DNR'),
     arcgis(ATLANTIC_URL, 'Fishing ground', 'BOEM Atlantic Fishing Atlas')
   ]);
-  const records = [];
-  for (const item of [...njItems, ...mdFishing, ...mdReefs, ...atlantic]) {
-    const existing = records.find(candidate => sameGround(candidate, item));
-    if (!existing) records.push({ ...item, id: item.id || stableId(item) });
-    else {
-      existing.geometry = existing.geometry && item.geometry
-        ? { type: 'MultiPolygon', coordinates: [
-            ...(existing.geometry.type === 'MultiPolygon' ? existing.geometry.coordinates : [existing.geometry.coordinates]),
-            ...(item.geometry.type === 'MultiPolygon' ? item.geometry.coordinates : [item.geometry.coordinates])
-          ] }
-        : existing.geometry || item.geometry;
-    }
-      existing.id = existing.id || stableId(existing);
-    }
+  const records = resolveFeatures([...njItems, ...mdFishing, ...mdReefs, ...atlantic]);
   const output = {
     version: 1,
     generated_at: new Date().toISOString(),

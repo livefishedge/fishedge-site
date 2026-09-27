@@ -46,6 +46,7 @@ const records = features.map((feature, index) => {
     source_class: sourceStatus(feature.source).source_class,
     review_status: sourceStatus(feature.source).review_status,
     point,
+    aliases: feature.aliases || [],
     source_record_index: index,
     source_record_id: feature.id || null,
   };
