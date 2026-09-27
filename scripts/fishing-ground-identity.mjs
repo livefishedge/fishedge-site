@@ -70,7 +70,7 @@ export function stableId(item) {
 
 export function resolveFeatures(features) {
   const resolved = [];
-  for (const raw of features || []) {
+  for (const raw of (features || []).filter(item => String(item?.name || '').trim())) {
     const item = { ...raw, name: String(raw.name || '').trim(), aliases: [] };
     const existing = resolved.find(candidate => identityMatch(candidate, item));
     if (!existing) {

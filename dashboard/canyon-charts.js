@@ -184,9 +184,9 @@
           var p = f.attributes || {};
           var geometry = f.geometry && Array.isArray(f.geometry.rings)
             ? { type: 'Polygon', coordinates: f.geometry.rings } : null;
-          return { point: point, geometry: geometry, name: p.Name || 'Unnamed',
+          return p.Name ? { point: point, geometry: geometry, name: p.Name,
             type: 'Canyon', region: p.Region,
-            system: p.Sys_Can };
+            system: p.Sys_Can } : null;
         }).filter(Boolean);
       })
       .finally(function () { clearTimeout(timeout); });
@@ -669,7 +669,12 @@
         })[0];
         familyRepresentatives.set(familyId, representative);
       });
-      var displayItems = items || [];
+      var displayItems = (items || []).filter(function (item) {
+        // An unlabeled feature must never create a marker or polygon. This is
+        // intentionally enforced at render time because remote enrichments
+        // can have a different schema from the compiled catalog.
+        return item && String(item.name || '').trim() && mdLabelEligible(item);
+      });
       if (groupLabels && familyRepresentatives.size) {
         var seenFamilies = new Set();
         displayItems = displayItems.filter(function (item) {
@@ -714,7 +719,10 @@
       });
       source.addFeatures(geometryFeatures);
       var mobile = window.innerWidth && window.innerWidth < 700;
-      var labelBudget = isMdRegion() ? (mobile ? 18 : 32) : labelCandidates.length;
+      // Every plotted feature has a corresponding label candidate. A prior
+      // budget hid labels while leaving their markers/polygons behind, which
+      // made the layer appear full of anonymous grounds.
+      var labelBudget = labelCandidates.length;
       labelCandidates.sort(function (a, b) { return a.priority - b.priority; });
       labelSource.addFeatures(labelCandidates.slice(0, labelBudget).map(function (candidate) { return candidate.feature; }));
       layer.setVisible(state.visible);
