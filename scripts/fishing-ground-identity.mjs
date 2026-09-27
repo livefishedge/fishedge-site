@@ -2,8 +2,9 @@
 // source records and geometry while choosing one display identity for nearby
 // spelling/descriptor variants.
 
-const DESCRIPTORS = new Set(['canyon', 'valley', 'ridge', 'lump', 'lumps', 'rock', 'rocks', 'reef', 'reefs', 'bank', 'banks', 'shoal', 'shoals']);
+const DESCRIPTORS = new Set(['canyon', 'valley', 'ridge', 'lump', 'lumps', 'rock', 'rocks', 'reef', 'reefs', 'bank', 'banks', 'shoal', 'shoals', 'hole', 'holes', 'bed', 'beds', 'ground', 'grounds']);
 const PROTECTED = /(^|\s)(block|site|box|nm|fathom|fathoms)\b|\b\d+(?:\.\d+)?\s*(?:nm|mile|miles|fathom|fathoms)\b/i;
+const SYNONYMS = { inside: 'inside', inner: 'inside', inshore: 'inside', outside: 'outside', outer: 'outside' };
 
 export function normalizedName(value) {
   return String(value || '').toLowerCase().replace(/[’']/g, '').replace(/[^a-z0-9()]+/g, ' ').trim().replace(/\s+/g, ' ');
@@ -26,8 +27,13 @@ function soundex(value) {
 function coreTokens(value) {
   const raw = normalizedName(value)
     .replace(/\((?:north|south|east|west|northeast|northwest|southeast|southwest)\)/g, '')
-    .replace(/(canyon|valley|ridge|lumps?|rocks?|reefs?|banks?|shoals?)$/g, ' $1');
-  return raw.split(' ').filter(token => !DESCRIPTORS.has(token));
+    .replace(/(canyon|valley|ridge|lumps?|rocks?|reefs?|banks?|shoals?|holes?|beds?|grounds?)$/g, ' $1');
+  return raw.split(' ').map(token => SYNONYMS[token] || token).filter(token => token && !DESCRIPTORS.has(token));
+}
+
+function nameVariants(value) {
+  const raw = String(value || '').replace(/\((?:north|south|east|west|northeast|northwest|southeast|southwest)\)/gi, ' ');
+  return raw.split(/\s+or\s+|\s*\/\s*/i).map(part => part.trim()).filter(Boolean);
 }
 
 function directionTokens(value) {
@@ -58,9 +64,11 @@ export function identityMatch(a, b) {
   const dx = (a.point[0] - b.point[0]) * Math.cos((a.point[1] + b.point[1]) * Math.PI / 360);
   const dy = a.point[1] - b.point[1];
   if (Math.hypot(dx, dy) > 0.12) return false;
-  const aa = coreTokens(a.name).join('');
-  const bb = coreTokens(b.name).join('');
-  return aa.length >= 2 && (aa === bb || tokenIdentityMatch(a.name, b.name));
+  return nameVariants(a.name).some(left => nameVariants(b.name).some(right => {
+    const aa = coreTokens(left).join('');
+    const bb = coreTokens(right).join('');
+    return aa.length >= 2 && (aa === bb || tokenIdentityMatch(left, right));
+  }));
 }
 
 export function stableId(item) {
@@ -71,7 +79,7 @@ export function stableId(item) {
 export function resolveFeatures(features) {
   const resolved = [];
   for (const raw of (features || []).filter(item => String(item?.name || '').trim())) {
-    const item = { ...raw, name: String(raw.name || '').trim(), aliases: [] };
+    const item = { ...raw, name: String(raw.name || '').trim(), aliases: Array.isArray(raw.aliases) ? raw.aliases.slice() : [] };
     const existing = resolved.find(candidate => identityMatch(candidate, item));
     if (!existing) {
       item.id = item.id || stableId(item);

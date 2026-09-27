@@ -444,14 +444,21 @@
   }
 
   var identityDescriptors = { canyon:1, valley:1, ridge:1, lump:1, lumps:1,
-    rock:1, rocks:1, reef:1, reefs:1, bank:1, banks:1, shoal:1, shoals:1 };
+    rock:1, rocks:1, reef:1, reefs:1, bank:1, banks:1, shoal:1, shoals:1,
+    hole:1, holes:1, bed:1, beds:1, ground:1, grounds:1 };
+  var identitySynonyms = { inside: 'inside', inner: 'inside', inshore: 'inside', outside: 'outside', outer: 'outside' };
   function identityCore(raw) {
     var value = identityName(raw)
       .replace(/\((?:north|south|east|west|northeast|northwest|southeast|southwest)\)/g, '')
-      .replace(/(canyon|valley|ridge|lumps?|rocks?|reefs?|banks?|shoals?)$/g, ' $1');
+      .replace(/(canyon|valley|ridge|lumps?|rocks?|reefs?|banks?|shoals?|holes?|beds?|grounds?)$/g, ' $1');
     return value.split(' ').filter(function (token) {
+      token = identitySynonyms[token] || token;
       return token && !identityDescriptors[token];
     });
+  }
+  function identityVariants(raw) {
+    return String(raw || '').replace(/\((?:north|south|east|west|northeast|northwest|southeast|southwest)\)/gi, ' ')
+      .split(/\s+or\s+|\s*\/\s*/i).map(function (part) { return part.trim(); }).filter(Boolean);
   }
   function identityDirections(raw) {
     return identityName(raw).replace(/\([^)]*\)/g, '').split(' ').filter(function (token) {
@@ -532,9 +539,13 @@
     // Descriptor changes and phonetic spelling variants are accepted only
     // inside a tight geographic neighborhood. Directional/numbered distance
     // blocks remain protected by hasProtectedSubarea above.
-    var left = identityCore(a.name).join(''), right = identityCore(b.name).join('');
-    return distance <= 0.12 && left.length >= 2 &&
-      (left === right || identityMatch(a.name, b.name));
+    var matched = identityVariants(a.name).some(function (leftName) {
+      return identityVariants(b.name).some(function (rightName) {
+        var left = identityCore(leftName).join(''), right = identityCore(rightName).join('');
+        return left.length >= 2 && (left === right || identityMatch(leftName, rightName));
+      });
+    });
+    return distance <= 0.12 && matched;
   }
 
   function structureId(item) {
@@ -761,18 +772,10 @@
           return basePromise.then(function (base) {
             var initial = mergeNamedFeatures(base);
             publish(initial);
-            if (!south) return;
-            var canyonPromise = fetchGrounds(bbox).then(function (canyons) {
-              publish(mergeFeatureSets([initial, canyons]));
-              return canyons;
-            });
-            var boemPromise = fetchBoemSouth(bbox).then(function (remote) {
-              publish(mergeFeatureSets([initial, remote]));
-              return remote;
-            });
-            return Promise.all([canyonPromise, boemPromise]).then(function (sets) {
-              publish(mergeFeatureSets([initial, sets[0], sets[1]]));
-            });
+            // The compiled catalog is authoritative in both regions. Do not
+            // append live South enrichments after publication; those records
+            // bypass the audited alias map and reintroduce duplicates.
+            return;
           });
         }
         return Promise.all([fetchGrounds(bbox), fetchGebco(bbox)])
