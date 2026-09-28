@@ -297,7 +297,7 @@
     if (state.inflight.has(key)) return state.inflight.get(key);
     // One compiled catalog is authoritative for both regions. The old MD
     // legacy asset had a different record set and reintroduced duplicates.
-    var pointsUrl = STATIC_LOCAL_POINTS_URL + '?v=20260927-catalog-v3';
+    var pointsUrl = STATIC_LOCAL_POINTS_URL + '?v=20260928-catalog-v5';
     if (!state.staticLocalPointsPromises.has(pointsUrl)) {
       state.staticLocalPointsPromises.set(pointsUrl, fetch(pointsUrl)
         .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
@@ -324,7 +324,7 @@
     var cached = state.cache.get(key);
     if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) return Promise.resolve(cached.features);
     if (state.inflight.has(key)) return state.inflight.get(key);
-    var polygonsUrl = STATIC_LOCAL_GROUNDS_URL + '?v=20260927-catalog-v3';
+    var polygonsUrl = STATIC_LOCAL_GROUNDS_URL + '?v=20260928-catalog-v5';
     if (!state.staticLocalPolygonsPromises.has(polygonsUrl)) {
       state.staticLocalPolygonsPromises.set(polygonsUrl, fetch(polygonsUrl)
         .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
@@ -783,7 +783,10 @@
         if (local.length) {
           var basePromise = state.showPolygons ? fetchLocalPolygons(bbox) : Promise.resolve(local);
           return basePromise.then(function (base) {
-            var initial = mergeNamedFeatures(base);
+            // The local catalog is already resolved by the build-time identity
+            // ledger. Re-running the legacy browser matcher here recreates
+            // aliases and duplicate labels. Preserve the authoritative IDs.
+            var initial = mergeFeatures([], [], base);
             publish(initial);
             // The compiled catalog is authoritative in both regions. Do not
             // append live South enrichments after publication; those records
