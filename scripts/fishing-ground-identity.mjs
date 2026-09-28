@@ -2,7 +2,7 @@
 // source records and geometry while choosing one display identity for nearby
 // spelling/descriptor variants.
 
-const DESCRIPTORS = new Set(['canyon', 'valley', 'ridge', 'lump', 'lumps', 'rock', 'rocks', 'reef', 'reefs', 'bank', 'banks', 'shoal', 'shoals', 'hole', 'holes', 'bed', 'beds', 'ground', 'grounds']);
+const DESCRIPTORS = new Set(['canyon', 'valley', 'ridge', 'lump', 'lumps', 'rock', 'rocks', 'reef', 'reefs', 'bank', 'banks', 'shoal', 'shoals', 'hole', 'holes', 'bed', 'beds', 'ground', 'grounds', 'slough', 'slue', 'channel', 'point', 'points', 'bar', 'bars', 'buoy', 'rips']);
 const PROTECTED = /(^|\s)block\b|(^|\s)box\b/i;
 const SYNONYMS = {
   inside: 'inside', inner: 'inside', inshore: 'inside',
@@ -37,12 +37,13 @@ function soundex(value) {
 
 function coreTokens(value) {
   const raw = normalizedName(value)
+    .replace(/^doc\s+/, '')
     .replace(/\bnorth\s+east\b/g, 'northeast')
     .replace(/\bnorth\s+west\b/g, 'northwest')
     .replace(/\bsouth\s+east\b/g, 'southeast')
     .replace(/\bsouth\s+west\b/g, 'southwest')
     .replace(/\((?:north|south|east|west|northeast|northwest|southeast|southwest)\)/g, '')
-    .replace(/(canyon|valley|ridge|lumps?|rocks?|reefs?|banks?|shoals?|holes?|beds?|grounds?)$/g, ' $1');
+    .replace(/(canyon|valley|ridge|lumps?|rocks?|reefs?|banks?|shoals?|holes?|beds?|grounds?|slough|slue|channel|points?|bars?|buoy|rips)$/g, ' $1');
   return raw.split(' ').map(token => NUMBER_WORDS[token] || SYNONYMS[token] || token).filter(token => token && !DESCRIPTORS.has(token));
 }
 
