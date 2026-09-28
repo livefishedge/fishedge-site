@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generated_at": "2026-09-28T16:34:51.187Z",
-  "input_catalog_version": 4,
+  "generated_at": "2026-09-28T17:37:05.912Z",
+  "input_catalog_version": 5,
   "policy": {
     "default_geometry": "retain all source geometry",
     "default_labels": "one family label at regional scale; child labels at close zoom",
@@ -6033,7 +6033,8 @@
         39.10240923235721
       ],
       "aliases": [
-        "Coral .?."
+        "Coral .?.",
+        "Coral Beds"
       ],
       "source_record_index": 348,
       "source_record_id": "carol-beds:-74.6271:39.1024"
@@ -6175,23 +6176,6 @@
       "source_record_id": "cod-fish-lump:-74.6209:38.7974"
     },
     {
-      "structure_id": "coral-beds:-74.7193:38.9544",
-      "family_id": "nj-dep-shore-guide:coral-beds",
-      "family_name": "Coral Beds",
-      "name": "Coral Beds",
-      "type": "Fishing ground",
-      "source": "NJ DEP / Shore Guide",
-      "source_class": "derived_official_geometry",
-      "review_status": "provisional",
-      "point": [
-        -74.71925361837972,
-        38.954397215093415
-      ],
-      "aliases": [],
-      "source_record_index": 357,
-      "source_record_id": "coral-beds:-74.7193:38.9544"
-    },
-    {
       "structure_id": "corson-inlet:-74.6351:39.2022",
       "family_id": "nj-dep-shore-guide:corson-inlet",
       "family_name": "Corson Inlet",
@@ -6205,7 +6189,7 @@
         39.202196766265125
       ],
       "aliases": [],
-      "source_record_index": 358,
+      "source_record_index": 357,
       "source_record_id": "corson-inlet:-74.6351:39.2022"
     },
     {
@@ -6222,7 +6206,7 @@
         39.65012799651155
       ],
       "aliases": [],
-      "source_record_index": 359,
+      "source_record_index": 358,
       "source_record_id": "corvalis:-73.2162:39.6501"
     },
     {
@@ -6239,7 +6223,7 @@
         39.923988126058006
       ],
       "aliases": [],
-      "source_record_index": 360,
+      "source_record_index": 359,
       "source_record_id": "cow-wreck:-73.3593:39.9240"
     },
     {
@@ -6256,7 +6240,7 @@
         40.14853822629187
       ],
       "aliases": [],
-      "source_record_index": 361,
+      "source_record_index": 360,
       "source_record_id": "crane-barge:-73.1023:40.1485"
     },
     {
@@ -6273,7 +6257,7 @@
         39.176363931420624
       ],
       "aliases": [],
-      "source_record_index": 362,
+      "source_record_index": 361,
       "source_record_id": "deep-hole:-74.6520:39.1764"
     },
     {
@@ -6290,7 +6274,7 @@
         39.04672450097523
       ],
       "aliases": [],
-      "source_record_index": 363,
+      "source_record_index": 362,
       "source_record_id": "delaware-bay-reef:-75.0677:39.0467"
     },
     {
@@ -6307,7 +6291,7 @@
         39.890367413764295
       ],
       "aliases": [],
-      "source_record_index": 364,
+      "source_record_index": 363,
       "source_record_id": "dip:-71.7283:39.8904"
     },
     {
@@ -6324,7 +6308,7 @@
         39.06835789938825
       ],
       "aliases": [],
-      "source_record_index": 365,
+      "source_record_index": 364,
       "source_record_id": "e-h-cole:-73.3013:39.0684"
     },
     {
@@ -6341,7 +6325,7 @@
         40.19237821408051
       ],
       "aliases": [],
-      "source_record_index": 366,
+      "source_record_index": 365,
       "source_record_id": "ednas-bottom:-73.3046:40.1924"
     },
     {
@@ -6358,7 +6342,7 @@
         39.5655031968255
       ],
       "aliases": [],
-      "source_record_index": 367,
+      "source_record_index": 366,
       "source_record_id": "elbow:-72.3762:39.5655"
     },
     {
@@ -6375,7 +6359,7 @@
         39.702258132099345
       ],
       "aliases": [],
-      "source_record_index": 368,
+      "source_record_index": 367,
       "source_record_id": "emery-canyon:-71.9180:39.7023"
     },
     {
@@ -6392,7 +6376,7 @@
         38.46178022618206
       ],
       "aliases": [],
-      "source_record_index": 369,
+      "source_record_index": 368,
       "source_record_id": "fenwick-shoal:-74.9300:38.4618"
     },
     {
@@ -6409,7 +6393,7 @@
         40.60167823142241
       ],
       "aliases": [],
-      "source_record_index": 370,
+      "source_record_index": 369,
       "source_record_id": "fire-island-buoy:-73.3183:40.6017"
     },
     {
@@ -6426,7 +6410,7 @@
         40.015955470521405
       ],
       "aliases": [],
-      "source_record_index": 371,
+      "source_record_index": 370,
       "source_record_id": "fish-tails:-71.3204:40.0160"
     },
     {
@@ -6443,7 +6427,7 @@
         38.96900525950002
       ],
       "aliases": [],
-      "source_record_index": 372,
+      "source_record_index": 371,
       "source_record_id": "five-fathom-bank:-74.6367:38.9690"
     },
     {
@@ -6460,7 +6444,7 @@
         40.30547823335791
       ],
       "aliases": [],
-      "source_record_index": 373,
+      "source_record_index": 372,
       "source_record_id": "florence:-73.2339:40.3055"
     },
     {
@@ -6477,7 +6461,7 @@
         40.29035821953504
       ],
       "aliases": [],
-      "source_record_index": 374,
+      "source_record_index": 373,
       "source_record_id": "g-d:-73.3706:40.2904"
     },
     {
@@ -6494,7 +6478,7 @@
         39.87876778385307
       ],
       "aliases": [],
-      "source_record_index": 375,
+      "source_record_index": 374,
       "source_record_id": "georges-bank:-72.7436:39.8788"
     },
     {
@@ -6511,7 +6495,7 @@
         39.93667816753705
       ],
       "aliases": [],
-      "source_record_index": 376,
+      "source_record_index": 375,
       "source_record_id": "glory-hole:-73.2417:39.9367"
     },
     {
@@ -6528,7 +6512,7 @@
         40.12898177958354
       ],
       "aliases": [],
-      "source_record_index": 377,
+      "source_record_index": 376,
       "source_record_id": "ha-bouy:-73.3315:40.1290"
     },
     {
@@ -6545,7 +6529,7 @@
         40.12667811722526
       ],
       "aliases": [],
-      "source_record_index": 378,
+      "source_record_index": 377,
       "source_record_id": "ha-buoy:-73.3567:40.1267"
     },
     {
@@ -6562,7 +6546,7 @@
         40.341328259168755
       ],
       "aliases": [],
-      "source_record_index": 379,
+      "source_record_index": 378,
       "source_record_id": "happy-days:-73.3666:40.3413"
     },
     {
@@ -6579,7 +6563,7 @@
         39.60263809008597
       ],
       "aliases": [],
-      "source_record_index": 380,
+      "source_record_index": 379,
       "source_record_id": "haskell:-73.0299:39.6026"
     },
     {
@@ -6596,7 +6580,7 @@
         39.06888291041155
       ],
       "aliases": [],
-      "source_record_index": 381,
+      "source_record_index": 380,
       "source_record_id": "hendrickson-canyon:-72.4741:39.0689"
     },
     {
@@ -6613,7 +6597,7 @@
         39.6388580848032
       ],
       "aliases": [],
-      "source_record_index": 382,
+      "source_record_index": 381,
       "source_record_id": "herb-parker:-73.1108:39.6389"
     },
     {
@@ -6630,7 +6614,7 @@
         40.537008294731486
       ],
       "aliases": [],
-      "source_record_index": 383,
+      "source_record_index": 382,
       "source_record_id": "hilton-castle:-73.0959:40.5370"
     },
     {
@@ -6647,7 +6631,7 @@
         39.54000805608905
       ],
       "aliases": [],
-      "source_record_index": 384,
+      "source_record_index": 383,
       "source_record_id": "hitlers-sub-u-869:-73.0433:39.5400"
     },
     {
@@ -6664,7 +6648,7 @@
         38.88535493181565
       ],
       "aliases": [],
-      "source_record_index": 385,
+      "source_record_index": 384,
       "source_record_id": "hotel-slough:-74.8901:38.8854"
     },
     {
@@ -6681,7 +6665,7 @@
         39.682608022061025
       ],
       "aliases": [],
-      "source_record_index": 386,
+      "source_record_index": 385,
       "source_record_id": "hudson-canyon:-72.4744:39.6826"
     },
     {
@@ -6698,7 +6682,7 @@
         39.44045810437828
       ],
       "aliases": [],
-      "source_record_index": 387,
+      "source_record_index": 386,
       "source_record_id": "hudson-seamount:-72.0640:39.4405"
     },
     {
@@ -6715,7 +6699,7 @@
         40.287828227651545
       ],
       "aliases": [],
-      "source_record_index": 388,
+      "source_record_index": 387,
       "source_record_id": "irma-c:-73.3482:40.2878"
     },
     {
@@ -6732,7 +6716,7 @@
         39.16962796279717
       ],
       "aliases": [],
-      "source_record_index": 389,
+      "source_record_index": 388,
       "source_record_id": "isabel-wiley:-73.1224:39.1696"
     },
     {
@@ -6751,7 +6735,7 @@
       "aliases": [
         "Jackspot Reef"
       ],
-      "source_record_index": 390,
+      "source_record_index": 389,
       "source_record_id": "jack-spot:-74.7883:38.0800"
     },
     {
@@ -6768,7 +6752,7 @@
         39.75000813243914
       ],
       "aliases": [],
-      "source_record_index": 391,
+      "source_record_index": 390,
       "source_record_id": "joes-spot:-73.1667:39.7500"
     },
     {
@@ -6787,7 +6771,7 @@
       "aliases": [
         "Jones Valley"
       ],
-      "source_record_index": 392,
+      "source_record_index": 391,
       "source_record_id": "jones-canyon:-72.0603:39.5166"
     },
     {
@@ -6804,7 +6788,7 @@
         40.436238152203295
       ],
       "aliases": [],
-      "source_record_index": 393,
+      "source_record_index": 392,
       "source_record_id": "kenosha:-73.1628:40.4362"
     },
     {
@@ -6821,7 +6805,7 @@
         40.02973814835853
       ],
       "aliases": [],
-      "source_record_index": 394,
+      "source_record_index": 393,
       "source_record_id": "kranston:-72.8766:40.0297"
     },
     {
@@ -6838,7 +6822,7 @@
         39.72265810544945
       ],
       "aliases": [],
-      "source_record_index": 395,
+      "source_record_index": 394,
       "source_record_id": "larsons:-73.0097:39.7227"
     },
     {
@@ -6855,7 +6839,7 @@
         39.51000802961179
       ],
       "aliases": [],
-      "source_record_index": 396,
+      "source_record_index": 395,
       "source_record_id": "letters-north:-72.4267:39.5100"
     },
     {
@@ -6872,7 +6856,7 @@
         39.46438805362529
       ],
       "aliases": [],
-      "source_record_index": 397,
+      "source_record_index": 396,
       "source_record_id": "letters-south:-72.3704:39.4644"
     },
     {
@@ -6889,7 +6873,7 @@
         39.80928814792234
       ],
       "aliases": [],
-      "source_record_index": 398,
+      "source_record_index": 397,
       "source_record_id": "lexington:-72.8213:39.8093"
     },
     {
@@ -6906,7 +6890,7 @@
         40.435838239954315
       ],
       "aliases": [],
-      "source_record_index": 399,
+      "source_record_index": 398,
       "source_record_id": "light-ship-wreck:-73.1821:40.4358"
     },
     {
@@ -6923,7 +6907,7 @@
         40.376208216666555
       ],
       "aliases": [],
-      "source_record_index": 400,
+      "source_record_index": 399,
       "source_record_id": "linda:-73.0050:40.3762"
     },
     {
@@ -6940,7 +6924,7 @@
         38.827505752577686
       ],
       "aliases": [],
-      "source_record_index": 401,
+      "source_record_index": 400,
       "source_record_id": "lindel-cone-canyon:-73.0066:38.8275"
     },
     {
@@ -6957,7 +6941,7 @@
         38.808337883055536
       ],
       "aliases": [],
-      "source_record_index": 402,
+      "source_record_index": 401,
       "source_record_id": "lindenkohl:-73.0417:38.8083"
     },
     {
@@ -6974,7 +6958,7 @@
         38.72402823852475
       ],
       "aliases": [],
-      "source_record_index": 403,
+      "source_record_index": 402,
       "source_record_id": "lindenkohl-canyon:-72.8955:38.7240"
     },
     {
@@ -6991,7 +6975,7 @@
         39.16706882427317
       ],
       "aliases": [],
-      "source_record_index": 404,
+      "source_record_index": 403,
       "source_record_id": "corson-inlet-2nm-south-lump:-74.6395:39.1671"
     },
     {
@@ -7008,7 +6992,7 @@
         39.1718221003764
       ],
       "aliases": [],
-      "source_record_index": 405,
+      "source_record_index": 404,
       "source_record_id": "corson-inlet-2nm-southeast-lump:-74.6336:39.1718"
     },
     {
@@ -7025,7 +7009,7 @@
         40.00727821274633
       ],
       "aliases": [],
-      "source_record_index": 406,
+      "source_record_index": 405,
       "source_record_id": "mako-hotel:-73.1165:40.0073"
     },
     {
@@ -7044,7 +7028,7 @@
       "aliases": [
         "McCrie Shoal"
       ],
-      "source_record_index": 407,
+      "source_record_index": 406,
       "source_record_id": "mc-crie-shoal:-74.8617:38.8518"
     },
     {
@@ -7061,7 +7045,7 @@
         39.20980802818184
       ],
       "aliases": [],
-      "source_record_index": 408,
+      "source_record_index": 407,
       "source_record_id": "mey-canyon:-72.4313:39.2098"
     },
     {
@@ -7080,7 +7064,7 @@
       "aliases": [
         "Middle Mud or Middle Hole"
       ],
-      "source_record_index": 409,
+      "source_record_index": 408,
       "source_record_id": "middle-hole:-74.6895:38.6538"
     },
     {
@@ -7097,7 +7081,7 @@
         40.73500827229126
       ],
       "aliases": [],
-      "source_record_index": 410,
+      "source_record_index": 409,
       "source_record_id": "moriches-inlet-buoy:-72.7533:40.7350"
     },
     {
@@ -7116,7 +7100,7 @@
       "aliases": [
         "Mussel Bed"
       ],
-      "source_record_index": 411,
+      "source_record_index": 410,
       "source_record_id": "mussel-beds:-74.7558:38.6992"
     },
     {
@@ -7133,7 +7117,7 @@
         40.42833824158354
       ],
       "aliases": [],
-      "source_record_index": 412,
+      "source_record_index": 411,
       "source_record_id": "na-buoy:-73.1900:40.4283"
     },
     {
@@ -7150,7 +7134,7 @@
         39.880008183701
       ],
       "aliases": [],
-      "source_record_index": 413,
+      "source_record_index": 412,
       "source_record_id": "manasquan-east-offshore-block-47nm:-73.0583:39.8800"
     },
     {
@@ -7167,7 +7151,7 @@
         39.383337995744334
       ],
       "aliases": [],
-      "source_record_index": 414,
+      "source_record_index": 413,
       "source_record_id": "mid-shelf-offshore-block-west:-73.2500:39.3833"
     },
     {
@@ -7184,7 +7168,7 @@
         38.783337970444336
       ],
       "aliases": [],
-      "source_record_index": 415,
+      "source_record_index": 414,
       "source_record_id": "hudson-canyon-south-block:-72.7333:38.7833"
     },
     {
@@ -7201,7 +7185,7 @@
         39.355008047607164
       ],
       "aliases": [],
-      "source_record_index": 416,
+      "source_record_index": 415,
       "source_record_id": "mid-shelf-offshore-block-west-2:-73.3500:39.3550"
     },
     {
@@ -7218,7 +7202,7 @@
         39.71667811768948
       ],
       "aliases": [],
-      "source_record_index": 417,
+      "source_record_index": 416,
       "source_record_id": "northern-offshore-shelf-block:-72.8850:39.7167"
     },
     {
@@ -7235,7 +7219,7 @@
         39.0983380213634
       ],
       "aliases": [],
-      "source_record_index": 418,
+      "source_record_index": 417,
       "source_record_id": "mid-shelf-offshore-block-far-east:-72.1483:39.0983"
     },
     {
@@ -7252,7 +7236,7 @@
         39.04500797631202
       ],
       "aliases": [],
-      "source_record_index": 419,
+      "source_record_index": 418,
       "source_record_id": "mid-shelf-offshore-block-east:-72.4033:39.0450"
     },
     {
@@ -7269,7 +7253,7 @@
         38.991677913111495
       ],
       "aliases": [],
-      "source_record_index": 420,
+      "source_record_index": 419,
       "source_record_id": "hudson-canyon-south-block-2:-72.7083:38.9917"
     },
     {
@@ -7286,7 +7270,7 @@
         38.93333794817537
       ],
       "aliases": [],
-      "source_record_index": 421,
+      "source_record_index": 420,
       "source_record_id": "hudson-canyon-south-block-3:-72.5633:38.9333"
     },
     {
@@ -7303,7 +7287,7 @@
         38.99167800645535
       ],
       "aliases": [],
-      "source_record_index": 422,
+      "source_record_index": 421,
       "source_record_id": "hudson-canyon-southeast-block:-72.4150:38.9917"
     },
     {
@@ -7320,7 +7304,7 @@
         38.900007929654514
       ],
       "aliases": [],
-      "source_record_index": 423,
+      "source_record_index": 422,
       "source_record_id": "hudson-canyon-south-block-4:-72.5833:38.9000"
     },
     {
@@ -7337,7 +7321,7 @@
         38.86667795723284
       ],
       "aliases": [],
-      "source_record_index": 424,
+      "source_record_index": 423,
       "source_record_id": "hudson-canyon-south-block-5:-72.6000:38.8667"
     },
     {
@@ -7354,7 +7338,7 @@
         40.59058827587327
       ],
       "aliases": [],
-      "source_record_index": 425,
+      "source_record_index": 424,
       "source_record_id": "ocean-prince:-73.1970:40.5906"
     },
     {
@@ -7371,7 +7355,7 @@
         39.582938057044075
       ],
       "aliases": [],
-      "source_record_index": 426,
+      "source_record_index": 425,
       "source_record_id": "odas-44066:-72.6006:39.5829"
     },
     {
@@ -7390,7 +7374,7 @@
       "aliases": [
         "Old Ground"
       ],
-      "source_record_index": 427,
+      "source_record_index": 426,
       "source_record_id": "old-grounds:-74.8164:38.5698"
     },
     {
@@ -7407,7 +7391,7 @@
         40.53233826746843
       ],
       "aliases": [],
-      "source_record_index": 428,
+      "source_record_index": 427,
       "source_record_id": "oregon:-72.8591:40.5323"
     },
     {
@@ -7424,7 +7408,7 @@
         39.042384196582
       ],
       "aliases": [],
-      "source_record_index": 429,
+      "source_record_index": 428,
       "source_record_id": "peacock-shaols:-74.6876:39.0424"
     },
     {
@@ -7441,7 +7425,7 @@
         39.09500792706135
       ],
       "aliases": [],
-      "source_record_index": 430,
+      "source_record_index": 429,
       "source_record_id": "rabbit-ears:-72.6200:39.0950"
     },
     {
@@ -7458,7 +7442,7 @@
         38.59550748276589
       ],
       "aliases": [],
-      "source_record_index": 431,
+      "source_record_index": 430,
       "source_record_id": "cape-may-site-10-reef-east-slough-60ft:-74.9262:38.5955"
     },
     {
@@ -7475,7 +7459,7 @@
         38.59680727332736
       ],
       "aliases": [],
-      "source_record_index": 432,
+      "source_record_index": 431,
       "source_record_id": "cape-may-site-10-reef-slough-60ft:-74.9489:38.5968"
     },
     {
@@ -7492,7 +7476,7 @@
         38.69962999146835
       ],
       "aliases": [],
-      "source_record_index": 433,
+      "source_record_index": 432,
       "source_record_id": "cape-may-site-11-northeast-slough:-74.6712:38.6996"
     },
     {
@@ -7509,7 +7493,7 @@
         38.72261401156337
       ],
       "aliases": [],
-      "source_record_index": 434,
+      "source_record_index": 433,
       "source_record_id": "cape-may-site-11-outer-slough:-74.6289:38.7226"
     },
     {
@@ -7526,7 +7510,7 @@
         38.76047105511302
       ],
       "aliases": [],
-      "source_record_index": 435,
+      "source_record_index": 434,
       "source_record_id": "cape-may-southwest-reef-slough-60ft:-74.7883:38.7605"
     },
     {
@@ -7543,7 +7527,7 @@
         38.87014502082244
       ],
       "aliases": [],
-      "source_record_index": 436,
+      "source_record_index": 435,
       "source_record_id": "cape-may-reef-inshore-slough-60ft:-74.7165:38.8701"
     },
     {
@@ -7560,7 +7544,7 @@
         38.95577184107787
       ],
       "aliases": [],
-      "source_record_index": 437,
+      "source_record_index": 436,
       "source_record_id": "hereford-inlet-offshore-reef-north:-74.6422:38.9558"
     },
     {
@@ -7577,7 +7561,7 @@
         38.95687734172159
       ],
       "aliases": [],
-      "source_record_index": 438,
+      "source_record_index": 437,
       "source_record_id": "hereford-inlet-offshore-reef-east:-74.6290:38.9569"
     },
     {
@@ -7594,7 +7578,7 @@
         38.88555771881903
       ],
       "aliases": [],
-      "source_record_index": 439,
+      "source_record_index": 438,
       "source_record_id": "cape-may-reef-inshore-slough-south-60ft:-74.7051:38.8856"
     },
     {
@@ -7611,7 +7595,7 @@
         38.89238740492132
       ],
       "aliases": [],
-      "source_record_index": 440,
+      "source_record_index": 439,
       "source_record_id": "cape-may-reef-inshore-slough-north-60ft:-74.7034:38.8924"
     },
     {
@@ -7628,7 +7612,7 @@
         40.46383823257074
       ],
       "aliases": [],
-      "source_record_index": 441,
+      "source_record_index": 440,
       "source_record_id": "reggie:-73.1654:40.4638"
     },
     {
@@ -7645,7 +7629,7 @@
         39.2530780320512
       ],
       "aliases": [],
-      "source_record_index": 442,
+      "source_record_index": 441,
       "source_record_id": "rio-tercero:-72.4797:39.2531"
     },
     {
@@ -7662,7 +7646,7 @@
         40.193978220285935
       ],
       "aliases": [],
-      "source_record_index": 443,
+      "source_record_index": 442,
       "source_record_id": "rock-pile:-73.0047:40.1940"
     },
     {
@@ -7679,7 +7663,7 @@
         40.09543817380501
       ],
       "aliases": [],
-      "source_record_index": 444,
+      "source_record_index": 443,
       "source_record_id": "rock-piles:-72.9143:40.0954"
     },
     {
@@ -7696,7 +7680,7 @@
         38.87266252674125
       ],
       "aliases": [],
-      "source_record_index": 445,
+      "source_record_index": 444,
       "source_record_id": "rock-slough:-74.8247:38.8727"
     },
     {
@@ -7713,7 +7697,7 @@
         40.54013825513575
       ],
       "aliases": [],
-      "source_record_index": 446,
+      "source_record_index": 445,
       "source_record_id": "san-diego:-73.0420:40.5401"
     },
     {
@@ -7732,7 +7716,7 @@
       "aliases": [
         "Sea Isle Shoal"
       ],
-      "source_record_index": 447,
+      "source_record_index": 446,
       "source_record_id": "sea-isle-lump:-74.6214:39.1189"
     },
     {
@@ -7749,7 +7733,7 @@
         39.125570566652854
       ],
       "aliases": [],
-      "source_record_index": 448,
+      "source_record_index": 447,
       "source_record_id": "seven-mile-beach:-74.7016:39.1256"
     },
     {
@@ -7766,7 +7750,7 @@
         40.81667837517669
       ],
       "aliases": [],
-      "source_record_index": 449,
+      "source_record_index": 448,
       "source_record_id": "shinnecock-inlet-buoy:-72.4767:40.8167"
     },
     {
@@ -7783,7 +7767,7 @@
         38.61097099884072
       ],
       "aliases": [],
-      "source_record_index": 450,
+      "source_record_index": 449,
       "source_record_id": "site-10:-74.9375:38.6110"
     },
     {
@@ -7800,7 +7784,7 @@
         38.672971730700255
       ],
       "aliases": [],
-      "source_record_index": 451,
+      "source_record_index": 450,
       "source_record_id": "site-11:-74.7294:38.6730"
     },
     {
@@ -7817,7 +7801,7 @@
         38.67387945292914
       ],
       "aliases": [],
-      "source_record_index": 452,
+      "source_record_index": 451,
       "source_record_id": "site-9:-74.9970:38.6739"
     },
     {
@@ -7834,7 +7818,7 @@
         38.47101565445197
       ],
       "aliases": [],
-      "source_record_index": 453,
+      "source_record_index": 452,
       "source_record_id": "cape-may-nearshore-east-slough:-74.9645:38.4710"
     },
     {
@@ -7851,7 +7835,7 @@
         38.46363429947692
       ],
       "aliases": [],
-      "source_record_index": 454,
+      "source_record_index": 453,
       "source_record_id": "cape-may-northeast-slough-south:-74.7862:38.4636"
     },
     {
@@ -7868,7 +7852,7 @@
         38.47492596799327
       ],
       "aliases": [],
-      "source_record_index": 455,
+      "source_record_index": 454,
       "source_record_id": "cape-may-northeast-slough-central:-74.7886:38.4749"
     },
     {
@@ -7885,7 +7869,7 @@
         38.483777359792285
       ],
       "aliases": [],
-      "source_record_index": 456,
+      "source_record_index": 455,
       "source_record_id": "cape-may-northeast-slough-north:-74.7883:38.4838"
     },
     {
@@ -7902,7 +7886,7 @@
         38.49668264408149
       ],
       "aliases": [],
-      "source_record_index": 457,
+      "source_record_index": 456,
       "source_record_id": "cape-may-northeast-slough-outer:-74.7938:38.4967"
     },
     {
@@ -7919,7 +7903,7 @@
         38.74746948660277
       ],
       "aliases": [],
-      "source_record_index": 458,
+      "source_record_index": 457,
       "source_record_id": "cape-may-southeast-slough-60ft:-74.9262:38.7475"
     },
     {
@@ -7936,7 +7920,7 @@
         38.72189472403303
       ],
       "aliases": [],
-      "source_record_index": 459,
+      "source_record_index": 458,
       "source_record_id": "cape-may-outer-slough-60ft:-74.8466:38.7219"
     },
     {
@@ -7953,7 +7937,7 @@
         38.73486262806821
       ],
       "aliases": [],
-      "source_record_index": 460,
+      "source_record_index": 459,
       "source_record_id": "cape-may-deep-slough-north-60ft:-74.7912:38.7349"
     },
     {
@@ -7970,7 +7954,7 @@
         38.71225299044049
       ],
       "aliases": [],
-      "source_record_index": 461,
+      "source_record_index": 460,
       "source_record_id": "cape-may-deep-slough-south-60ft:-74.7853:38.7123"
     },
     {
@@ -7987,7 +7971,7 @@
         38.72923754239526
       ],
       "aliases": [],
-      "source_record_index": 462,
+      "source_record_index": 461,
       "source_record_id": "cape-may-deep-slough-central-60ft:-74.7693:38.7292"
     },
     {
@@ -8004,7 +7988,7 @@
         39.14399184137902
       ],
       "aliases": [],
-      "source_record_index": 463,
+      "source_record_index": 462,
       "source_record_id": "townsends-inlet-northeast-slough-30ft:-74.6710:39.1440"
     },
     {
@@ -8021,7 +8005,7 @@
         38.61357800557995
       ],
       "aliases": [],
-      "source_record_index": 464,
+      "source_record_index": 463,
       "source_record_id": "south-east-grounds:-74.7340:38.6136"
     },
     {
@@ -8038,7 +8022,7 @@
         38.838935781763816
       ],
       "aliases": [],
-      "source_record_index": 465,
+      "source_record_index": 464,
       "source_record_id": "south-shoal:-74.6393:38.8389"
     },
     {
@@ -8055,7 +8039,7 @@
         38.57794404027054
       ],
       "aliases": [],
-      "source_record_index": 466,
+      "source_record_index": 465,
       "source_record_id": "spencer-canyon:-73.1272:38.5779"
     },
     {
@@ -8072,7 +8056,7 @@
         39.05560945708215
       ],
       "aliases": [],
-      "source_record_index": 467,
+      "source_record_index": 466,
       "source_record_id": "stone-harbour:-74.7402:39.0556"
     },
     {
@@ -8089,7 +8073,7 @@
         38.95618983381143
       ],
       "aliases": [],
-      "source_record_index": 468,
+      "source_record_index": 467,
       "source_record_id": "taylor-slough:-74.7997:38.9562"
     },
     {
@@ -8106,7 +8090,7 @@
         39.79856405952371
       ],
       "aliases": [],
-      "source_record_index": 469,
+      "source_record_index": 468,
       "source_record_id": "texas-tower:-72.6906:39.7986"
     },
     {
@@ -8123,7 +8107,7 @@
         38.829857884966515
       ],
       "aliases": [],
-      "source_record_index": 470,
+      "source_record_index": 469,
       "source_record_id": "texel:-73.2042:38.8299"
     },
     {
@@ -8140,7 +8124,7 @@
         38.58284584677888
       ],
       "aliases": [],
-      "source_record_index": 471,
+      "source_record_index": 470,
       "source_record_id": "the-curequi:-74.7458:38.5828"
     },
     {
@@ -8157,7 +8141,7 @@
         39.777013451114414
       ],
       "aliases": [],
-      "source_record_index": 472,
+      "source_record_index": 471,
       "source_record_id": "the-bomb:-73.1943:39.7770"
     },
     {
@@ -8174,7 +8158,7 @@
         39.61877248185004
       ],
       "aliases": [],
-      "source_record_index": 473,
+      "source_record_index": 472,
       "source_record_id": "the-bombs:-72.4273:39.6188"
     },
     {
@@ -8191,7 +8175,7 @@
         39.45072802999343
       ],
       "aliases": [],
-      "source_record_index": 474,
+      "source_record_index": 473,
       "source_record_id": "the-deep:-72.2055:39.4507"
     },
     {
@@ -8208,7 +8192,7 @@
         39.39276226843702
       ],
       "aliases": [],
-      "source_record_index": 475,
+      "source_record_index": 474,
       "source_record_id": "the-flats:-72.5554:39.3928"
     },
     {
@@ -8225,7 +8209,7 @@
         38.80000789970535
       ],
       "aliases": [],
-      "source_record_index": 476,
+      "source_record_index": 475,
       "source_record_id": "the-funnel:-73.0300:38.8000"
     },
     {
@@ -8242,7 +8226,7 @@
         39.154338065285984
       ],
       "aliases": [],
-      "source_record_index": 477,
+      "source_record_index": 476,
       "source_record_id": "the-hook:-72.7011:39.1543"
     },
     {
@@ -8259,7 +8243,7 @@
         39.49197809813045
       ],
       "aliases": [],
-      "source_record_index": 478,
+      "source_record_index": 477,
       "source_record_id": "the-mouth:-72.2824:39.4920"
     },
     {
@@ -8276,7 +8260,7 @@
         35.87763287878185
       ],
       "aliases": [],
-      "source_record_index": 479,
+      "source_record_index": 478,
       "source_record_id": "the-point:-74.5704:35.8776"
     },
     {
@@ -8293,7 +8277,7 @@
         39.601219457047144
       ],
       "aliases": [],
-      "source_record_index": 480,
+      "source_record_index": 479,
       "source_record_id": "the-rips:-72.6417:39.6012"
     },
     {
@@ -8310,7 +8294,7 @@
         39.482538029614545
       ],
       "aliases": [],
-      "source_record_index": 481,
+      "source_record_index": 480,
       "source_record_id": "the-tongue:-72.2599:39.4825"
     },
     {
@@ -8327,7 +8311,7 @@
         39.66380626460144
       ],
       "aliases": [],
-      "source_record_index": 482,
+      "source_record_index": 481,
       "source_record_id": "tip:-72.4614:39.6638"
     },
     {
@@ -8344,7 +8328,7 @@
         39.15833799442228
       ],
       "aliases": [],
-      "source_record_index": 483,
+      "source_record_index": 482,
       "source_record_id": "toms:-72.6950:39.1583"
     },
     {
@@ -8361,7 +8345,7 @@
         39.051079347179645
       ],
       "aliases": [],
-      "source_record_index": 484,
+      "source_record_index": 483,
       "source_record_id": "toms-canyon:-72.5751:39.0511"
     },
     {
@@ -8378,7 +8362,7 @@
         39.107925013160184
       ],
       "aliases": [],
-      "source_record_index": 485,
+      "source_record_index": 484,
       "source_record_id": "townsends-inlet-reef:-74.6125:39.1079"
     },
     {
@@ -8395,7 +8379,7 @@
         39.81292437847496
       ],
       "aliases": [],
-      "source_record_index": 486,
+      "source_record_index": 485,
       "source_record_id": "triple-wrecks-north:-72.7845:39.8129"
     },
     {
@@ -8412,7 +8396,7 @@
         39.53283347255649
       ],
       "aliases": [],
-      "source_record_index": 487,
+      "source_record_index": 486,
       "source_record_id": "triple-wrecks-south:-73.0610:39.5328"
     },
     {
@@ -8429,7 +8413,7 @@
         39.66500802070908
       ],
       "aliases": [],
-      "source_record_index": 488,
+      "source_record_index": 487,
       "source_record_id": "uss-murphy:-72.5747:39.6650"
     },
     {
@@ -8446,7 +8430,7 @@
         40.36903817363054
       ],
       "aliases": [],
-      "source_record_index": 489,
+      "source_record_index": 488,
       "source_record_id": "uss-tarantula:-73.2209:40.3690"
     },
     {
@@ -8463,7 +8447,7 @@
         40.1258382103581
       ],
       "aliases": [],
-      "source_record_index": 490,
+      "source_record_index": 489,
       "source_record_id": "virginia-wreck:-72.8760:40.1258"
     },
     {
@@ -8480,7 +8464,7 @@
         39.55655093614652
       ],
       "aliases": [],
-      "source_record_index": 491,
+      "source_record_index": 490,
       "source_record_id": "west-wall:-72.4336:39.5566"
     },
     {
@@ -8497,7 +8481,7 @@
         39.83012810798576
       ],
       "aliases": [],
-      "source_record_index": 492,
+      "source_record_index": 491,
       "source_record_id": "west-wreck:-72.8773:39.8301"
     },
     {
@@ -8514,7 +8498,7 @@
         39.020431038598986
       ],
       "aliases": [],
-      "source_record_index": 493,
+      "source_record_index": 492,
       "source_record_id": "white-p-boat:-74.6553:39.0204"
     },
     {
@@ -8531,7 +8515,7 @@
         38.96156233253556
       ],
       "aliases": [],
-      "source_record_index": 494,
+      "source_record_index": 493,
       "source_record_id": "wildwood-reef:-74.6858:38.9616"
     },
     {
@@ -8548,7 +8532,7 @@
         39.43618804424863
       ],
       "aliases": [],
-      "source_record_index": 495,
+      "source_record_index": 494,
       "source_record_id": "winneconne:-72.8385:39.4362"
     },
     {
@@ -8565,7 +8549,7 @@
         40.063338161117876
       ],
       "aliases": [],
-      "source_record_index": 496,
+      "source_record_index": 495,
       "source_record_id": "witchs-chin:-73.1033:40.0633"
     },
     {
@@ -8582,7 +8566,7 @@
         40.15333814620076
       ],
       "aliases": [],
-      "source_record_index": 497,
+      "source_record_index": 496,
       "source_record_id": "witchs-nose:-73.0883:40.1533"
     },
     {
@@ -8599,7 +8583,7 @@
         40.584908217193075
       ],
       "aliases": [],
-      "source_record_index": 498,
+      "source_record_index": 497,
       "source_record_id": "wolcott:-72.9813:40.5849"
     },
     {
@@ -8616,7 +8600,7 @@
         39.05401313777804
       ],
       "aliases": [],
-      "source_record_index": 499,
+      "source_record_index": 498,
       "source_record_id": "townsends-inlet-mussel-wreck-5nm-northeast:-74.6895:39.0540"
     },
     {
@@ -8633,7 +8617,7 @@
         40.480264240591374
       ],
       "aliases": [],
-      "source_record_index": 500,
+      "source_record_index": 499,
       "source_record_id": "yankees-spot:-72.8559:40.4803"
     },
     {
@@ -8652,7 +8636,7 @@
       "aliases": [
         "The Lumps or Tea Kettle Shoal"
       ],
-      "source_record_index": 501,
+      "source_record_index": 500,
       "source_record_id": "tea-kettle-shoals:-76.3153:39.2196"
     },
     {
@@ -8669,7 +8653,7 @@
         39.36367781379446
       ],
       "aliases": [],
-      "source_record_index": 502,
+      "source_record_index": 501,
       "source_record_id": "shad-battery-shoal:-76.1544:39.3637"
     },
     {
@@ -8688,7 +8672,7 @@
       "aliases": [
         "Susquehanna Flat"
       ],
-      "source_record_index": 503,
+      "source_record_index": 502,
       "source_record_id": "susquehanna-flats:-76.0393:39.5067"
     },
     {
@@ -8705,7 +8689,7 @@
         39.17271528540955
       ],
       "aliases": [],
-      "source_record_index": 504,
+      "source_record_index": 503,
       "source_record_id": "hodges-bar:-76.2837:39.1727"
     },
     {
@@ -8724,7 +8708,7 @@
       "aliases": [
         "7 Foot Knoll"
       ],
-      "source_record_index": 505,
+      "source_record_index": 504,
       "source_record_id": "seven-foot-knoll:-76.4077:39.1571"
     },
     {
@@ -8743,7 +8727,7 @@
       "aliases": [
         "6 Foot Knoll"
       ],
-      "source_record_index": 506,
+      "source_record_index": 505,
       "source_record_id": "six-foot-knoll:-76.3736:39.1432"
     },
     {
@@ -8762,7 +8746,7 @@
       "aliases": [
         "9 Foot Knoll"
       ],
-      "source_record_index": 507,
+      "source_record_index": 506,
       "source_record_id": "nine-foot-knoll:-76.3533:39.1471"
     },
     {
@@ -8784,7 +8768,7 @@
         "Swan Point Ground",
         "Swan Point Bar"
       ],
-      "source_record_index": 508,
+      "source_record_index": 507,
       "source_record_id": "swan-pt-ground:-76.3234:39.1309"
     },
     {
@@ -8801,7 +8785,7 @@
         39.075032111947806
       ],
       "aliases": [],
-      "source_record_index": 509,
+      "source_record_index": 508,
       "source_record_id": "hickory-thicket:-76.2482:39.0750"
     },
     {
@@ -8818,7 +8802,7 @@
         39.07390816818464
       ],
       "aliases": [],
-      "source_record_index": 510,
+      "source_record_index": 509,
       "source_record_id": "light-house-lump:-76.2674:39.0739"
     },
     {
@@ -8838,7 +8822,7 @@
         "Love Point",
         "Love Point Ground"
       ],
-      "source_record_index": 511,
+      "source_record_index": 510,
       "source_record_id": "love-pt-ground:-76.2940:39.0536"
     },
     {
@@ -8855,7 +8839,7 @@
         39.09592263994302
       ],
       "aliases": [],
-      "source_record_index": 512,
+      "source_record_index": 511,
       "source_record_id": "belvidere-shoal:-76.3737:39.0959"
     },
     {
@@ -8872,7 +8856,7 @@
         39.087755100831785
       ],
       "aliases": [],
-      "source_record_index": 513,
+      "source_record_index": 512,
       "source_record_id": "snake-reef:-76.4127:39.0878"
     },
     {
@@ -8889,7 +8873,7 @@
         39.0206657437311
       ],
       "aliases": [],
-      "source_record_index": 514,
+      "source_record_index": 513,
       "source_record_id": "dumping-ground:-76.3474:39.0207"
     },
     {
@@ -8908,7 +8892,7 @@
       "aliases": [
         "Hackett Point/Dollys Lump"
       ],
-      "source_record_index": 515,
+      "source_record_index": 514,
       "source_record_id": "hacketts-bar:-76.4252:38.9743"
     },
     {
@@ -8927,7 +8911,7 @@
       "aliases": [
         "Tolly Point Ground"
       ],
-      "source_record_index": 516,
+      "source_record_index": 515,
       "source_record_id": "tolly-pt-ground:-76.4388:38.9391"
     },
     {
@@ -8946,7 +8930,7 @@
       "aliases": [
         "Thomas Point Shoal"
       ],
-      "source_record_index": 517,
+      "source_record_index": 516,
       "source_record_id": "thomas-pt-shoal:-76.4489:38.8999"
     },
     {
@@ -8963,7 +8947,7 @@
         38.939188060536644
       ],
       "aliases": [],
-      "source_record_index": 518,
+      "source_record_index": 517,
       "source_record_id": "brickhouse-bar:-76.3746:38.9392"
     },
     {
@@ -8980,7 +8964,7 @@
         38.8857679005583
       ],
       "aliases": [],
-      "source_record_index": 519,
+      "source_record_index": 518,
       "source_record_id": "gum-thickets:-76.3820:38.8858"
     },
     {
@@ -8999,7 +8983,7 @@
       "aliases": [
         "Long Point Ground"
       ],
-      "source_record_index": 520,
+      "source_record_index": 519,
       "source_record_id": "long-pt-ground:-76.3276:38.8544"
     },
     {
@@ -9016,7 +9000,7 @@
         38.84100260142164
       ],
       "aliases": [],
-      "source_record_index": 521,
+      "source_record_index": 520,
       "source_record_id": "kent-island-ground:-76.3540:38.8410"
     },
     {
@@ -9035,7 +9019,7 @@
       "aliases": [
         "Bloody Point Bar"
       ],
-      "source_record_index": 522,
+      "source_record_index": 521,
       "source_record_id": "bloody-pt-bar:-76.3870:38.8382"
     },
     {
@@ -9054,7 +9038,7 @@
       "aliases": [
         "Wade Point Ground"
       ],
-      "source_record_index": 523,
+      "source_record_index": 522,
       "source_record_id": "wade-pt-ground:-76.3349:38.8060"
     },
     {
@@ -9071,7 +9055,7 @@
         38.81024234285169
       ],
       "aliases": [],
-      "source_record_index": 524,
+      "source_record_index": 523,
       "source_record_id": "wild-ground:-76.3830:38.8102"
     },
     {
@@ -9088,7 +9072,7 @@
         38.787274116464964
       ],
       "aliases": [],
-      "source_record_index": 525,
+      "source_record_index": 524,
       "source_record_id": "the-hill:-76.4119:38.7873"
     },
     {
@@ -9105,7 +9089,7 @@
         38.60713386598748
       ],
       "aliases": [],
-      "source_record_index": 526,
+      "source_record_index": 525,
       "source_record_id": "clay-banks:-76.3958:38.6071"
     },
     {
@@ -9122,7 +9106,7 @@
         38.67360106629065
       ],
       "aliases": [],
-      "source_record_index": 527,
+      "source_record_index": 526,
       "source_record_id": "devils-hole:-76.4175:38.6736"
     },
     {
@@ -9139,7 +9123,7 @@
         38.65292107090724
       ],
       "aliases": [],
-      "source_record_index": 528,
+      "source_record_index": 527,
       "source_record_id": "stone-rock:-76.3837:38.6529"
     },
     {
@@ -9156,7 +9140,7 @@
         38.60840426912384
       ],
       "aliases": [],
-      "source_record_index": 529,
+      "source_record_index": 528,
       "source_record_id": "diamonds:-76.3333:38.6084"
     },
     {
@@ -9173,7 +9157,7 @@
         38.551812418085916
       ],
       "aliases": [],
-      "source_record_index": 530,
+      "source_record_index": 529,
       "source_record_id": "summer-gooses:-76.4044:38.5518"
     },
     {
@@ -9190,7 +9174,7 @@
         38.58267134769957
       ],
       "aliases": [],
-      "source_record_index": 531,
+      "source_record_index": 530,
       "source_record_id": "winter-gooses:-76.4572:38.5827"
     },
     {
@@ -9207,7 +9191,7 @@
         38.40007537512331
       ],
       "aliases": [],
-      "source_record_index": 532,
+      "source_record_index": 531,
       "source_record_id": "punch-island-ground:-76.3174:38.4001"
     },
     {
@@ -9226,7 +9210,7 @@
       "aliases": [
         "Chinese Mud Hole"
       ],
-      "source_record_index": 533,
+      "source_record_index": 532,
       "source_record_id": "chinese-mud:-76.3770:38.3444"
     },
     {
@@ -9243,7 +9227,7 @@
         38.21659284876721
       ],
       "aliases": [],
-      "source_record_index": 534,
+      "source_record_index": 533,
       "source_record_id": "the-targets:-76.3151:38.2166"
     },
     {
@@ -9260,7 +9244,7 @@
         38.2583811602184
       ],
       "aliases": [],
-      "source_record_index": 535,
+      "source_record_index": 534,
       "source_record_id": "hooper-island-light:-76.2448:38.2584"
     },
     {
@@ -9280,7 +9264,7 @@
         "Hooper Island Ground",
         "Hooper Island"
       ],
-      "source_record_index": 536,
+      "source_record_index": 535,
       "source_record_id": "hooper-island-bar:-76.1496:38.2636"
     },
     {
@@ -9297,7 +9281,7 @@
         38.22663328708601
       ],
       "aliases": [],
-      "source_record_index": 537,
+      "source_record_index": 536,
       "source_record_id": "clay-island-ground:-75.9837:38.2266"
     },
     {
@@ -9314,7 +9298,7 @@
         38.19983324769609
       ],
       "aliases": [],
-      "source_record_index": 538,
+      "source_record_index": 537,
       "source_record_id": "sharkfin-shoal:-75.9917:38.1998"
     },
     {
@@ -9331,7 +9315,7 @@
         38.16053984668462
       ],
       "aliases": [],
-      "source_record_index": 539,
+      "source_record_index": 538,
       "source_record_id": "old-orchard:-75.9882:38.1605"
     },
     {
@@ -9348,7 +9332,7 @@
         38.10643176466465
       ],
       "aliases": [],
-      "source_record_index": 540,
+      "source_record_index": 539,
       "source_record_id": "sheepshead-ground:-75.9870:38.1064"
     },
     {
@@ -9365,7 +9349,7 @@
         38.10588728028224
       ],
       "aliases": [],
-      "source_record_index": 541,
+      "source_record_index": 540,
       "source_record_id": "chain-shoal:-75.9577:38.1059"
     },
     {
@@ -9382,7 +9366,7 @@
         38.108172155242755
       ],
       "aliases": [],
-      "source_record_index": 542,
+      "source_record_index": 541,
       "source_record_id": "loon-hill:-75.8742:38.1082"
     },
     {
@@ -9399,7 +9383,7 @@
         38.05235341568751
       ],
       "aliases": [],
-      "source_record_index": 543,
+      "source_record_index": 542,
       "source_record_id": "piney-island-bar:-75.9290:38.0524"
     },
     {
@@ -9416,7 +9400,7 @@
         38.051277802560456
       ],
       "aliases": [],
-      "source_record_index": 544,
+      "source_record_index": 543,
       "source_record_id": "solomons-lump:-76.0133:38.0513"
     },
     {
@@ -9435,7 +9419,7 @@
       "aliases": [
         "Southwest Middle Ground"
       ],
-      "source_record_index": 545,
+      "source_record_index": 544,
       "source_record_id": "southwest-middle-grounds:-76.1609:37.9991"
     },
     {
@@ -9452,7 +9436,7 @@
         38.02641263461589
       ],
       "aliases": [],
-      "source_record_index": 546,
+      "source_record_index": 545,
       "source_record_id": "the-triangle:-76.2845:38.0264"
     },
     {
@@ -9469,7 +9453,7 @@
         38.05774120347657
       ],
       "aliases": [],
-      "source_record_index": 547,
+      "source_record_index": 546,
       "source_record_id": "cornfield-harbor:-76.3703:38.0577"
     },
     {
@@ -9488,7 +9472,7 @@
       "aliases": [
         "Northwest Middle Ground"
       ],
-      "source_record_index": 548,
+      "source_record_index": 547,
       "source_record_id": "northwest-middle-grounds:-76.2014:38.1026"
     },
     {
@@ -9507,7 +9491,7 @@
       "aliases": [
         "Jane's Island"
       ],
-      "source_record_index": 549,
+      "source_record_index": 548,
       "source_record_id": "james-island-ground:-75.9240:37.9566"
     },
     {
@@ -9524,7 +9508,7 @@
         37.96255881562498
       ],
       "aliases": [],
-      "source_record_index": 550,
+      "source_record_index": 549,
       "source_record_id": "shell-leads:-76.0820:37.9626"
     },
     {
@@ -9541,7 +9525,7 @@
         39.23737803176099
       ],
       "aliases": [],
-      "source_record_index": 551,
+      "source_record_index": 550,
       "source_record_id": "spartys-lump:-76.3639:39.2374"
     },
     {
@@ -9560,7 +9544,7 @@
       "aliases": [
         "Gales Lumps"
       ],
-      "source_record_index": 552,
+      "source_record_index": 551,
       "source_record_id": "gales-shoals:-76.2633:39.2061"
     },
     {
@@ -9577,7 +9561,7 @@
         38.98897452703362
       ],
       "aliases": [],
-      "source_record_index": 553,
+      "source_record_index": 552,
       "source_record_id": "black-beards-bluff:-76.1938:38.9890"
     },
     {
@@ -9594,7 +9578,7 @@
         38.76620434410749
       ],
       "aliases": [],
-      "source_record_index": 554,
+      "source_record_index": 553,
       "source_record_id": "poplar-is-narrows:-76.3516:38.7662"
     },
     {
@@ -9613,7 +9597,7 @@
       "aliases": [
         "Holland Point"
       ],
-      "source_record_index": 555,
+      "source_record_index": 554,
       "source_record_id": "holland-pt-bar:-76.5143:38.7392"
     },
     {
@@ -9630,7 +9614,7 @@
         38.64891535221991
       ],
       "aliases": [],
-      "source_record_index": 556,
+      "source_record_index": 555,
       "source_record_id": "randle-cliffs:-76.5112:38.6489"
     },
     {
@@ -9647,7 +9631,7 @@
         38.531247268608695
       ],
       "aliases": [],
-      "source_record_index": 557,
+      "source_record_index": 556,
       "source_record_id": "james-is-stone-piles:-76.3561:38.5312"
     },
     {
@@ -9666,7 +9650,7 @@
       "aliases": [
         "Cedar Point"
       ],
-      "source_record_index": 558,
+      "source_record_index": 557,
       "source_record_id": "cedar-pt-rips:-76.3610:38.2973"
     },
     {
@@ -9683,7 +9667,7 @@
         38.83983035584721
       ],
       "aliases": [],
-      "source_record_index": 559,
+      "source_record_index": 558,
       "source_record_id": "cedarhurst:-76.4620:38.8398"
     },
     {
@@ -9700,7 +9684,7 @@
         38.71565965441014
       ],
       "aliases": [],
-      "source_record_index": 560,
+      "source_record_index": 559,
       "source_record_id": "chesapeake-beach:-76.5029:38.7157"
     },
     {
@@ -9717,7 +9701,7 @@
         38.34213993740785
       ],
       "aliases": [],
-      "source_record_index": 561,
+      "source_record_index": 560,
       "source_record_id": "little-cove:-76.3799:38.3421"
     },
     {
@@ -9734,7 +9718,7 @@
         38.84162264315014
       ],
       "aliases": [],
-      "source_record_index": 562,
+      "source_record_index": 561,
       "source_record_id": "hollicuts-noose:-76.3427:38.8416"
     },
     {
@@ -9751,7 +9735,7 @@
         38.04995167862053
       ],
       "aliases": [],
-      "source_record_index": 563,
+      "source_record_index": 562,
       "source_record_id": "point-lookout:-76.3178:38.0500"
     },
     {
@@ -9768,7 +9752,7 @@
         38.114227587880045
       ],
       "aliases": [],
-      "source_record_index": 564,
+      "source_record_index": 563,
       "source_record_id": "point-no-point:-76.2973:38.1142"
     },
     {
@@ -9785,7 +9769,7 @@
         39.23973340052389
       ],
       "aliases": [],
-      "source_record_index": 565,
+      "source_record_index": 564,
       "source_record_id": "pooles-island:-76.2912:39.2397"
     },
     {
@@ -9802,7 +9786,7 @@
         38.99360945018422
       ],
       "aliases": [],
-      "source_record_index": 566,
+      "source_record_index": 565,
       "source_record_id": "severn-river:-76.4847:38.9936"
     },
     {
@@ -9819,7 +9803,7 @@
         37.92023769471222
       ],
       "aliases": [],
-      "source_record_index": 567,
+      "source_record_index": 566,
       "source_record_id": "tangier-sound:-75.9441:37.9202"
     },
     {
@@ -9836,7 +9820,7 @@
         38.46386073808426
       ],
       "aliases": [],
-      "source_record_index": 568,
+      "source_record_index": 567,
       "source_record_id": "taylors-island:-76.3571:38.4639"
     },
     {
@@ -9853,7 +9837,7 @@
         38.61672933952863
       ],
       "aliases": [],
-      "source_record_index": 569,
+      "source_record_index": 568,
       "source_record_id": "plum-point:-76.4910:38.6167"
     },
     {
@@ -9870,7 +9854,7 @@
         38.69230412124515
       ],
       "aliases": [],
-      "source_record_index": 570,
+      "source_record_index": 569,
       "source_record_id": "tilghman-island:-76.3775:38.6923"
     },
     {
@@ -9887,7 +9871,7 @@
         38.58047058819927
       ],
       "aliases": [],
-      "source_record_index": 571,
+      "source_record_index": 570,
       "source_record_id": "choptank-river-bridge:-76.0557:38.5805"
     },
     {
@@ -9906,7 +9890,7 @@
       "aliases": [
         "Gooses"
       ],
-      "source_record_index": 572,
+      "source_record_index": 571,
       "source_record_id": "gooses-reef:-76.4156:38.5634"
     },
     {
@@ -9923,7 +9907,7 @@
         39.20768130699189
       ],
       "aliases": [],
-      "source_record_index": 573,
+      "source_record_index": 572,
       "source_record_id": "memorial-stadium:-76.3073:39.2077"
     },
     {
@@ -9940,7 +9924,7 @@
         38.654759063898304
       ],
       "aliases": [],
-      "source_record_index": 574,
+      "source_record_index": 573,
       "source_record_id": "cooks-point:-76.2828:38.6548"
     },
     {
@@ -9957,7 +9941,7 @@
         39.032752390286994
       ],
       "aliases": [],
-      "source_record_index": 575,
+      "source_record_index": 574,
       "source_record_id": "asquith-reef:-76.5299:39.0328"
     },
     {
@@ -9976,7 +9960,7 @@
       "aliases": [
         "Sharps Island Ground"
       ],
-      "source_record_index": 576,
+      "source_record_index": 575,
       "source_record_id": "sharps-island:-76.4066:38.5655"
     },
     {
@@ -9993,7 +9977,7 @@
         39.239642200654956
       ],
       "aliases": [],
-      "source_record_index": 577,
+      "source_record_index": 576,
       "source_record_id": "tolchester:-76.2688:39.2396"
     },
     {
@@ -10010,7 +9994,7 @@
         38.28700560823638
       ],
       "aliases": [],
-      "source_record_index": 578,
+      "source_record_index": 577,
       "source_record_id": "old-bass-grounds-reef-box-2:-74.8849:38.2870"
     },
     {
@@ -10027,7 +10011,7 @@
         38.29680931204169
       ],
       "aliases": [],
-      "source_record_index": 579,
+      "source_record_index": 578,
       "source_record_id": "old-bass-grounds-reef-box-1:-74.8972:38.2968"
     },
     {
@@ -10044,7 +10028,7 @@
         38.29719023903337
       ],
       "aliases": [],
-      "source_record_index": 580,
+      "source_record_index": 579,
       "source_record_id": "new-bass-grounds-reef:-74.9167:38.2972"
     },
     {
@@ -10061,7 +10045,7 @@
         38.151608002386645
       ],
       "aliases": [],
-      "source_record_index": 581,
+      "source_record_index": 580,
       "source_record_id": "african-queen-reef:-74.9525:38.1516"
     },
     {
@@ -10078,7 +10062,7 @@
         38.208341523135445
       ],
       "aliases": [],
-      "source_record_index": 582,
+      "source_record_index": 581,
       "source_record_id": "great-eastern-reef:-74.7316:38.2083"
     },
     {
@@ -10097,7 +10081,7 @@
       "aliases": [
         "Great Gull Bank"
       ],
-      "source_record_index": 583,
+      "source_record_index": 582,
       "source_record_id": "great-gull-reef:-75.0299:38.2685"
     },
     {
@@ -10114,7 +10098,7 @@
         38.32350725915887
       ],
       "aliases": [],
-      "source_record_index": 584,
+      "source_record_index": 583,
       "source_record_id": "research-reef:-74.9396:38.3235"
     },
     {
@@ -10133,7 +10117,7 @@
       "aliases": [
         "Isle of Wight Shoal"
       ],
-      "source_record_index": 585,
+      "source_record_index": 584,
       "source_record_id": "isle-of-wight-reef:-74.9784:38.3818"
     },
     {
@@ -10150,7 +10134,7 @@
         38.34998091482832
       ],
       "aliases": [],
-      "source_record_index": 586,
+      "source_record_index": 585,
       "source_record_id": "purnells-reef:-75.0583:38.3500"
     },
     {
@@ -10167,7 +10151,7 @@
         38.276837217762996
       ],
       "aliases": [],
-      "source_record_index": 587,
+      "source_record_index": 586,
       "source_record_id": "kellys-reef:-75.0752:38.2768"
     },
     {
@@ -10184,7 +10168,7 @@
         38.51607376615062
       ],
       "aliases": [],
-      "source_record_index": 588,
+      "source_record_index": 587,
       "source_record_id": "del-jersey-land-inshore:-74.5122:38.5161"
     },
     {
@@ -10201,7 +10185,7 @@
         40.99411513385544
       ],
       "aliases": [],
-      "source_record_index": 589,
+      "source_record_index": 588,
       "source_record_id": "rocky-hill:-71.9291:40.9941"
     },
     {
@@ -10218,7 +10202,7 @@
         40.98376214633532
       ],
       "aliases": [],
-      "source_record_index": 590,
+      "source_record_index": 589,
       "source_record_id": "new-ground:-72.0105:40.9838"
     },
     {
@@ -10235,7 +10219,7 @@
         40.502911414378644
       ],
       "aliases": [],
-      "source_record_index": 591,
+      "source_record_index": 590,
       "source_record_id": "southeast-ground:-73.4874:40.5029"
     },
     {
@@ -10252,7 +10236,7 @@
         40.53616771546679
       ],
       "aliases": [],
-      "source_record_index": 592,
+      "source_record_index": 591,
       "source_record_id": "mcallister-ground:-73.6541:40.5362"
     },
     {
@@ -10269,7 +10253,7 @@
         40.99695269753271
       ],
       "aliases": [],
-      "source_record_index": 593,
+      "source_record_index": 592,
       "source_record_id": "roanoke-point-shoal:-72.7091:40.9970"
     },
     {
@@ -10286,7 +10270,7 @@
         40.98595293887887
       ],
       "aliases": [],
-      "source_record_index": 594,
+      "source_record_index": 593,
       "source_record_id": "herod-point-shoal:-72.8396:40.9860"
     },
     {
@@ -10303,7 +10287,7 @@
         40.98143549479634
       ],
       "aliases": [],
-      "source_record_index": 595,
+      "source_record_index": 594,
       "source_record_id": "mount-misery-shoal:-73.0816:40.9814"
     },
     {
@@ -10320,7 +10304,7 @@
         39.360940759134365
       ],
       "aliases": [],
-      "source_record_index": 596,
+      "source_record_index": 595,
       "source_record_id": "arnold-point-shoal:-75.4297:39.3609"
     },
     {
@@ -10337,7 +10321,7 @@
         39.31233033534741
       ],
       "aliases": [],
-      "source_record_index": 597,
+      "source_record_index": 596,
       "source_record_id": "ship-john-shoal:-75.3653:39.3123"
     },
     {
@@ -10354,7 +10338,7 @@
         39.17866665766192
       ],
       "aliases": [],
-      "source_record_index": 598,
+      "source_record_index": 597,
       "source_record_id": "cross-ledge:-75.2469:39.1787"
     },
     {
@@ -10371,7 +10355,7 @@
         39.143896740367374
       ],
       "aliases": [],
-      "source_record_index": 599,
+      "source_record_index": 598,
       "source_record_id": "joe-flogger-shoal:-75.2603:39.1439"
     },
     {
@@ -10388,7 +10372,7 @@
         39.25632739154827
       ],
       "aliases": [],
-      "source_record_index": 600,
+      "source_record_index": 599,
       "source_record_id": "ben-davis-or-bennies-shoal:-75.2929:39.2563"
     },
     {
@@ -10405,7 +10389,7 @@
         39.138181372238925
       ],
       "aliases": [],
-      "source_record_index": 601,
+      "source_record_index": 600,
       "source_record_id": "egg-island-flat:-75.1216:39.1382"
     },
     {
@@ -10422,7 +10406,7 @@
         39.04369048802551
       ],
       "aliases": [],
-      "source_record_index": 602,
+      "source_record_index": 601,
       "source_record_id": "hawknest:-75.2824:39.0437"
     },
     {
@@ -10439,7 +10423,7 @@
         39.01753378499018
       ],
       "aliases": [],
-      "source_record_index": 603,
+      "source_record_index": 602,
       "source_record_id": "the-lower-middle:-75.2083:39.0175"
     },
     {
@@ -10456,7 +10440,7 @@
         39.053308820868644
       ],
       "aliases": [],
-      "source_record_index": 604,
+      "source_record_index": 603,
       "source_record_id": "14-foot-bank:-75.1812:39.0533"
     },
     {
@@ -10473,7 +10457,7 @@
         38.614708156993224
       ],
       "aliases": [],
-      "source_record_index": 605,
+      "source_record_index": 604,
       "source_record_id": "outside-or-outer-hole:-74.6790:38.6147"
     },
     {
@@ -10490,7 +10474,7 @@
         37.83405363225113
       ],
       "aliases": [],
-      "source_record_index": 606,
+      "source_record_index": 605,
       "source_record_id": "turners-lump:-75.3605:37.8341"
     },
     {
@@ -10509,7 +10493,7 @@
       "aliases": [
         "Blackfish Slough"
       ],
-      "source_record_index": 607,
+      "source_record_index": 606,
       "source_record_id": "blackfish-bank:-75.2498:37.8598"
     },
     {
@@ -10526,7 +10510,7 @@
         37.53550508566166
       ],
       "aliases": [],
-      "source_record_index": 608,
+      "source_record_index": 607,
       "source_record_id": "paramore-bank:-75.5121:37.5355"
     },
     {
@@ -10543,7 +10527,7 @@
         37.52332516875363
       ],
       "aliases": [],
-      "source_record_index": 609,
+      "source_record_index": 608,
       "source_record_id": "3-mile-hill:-75.3655:37.5233"
     },
     {
@@ -10560,7 +10544,7 @@
         37.43835471906635
       ],
       "aliases": [],
-      "source_record_index": 610,
+      "source_record_index": 609,
       "source_record_id": "21-mile-hill:-75.1949:37.4384"
     },
     {
@@ -10577,7 +10561,7 @@
         37.25075314128294
       ],
       "aliases": [],
-      "source_record_index": 611,
+      "source_record_index": 610,
       "source_record_id": "26-mile-(big)-hill-or-lump:-75.1987:37.2508"
     },
     {
@@ -10594,7 +10578,7 @@
         37.13224127062309
       ],
       "aliases": [],
-      "source_record_index": 612,
+      "source_record_index": 611,
       "source_record_id": "latimer-shoal:-75.9968:37.1322"
     },
     {
@@ -10611,7 +10595,7 @@
         37.10217734671089
       ],
       "aliases": [],
-      "source_record_index": 613,
+      "source_record_index": 612,
       "source_record_id": "inner-middle-ground:-76.0202:37.1022"
     },
     {
@@ -10628,7 +10612,7 @@
         38.29669591509414
       ],
       "aliases": [],
-      "source_record_index": 614,
+      "source_record_index": 613,
       "source_record_id": "little-gull-bank:-75.0497:38.2967"
     },
     {
@@ -10645,7 +10629,7 @@
         38.1599901932321
       ],
       "aliases": [],
-      "source_record_index": 615,
+      "source_record_index": 614,
       "source_record_id": "southeast-lump:-74.8609:38.1600"
     },
     {
@@ -10662,7 +10646,7 @@
         38.04697969872384
       ],
       "aliases": [],
-      "source_record_index": 616,
+      "source_record_index": 615,
       "source_record_id": "johnny-spot:-74.7294:38.0470"
     },
     {
@@ -10679,7 +10663,7 @@
         38.070978931521545
       ],
       "aliases": [],
-      "source_record_index": 617,
+      "source_record_index": 616,
       "source_record_id": "sugar-lump:-75.0302:38.0710"
     },
     {
@@ -10696,7 +10680,7 @@
         37.976803009421175
       ],
       "aliases": [],
-      "source_record_index": 618,
+      "source_record_index": 617,
       "source_record_id": "winter-quarter-shoal:-75.1270:37.9768"
     },
     {
@@ -10713,7 +10697,7 @@
         37.86794592090725
       ],
       "aliases": [],
-      "source_record_index": 619,
+      "source_record_index": 618,
       "source_record_id": "chincoteague-shoal:-75.3267:37.8679"
     },
     {
@@ -10730,7 +10714,7 @@
         37.85437371453928
       ],
       "aliases": [],
-      "source_record_index": 620,
+      "source_record_index": 619,
       "source_record_id": "shoal-slough:-75.3249:37.8544"
     },
     {
@@ -10747,7 +10731,7 @@
         39.09371058079185
       ],
       "aliases": [],
-      "source_record_index": 621,
+      "source_record_index": 620,
       "source_record_id": "deadman-shoal:-75.0160:39.0937"
     },
     {
@@ -10764,7 +10748,7 @@
         39.07991751350561
       ],
       "aliases": [],
-      "source_record_index": 622,
+      "source_record_index": 621,
       "source_record_id": "fishing-creek-shoal:-74.9404:39.0799"
     },
     {
@@ -10781,7 +10765,7 @@
         39.06651007590205
       ],
       "aliases": [],
-      "source_record_index": 623,
+      "source_record_index": 622,
       "source_record_id": "egypt-bottom:-75.0811:39.0665"
     },
     {
@@ -10798,7 +10782,7 @@
         39.00099834050832
       ],
       "aliases": [],
-      "source_record_index": 624,
+      "source_record_index": 623,
       "source_record_id": "brandywine-shoal:-75.1205:39.0010"
     },
     {
@@ -10815,7 +10799,7 @@
         38.946561594373144
       ],
       "aliases": [],
-      "source_record_index": 625,
+      "source_record_index": 624,
       "source_record_id": "brown-shoal:-75.1256:38.9466"
     },
     {
@@ -10832,7 +10816,7 @@
         38.941298278582984
       ],
       "aliases": [],
-      "source_record_index": 626,
+      "source_record_index": 625,
       "source_record_id": "old-bare-shoal:-75.2309:38.9413"
     },
     {
@@ -10849,7 +10833,7 @@
         38.959782716643005
       ],
       "aliases": [],
-      "source_record_index": 627,
+      "source_record_index": 626,
       "source_record_id": "crow-shoal:-75.0053:38.9598"
     },
     {
@@ -10866,7 +10850,7 @@
         38.90958071594491
       ],
       "aliases": [],
-      "source_record_index": 628,
+      "source_record_index": 627,
       "source_record_id": "north-shoal:-74.9807:38.9096"
     },
     {
@@ -10883,7 +10867,7 @@
         38.89385180577222
       ],
       "aliases": [],
-      "source_record_index": 629,
+      "source_record_index": 628,
       "source_record_id": "middle-shoal:-74.9871:38.8939"
     },
     {
@@ -10900,7 +10884,7 @@
         38.910986047579065
       ],
       "aliases": [],
-      "source_record_index": 630,
+      "source_record_index": 629,
       "source_record_id": "round-shoal:-75.0152:38.9110"
     },
     {
@@ -10917,7 +10901,7 @@
         38.839772461686785
       ],
       "aliases": [],
-      "source_record_index": 631,
+      "source_record_index": 630,
       "source_record_id": "the-shears:-75.1359:38.8398"
     },
     {
@@ -10934,7 +10918,7 @@
         38.91869198921567
       ],
       "aliases": [],
-      "source_record_index": 632,
+      "source_record_index": 631,
       "source_record_id": "eph-shoal:-74.9350:38.9187"
     },
     {
@@ -10951,7 +10935,7 @@
         38.89563561762177
       ],
       "aliases": [],
-      "source_record_index": 633,
+      "source_record_index": 632,
       "source_record_id": "prissy-wicks-shoal:-74.9382:38.8956"
     },
     {
@@ -10968,7 +10952,7 @@
         38.869795282537055
       ],
       "aliases": [],
-      "source_record_index": 634,
+      "source_record_index": 633,
       "source_record_id": "somer-shoal:-74.9514:38.8698"
     },
     {
@@ -10985,7 +10969,7 @@
         38.86855562091024
       ],
       "aliases": [],
-      "source_record_index": 635,
+      "source_record_index": 634,
       "source_record_id": "overfalls-shoal:-74.9855:38.8686"
     },
     {
@@ -11002,7 +10986,7 @@
         38.74021612539477
       ],
       "aliases": [],
-      "source_record_index": 636,
+      "source_record_index": 635,
       "source_record_id": "hen-and-chicken-shoal:-75.0432:38.7402"
     },
     {
@@ -11019,7 +11003,7 @@
         38.608941174701016
       ],
       "aliases": [],
-      "source_record_index": 637,
+      "source_record_index": 636,
       "source_record_id": "ling-canyon:-74.8117:38.6089"
     },
     {
@@ -11036,7 +11020,7 @@
         37.8653167789559
       ],
       "aliases": [],
-      "source_record_index": 638,
+      "source_record_index": 637,
       "source_record_id": "ship-shoal:-75.2975:37.8653"
     },
     {
@@ -11053,7 +11037,7 @@
         38.92549397231078
       ],
       "aliases": [],
-      "source_record_index": 639,
+      "source_record_index": 638,
       "source_record_id": "buck-ridge:-74.7521:38.9255"
     },
     {
@@ -11070,7 +11054,7 @@
         36.60465232064461
       ],
       "aliases": [],
-      "source_record_index": 640,
+      "source_record_index": 639,
       "source_record_id": "false-cape:-75.8489:36.6047"
     },
     {
@@ -11087,7 +11071,7 @@
         39.42502841361149
       ],
       "aliases": [],
-      "source_record_index": 641,
+      "source_record_index": 640,
       "source_record_id": "turkey-point-ground:-76.0258:39.4250"
     },
     {
@@ -11104,7 +11088,7 @@
         39.34680979291872
       ],
       "aliases": [],
-      "source_record_index": 642,
+      "source_record_index": 641,
       "source_record_id": "abbey-point-ground:-76.2074:39.3468"
     },
     {
@@ -11121,7 +11105,7 @@
         39.33088806298027
       ],
       "aliases": [],
-      "source_record_index": 643,
+      "source_record_index": 642,
       "source_record_id": "plum-point-ground:-76.1810:39.3309"
     },
     {
@@ -11138,7 +11122,7 @@
         39.19524579885342
       ],
       "aliases": [],
-      "source_record_index": 644,
+      "source_record_index": 643,
       "source_record_id": "craig-hill-channel:-76.4116:39.1952"
     },
     {
@@ -11155,7 +11139,7 @@
         37.06188593679108
       ],
       "aliases": [],
-      "source_record_index": 645,
+      "source_record_index": 644,
       "source_record_id": "nautilus-shoal:-75.9319:37.0619"
     },
     {
@@ -11172,7 +11156,7 @@
         37.11048520555597
       ],
       "aliases": [],
-      "source_record_index": 646,
+      "source_record_index": 645,
       "source_record_id": "smith-island-shoal:-75.7286:37.1105"
     },
     {
@@ -11189,7 +11173,7 @@
         37.07915291817004
       ],
       "aliases": [],
-      "source_record_index": 647,
+      "source_record_index": 646,
       "source_record_id": "9-foot-shoal:-76.0260:37.0792"
     },
     {
@@ -11206,7 +11190,7 @@
         36.8569240234131
       ],
       "aliases": [],
-      "source_record_index": 648,
+      "source_record_index": 647,
       "source_record_id": "north-reef:-75.7397:36.8569"
     },
     {
@@ -11223,7 +11207,7 @@
         36.81903441785182
       ],
       "aliases": [],
-      "source_record_index": 649,
+      "source_record_index": 648,
       "source_record_id": "south-reef:-75.7779:36.8190"
     },
     {
@@ -11240,7 +11224,7 @@
         39.65132207123972
       ],
       "aliases": [],
-      "source_record_index": 650,
+      "source_record_index": 649,
       "source_record_id": "barnegat-south-end-ridge:-73.7814:39.6513"
     },
     {
@@ -11257,7 +11241,7 @@
         40.56246852902304
       ],
       "aliases": [],
-      "source_record_index": 651,
+      "source_record_index": 650,
       "source_record_id": "stone-pile:-73.6467:40.5625"
     },
     {
@@ -11274,7 +11258,7 @@
         40.549930841540515
       ],
       "aliases": [],
-      "source_record_index": 652,
+      "source_record_index": 651,
       "source_record_id": "mussel-ground:-73.6512:40.5499"
     },
     {
@@ -11291,7 +11275,7 @@
         40.51613743021199
       ],
       "aliases": [],
-      "source_record_index": 653,
+      "source_record_index": 652,
       "source_record_id": "old-orchard-shoal-ground:-74.1179:40.5161"
     },
     {
@@ -11308,7 +11292,7 @@
         40.49216695093791
       ],
       "aliases": [],
-      "source_record_index": 654,
+      "source_record_index": 653,
       "source_record_id": "flynns-knoll:-74.0287:40.4922"
     },
     {
@@ -11325,7 +11309,7 @@
         40.51675271282845
       ],
       "aliases": [],
-      "source_record_index": 655,
+      "source_record_index": 654,
       "source_record_id": "romer-shoal:-74.0103:40.5168"
     },
     {
@@ -11342,7 +11326,7 @@
         40.360495132048754
       ],
       "aliases": [],
-      "source_record_index": 656,
+      "source_record_index": 655,
       "source_record_id": "sea-bright-ground:-73.9535:40.3605"
     },
     {
@@ -11359,7 +11343,7 @@
         40.456252043494814
       ],
       "aliases": [],
-      "source_record_index": 657,
+      "source_record_index": 656,
       "source_record_id": "lightship-ridge:-73.7874:40.4563"
     },
     {
@@ -11376,7 +11360,7 @@
         40.41302723289609
       ],
       "aliases": [],
-      "source_record_index": 658,
+      "source_record_index": 657,
       "source_record_id": "subway-rock:-73.8113:40.4130"
     },
     {
@@ -11393,7 +11377,7 @@
         40.42382238844218
       ],
       "aliases": [],
-      "source_record_index": 659,
+      "source_record_index": 658,
       "source_record_id": "lump-or-sea-gull-bank:-73.8603:40.4238"
     },
     {
@@ -11410,7 +11394,7 @@
         40.43463931679104
       ],
       "aliases": [],
-      "source_record_index": 660,
+      "source_record_index": 659,
       "source_record_id": "outer-middle-ground:-73.9649:40.4346"
     },
     {
@@ -11427,7 +11411,7 @@
         40.455243943720596
       ],
       "aliases": [],
-      "source_record_index": 661,
+      "source_record_index": 660,
       "source_record_id": "oil-spot:-73.9662:40.4552"
     },
     {
@@ -11444,7 +11428,7 @@
         40.47812324887822
       ],
       "aliases": [],
-      "source_record_index": 662,
+      "source_record_index": 661,
       "source_record_id": "northern-shoal:-73.9987:40.4781"
     },
     {
@@ -11461,7 +11445,7 @@
         40.45874901757114
       ],
       "aliases": [],
-      "source_record_index": 663,
+      "source_record_index": 662,
       "source_record_id": "the-cedars:-73.9847:40.4587"
     },
     {
@@ -11478,7 +11462,7 @@
         40.5398410011292
       ],
       "aliases": [],
-      "source_record_index": 664,
+      "source_record_index": 663,
       "source_record_id": "mussel-bank:-73.9974:40.5398"
     },
     {
@@ -11495,7 +11479,7 @@
         40.57964581400084
       ],
       "aliases": [],
-      "source_record_index": 665,
+      "source_record_index": 664,
       "source_record_id": "hoffman-ground:-74.0594:40.5796"
     },
     {
@@ -11512,7 +11496,7 @@
         40.56721015905476
       ],
       "aliases": [],
-      "source_record_index": 666,
+      "source_record_index": 665,
       "source_record_id": "swinburne-ground:-74.0551:40.5672"
     },
     {
@@ -11529,7 +11513,7 @@
         40.5569168461524
       ],
       "aliases": [],
-      "source_record_index": 667,
+      "source_record_index": 666,
       "source_record_id": "west-bank:-74.0715:40.5569"
     },
     {
@@ -11546,7 +11530,7 @@
         40.82829455592188
       ],
       "aliases": [],
-      "source_record_index": 668,
+      "source_record_index": 667,
       "source_record_id": "stepping-stones:-73.7761:40.8283"
     },
     {
@@ -11563,7 +11547,7 @@
         40.86051167367254
       ],
       "aliases": [],
-      "source_record_index": 669,
+      "source_record_index": 668,
       "source_record_id": "gangway-rock:-73.7464:40.8605"
     },
     {
@@ -11580,7 +11564,7 @@
         40.88176503545399
       ],
       "aliases": [],
-      "source_record_index": 670,
+      "source_record_index": 669,
       "source_record_id": "execution-rock:-73.7382:40.8818"
     },
     {
@@ -11597,7 +11581,7 @@
         40.87869120887786
       ],
       "aliases": [],
-      "source_record_index": 671,
+      "source_record_index": 670,
       "source_record_id": "old-hen:-73.7123:40.8787"
     },
     {
@@ -11614,7 +11598,7 @@
         40.91321974271791
       ],
       "aliases": [],
-      "source_record_index": 672,
+      "source_record_index": 671,
       "source_record_id": "hen-and-chickens:-73.7323:40.9132"
     },
     {
@@ -11631,7 +11615,7 @@
         40.93735833635717
       ],
       "aliases": [],
-      "source_record_index": 673,
+      "source_record_index": 672,
       "source_record_id": "scotch-caps:-73.6949:40.9374"
     },
     {
@@ -11648,7 +11632,7 @@
         40.9677311321194
       ],
       "aliases": [],
-      "source_record_index": 674,
+      "source_record_index": 673,
       "source_record_id": "clover-reef:-73.6544:40.9677"
     },
     {
@@ -11665,7 +11649,7 @@
         39.70112087379741
       ],
       "aliases": [],
-      "source_record_index": 675,
+      "source_record_index": 674,
       "source_record_id": "barnegat-north-end-ridge:-73.7905:39.7011"
     },
     {
@@ -11682,7 +11666,7 @@
         39.6773638620314
       ],
       "aliases": [],
-      "source_record_index": 676,
+      "source_record_index": 675,
       "source_record_id": "middle-ridge:-73.8017:39.6774"
     },
     {
@@ -11699,7 +11683,7 @@
         35.94887975600011
       ],
       "aliases": [],
-      "source_record_index": 677,
+      "source_record_index": 676,
       "source_record_id": "middle-ground:-75.9743:35.9489"
     },
     {
@@ -11716,7 +11700,7 @@
         37.756598839620274
       ],
       "aliases": [],
-      "source_record_index": 678,
+      "source_record_index": 677,
       "source_record_id": "watts-island-ground:-75.8993:37.7566"
     },
     {
@@ -11733,7 +11717,7 @@
         37.876351328646265
       ],
       "aliases": [],
-      "source_record_index": 679,
+      "source_record_index": 678,
       "source_record_id": "smith-point-ground:-76.1752:37.8764"
     },
     {
@@ -11750,7 +11734,7 @@
         37.799255342185305
       ],
       "aliases": [],
-      "source_record_index": 680,
+      "source_record_index": 679,
       "source_record_id": "great-wicomico:-76.2506:37.7993"
     },
     {
@@ -11767,7 +11751,7 @@
         37.604824254338624
       ],
       "aliases": [],
-      "source_record_index": 681,
+      "source_record_index": 680,
       "source_record_id": "rappahannock-spit:-76.2462:37.6048"
     },
     {
@@ -11784,7 +11768,7 @@
         37.56318502949271
       ],
       "aliases": [],
-      "source_record_index": 682,
+      "source_record_index": 681,
       "source_record_id": "stingray-point-ground:-76.2635:37.5632"
     },
     {
@@ -11801,7 +11785,7 @@
         37.39531039254762
       ],
       "aliases": [],
-      "source_record_index": 683,
+      "source_record_index": 682,
       "source_record_id": "wolf-trap:-76.1982:37.3953"
     },
     {
@@ -11818,7 +11802,7 @@
         37.21812372687119
       ],
       "aliases": [],
-      "source_record_index": 684,
+      "source_record_index": 683,
       "source_record_id": "old-plantation-flat:-76.0366:37.2181"
     },
     {
@@ -11835,7 +11819,7 @@
         37.25502323224746
       ],
       "aliases": [],
-      "source_record_index": 685,
+      "source_record_index": 684,
       "source_record_id": "new-point-comfort-shoal:-76.2244:37.2550"
     },
     {
@@ -11852,7 +11836,7 @@
         37.06671219181016
       ],
       "aliases": [],
-      "source_record_index": 686,
+      "source_record_index": 685,
       "source_record_id": "point-of-shoal:-76.6291:37.0667"
     },
     {
@@ -11869,7 +11853,7 @@
         38.88608847474148
       ],
       "aliases": [],
-      "source_record_index": 687,
+      "source_record_index": 686,
       "source_record_id": "bodkin-island-ground:-76.2817:38.8861"
     },
     {
@@ -11886,7 +11870,7 @@
         38.86637744031811
       ],
       "aliases": [],
-      "source_record_index": 688,
+      "source_record_index": 687,
       "source_record_id": "pear-tree:-76.2570:38.8664"
     },
     {
@@ -11903,7 +11887,7 @@
         38.79282103596289
       ],
       "aliases": [],
-      "source_record_index": 689,
+      "source_record_index": 688,
       "source_record_id": "clay-bank:-76.5016:38.7928"
     },
     {
@@ -11920,7 +11904,7 @@
         38.71431877235628
       ],
       "aliases": [],
-      "source_record_index": 690,
+      "source_record_index": 689,
       "source_record_id": "pone-buoy:-76.3648:38.7143"
     },
     {
@@ -11937,7 +11921,7 @@
         38.32653241238093
       ],
       "aliases": [],
-      "source_record_index": 691,
+      "source_record_index": 690,
       "source_record_id": "barren-island-ground:-76.2760:38.3265"
     },
     {
@@ -11954,7 +11938,7 @@
         38.28892326010669
       ],
       "aliases": [],
-      "source_record_index": 692,
+      "source_record_index": 691,
       "source_record_id": "old-rock:-76.2661:38.2889"
     },
     {
@@ -11971,7 +11955,7 @@
         38.18794735896017
       ],
       "aliases": [],
-      "source_record_index": 693,
+      "source_record_index": 692,
       "source_record_id": "bloodsworth-island-ground:-76.1321:38.1879"
     },
     {
@@ -11988,7 +11972,7 @@
         38.222498396016405
       ],
       "aliases": [],
-      "source_record_index": 694,
+      "source_record_index": 693,
       "source_record_id": "lower-hooper-island-ground:-76.1636:38.2225"
     },
     {
@@ -12005,7 +11989,7 @@
         37.85999968383436
       ],
       "aliases": [],
-      "source_record_index": 695,
+      "source_record_index": 694,
       "source_record_id": "guilford-flat:-75.7577:37.8600"
     },
     {
@@ -12022,7 +12006,7 @@
         38.06270079015749
       ],
       "aliases": [],
-      "source_record_index": 696,
+      "source_record_index": 695,
       "source_record_id": "holland-bar:-76.1022:38.0627"
     },
     {
@@ -12039,7 +12023,7 @@
         37.0257799708692
       ],
       "aliases": [],
-      "source_record_index": 697,
+      "source_record_index": 696,
       "source_record_id": "white-shoal:-76.5303:37.0258"
     },
     {
@@ -12056,7 +12040,7 @@
         36.99032469832234
       ],
       "aliases": [],
-      "source_record_index": 698,
+      "source_record_index": 697,
       "source_record_id": "willoughby-bank:-76.2678:36.9903"
     },
     {
@@ -12073,7 +12057,7 @@
         37.01901804308657
       ],
       "aliases": [],
-      "source_record_index": 699,
+      "source_record_index": 698,
       "source_record_id": "the-thimbles:-76.2658:37.0190"
     },
     {
@@ -12090,7 +12074,7 @@
         37.10441597988425
       ],
       "aliases": [],
-      "source_record_index": 700,
+      "source_record_index": 699,
       "source_record_id": "bluefish-rock:-76.2367:37.1044"
     },
     {
@@ -12107,7 +12091,7 @@
         37.23322516370737
       ],
       "aliases": [],
-      "source_record_index": 701,
+      "source_record_index": 700,
       "source_record_id": "york-spit:-76.2860:37.2332"
     },
     {
@@ -12124,7 +12108,7 @@
         37.17236245431826
       ],
       "aliases": [],
-      "source_record_index": 702,
+      "source_record_index": 701,
       "source_record_id": "cabbage-patch:-76.0610:37.1724"
     },
     {
@@ -12141,7 +12125,7 @@
         35.54960800743197
       ],
       "aliases": [],
-      "source_record_index": 703,
+      "source_record_index": 702,
       "source_record_id": "long-shoal:-75.7093:35.5496"
     },
     {
@@ -12158,7 +12142,7 @@
         35.77557380136193
       ],
       "aliases": [],
-      "source_record_index": 704,
+      "source_record_index": 703,
       "source_record_id": "platt-shoal:-75.4577:35.7756"
     },
     {
@@ -12175,7 +12159,7 @@
         35.46021530161976
       ],
       "aliases": [],
-      "source_record_index": 705,
+      "source_record_index": 704,
       "source_record_id": "gibbs-shoal:-75.9552:35.4602"
     },
     {
@@ -12192,7 +12176,7 @@
         35.365322443332275
       ],
       "aliases": [],
-      "source_record_index": 706,
+      "source_record_index": 705,
       "source_record_id": "gull-shoal:-75.9736:35.3653"
     },
     {
@@ -12209,7 +12193,7 @@
         35.56482840298
       ],
       "aliases": [],
-      "source_record_index": 707,
+      "source_record_index": 706,
       "source_record_id": "wimble-shoal:-75.4218:35.5648"
     },
     {
@@ -12226,7 +12210,7 @@
         35.294905451256255
       ],
       "aliases": [],
-      "source_record_index": 708,
+      "source_record_index": 707,
       "source_record_id": "clam-shoal:-75.6508:35.2949"
     },
     {
@@ -12245,7 +12229,7 @@
       "aliases": [
         "Brant Island Slue"
       ],
-      "source_record_index": 709,
+      "source_record_index": 708,
       "source_record_id": "brant-island-shoal:-76.3571:35.1691"
     },
     {
@@ -12262,7 +12246,7 @@
         35.135632665408586
       ],
       "aliases": [],
-      "source_record_index": 710,
+      "source_record_index": 709,
       "source_record_id": "maw-point-shoal:-76.5255:35.1356"
     },
     {
@@ -12279,7 +12263,7 @@
         35.060249669927295
       ],
       "aliases": [],
-      "source_record_index": 711,
+      "source_record_index": 710,
       "source_record_id": "gum-thicket-shoal:-76.5942:35.0602"
     },
     {
@@ -12296,7 +12280,7 @@
         39.16738166315458
       ],
       "aliases": [],
-      "source_record_index": 712,
+      "source_record_index": 711,
       "source_record_id": "27-fathom-hole:-73.9242:39.1674"
     },
     {
@@ -12313,7 +12297,7 @@
         38.86499843190574
       ],
       "aliases": [],
-      "source_record_index": 713,
+      "source_record_index": 712,
       "source_record_id": "sanctuary:-74.6869:38.8650"
     },
     {
@@ -12330,7 +12314,7 @@
         39.114292476981575
       ],
       "aliases": [],
-      "source_record_index": 714,
+      "source_record_index": 713,
       "source_record_id": "miah-maull-shoal:-75.1930:39.1143"
     },
     {
@@ -12347,7 +12331,7 @@
         39.294469832300564
       ],
       "aliases": [],
-      "source_record_index": 715,
+      "source_record_index": 714,
       "source_record_id": "shell:-75.3309:39.2945"
     },
     {
@@ -12364,7 +12348,7 @@
         39.27165566741674
       ],
       "aliases": [],
-      "source_record_index": 716,
+      "source_record_index": 715,
       "source_record_id": "mince:-75.2487:39.2717"
     },
     {
@@ -12381,7 +12365,7 @@
         39.23882115471632
       ],
       "aliases": [],
-      "source_record_index": 717,
+      "source_record_index": 716,
       "source_record_id": "new:-75.2458:39.2388"
     },
     {
@@ -12398,7 +12382,7 @@
         39.2120656850039
       ],
       "aliases": [],
-      "source_record_index": 718,
+      "source_record_index": 717,
       "source_record_id": "egg-island:-75.1931:39.2121"
     },
     {
@@ -12415,7 +12399,7 @@
         39.15210957309475
       ],
       "aliases": [],
-      "source_record_index": 719,
+      "source_record_index": 718,
       "source_record_id": "paris-green:-74.9472:39.1521"
     },
     {
@@ -12432,7 +12416,7 @@
         37.68572718547698
       ],
       "aliases": [],
-      "source_record_index": 720,
+      "source_record_index": 719,
       "source_record_id": "porpoise:-75.4171:37.6857"
     },
     {
@@ -12449,7 +12433,7 @@
         36.73965987015169
       ],
       "aliases": [],
-      "source_record_index": 721,
+      "source_record_index": 720,
       "source_record_id": "inshore-southeast:-75.6010:36.7397"
     },
     {
@@ -12466,7 +12450,7 @@
         36.633973577932025
       ],
       "aliases": [],
-      "source_record_index": 722,
+      "source_record_index": 721,
       "source_record_id": "offshore-southeast:-75.3975:36.6340"
     },
     {
@@ -12483,7 +12467,7 @@
         40.99814296728129
       ],
       "aliases": [],
-      "source_record_index": 723,
+      "source_record_index": 722,
       "source_record_id": "cartwright-area:-71.8266:40.9981"
     },
     {
@@ -12500,7 +12484,7 @@
         40.8874348316543
       ],
       "aliases": [],
-      "source_record_index": 724,
+      "source_record_index": 723,
       "source_record_id": "outside-or-butterfish-hole:-71.7027:40.8874"
     },
     {
@@ -12517,7 +12501,7 @@
         40.854715536805365
       ],
       "aliases": [],
-      "source_record_index": 725,
+      "source_record_index": 724,
       "source_record_id": "mako:-72.0812:40.8547"
     },
     {
@@ -12534,7 +12518,7 @@
         40.468879157880146
       ],
       "aliases": [],
-      "source_record_index": 726,
+      "source_record_index": 725,
       "source_record_id": "east-of-cholera:-73.4631:40.4689"
     },
     {
@@ -12551,7 +12535,7 @@
         39.77554392247019
       ],
       "aliases": [],
-      "source_record_index": 727,
+      "source_record_index": 726,
       "source_record_id": "block:-71.2122:39.7755"
     },
     {
@@ -12568,7 +12552,7 @@
         40.44200729974332
       ],
       "aliases": [],
-      "source_record_index": 728,
+      "source_record_index": 727,
       "source_record_id": "middle:-73.5719:40.4420"
     },
     {
@@ -12585,7 +12569,7 @@
         40.29348143674149
       ],
       "aliases": [],
-      "source_record_index": 729,
+      "source_record_index": 728,
       "source_record_id": "acid-water-(stain)-may-extend-to-this-limit:-73.6330:40.2935"
     },
     {
@@ -12602,7 +12586,7 @@
         40.42851172370415
       ],
       "aliases": [],
-      "source_record_index": 730,
+      "source_record_index": 729,
       "source_record_id": "envelope:-73.8146:40.4285"
     },
     {
@@ -12619,7 +12603,7 @@
         40.43181827437279
       ],
       "aliases": [],
-      "source_record_index": 731,
+      "source_record_index": 730,
       "source_record_id": "southwest:-73.9262:40.4318"
     },
     {
@@ -12636,7 +12620,7 @@
         38.4145324875127
       ],
       "aliases": [],
-      "source_record_index": 732,
+      "source_record_index": 731,
       "source_record_id": "flag-harbor:-76.3989:38.4145"
     },
     {
@@ -12653,7 +12637,7 @@
         37.40301505427469
       ],
       "aliases": [],
-      "source_record_index": 733,
+      "source_record_index": 732,
       "source_record_id": "the-cells:-76.0496:37.4030"
     },
     {
@@ -12670,7 +12654,7 @@
         37.07889846946669
       ],
       "aliases": [],
-      "source_record_index": 734,
+      "source_record_index": 733,
       "source_record_id": "norfolk-canyon:-74.6370:37.0789"
     },
     {
@@ -12687,7 +12671,7 @@
         35.28294953831705
       ],
       "aliases": [],
-      "source_record_index": 735,
+      "source_record_index": 734,
       "source_record_id": "upper-middle:-76.3388:35.2829"
     },
     {
@@ -12704,7 +12688,7 @@
         35.24844561724471
       ],
       "aliases": [],
-      "source_record_index": 736,
+      "source_record_index": 735,
       "source_record_id": "inner-middle:-76.2962:35.2484"
     },
     {
@@ -12721,7 +12705,7 @@
         35.23234911471016
       ],
       "aliases": [],
-      "source_record_index": 737,
+      "source_record_index": 736,
       "source_record_id": "lower-middle:-76.2416:35.2323"
     },
     {
@@ -12738,7 +12722,7 @@
         40.14488584936733
       ],
       "aliases": [],
-      "source_record_index": 738,
+      "source_record_index": 737,
       "source_record_id": "klondike-(shark-river):-73.9072:40.1449"
     },
     {
@@ -12755,7 +12739,7 @@
         39.80723556414937
       ],
       "aliases": [],
-      "source_record_index": 739,
+      "source_record_index": 738,
       "source_record_id": "north:-74.0669:39.8072"
     },
     {
@@ -12772,7 +12756,7 @@
         40.117872823339944
       ],
       "aliases": [],
-      "source_record_index": 740,
+      "source_record_index": 739,
       "source_record_id": "firing-range:-74.0060:40.1179"
     },
     {
@@ -12789,7 +12773,7 @@
         39.021709737223546
       ],
       "aliases": [],
-      "source_record_index": 741,
+      "source_record_index": 740,
       "source_record_id": "kent-island-dumping-ground:-76.3465:39.0217"
     },
     {
@@ -12806,7 +12790,7 @@
         33.71870163643851
       ],
       "aliases": [],
-      "source_record_index": 742,
+      "source_record_index": 741,
       "source_record_id": "frying-pan-shoal:-77.9126:33.7187"
     },
     {
@@ -12823,7 +12807,7 @@
         33.153028110130215
       ],
       "aliases": [],
-      "source_record_index": 743,
+      "source_record_index": 742,
       "source_record_id": "east-bank:-79.1435:33.1530"
     },
     {
@@ -12840,7 +12824,7 @@
         32.977887090315555
       ],
       "aliases": [],
-      "source_record_index": 744,
+      "source_record_index": 743,
       "source_record_id": "cape-romain-shoal:-79.3153:32.9779"
     },
     {
@@ -12857,7 +12841,7 @@
         32.87100149038491
       ],
       "aliases": [],
-      "source_record_index": 745,
+      "source_record_index": 744,
       "source_record_id": "bull-breakers:-79.5552:32.8710"
     },
     {
@@ -12874,7 +12858,7 @@
         32.72506889673774
       ],
       "aliases": [],
-      "source_record_index": 746,
+      "source_record_index": 745,
       "source_record_id": "big-bank:-79.6280:32.7251"
     },
     {
@@ -12891,7 +12875,7 @@
         32.702916541449255
       ],
       "aliases": [],
-      "source_record_index": 747,
+      "source_record_index": 746,
       "source_record_id": "little-bank:-79.6670:32.7029"
     },
     {
@@ -12908,7 +12892,7 @@
         32.538693787418396
       ],
       "aliases": [],
-      "source_record_index": 748,
+      "source_record_index": 747,
       "source_record_id": "deveaux-bank:-80.1717:32.5387"
     },
     {
@@ -12925,7 +12909,7 @@
         32.47307470419997
       ],
       "aliases": [],
-      "source_record_index": 749,
+      "source_record_index": 748,
       "source_record_id": "combahee-bank:-80.4381:32.4731"
     },
     {
@@ -12942,7 +12926,7 @@
         32.444163978305376
       ],
       "aliases": [],
-      "source_record_index": 750,
+      "source_record_index": 749,
       "source_record_id": "pelican-bank:-80.4085:32.4442"
     },
     {
@@ -12959,7 +12943,7 @@
         32.11764193588881
       ],
       "aliases": [],
-      "source_record_index": 751,
+      "source_record_index": 750,
       "source_record_id": "southeast-channel:-80.5522:32.1176"
     },
     {
@@ -12976,7 +12960,7 @@
         32.10426073950346
       ],
       "aliases": [],
-      "source_record_index": 752,
+      "source_record_index": 751,
       "source_record_id": "south-channel:-80.6213:32.1043"
     },
     {
@@ -12993,7 +12977,7 @@
         34.87333808706233
       ],
       "aliases": [],
-      "source_record_index": 753,
+      "source_record_index": 752,
       "source_record_id": "offshore-lump:-75.5569:34.8733"
     },
     {
@@ -13010,7 +12994,7 @@
         34.998159054754844
       ],
       "aliases": [],
-      "source_record_index": 754,
+      "source_record_index": 753,
       "source_record_id": "king-fish-shoal:-76.2214:34.9982"
     },
     {
@@ -13027,7 +13011,7 @@
         34.12480865344993
       ],
       "aliases": [],
-      "source_record_index": 755,
+      "source_record_index": 754,
       "source_record_id": "marlin-ground:-76.1093:34.1248"
     },
     {
@@ -13044,7 +13028,7 @@
         34.2541056100262
       ],
       "aliases": [],
-      "source_record_index": 756,
+      "source_record_index": 755,
       "source_record_id": "240-rock:-76.6431:34.2541"
     },
     {
@@ -13061,7 +13045,7 @@
         34.3028113377288
       ],
       "aliases": [],
-      "source_record_index": 757,
+      "source_record_index": 756,
       "source_record_id": "west-rock:-76.5870:34.3028"
     },
     {
@@ -13078,7 +13062,7 @@
         34.383903554875715
       ],
       "aliases": [],
-      "source_record_index": 758,
+      "source_record_index": 757,
       "source_record_id": "10-fathom:-76.5661:34.3839"
     },
     {
@@ -13095,7 +13079,7 @@
         34.42657785444104
       ],
       "aliases": [],
-      "source_record_index": 759,
+      "source_record_index": 758,
       "source_record_id": "northwest-place:-76.6064:34.4266"
     },
     {
@@ -13112,7 +13096,7 @@
         32.102982449419244
       ],
       "aliases": [],
-      "source_record_index": 760,
+      "source_record_index": 759,
       "source_record_id": "gaskin-bank:-80.7030:32.1030"
     },
     {
@@ -13129,7 +13113,7 @@
         34.51633411160312
       ],
       "aliases": [],
-      "source_record_index": 761,
+      "source_record_index": 760,
       "source_record_id": "cape-lookout-shoal:-76.4914:34.5163"
     },
     {
@@ -13146,7 +13130,7 @@
         33.93347375294113
       ],
       "aliases": [],
-      "source_record_index": 762,
+      "source_record_index": 761,
       "source_record_id": "atlantic-4:-73.6602:33.9335"
     },
     {
@@ -13163,7 +13147,7 @@
         33.04698402287476
       ],
       "aliases": [],
-      "source_record_index": 763,
+      "source_record_index": 762,
       "source_record_id": "hatteras:-73.0592:33.0470"
     },
     {
@@ -13180,7 +13164,7 @@
         34.720211327836125
       ],
       "aliases": [],
-      "source_record_index": 764,
+      "source_record_index": 763,
       "source_record_id": "keller:-73.2537:34.7202"
     },
     {
@@ -13197,7 +13181,7 @@
         34.452618821244386
       ],
       "aliases": [],
-      "source_record_index": 765,
+      "source_record_index": 764,
       "source_record_id": "pamlico:-74.6305:34.4526"
     }
   ],
@@ -17698,19 +17682,6 @@
       ],
       "review_status": "provisional",
       "representative_structure_id": "cod-fish-lump:-74.6209:38.7974"
-    },
-    {
-      "family_id": "nj-dep-shore-guide:coral-beds",
-      "family_name": "Coral Beds",
-      "child_structure_ids": [
-        "coral-beds:-74.7193:38.9544"
-      ],
-      "child_count": 1,
-      "source_classes": [
-        "derived_official_geometry"
-      ],
-      "review_status": "provisional",
-      "representative_structure_id": "coral-beds:-74.7193:38.9544"
     },
     {
       "family_id": "nj-dep-shore-guide:corson-inlet",

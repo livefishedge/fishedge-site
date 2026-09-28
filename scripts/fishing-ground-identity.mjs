@@ -117,20 +117,34 @@ export function stableId(item) {
 }
 
 export function resolveFeatures(features) {
-  const resolved = [];
-  for (const raw of (features || []).filter(item => String(item?.name || '').trim())) {
-    const item = { ...raw, name: String(raw.name || '').trim(), aliases: Array.isArray(raw.aliases) ? raw.aliases.slice() : [] };
-    const existing = resolved.find(candidate => identityMatch(candidate, item));
-    if (!existing) {
-      item.id = item.id || stableId(item);
-      resolved.push(item);
-      continue;
-    }
-    if (item.name !== existing.name && !existing.aliases.includes(item.name)) existing.aliases.push(item.name);
-    if (item.source && !existing.sources?.includes(item.source)) existing.sources = [...(existing.sources || [existing.source]), item.source];
-    if (item.geometry) existing.geometry = mergeGeometry(existing.geometry, item.geometry);
+  const items = (features || []).filter(item => String(item?.name || '').trim()).map(raw => ({
+    ...raw,
+    name: String(raw.name || '').trim(),
+    aliases: Array.isArray(raw.aliases) ? raw.aliases.slice() : [],
+  }));
+  const parent = items.map((_, index) => index);
+  const find = index => {
+    while (parent[index] !== index) { parent[index] = parent[parent[index]]; index = parent[index]; }
+    return index;
+  };
+  const union = (left, right) => { const a = find(left), b = find(right); if (a !== b) parent[b] = a; };
+  for (let i = 0; i < items.length; i++) for (let j = i + 1; j < items.length; j++) {
+    if (identityMatch(items[i], items[j])) union(i, j);
   }
-  return resolved;
+  const groups = new Map();
+  items.forEach((item, index) => { const root = find(index); const group = groups.get(root) || []; group.push(item); groups.set(root, group); });
+  return [...groups.values()].map(group => {
+    const [first, ...rest] = group;
+    const item = { ...first, aliases: [...(first.aliases || [])] };
+    for (const other of rest) {
+      if (other.name !== item.name && !item.aliases.includes(other.name)) item.aliases.push(other.name);
+      for (const alias of other.aliases || []) if (alias !== item.name && !item.aliases.includes(alias)) item.aliases.push(alias);
+      if (other.source && !item.sources?.includes(other.source)) item.sources = [...(item.sources || [item.source]), other.source];
+      if (other.geometry) item.geometry = mergeGeometry(item.geometry, other.geometry);
+    }
+    item.id = item.id || stableId(item);
+    return item;
+  });
 }
 
 export function mergeGeometry(a, b) {

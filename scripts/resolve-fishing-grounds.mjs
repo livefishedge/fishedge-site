@@ -1,11 +1,12 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { resolveFeatures } from './fishing-ground-identity.mjs';
 
-const path = 'dashboard/data/fishing-grounds.json';
-const source = JSON.parse(await readFile(path, 'utf8'));
+const sourcePath = 'dashboard/data/fishing-grounds-source.json';
+const outputPath = 'dashboard/data/fishing-grounds.json';
+const source = JSON.parse(await readFile(sourcePath, 'utf8'));
 const features = resolveFeatures(source.features || []);
-const output = { ...source, version: 4, generated_at: new Date().toISOString(), identity_policy: 'catalog-wide-alias-aware-spatial-semantic-v2', features };
-await writeFile(path, JSON.stringify(output));
+const output = { ...source, version: 5, generated_at: new Date().toISOString(), identity_policy: 'catalog-wide-component-resolver-v3', features };
+await writeFile(outputPath, JSON.stringify(output));
 await writeFile('dashboard/data/fishing-grounds-points.json', JSON.stringify({
   ...output,
   features: features.map(({ geometry, ...item }) => item),
