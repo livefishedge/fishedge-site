@@ -578,8 +578,21 @@
   function mergeFeatures(boem, gebco, local) {
     // Local NJ/MD/Atlantic records own the region. Global BOEM/GEBCO records
     // are used only when no local records are available at all.
-    var localMerged = mergeNamedFeatures(local);
-    return localMerged.length ? localMerged : mergeNamedFeatures(gebco.concat(boem));
+    // The local catalog is already identity-resolved at build time. Do not
+    // run a second browser-side matcher: it can recreate aliases differently
+    // after refresh and can merge legitimate nearby subareas. Keep one
+    // authoritative record per persisted structure ID.
+    var authoritative = (local || []).filter(function (item) {
+      return item && String(item.name || '').trim() && Array.isArray(item.point);
+    }).map(function (item) {
+      var copy = Object.assign({}, item);
+      copy.aliases = Array.isArray(item.aliases) ? item.aliases.slice() : [];
+      copy.family_id = item.family_id || structureFamilyId(item);
+      copy.family_name = item.family_name || structureFamilyName(item.name);
+      copy.id = item.id || structureId(item);
+      return copy;
+    });
+    return authoritative.length ? authoritative : mergeNamedFeatures(gebco.concat(boem));
   }
 
   function styleForGeometry(feature) {

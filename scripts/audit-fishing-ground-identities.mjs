@@ -22,7 +22,17 @@ function score(a, b) {
   }
   return { similarity: best, reason };
 }
-const load = async (path, source) => { const d = JSON.parse(await readFile(path, 'utf8')); return (d.features || []).map((item, index) => ({ ...item, audit_id: `${source}:${index}`, audit_source: source })); };
+const load = async (path, source) => {
+  const d = JSON.parse(await readFile(path, 'utf8'));
+  const out = [];
+  for (const [index, item] of (d.features || []).entries()) {
+    out.push({ ...item, audit_id: `${source}:${index}`, audit_source: source });
+    for (const [aliasIndex, alias] of (item.aliases || []).entries()) {
+      out.push({ ...item, name: alias, aliases: [], audit_id: `${source}:${index}:alias:${aliasIndex}`, audit_source: source });
+    }
+  }
+  return out;
+};
 const records = [...await load('dashboard/data/fishing-grounds.json', 'compiled'), ...await load('dashboard/data/fishing-grounds-md-legacy.json', 'legacy-md')];
 const candidates = [];
 let exactDuplicateCount = 0;

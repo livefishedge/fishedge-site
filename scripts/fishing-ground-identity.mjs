@@ -3,8 +3,19 @@
 // spelling/descriptor variants.
 
 const DESCRIPTORS = new Set(['canyon', 'valley', 'ridge', 'lump', 'lumps', 'rock', 'rocks', 'reef', 'reefs', 'bank', 'banks', 'shoal', 'shoals', 'hole', 'holes', 'bed', 'beds', 'ground', 'grounds']);
-const PROTECTED = /(^|\s)(block|site|box|nm|fathom|fathoms)\b|\b\d+(?:\.\d+)?\s*(?:nm|mile|miles|fathom|fathoms)\b/i;
-const SYNONYMS = { inside: 'inside', inner: 'inside', inshore: 'inside', outside: 'outside', outer: 'outside' };
+const PROTECTED = /(^|\s)block\b|(^|\s)box\b/i;
+const SYNONYMS = {
+  inside: 'inside', inner: 'inside', inshore: 'inside',
+  outside: 'outside', outer: 'outside',
+  pt: 'point', pts: 'points', pnt: 'point', pnts: 'points',
+  pk: 'peak', mt: 'mount', shl: 'shoal', shoals: 'shoal',
+  rks: 'rock', rocks: 'rock', rfs: 'reef', reefs: 'reef',
+  bks: 'bank', banks: 'bank', grnd: 'ground', grounds: 'ground',
+  beds: 'bed', lumps: 'lump', holes: 'hole', grounds: 'ground',
+  noreast: 'northeast', norwest: 'northwest', soueast: 'southeast', souwest: 'southwest',
+};
+const QUALIFIERS = new Set(['north', 'south', 'east', 'west', 'northeast', 'northwest', 'southeast', 'southwest', 'central', 'mid', 'middle', 'inner', 'inside', 'inshore', 'outer', 'outside']);
+const NUMBER_WORDS = { zero: '0', one: '1', two: '2', three: '3', four: '4', five: '5', six: '6', seven: '7', eight: '8', nine: '9', ten: '10' };
 
 export function normalizedName(value) {
   return String(value || '').toLowerCase().replace(/[’']/g, '').replace(/[^a-z0-9()]+/g, ' ').trim().replace(/\s+/g, ' ');
@@ -26,9 +37,13 @@ function soundex(value) {
 
 function coreTokens(value) {
   const raw = normalizedName(value)
+    .replace(/\bnorth\s+east\b/g, 'northeast')
+    .replace(/\bnorth\s+west\b/g, 'northwest')
+    .replace(/\bsouth\s+east\b/g, 'southeast')
+    .replace(/\bsouth\s+west\b/g, 'southwest')
     .replace(/\((?:north|south|east|west|northeast|northwest|southeast|southwest)\)/g, '')
     .replace(/(canyon|valley|ridge|lumps?|rocks?|reefs?|banks?|shoals?|holes?|beds?|grounds?)$/g, ' $1');
-  return raw.split(' ').map(token => SYNONYMS[token] || token).filter(token => token && !DESCRIPTORS.has(token));
+  return raw.split(' ').map(token => NUMBER_WORDS[token] || SYNONYMS[token] || token).filter(token => token && !DESCRIPTORS.has(token));
 }
 
 function nameVariants(value) {
@@ -37,12 +52,11 @@ function nameVariants(value) {
 }
 
 function directionTokens(value) {
-  return normalizedName(value).replace(/\([^)]*\)/g, '').split(' ')
-    .filter(token => /^(north|south|east|west|northeast|northwest|southeast|southwest)$/.test(token));
+  return coreTokens(value).filter(token => QUALIFIERS.has(token) && /^(north|south|east|west|northeast|northwest|southeast|southwest)$/.test(token));
 }
 
-function numericPrefix(value) {
-  return (normalizedName(value).split(' ')[0] || '').match(/^\d/);
+function numericTokens(value) {
+  return normalizedName(value).split(' ').map(token => NUMBER_WORDS[token] || token).filter(token => /\d/.test(token));
 }
 
 function phoneticTokens(value) {
@@ -51,24 +65,49 @@ function phoneticTokens(value) {
 
 function tokenIdentityMatch(a, b) {
   const aa = coreTokens(a), bb = coreTokens(b);
-  if (!aa.length || aa.length !== bb.length) return false;
+  if (!aa.length || !bb.length || aa.length !== bb.length) return false;
   const pa = phoneticTokens(a), pb = phoneticTokens(b);
   return pa.every((code, index) => code && code === pb[index]);
 }
 
+function editSimilarity(a, b) {
+  const aa = coreTokens(a).join('');
+  const bb = coreTokens(b).join('');
+  if (!aa || !bb) return 0;
+  const row = Array.from({ length: bb.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= aa.length; i++) {
+    let prev = row[0]; row[0] = i;
+    for (let j = 1; j <= bb.length; j++) {
+      const next = row[j];
+      row[j] = Math.min(row[j] + 1, row[j - 1] + 1, prev + (aa[i - 1] === bb[j - 1] ? 0 : 1));
+      prev = next;
+    }
+  }
+  return 1 - row[bb.length] / Math.max(aa.length, bb.length);
+}
+
+function featureNames(item) {
+  return [item?.name, ...(Array.isArray(item?.aliases) ? item.aliases : [])].filter(Boolean);
+}
+
+function qualifierTokens(value) {
+  return coreTokens(value).filter(token => QUALIFIERS.has(token)).sort();
+}
+
 export function identityMatch(a, b) {
   if (!a || !b || !a.point || !b.point || PROTECTED.test(a.name || '') || PROTECTED.test(b.name || '')) return false;
-  if (numericPrefix(a.name) && numericPrefix(b.name) && normalizedName(a.name).split(' ')[0] !== normalizedName(b.name).split(' ')[0]) return false;
-  const da = directionTokens(a.name), db = directionTokens(b.name);
-  if (da.length && db.length && da.join('|') !== db.join('|')) return false;
+  const na = numericTokens(a.name), nb = numericTokens(b.name);
+  if (na.length !== nb.length || na.some((n, i) => n !== nb[i])) return false;
   const dx = (a.point[0] - b.point[0]) * Math.cos((a.point[1] + b.point[1]) * Math.PI / 360);
   const dy = a.point[1] - b.point[1];
   if (Math.hypot(dx, dy) > 0.12) return false;
-  return nameVariants(a.name).some(left => nameVariants(b.name).some(right => {
+  return featureNames(a).some(nameA => nameVariants(nameA).some(left => featureNames(b).some(nameB => nameVariants(nameB).some(right => {
+    const qa = qualifierTokens(left), qb = qualifierTokens(right);
+    if (qa.length !== qb.length || qa.some((q, i) => q !== qb[i])) return false;
     const aa = coreTokens(left).join('');
     const bb = coreTokens(right).join('');
-    return aa.length >= 2 && (aa === bb || tokenIdentityMatch(left, right));
-  }));
+    return aa.length >= 2 && (aa === bb || tokenIdentityMatch(left, right) || editSimilarity(left, right) >= 0.82);
+  }))));
 }
 
 export function stableId(item) {
