@@ -81,9 +81,10 @@
     var modeMatches = state.displayMode === 'all' ||
       (state.displayMode === 'expanded' && item.display_tier !== 'reference') ||
       (state.displayMode === 'key' && item.default_visible === true);
+    var sourceMatches = !state.sourceFilter || state.sourceFilter === 'all' || item.source_status === state.sourceFilter ||
+      (item.source_status === 'mixed' && (state.sourceFilter === 'official' || state.sourceFilter === 'unofficial'));
     return modeMatches &&
-      (!state.zoneFilter || state.zoneFilter === 'all' || item.zone === state.zoneFilter) &&
-      (!state.sourceFilter || state.sourceFilter === 'all' || item.source_status === state.sourceFilter);
+      (!state.zoneFilter || state.zoneFilter === 'all' || item.zone === state.zoneFilter) && sourceMatches;
   }
 
   function paddedBbox(extent) {

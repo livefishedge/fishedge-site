@@ -89,3 +89,9 @@ test('default inventory is small, explicit, and all default-visible records are 
   assert.ok(defaults.every(item => item.geographic_class === 'offshore'));
   assert.ok(defaults.every(item => item.display_tier === 'key'));
 });
+
+test('mixed provenance remains eligible for either evidence filter', () => {
+  const mixed = result.find(item => item.source_status === 'mixed');
+  assert.ok(mixed && mixed.sources?.length >= 2);
+  assert.ok(mixed.sources.includes('Maryland DNR') || mixed.sources.includes('BOEM Atlantic Fishing Atlas'));
+});
