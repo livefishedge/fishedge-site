@@ -1558,12 +1558,11 @@
         <span>Show full polygons</span>
       </label>
       <label class="combined-toggle" style="margin-left:28px;font-size:12px;color:#9fb0c3;">
-        <span style="min-width:56px;">Area</span>
-        <select id="combined-fishing-zone" aria-label="Underwater structure area">
-          <option value="all">All areas</option>
-          <option value="major_offshore">Major offshore</option>
-          <option value="offshore">Offshore</option>
-          <option value="inshore">Inshore</option>
+        <span style="min-width:56px;">Display</span>
+        <select id="combined-fishing-display" aria-label="Underwater structure display mode">
+          <option value="key">Key offshore grounds</option>
+          <option value="expanded">More offshore spots</option>
+          <option value="all">All structures</option>
         </select>
       </label>
       <label class="combined-toggle" style="margin-left:28px;font-size:12px;color:#9fb0c3;">
@@ -3434,7 +3433,7 @@ const chkBathy = document.getElementById("chk-combined-bathy");
 const chkFront = document.getElementById("chk-combined-front");
 const chkFishing = document.getElementById("chk-combined-fishing");
 const chkFishingPolygons = document.getElementById("chk-combined-fishing-polygons");
-const fishingZoneFilter = document.getElementById("combined-fishing-zone");
+const fishingDisplayMode = document.getElementById("combined-fishing-display");
 const fishingSourceFilter = document.getElementById("combined-fishing-source");
 function syncFishingGroundControls() {
   if (!chkFishingPolygons) return;
@@ -3457,8 +3456,8 @@ if (chkFishing) chkFishing.addEventListener("change", e => {
 if (chkFishingPolygons) chkFishingPolygons.addEventListener("change", e => {
   window.fishedgeUnderwater?.setFullPolygons?.(e.target.checked);
 });
-if (fishingZoneFilter) fishingZoneFilter.addEventListener("change", e => {
-  window.fishedgeUnderwater?.setZoneFilter?.(e.target.value);
+if (fishingDisplayMode) fishingDisplayMode.addEventListener("change", e => {
+  window.fishedgeUnderwater?.setDisplayMode?.(e.target.value);
 });
 if (fishingSourceFilter) fishingSourceFilter.addEventListener("change", e => {
   window.fishedgeUnderwater?.setSourceFilter?.(e.target.value);

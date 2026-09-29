@@ -37,6 +37,19 @@ const MAJOR_OFFSHORE_NAMES = new Set([
   'acid water or stain', 'acid waters', 'mako', 'ling canyon', 'offshore lump',
   'washington canyon', 'atlantic 4', 'hatteras', 'keller', 'pamlico',
 ]);
+// Reviewed default inventory: the small set shown at first load. This is a
+// display contract, not an identity rule and not a source-authority rule.
+const DEFAULT_KEY_OFFSHORE_NAMES = new Set([
+  'barnegat ridge south', 'barnegat ridge north', 'romer shoal',
+  '21 mile hill', '26 mile (big) hill or lump', 'mako', 'the cigar',
+  'sea bright ground', 'sandy hook ground', 'axel carlson reef',
+  'hudson canyon', 'toms canyon', 'spencer canyon', 'carteret canyon',
+  'lindenkohl canyon', 'poor mans canyon', 'baltimore canyon',
+  'wilmington canyon', 'norfolk canyon', 'miah maull shoal',
+  'winter quarter shoal', 'chincoteague shoal', 'ocean city shoal',
+  'offshore southeast', 'offshore lump', 'lightship ridge',
+  'manasquan ridge', 'manasquan (southeast) ridge', 'manasquan southeast ridge', 'sausages',
+]);
 
 export function classifyFeature(item) {
   const names = [item?.name, ...(Array.isArray(item?.aliases) ? item.aliases : [])].filter(Boolean).join(' ');
@@ -47,16 +60,22 @@ export function classifyFeature(item) {
   const source_status_label = source_status === 'official' ? 'Official source' : source_status === 'unofficial' ? 'Unofficial reference' : source_status === 'mixed' ? 'Mixed provenance' : 'Unclassified source';
   const normalizedNames = [item?.name, ...(Array.isArray(item?.aliases) ? item.aliases : [])].filter(Boolean).map(normalizedName);
   const curatedMajor = normalizedNames.some(name => MAJOR_OFFSHORE_NAMES.has(name));
+  const keyOffshore = normalizedNames.some(name => DEFAULT_KEY_OFFSHORE_NAMES.has(name) || name.replace(/\s*\([^)]*\)\s*/g, ' ').trim() === 'manasquan southeast ridge');
   const explicitMajor = curatedMajor || MAJOR_OFFSHORE_RE.test(names) || /canyon|seamount/i.test(String(item?.type || ''));
   const explicitInshore = INSHORE_RE.test(names);
-  const zone = explicitMajor ? 'major_offshore' : explicitInshore ? 'inshore' : 'offshore';
+  const geographic_class = explicitInshore && !keyOffshore ? 'nearshore' : explicitMajor ? 'offshore' : 'uncertain';
+  const display_tier = keyOffshore ? 'key' : geographic_class === 'nearshore' ? 'reference' : 'expanded';
   return {
-    zone,
-    zone_label: zone === 'major_offshore' ? 'Major offshore' : zone === 'inshore' ? 'Inshore' : 'Offshore',
+    zone: explicitMajor ? 'major_offshore' : explicitInshore ? 'inshore' : 'uncertain',
+    zone_label: explicitMajor ? 'Major offshore' : explicitInshore ? 'Nearshore / coastal' : 'Uncertain setting',
+    geographic_class,
+    display_tier,
+    default_visible: display_tier === 'key',
+    display_tier_label: display_tier === 'key' ? 'Key offshore ground' : display_tier === 'expanded' ? 'Expanded offshore catalog' : 'Reference / nearshore',
     source_status,
     source_status_label,
     classification_confidence: explicitMajor || explicitInshore ? 'high' : 'default',
-    classification_reason: curatedMajor ? 'Planner-curated major offshore ground' : explicitMajor ? 'explicit offshore/deepwater/canyon terminology' : explicitInshore ? 'explicit inlet/coastal/inshore terminology' : 'regional offshore default',
+    classification_reason: keyOffshore ? 'reviewed default inventory' : curatedMajor ? 'curated offshore candidate' : explicitMajor ? 'explicit offshore/deepwater/canyon terminology' : explicitInshore ? 'explicit inlet/coastal/inshore terminology' : 'unresolved geographic setting',
   };
 }
 

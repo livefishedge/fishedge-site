@@ -56,6 +56,7 @@
     attributionEl: null,
     visible: false,
     showPolygons: false,
+    displayMode: 'key',
     zoneFilter: 'all',
     sourceFilter: 'all',
     staticLocalPromise: null,
@@ -77,7 +78,11 @@
   }
   function bboxKey(bbox) { return bbox.map(function (v) { return v.toFixed(2); }).join(','); }
   function structureMatchesFilters(item) {
-    return (!state.zoneFilter || state.zoneFilter === 'all' || item.zone === state.zoneFilter) &&
+    var modeMatches = state.displayMode === 'all' ||
+      (state.displayMode === 'expanded' && item.display_tier !== 'reference') ||
+      (state.displayMode === 'key' && item.default_visible === true);
+    return modeMatches &&
+      (!state.zoneFilter || state.zoneFilter === 'all' || item.zone === state.zoneFilter) &&
       (!state.sourceFilter || state.sourceFilter === 'all' || item.source_status === state.sourceFilter);
   }
 
@@ -679,12 +684,15 @@
       var geometryFeatures = [];
       var labelCandidates = [];
       var labelGroups = new Set();
+      var displayItems = (items || []).filter(function (item) {
+        return item && String(item.name || '').trim() && mdLabelEligible(item) && structureMatchesFilters(item);
+      });
       var mapResolution = map.getView() && map.getView().getResolution();
       // Group geometry and labels only at regional scale. The old MD-always-
       // grouped rule hid the zoom transition while still drawing every marker.
       var groupLabels = Number.isFinite(mapResolution) && mapResolution > 180;
       var familyCandidates = new Map();
-      if (groupLabels) (items || []).forEach(function (item) {
+      if (groupLabels) displayItems.forEach(function (item) {
         var familyId = item.family_id || structureFamilyId(item);
         var bucket = familyCandidates.get(familyId) || { items: [], lon: 0, lat: 0 };
         if (Array.isArray(item.point)) { bucket.items.push(item); bucket.lon += item.point[0]; bucket.lat += item.point[1]; }
@@ -698,12 +706,6 @@
           return Math.hypot(a.point[0] - center[0], a.point[1] - center[1]) - Math.hypot(b.point[0] - center[0], b.point[1] - center[1]);
         })[0];
         familyRepresentatives.set(familyId, representative);
-      });
-      var displayItems = (items || []).filter(function (item) {
-        // An unlabeled feature must never create a marker or polygon. This is
-        // intentionally enforced at render time because remote enrichments
-        // can have a different schema from the compiled catalog.
-        return item && String(item.name || '').trim() && mdLabelEligible(item) && structureMatchesFilters(item);
       });
       if (groupLabels && familyRepresentatives.size) {
         var seenFamilies = new Set();
@@ -870,6 +872,12 @@
     return state.zoneFilter;
   }
 
+  function setDisplayMode(value) {
+    state.displayMode = value || 'key';
+    state.items.forEach(function (render) { render(); });
+    return state.displayMode;
+  }
+
   function setSourceFilter(value) {
     state.sourceFilter = value || 'all';
     state.items.forEach(function (render) { render(); });
@@ -884,11 +892,13 @@
       setVisible: setVisible,
       setFullPolygons: setFullPolygons,
       setZoneFilter: setZoneFilter,
+      setDisplayMode: setDisplayMode,
       setSourceFilter: setSourceFilter,
       toggle: function () { return setVisible(!state.visible); },
       isVisible: function () { return state.visible; },
       isFullPolygons: function () { return state.showPolygons; },
       getZoneFilter: function () { return state.zoneFilter; },
+      getDisplayMode: function () { return state.displayMode; },
       getSourceFilter: function () { return state.sourceFilter; },
       attachMap: attachToMap
     };

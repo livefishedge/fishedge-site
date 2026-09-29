@@ -57,7 +57,9 @@ test('published full, point and registry catalogs agree', () => {
 });
 
 test('every display entry has orthogonal area and source classifications', () => {
-  const zones = new Set(['major_offshore', 'offshore', 'inshore']);
+  const zones = new Set(['major_offshore', 'inshore', 'uncertain']);
+  const geographic = new Set(['offshore', 'nearshore', 'uncertain']);
+  const tiers = new Set(['key', 'expanded', 'reference']);
   const sources = new Set(['official', 'unofficial', 'mixed', 'unknown']);
   assert.ok(result.some(item => item.zone === 'major_offshore'));
   assert.ok(result.some(item => item.zone === 'inshore'));
@@ -65,6 +67,8 @@ test('every display entry has orthogonal area and source classifications', () =>
   assert.ok(result.some(item => item.source_status === 'unofficial'));
   for (const item of result) {
     assert.ok(zones.has(item.zone), item.name);
+    assert.ok(geographic.has(item.geographic_class), item.name);
+    assert.ok(tiers.has(item.display_tier), item.name);
     assert.ok(sources.has(item.source_status), item.name);
     assert.ok(item.zone_label && item.source_status_label, item.name);
   }
@@ -75,6 +79,13 @@ test('planner-curated major grounds override misleading coastal words', () => {
     const item = result.find(candidate => candidate.name === name || candidate.aliases.includes(name));
     assert.ok(item, name);
     assert.equal(item.zone, 'major_offshore', name);
-    assert.equal(item.classification_reason, 'Planner-curated major offshore ground', name);
+    assert.equal(item.geographic_class, 'offshore', name);
   }
+});
+
+test('default inventory is small, explicit, and all default-visible records are offshore', () => {
+  const defaults = result.filter(item => item.default_visible);
+  assert.ok(defaults.length >= 15 && defaults.length <= 40, `default count=${defaults.length}`);
+  assert.ok(defaults.every(item => item.geographic_class === 'offshore'));
+  assert.ok(defaults.every(item => item.display_tier === 'key'));
 });
