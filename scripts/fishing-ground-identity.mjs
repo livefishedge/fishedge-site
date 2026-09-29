@@ -21,6 +21,22 @@ const OFFICIAL_SOURCES = new Set(['Maryland DNR', 'BOEM Atlantic Fishing Atlas',
 const UNOFFICIAL_SOURCES = new Set(['NJ DEP / Shore Guide']);
 const MAJOR_OFFSHORE_RE = /\b(canyon|canyons|seamount|deepwater|offshore|outer bank|outer banks|major bank)\b/i;
 const INSHORE_RE = /\b(inlet|buoy|bridge|sewer|jetty|channel|shore|beach|inshore|inside|slough|harbor|harbour|bay)\b/i;
+// Operational captain-facing grounds already curated by the Planner. This is
+// the source of truth for "major offshore"; lexical matching is only fallback.
+const MAJOR_OFFSHORE_NAMES = new Set([
+  '17 fathoms', '17 fathoms bank', 'axel carlson reef', 'barnegat light reef',
+  'manasquan inlet reef', 'sandy hook ground', 'sea bright ground', 'shrewsbury rock',
+  'klondike (shark river)', 'mussel bed', 'mussel bank', 'oil wreck', 'romer shoal',
+  'the cigar', '21 mile hill', '3 mile hill', '26 mile (big) hill or lump',
+  'barnegat, south end ridge', 'barnegat, north end ridge', 'barnegat ridge south',
+  'barnegat ridge north', 'manasquan (southeast) ridge', 'ambrose ridge', 'lightship ridge',
+  'scotland ridge', 'lindenkohl canyon', 'spencer canyon', 'toms canyon', 'carteret canyon',
+  'hudson canyon', 'baltimore canyon', 'wilmington canyon', 'norfolk canyon',
+  "poor man's canyon", 'sausages', 'miah maull shoal', 'chincoteague shoal',
+  'winter quarter shoal', 'ocean city shoal', 'offshore southeast', 'cartwright area',
+  'acid water or stain', 'acid waters', 'mako', 'ling canyon', 'offshore lump',
+  'washington canyon', 'atlantic 4', 'hatteras', 'keller', 'pamlico',
+]);
 
 export function classifyFeature(item) {
   const names = [item?.name, ...(Array.isArray(item?.aliases) ? item.aliases : [])].filter(Boolean).join(' ');
@@ -29,7 +45,9 @@ export function classifyFeature(item) {
   const unofficial = sourceNames.filter(source => UNOFFICIAL_SOURCES.has(source)).length;
   const source_status = official && unofficial ? 'mixed' : official ? 'official' : unofficial ? 'unofficial' : 'unknown';
   const source_status_label = source_status === 'official' ? 'Official source' : source_status === 'unofficial' ? 'Unofficial reference' : source_status === 'mixed' ? 'Mixed provenance' : 'Unclassified source';
-  const explicitMajor = MAJOR_OFFSHORE_RE.test(names) || /canyon|seamount/i.test(String(item?.type || ''));
+  const normalizedNames = [item?.name, ...(Array.isArray(item?.aliases) ? item.aliases : [])].filter(Boolean).map(normalizedName);
+  const curatedMajor = normalizedNames.some(name => MAJOR_OFFSHORE_NAMES.has(name));
+  const explicitMajor = curatedMajor || MAJOR_OFFSHORE_RE.test(names) || /canyon|seamount/i.test(String(item?.type || ''));
   const explicitInshore = INSHORE_RE.test(names);
   const zone = explicitMajor ? 'major_offshore' : explicitInshore ? 'inshore' : 'offshore';
   return {
@@ -38,7 +56,7 @@ export function classifyFeature(item) {
     source_status,
     source_status_label,
     classification_confidence: explicitMajor || explicitInshore ? 'high' : 'default',
-    classification_reason: explicitMajor ? 'explicit offshore/deepwater/canyon terminology' : explicitInshore ? 'explicit inlet/coastal/inshore terminology' : 'regional offshore default',
+    classification_reason: curatedMajor ? 'Planner-curated major offshore ground' : explicitMajor ? 'explicit offshore/deepwater/canyon terminology' : explicitInshore ? 'explicit inlet/coastal/inshore terminology' : 'regional offshore default',
   };
 }
 

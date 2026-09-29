@@ -69,3 +69,12 @@ test('every display entry has orthogonal area and source classifications', () =>
     assert.ok(item.zone_label && item.source_status_label, item.name);
   }
 });
+
+test('planner-curated major grounds override misleading coastal words', () => {
+  for (const name of ['Barnegat Ridge South', 'Barnegat Ridge North', 'Barnegat Light Reef', 'Romer Shoal', 'Mako', 'Baltimore Canyon']) {
+    const item = result.find(candidate => candidate.name === name || candidate.aliases.includes(name));
+    assert.ok(item, name);
+    assert.equal(item.zone, 'major_offshore', name);
+    assert.equal(item.classification_reason, 'Planner-curated major offshore ground', name);
+  }
+});
