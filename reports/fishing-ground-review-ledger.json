@@ -1,28 +1,81 @@
 {
-  "version": 1,
-  "generated_at": "2026-09-28T17:37:10.118Z",
+  "version": 2,
+  "generated_at": "2026-09-29T00:13:24.318Z",
   "policy": {
     "source_records_are_immutable": true,
     "every_candidate_has_decision": true,
     "unresolved_never_auto_merged": true,
-    "canonical_catalog_records": 765
+    "canonical_catalog_records": 759,
+    "display_groups_are_separate_from_source_identity": true
   },
   "source_accounting": {
     "total": 1612,
     "compiled": 851,
     "legacy_md": 761,
-    "mapped": 1520,
-    "unmapped": 92
+    "mapped": 1514,
+    "unmapped": 98
   },
   "decisions": {
     "total": 15381,
     "counts": {
-      "merge": 1203,
+      "merge": 1207,
       "keep-separate": 7092,
       "parent/subarea": 52,
-      "unresolved": 7034
+      "unresolved": 7030
     }
   },
+  "display_groups": [
+    {
+      "display_group_id": "resor:-73.4213:39.7789",
+      "canonical_name": "Resor",
+      "aliases": [
+        "Resor Wreck"
+      ],
+      "related_ids": [
+        "resor:-73.4213:39.7789",
+        "resor-wreck:-73.4217:39.7789"
+      ],
+      "size": 2
+    },
+    {
+      "display_group_id": "poor-mans-canyon:-74.0140:37.8238",
+      "canonical_name": "Poor Man's Canyon",
+      "aliases": [
+        "Poormans Canyon South"
+      ],
+      "related_ids": [
+        "poor-mans-canyon:-74.0140:37.8238",
+        "poormans-canyon-south:-74.0979:37.7257"
+      ],
+      "size": 2
+    },
+    {
+      "display_group_id": "lindel-cone-canyon:-73.0066:38.8275",
+      "canonical_name": "Lindel Cone Canyon",
+      "aliases": [
+        "Lindenkohl",
+        "Lindenkohl Canyon"
+      ],
+      "related_ids": [
+        "lindel-cone-canyon:-73.0066:38.8275",
+        "lindenkohl:-73.0417:38.8083",
+        "lindenkohl-canyon:-72.8955:38.7240"
+      ],
+      "size": 3
+    },
+    {
+      "display_group_id": "toms:-72.6950:39.1583",
+      "canonical_name": "Toms",
+      "aliases": [
+        "Toms Canyon"
+      ],
+      "related_ids": [
+        "toms:-72.6950:39.1583",
+        "toms-canyon:-72.5751:39.0511"
+      ],
+      "size": 2
+    }
+  ],
   "canonical_mapping": [
     {
       "canonical_id": "17-fathoms:-73.8102:40.3842",
@@ -967,14 +1020,8 @@
       "canonical_name": "Resor",
       "source_record_ids": [
         "compiled:129",
-        "legacy-md:118"
-      ]
-    },
-    {
-      "canonical_id": "resor-wreck:-73.4217:39.7789",
-      "canonical_name": "Resor Wreck",
-      "source_record_ids": [
         "compiled:130",
+        "legacy-md:118",
         "legacy-md:119"
       ]
     },
@@ -2261,14 +2308,8 @@
       "canonical_name": "Poor Man's Canyon",
       "source_record_ids": [
         "compiled:304",
-        "legacy-md:292"
-      ]
-    },
-    {
-      "canonical_id": "poormans-canyon-south:-74.0979:37.7257",
-      "canonical_name": "Poormans Canyon South",
-      "source_record_ids": [
         "compiled:305",
+        "legacy-md:292",
         "legacy-md:293"
       ]
     },
@@ -2820,14 +2861,8 @@
       "canonical_name": "Carteret Canyon",
       "source_record_ids": [
         "compiled:374",
-        "legacy-md:361"
-      ]
-    },
-    {
-      "canonical_id": "carteret-deep:-72.9000:38.9083",
-      "canonical_name": "Carteret Deep",
-      "source_record_ids": [
         "compiled:375",
+        "legacy-md:361",
         "legacy-md:362"
       ]
     },
@@ -2906,10 +2941,7 @@
     {
       "canonical_id": "deep-hole:-74.6520:39.1764",
       "canonical_name": "Deep Hole",
-      "source_record_ids": [
-        "compiled:387",
-        "legacy-md:374"
-      ]
+      "source_record_ids": []
     },
     {
       "canonical_id": "delaware-bay-reef:-75.0677:39.0467",
@@ -3221,23 +3253,9 @@
       "canonical_name": "Lindel Cone Canyon",
       "source_record_ids": [
         "compiled:427",
-        "legacy-md:411"
-      ]
-    },
-    {
-      "canonical_id": "lindenkohl:-73.0417:38.8083",
-      "canonical_name": "Lindenkohl",
-      "source_record_ids": [
         "compiled:428",
+        "legacy-md:411",
         "legacy-md:412"
-      ]
-    },
-    {
-      "canonical_id": "lindenkohl-canyon:-72.8955:38.7240",
-      "canonical_name": "Lindenkohl Canyon",
-      "source_record_ids": [
-        "compiled:429",
-        "legacy-md:413"
       ]
     },
     {
@@ -3843,14 +3861,6 @@
       "source_record_ids": [
         "compiled:510",
         "legacy-md:490"
-      ]
-    },
-    {
-      "canonical_id": "toms-canyon:-72.5751:39.0511",
-      "canonical_name": "Toms Canyon",
-      "source_record_ids": [
-        "compiled:511",
-        "legacy-md:491"
       ]
     },
     {
@@ -158143,8 +158153,8 @@
       "distance_nm": 4.78,
       "name_similarity": 0.667,
       "geometry_overlap": true,
-      "decision": "unresolved",
-      "reason": "candidate requires source review; no automatic identity decision"
+      "decision": "merge",
+      "reason": "same semantic core, compatible qualifiers/numbers, and within resolver distance"
     },
     {
       "a": "compiled:374",
@@ -158296,8 +158306,8 @@
       "distance_nm": 4.78,
       "name_similarity": 0.667,
       "geometry_overlap": true,
-      "decision": "unresolved",
-      "reason": "candidate requires source review; no automatic identity decision"
+      "decision": "merge",
+      "reason": "same semantic core, compatible qualifiers/numbers, and within resolver distance"
     },
     {
       "a": "compiled:374",
@@ -158449,8 +158459,8 @@
       "distance_nm": 4.78,
       "name_similarity": 0.667,
       "geometry_overlap": true,
-      "decision": "unresolved",
-      "reason": "candidate requires source review; no automatic identity decision"
+      "decision": "merge",
+      "reason": "same semantic core, compatible qualifiers/numbers, and within resolver distance"
     },
     {
       "a": "compiled:375",
@@ -160932,7 +160942,7 @@
       "name_similarity": 1,
       "geometry_overlap": true,
       "decision": "merge",
-      "reason": "same semantic core, compatible qualifiers/numbers, and within resolver distance"
+      "reason": "same normalized identity and coincident/overlapping geometry"
     },
     {
       "a": "compiled:387",
@@ -276667,8 +276677,8 @@
       "distance_nm": 4.78,
       "name_similarity": 0.667,
       "geometry_overlap": true,
-      "decision": "unresolved",
-      "reason": "candidate requires source review; no automatic identity decision"
+      "decision": "merge",
+      "reason": "same semantic core, compatible qualifiers/numbers, and within resolver distance"
     },
     {
       "a": "legacy-md:361",

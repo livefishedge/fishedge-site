@@ -2,7 +2,7 @@
 // source records and geometry while choosing one display identity for nearby
 // spelling/descriptor variants.
 
-const DESCRIPTORS = new Set(['canyon', 'valley', 'ridge', 'lump', 'lumps', 'rock', 'rocks', 'reef', 'reefs', 'bank', 'banks', 'shoal', 'shoals', 'hole', 'holes', 'bed', 'beds', 'ground', 'grounds', 'slough', 'slue', 'channel', 'point', 'points', 'bar', 'bars', 'buoy', 'rips']);
+const DESCRIPTORS = new Set(['canyon', 'valley', 'ridge', 'lump', 'lumps', 'rock', 'rocks', 'reef', 'reefs', 'bank', 'banks', 'shoal', 'shoals', 'hole', 'holes', 'bed', 'beds', 'ground', 'grounds', 'slough', 'slue', 'channel', 'point', 'points', 'bar', 'bars', 'buoy', 'rips', 'deep']);
 const PROTECTED = /(^|\s)block\b|(^|\s)box\b/i;
 const SYNONYMS = {
   inside: 'inside', inner: 'inside', inshore: 'inside',
@@ -16,6 +16,7 @@ const SYNONYMS = {
 };
 const QUALIFIERS = new Set(['north', 'south', 'east', 'west', 'northeast', 'northwest', 'southeast', 'southwest', 'central', 'mid', 'middle', 'inner', 'inside', 'inshore', 'outer', 'outside']);
 const NUMBER_WORDS = { zero: '0', one: '1', two: '2', three: '3', four: '4', five: '5', six: '6', seven: '7', eight: '8', nine: '9', ten: '10' };
+const DISPLAY_PROTECTED = /(^|\s)(block|box|site|fathom|fathoms|nm|mile|miles)\b|\b\d+(?:\.\d+)?\s*(?:ft|nm|mile|miles|fathom|fathoms)\b/i;
 
 export function normalizedName(value) {
   return String(value || '').toLowerCase().replace(/[’']/g, '').replace(/[^a-z0-9()]+/g, ' ').trim().replace(/\s+/g, ' ');
@@ -95,6 +96,89 @@ function qualifierTokens(value) {
   return coreTokens(value).filter(token => QUALIFIERS.has(token)).sort();
 }
 
+function geometryBbox(geometry) {
+  if (!geometry?.coordinates) return null;
+  const points = [];
+  const walk = value => {
+    if (Array.isArray(value) && typeof value[0] === 'number') points.push(value);
+    else if (Array.isArray(value)) value.forEach(walk);
+  };
+  walk(geometry.coordinates);
+  if (!points.length) return null;
+  return [Math.min(...points.map(point => point[0])), Math.min(...points.map(point => point[1])),
+    Math.max(...points.map(point => point[0])), Math.max(...points.map(point => point[1]))];
+}
+
+function bboxContains(a, b) {
+  return a && b && a[0] <= b[0] && a[1] <= b[1] && a[2] >= b[2] && a[3] >= b[3];
+}
+
+function pointInRing(point, ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i][0], yi = ring[i][1], xj = ring[j][0], yj = ring[j][1];
+    const intersects = ((yi > point[1]) !== (yj > point[1])) && (point[0] < (xj - xi) * (point[1] - yi) / ((yj - yi) || Number.EPSILON) + xi);
+    if (intersects) inside = !inside;
+  }
+  return inside;
+}
+
+function polygonContainsPoint(polygon, point) {
+  if (!polygon?.length || !pointInRing(point, polygon[0])) return false;
+  return !polygon.slice(1).some(hole => pointInRing(point, hole));
+}
+
+function geometryOuterRings(geometry) {
+  if (!geometry?.coordinates) return [];
+  if (geometry.type === 'Polygon') return [geometry.coordinates[0]];
+  if (geometry.type === 'MultiPolygon') return geometry.coordinates.map(polygon => polygon[0]);
+  return [];
+}
+
+function geometryContains(container, child) {
+  const containers = geometryOuterRings(container), children = geometryOuterRings(child);
+  return containers.length > 0 && children.length > 0 && children.every(ring => ring.every(point => containers.some(containerRing => pointInRing(point, containerRing))));
+}
+
+function displayCore(value) {
+  return coreTokens(value).filter(token => !QUALIFIERS.has(token)).join('');
+}
+
+function displaySimilarity(a, b) {
+  const left = displayCore(a), right = displayCore(b);
+  if (left.length < 4 || right.length < 4) return 0;
+  if (left === right || (Math.min(left.length, right.length) >= 5 && (left.includes(right) || right.includes(left)))) return 1;
+  return editSimilarity(a, b);
+}
+
+function structureTokens(value) {
+  return normalizedName(value).split(' ').filter(token => DESCRIPTORS.has(token) || DESCRIPTORS.has(SYNONYMS[token])).map(token => SYNONYMS[token] || token).map(token => token.replace(/s$/, '')).sort();
+}
+
+// Display-equivalence is intentionally separate from source identity. It is
+// used only where two nearby records are the same captain-facing ground or a
+// parent polygon redundantly names a contained child. Protected operational
+// subareas never enter this relation.
+export function displayEquivalent(a, b) {
+  if (!a?.point || !b?.point || DISPLAY_PROTECTED.test(a.name || '') || DISPLAY_PROTECTED.test(b.name || '')) return false;
+  const dx = (a.point[0] - b.point[0]) * Math.cos((a.point[1] + b.point[1]) * Math.PI / 360);
+  const dy = a.point[1] - b.point[1];
+  const distanceNm = Math.hypot(dx, dy) * 60;
+  if (distanceNm > 9) return false;
+  const similarity = displaySimilarity(a.name, b.name);
+  const qa = qualifierTokens(a.name), qb = qualifierTokens(b.name);
+  const conflictingDirections = qa.length && qb.length && qa.join('|') !== qb.join('|');
+  if (conflictingDirections) return false;
+  const sameBase = displayCore(a.name) === displayCore(b.name) && displayCore(a.name).length >= 4;
+  if (distanceNm > 9) return false;
+  const sa = structureTokens([a.name, ...(a.aliases || [])].join(' ')), sb = structureTokens([b.name, ...(b.aliases || [])].join(' '));
+  const structureCompatible = !sa.length || !sb.length || sa.join('|') === sb.join('|');
+  const contained = geometryContains(a.geometry, b.geometry) || geometryContains(b.geometry, a.geometry);
+  const bboxContained = bboxContains(geometryBbox(a.geometry), geometryBbox(b.geometry)) || bboxContains(geometryBbox(b.geometry), geometryBbox(a.geometry));
+  if (sameBase) return similarity >= 0.9 && (structureCompatible || contained || bboxContained);
+  return contained && similarity >= 0.55 && (structureCompatible || sa.includes('canyon') || sb.includes('canyon'));
+}
+
 export function identityMatch(a, b) {
   if (!a || !b || !a.point || !b.point || PROTECTED.test(a.name || '') || PROTECTED.test(b.name || '')) return false;
   const na = numericTokens(a.name), nb = numericTokens(b.name);
@@ -143,6 +227,32 @@ export function resolveFeatures(features) {
       if (other.geometry) item.geometry = mergeGeometry(item.geometry, other.geometry);
     }
     item.id = item.id || stableId(item);
+    return item;
+  });
+}
+
+export function resolveDisplayGroups(features) {
+  const items = (features || []).map(item => ({ ...item, aliases: Array.isArray(item.aliases) ? item.aliases.slice() : [] }));
+  const parent = items.map((_, index) => index);
+  const find = index => {
+    while (parent[index] !== index) { parent[index] = parent[parent[index]]; index = parent[index]; }
+    return index;
+  };
+  const union = (left, right) => { const a = find(left), b = find(right); if (a !== b) parent[b] = a; };
+  for (let i = 0; i < items.length; i++) for (let j = i + 1; j < items.length; j++) if (displayEquivalent(items[i], items[j])) union(i, j);
+  const groups = new Map();
+  items.forEach((item, index) => { const root = find(index); const group = groups.get(root) || []; group.push(item); groups.set(root, group); });
+  return [...groups.values()].map(group => {
+    const [first, ...rest] = group;
+    const item = { ...first, aliases: [...(first.aliases || [])], related_ids: group.map(member => member.id).filter(Boolean) };
+    for (const other of rest) {
+      if (other.name !== item.name && !item.aliases.includes(other.name)) item.aliases.push(other.name);
+      for (const alias of other.aliases || []) if (alias !== item.name && !item.aliases.includes(alias)) item.aliases.push(alias);
+      if (other.geometry) item.geometry = mergeGeometry(item.geometry, other.geometry);
+      if (other.source && !item.sources?.includes(other.source)) item.sources = [...(item.sources || [item.source]), other.source];
+    }
+    item.display_group_id = item.id || stableId(item);
+    item.display_group_size = group.length;
     return item;
   });
 }
