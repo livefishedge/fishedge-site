@@ -1,4 +1,6 @@
-# Underwater structure classification — 2026-09-29
+# Underwater structure classification — superseded 2026-09-29
+
+The source-authority classification in this document is no longer user-facing and no longer gates display. Raw source names remain attached for audit/details.
 
 The catalog now separates display filtering from identity resolution. No source record or geometry is removed.
 

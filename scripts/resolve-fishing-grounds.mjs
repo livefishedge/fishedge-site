@@ -6,7 +6,7 @@ const outputPath = 'dashboard/data/fishing-grounds.json';
 const source = JSON.parse(await readFile(sourcePath, 'utf8'));
 const identityFeatures = resolveFeatures(source.features || []);
 const features = resolveDisplayGroups(identityFeatures);
-const output = { ...source, version: 8, generated_at: new Date().toISOString(), identity_policy: 'catalog-wide-component-resolver-v5-reviewed-display-groups', classification_policy: 'zone-and-source-v1', source_feature_count: identityFeatures.length, features };
+const output = { ...source, version: 9, generated_at: new Date().toISOString(), identity_policy: 'catalog-wide-component-resolver-v5-reviewed-display-groups', classification_policy: 'display-hierarchy-v2-no-source-gating', source_feature_count: identityFeatures.length, features };
 await writeFile(outputPath, JSON.stringify(output));
 await writeFile('dashboard/data/fishing-grounds-points.json', JSON.stringify({
   ...output,

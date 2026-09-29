@@ -17,8 +17,6 @@ const SYNONYMS = {
 const QUALIFIERS = new Set(['north', 'south', 'east', 'west', 'northeast', 'northwest', 'southeast', 'southwest', 'central', 'mid', 'middle', 'inner', 'inside', 'inshore', 'outer', 'outside']);
 const NUMBER_WORDS = { zero: '0', one: '1', two: '2', three: '3', four: '4', five: '5', six: '6', seven: '7', eight: '8', nine: '9', ten: '10' };
 const DISPLAY_PROTECTED = /(^|\s)(block|box|site|fathom|fathoms|nm|mile|miles)\b|\b\d+(?:\.\d+)?\s*(?:ft|nm|mile|miles|fathom|fathoms)\b/i;
-const OFFICIAL_SOURCES = new Set(['Maryland DNR', 'BOEM Atlantic Fishing Atlas', 'NOAA/ArcGIS US Submarine Canyons']);
-const UNOFFICIAL_SOURCES = new Set(['NJ DEP / Shore Guide']);
 const MAJOR_OFFSHORE_RE = /\b(canyon|canyons|seamount|deepwater|offshore|outer bank|outer banks|major bank)\b/i;
 const INSHORE_RE = /\b(inlet|buoy|bridge|sewer|jetty|channel|shore|beach|inshore|inside|slough|harbor|harbour|bay)\b/i;
 // Operational captain-facing grounds already curated by the Planner. This is
@@ -48,16 +46,11 @@ const DEFAULT_KEY_OFFSHORE_NAMES = new Set([
   'wilmington canyon', 'norfolk canyon', 'miah maull shoal',
   'winter quarter shoal', 'chincoteague shoal', 'ocean city shoal',
   'offshore southeast', 'offshore lump', 'lightship ridge',
-  'manasquan ridge', 'manasquan (southeast) ridge', 'manasquan southeast ridge', 'sausages',
+  'manasquan ridge', 'manasquan (southeast) ridge', 'manasquan southeast ridge', 'sausages', 'washington canyon',
 ]);
 
 export function classifyFeature(item) {
   const names = [item?.name, ...(Array.isArray(item?.aliases) ? item.aliases : [])].filter(Boolean).join(' ');
-  const sourceNames = [...new Set([...(Array.isArray(item?.sources) ? item.sources : []), item?.source].filter(Boolean))];
-  const official = sourceNames.filter(source => OFFICIAL_SOURCES.has(source)).length;
-  const unofficial = sourceNames.filter(source => UNOFFICIAL_SOURCES.has(source)).length;
-  const source_status = official && unofficial ? 'mixed' : official ? 'official' : unofficial ? 'unofficial' : 'unknown';
-  const source_status_label = source_status === 'official' ? 'Official source' : source_status === 'unofficial' ? 'Unofficial reference' : source_status === 'mixed' ? 'Mixed provenance' : 'Unclassified source';
   const normalizedNames = [item?.name, ...(Array.isArray(item?.aliases) ? item.aliases : [])].filter(Boolean).map(normalizedName);
   const curatedMajor = normalizedNames.some(name => MAJOR_OFFSHORE_NAMES.has(name));
   const keyOffshore = normalizedNames.some(name => DEFAULT_KEY_OFFSHORE_NAMES.has(name) || name.replace(/\s*\([^)]*\)\s*/g, ' ').trim() === 'manasquan southeast ridge');
@@ -72,8 +65,6 @@ export function classifyFeature(item) {
     display_tier,
     default_visible: display_tier === 'key',
     display_tier_label: display_tier === 'key' ? 'Key offshore ground' : display_tier === 'expanded' ? 'Expanded offshore catalog' : 'Reference / nearshore',
-    source_status,
-    source_status_label,
     classification_confidence: explicitMajor || explicitInshore ? 'high' : 'default',
     classification_reason: keyOffshore ? 'reviewed default inventory' : curatedMajor ? 'curated offshore candidate' : explicitMajor ? 'explicit offshore/deepwater/canyon terminology' : explicitInshore ? 'explicit inlet/coastal/inshore terminology' : 'unresolved geographic setting',
   };

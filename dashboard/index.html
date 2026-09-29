@@ -42,7 +42,7 @@
   <script src="supabase-init.js?v=20260918-user-activity"></script>
   <script src="/dashboard/chartbook.js?v=20260924-logbook2"></script>
   <script src="/dashboard/fullscreen.js?v=20260924f"></script>
-<script src="canyon-charts.js?v=20260929-catalog-v8"></script>
+<script src="canyon-charts.js?v=20260929-catalog-v9"></script>
   <script src="loran-td.js?v=20260818-3"></script>
   <script src="https://cdn.jsdelivr.net/npm/posthog-js@1.200.0/dist/array.js"></script>
 
@@ -1563,15 +1563,6 @@
           <option value="key">Key offshore grounds</option>
           <option value="expanded">More offshore spots</option>
           <option value="all">All structures</option>
-        </select>
-      </label>
-      <label class="combined-toggle" style="margin-left:28px;font-size:12px;color:#9fb0c3;">
-        <span style="min-width:56px;">Source</span>
-        <select id="combined-fishing-source" aria-label="Underwater structure source status">
-          <option value="all">All sources</option>
-          <option value="official">Official sources</option>
-          <option value="unofficial">Unofficial references</option>
-          <option value="mixed">Mixed provenance</option>
         </select>
       </label>
       <div class="combined-product-row">
@@ -3434,7 +3425,6 @@ const chkFront = document.getElementById("chk-combined-front");
 const chkFishing = document.getElementById("chk-combined-fishing");
 const chkFishingPolygons = document.getElementById("chk-combined-fishing-polygons");
 const fishingDisplayMode = document.getElementById("combined-fishing-display");
-const fishingSourceFilter = document.getElementById("combined-fishing-source");
 function syncFishingGroundControls() {
   if (!chkFishingPolygons) return;
   const visible = typeof window.fishedgeUnderwater?.isVisible === "function"
@@ -3458,9 +3448,6 @@ if (chkFishingPolygons) chkFishingPolygons.addEventListener("change", e => {
 });
 if (fishingDisplayMode) fishingDisplayMode.addEventListener("change", e => {
   window.fishedgeUnderwater?.setDisplayMode?.(e.target.value);
-});
-if (fishingSourceFilter) fishingSourceFilter.addEventListener("change", e => {
-  window.fishedgeUnderwater?.setSourceFilter?.(e.target.value);
 });
 // canyon-charts.js is deferred and can initialize before these listeners.
 // Reconcile after both scripts exist so this control works on first load.

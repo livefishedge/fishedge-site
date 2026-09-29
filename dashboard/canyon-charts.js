@@ -58,7 +58,6 @@
     showPolygons: false,
     displayMode: 'key',
     zoneFilter: 'all',
-    sourceFilter: 'all',
     staticLocalPromise: null,
     staticLocalPointsPromise: null,
     staticLocalPolygonsPromise: null,
@@ -81,10 +80,8 @@
     var modeMatches = state.displayMode === 'all' ||
       (state.displayMode === 'expanded' && item.display_tier !== 'reference') ||
       (state.displayMode === 'key' && item.default_visible === true);
-    var sourceMatches = !state.sourceFilter || state.sourceFilter === 'all' || item.source_status === state.sourceFilter ||
-      (item.source_status === 'mixed' && (state.sourceFilter === 'official' || state.sourceFilter === 'unofficial'));
     return modeMatches &&
-      (!state.zoneFilter || state.zoneFilter === 'all' || item.zone === state.zoneFilter) && sourceMatches;
+      (!state.zoneFilter || state.zoneFilter === 'all' || item.zone === state.zoneFilter);
   }
 
   function paddedBbox(extent) {
@@ -309,7 +306,7 @@
     if (state.inflight.has(key)) return state.inflight.get(key);
     // One compiled catalog is authoritative for both regions. The old MD
     // legacy asset had a different record set and reintroduced duplicates.
-    var pointsUrl = STATIC_LOCAL_POINTS_URL + '?v=20260929-catalog-v8';
+    var pointsUrl = STATIC_LOCAL_POINTS_URL + '?v=20260929-catalog-v9';
     if (!state.staticLocalPointsPromises.has(pointsUrl)) {
       state.staticLocalPointsPromises.set(pointsUrl, fetch(pointsUrl)
         .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
@@ -336,7 +333,7 @@
     var cached = state.cache.get(key);
     if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) return Promise.resolve(cached.features);
     if (state.inflight.has(key)) return state.inflight.get(key);
-    var polygonsUrl = STATIC_LOCAL_GROUNDS_URL + '?v=20260929-catalog-v8';
+    var polygonsUrl = STATIC_LOCAL_GROUNDS_URL + '?v=20260929-catalog-v9';
     if (!state.staticLocalPolygonsPromises.has(polygonsUrl)) {
       state.staticLocalPolygonsPromises.set(polygonsUrl, fetch(polygonsUrl)
         .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
@@ -879,12 +876,6 @@
     return state.displayMode;
   }
 
-  function setSourceFilter(value) {
-    state.sourceFilter = value || 'all';
-    state.items.forEach(function (render) { render(); });
-    return state.sourceFilter;
-  }
-
   function init() {
     if (window.__fishing_grounds_loaded) return;
     window.__fishing_grounds_loaded = true;
@@ -894,13 +885,11 @@
       setFullPolygons: setFullPolygons,
       setZoneFilter: setZoneFilter,
       setDisplayMode: setDisplayMode,
-      setSourceFilter: setSourceFilter,
       toggle: function () { return setVisible(!state.visible); },
       isVisible: function () { return state.visible; },
       isFullPolygons: function () { return state.showPolygons; },
       getZoneFilter: function () { return state.zoneFilter; },
       getDisplayMode: function () { return state.displayMode; },
-      getSourceFilter: function () { return state.sourceFilter; },
       attachMap: attachToMap
     };
     var tick = 0;

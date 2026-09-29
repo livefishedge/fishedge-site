@@ -12,7 +12,7 @@ The current reviewed default contains 27 display entries:
 
 Axel Carlson Reef; Manasquan Ridge; Sandy Hook Reef; Barnegat Ridge South; Barnegat Ridge North; Baltimore Canyon; Poor Man's Canyon; Sausages; The Cigar; Wilmington Canyon; Carteret Canyon; Hudson Canyon; Lindel Cone Canyon; Spencer Canyon; Toms; 21 Mile Hill; 26 Mile (Big) Hill or Lump; Winter Quarter Shoal; Chincoteague Shoal; Romer Shoal; Sea Bright Ground; Lightship Ridge; Miah Maull Shoal; Offshore Southeast; Mako; Norfolk Canyon; Offshore Lump.
 
-This is a proposed inventory, not a claim that every item is officially named by a government source. Source provenance remains visible as metadata (`official`, `mixed`, or `unofficial`) and does not decide importance.
+Washington Canyon was added to the key inventory in the production follow-up. Source provenance remains raw metadata for audit/details only; it no longer creates an official/unofficial display classification or filter.
 
 ## Negative controls
 

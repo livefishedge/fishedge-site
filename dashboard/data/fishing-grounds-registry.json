@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generated_at": "2026-09-29T15:29:32.074Z",
-  "input_catalog_version": 8,
+  "generated_at": "2026-09-29T15:59:13.485Z",
+  "input_catalog_version": 9,
   "policy": {
     "default_geometry": "retain all source geometry",
     "default_labels": "one family label at regional scale; child labels at close zoom",
