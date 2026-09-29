@@ -55,3 +55,17 @@ test('published full, point and registry catalogs agree', () => {
   assert.deepEqual(points.map(item => item.id), registry.map(item => item.structure_id));
   assert.deepEqual(full, result);
 });
+
+test('every display entry has orthogonal area and source classifications', () => {
+  const zones = new Set(['major_offshore', 'offshore', 'inshore']);
+  const sources = new Set(['official', 'unofficial', 'mixed', 'unknown']);
+  assert.ok(result.some(item => item.zone === 'major_offshore'));
+  assert.ok(result.some(item => item.zone === 'inshore'));
+  assert.ok(result.some(item => item.source_status === 'official'));
+  assert.ok(result.some(item => item.source_status === 'unofficial'));
+  for (const item of result) {
+    assert.ok(zones.has(item.zone), item.name);
+    assert.ok(sources.has(item.source_status), item.name);
+    assert.ok(item.zone_label && item.source_status_label, item.name);
+  }
+});

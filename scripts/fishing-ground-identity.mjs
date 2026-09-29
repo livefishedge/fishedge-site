@@ -17,6 +17,30 @@ const SYNONYMS = {
 const QUALIFIERS = new Set(['north', 'south', 'east', 'west', 'northeast', 'northwest', 'southeast', 'southwest', 'central', 'mid', 'middle', 'inner', 'inside', 'inshore', 'outer', 'outside']);
 const NUMBER_WORDS = { zero: '0', one: '1', two: '2', three: '3', four: '4', five: '5', six: '6', seven: '7', eight: '8', nine: '9', ten: '10' };
 const DISPLAY_PROTECTED = /(^|\s)(block|box|site|fathom|fathoms|nm|mile|miles)\b|\b\d+(?:\.\d+)?\s*(?:ft|nm|mile|miles|fathom|fathoms)\b/i;
+const OFFICIAL_SOURCES = new Set(['Maryland DNR', 'BOEM Atlantic Fishing Atlas', 'NOAA/ArcGIS US Submarine Canyons']);
+const UNOFFICIAL_SOURCES = new Set(['NJ DEP / Shore Guide']);
+const MAJOR_OFFSHORE_RE = /\b(canyon|canyons|seamount|deepwater|offshore|outer bank|outer banks|major bank)\b/i;
+const INSHORE_RE = /\b(inlet|buoy|bridge|sewer|jetty|channel|shore|beach|inshore|inside|slough|harbor|harbour|bay)\b/i;
+
+export function classifyFeature(item) {
+  const names = [item?.name, ...(Array.isArray(item?.aliases) ? item.aliases : [])].filter(Boolean).join(' ');
+  const sourceNames = [...new Set([...(Array.isArray(item?.sources) ? item.sources : []), item?.source].filter(Boolean))];
+  const official = sourceNames.filter(source => OFFICIAL_SOURCES.has(source)).length;
+  const unofficial = sourceNames.filter(source => UNOFFICIAL_SOURCES.has(source)).length;
+  const source_status = official && unofficial ? 'mixed' : official ? 'official' : unofficial ? 'unofficial' : 'unknown';
+  const source_status_label = source_status === 'official' ? 'Official source' : source_status === 'unofficial' ? 'Unofficial reference' : source_status === 'mixed' ? 'Mixed provenance' : 'Unclassified source';
+  const explicitMajor = MAJOR_OFFSHORE_RE.test(names) || /canyon|seamount/i.test(String(item?.type || ''));
+  const explicitInshore = INSHORE_RE.test(names);
+  const zone = explicitMajor ? 'major_offshore' : explicitInshore ? 'inshore' : 'offshore';
+  return {
+    zone,
+    zone_label: zone === 'major_offshore' ? 'Major offshore' : zone === 'inshore' ? 'Inshore' : 'Offshore',
+    source_status,
+    source_status_label,
+    classification_confidence: explicitMajor || explicitInshore ? 'high' : 'default',
+    classification_reason: explicitMajor ? 'explicit offshore/deepwater/canyon terminology' : explicitInshore ? 'explicit inlet/coastal/inshore terminology' : 'regional offshore default',
+  };
+}
 
 export function normalizedName(value) {
   return String(value || '').toLowerCase().replace(/[’']/g, '').replace(/[^a-z0-9()]+/g, ' ').trim().replace(/\s+/g, ' ');
@@ -274,6 +298,7 @@ export function resolveDisplayGroups(features) {
     }
     item.display_group_id = item.id || stableId(item);
     item.display_group_size = group.length;
+    Object.assign(item, classifyFeature(item));
     return item;
   });
 }

@@ -56,6 +56,8 @@
     attributionEl: null,
     visible: false,
     showPolygons: false,
+    zoneFilter: 'all',
+    sourceFilter: 'all',
     staticLocalPromise: null,
     staticLocalPointsPromise: null,
     staticLocalPolygonsPromise: null,
@@ -74,6 +76,10 @@
     if (window.console && console.error) console.error.apply(console, args);
   }
   function bboxKey(bbox) { return bbox.map(function (v) { return v.toFixed(2); }).join(','); }
+  function structureMatchesFilters(item) {
+    return (!state.zoneFilter || state.zoneFilter === 'all' || item.zone === state.zoneFilter) &&
+      (!state.sourceFilter || state.sourceFilter === 'all' || item.source_status === state.sourceFilter);
+  }
 
   function paddedBbox(extent) {
     var min = ol.proj.toLonLat([extent[0], extent[1]]);
@@ -297,7 +303,7 @@
     if (state.inflight.has(key)) return state.inflight.get(key);
     // One compiled catalog is authoritative for both regions. The old MD
     // legacy asset had a different record set and reintroduced duplicates.
-    var pointsUrl = STATIC_LOCAL_POINTS_URL + '?v=20260929-catalog-v7';
+    var pointsUrl = STATIC_LOCAL_POINTS_URL + '?v=20260929-catalog-v8';
     if (!state.staticLocalPointsPromises.has(pointsUrl)) {
       state.staticLocalPointsPromises.set(pointsUrl, fetch(pointsUrl)
         .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
@@ -324,7 +330,7 @@
     var cached = state.cache.get(key);
     if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) return Promise.resolve(cached.features);
     if (state.inflight.has(key)) return state.inflight.get(key);
-    var polygonsUrl = STATIC_LOCAL_GROUNDS_URL + '?v=20260929-catalog-v7';
+    var polygonsUrl = STATIC_LOCAL_GROUNDS_URL + '?v=20260929-catalog-v8';
     if (!state.staticLocalPolygonsPromises.has(polygonsUrl)) {
       state.staticLocalPolygonsPromises.set(polygonsUrl, fetch(polygonsUrl)
         .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
@@ -697,7 +703,7 @@
         // An unlabeled feature must never create a marker or polygon. This is
         // intentionally enforced at render time because remote enrichments
         // can have a different schema from the compiled catalog.
-        return item && String(item.name || '').trim() && mdLabelEligible(item);
+        return item && String(item.name || '').trim() && mdLabelEligible(item) && structureMatchesFilters(item);
       });
       if (groupLabels && familyRepresentatives.size) {
         var seenFamilies = new Set();
@@ -858,6 +864,18 @@
     return state.showPolygons;
   }
 
+  function setZoneFilter(value) {
+    state.zoneFilter = value || 'all';
+    state.items.forEach(function (render) { render(); });
+    return state.zoneFilter;
+  }
+
+  function setSourceFilter(value) {
+    state.sourceFilter = value || 'all';
+    state.items.forEach(function (render) { render(); });
+    return state.sourceFilter;
+  }
+
   function init() {
     if (window.__fishing_grounds_loaded) return;
     window.__fishing_grounds_loaded = true;
@@ -865,9 +883,13 @@
     window.fishedgeUnderwater = {
       setVisible: setVisible,
       setFullPolygons: setFullPolygons,
+      setZoneFilter: setZoneFilter,
+      setSourceFilter: setSourceFilter,
       toggle: function () { return setVisible(!state.visible); },
       isVisible: function () { return state.visible; },
       isFullPolygons: function () { return state.showPolygons; },
+      getZoneFilter: function () { return state.zoneFilter; },
+      getSourceFilter: function () { return state.sourceFilter; },
       attachMap: attachToMap
     };
     var tick = 0;

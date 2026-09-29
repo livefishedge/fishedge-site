@@ -42,7 +42,7 @@
   <script src="supabase-init.js?v=20260918-user-activity"></script>
   <script src="/dashboard/chartbook.js?v=20260924-logbook2"></script>
   <script src="/dashboard/fullscreen.js?v=20260924f"></script>
-<script src="canyon-charts.js?v=20260929-catalog-v7"></script>
+<script src="canyon-charts.js?v=20260929-catalog-v8"></script>
   <script src="loran-td.js?v=20260818-3"></script>
   <script src="https://cdn.jsdelivr.net/npm/posthog-js@1.200.0/dist/array.js"></script>
 
@@ -1556,6 +1556,24 @@
         <input type="checkbox" id="chk-combined-fishing-polygons" disabled>
         <span class="box"></span>
         <span>Show full polygons</span>
+      </label>
+      <label class="combined-toggle" style="margin-left:28px;font-size:12px;color:#9fb0c3;">
+        <span style="min-width:56px;">Area</span>
+        <select id="combined-fishing-zone" aria-label="Underwater structure area">
+          <option value="all">All areas</option>
+          <option value="major_offshore">Major offshore</option>
+          <option value="offshore">Offshore</option>
+          <option value="inshore">Inshore</option>
+        </select>
+      </label>
+      <label class="combined-toggle" style="margin-left:28px;font-size:12px;color:#9fb0c3;">
+        <span style="min-width:56px;">Source</span>
+        <select id="combined-fishing-source" aria-label="Underwater structure source status">
+          <option value="all">All sources</option>
+          <option value="official">Official sources</option>
+          <option value="unofficial">Unofficial references</option>
+          <option value="mixed">Mixed provenance</option>
+        </select>
       </label>
       <div class="combined-product-row">
         <label class="combined-toggle">
@@ -3416,6 +3434,8 @@ const chkBathy = document.getElementById("chk-combined-bathy");
 const chkFront = document.getElementById("chk-combined-front");
 const chkFishing = document.getElementById("chk-combined-fishing");
 const chkFishingPolygons = document.getElementById("chk-combined-fishing-polygons");
+const fishingZoneFilter = document.getElementById("combined-fishing-zone");
+const fishingSourceFilter = document.getElementById("combined-fishing-source");
 function syncFishingGroundControls() {
   if (!chkFishingPolygons) return;
   const visible = typeof window.fishedgeUnderwater?.isVisible === "function"
@@ -3436,6 +3456,12 @@ if (chkFishing) chkFishing.addEventListener("change", e => {
 });
 if (chkFishingPolygons) chkFishingPolygons.addEventListener("change", e => {
   window.fishedgeUnderwater?.setFullPolygons?.(e.target.checked);
+});
+if (fishingZoneFilter) fishingZoneFilter.addEventListener("change", e => {
+  window.fishedgeUnderwater?.setZoneFilter?.(e.target.value);
+});
+if (fishingSourceFilter) fishingSourceFilter.addEventListener("change", e => {
+  window.fishedgeUnderwater?.setSourceFilter?.(e.target.value);
 });
 // canyon-charts.js is deferred and can initialize before these listeners.
 // Reconcile after both scripts exist so this control works on first load.

@@ -87,8 +87,9 @@ async function main() {
   const identities = resolveFeatures(sourceRecords);
   const records = resolveDisplayGroups(identities);
   const output = {
-    version: 7,
+    version: 8,
     identity_policy: 'catalog-wide-component-resolver-v5-reviewed-display-groups',
+    classification_policy: 'zone-and-source-v1',
     source_feature_count: identities.length,
     generated_at: new Date().toISOString(),
     bbox,
