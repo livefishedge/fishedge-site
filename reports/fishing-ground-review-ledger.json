@@ -1,30 +1,42 @@
 {
   "version": 2,
-  "generated_at": "2026-09-29T00:13:24.318Z",
+  "generated_at": "2026-09-29T03:24:55.303Z",
   "policy": {
     "source_records_are_immutable": true,
     "every_candidate_has_decision": true,
     "unresolved_never_auto_merged": true,
-    "canonical_catalog_records": 759,
+    "canonical_catalog_records": 754,
     "display_groups_are_separate_from_source_identity": true
   },
   "source_accounting": {
     "total": 1612,
     "compiled": 851,
     "legacy_md": 761,
-    "mapped": 1514,
-    "unmapped": 98
+    "mapped": 1534,
+    "unmapped": 78
   },
   "decisions": {
     "total": 15381,
     "counts": {
-      "merge": 1207,
+      "merge": 1219,
       "keep-separate": 7092,
-      "parent/subarea": 52,
-      "unresolved": 7030
+      "parent/subarea": 44,
+      "unresolved": 7026
     }
   },
   "display_groups": [
+    {
+      "display_group_id": "barnegat-inlet-buoy:-74.0642:39.7412",
+      "canonical_name": "Barnegat Inlet Buoy",
+      "aliases": [
+        "BI"
+      ],
+      "related_ids": [
+        "barnegat-inlet-buoy:-74.0642:39.7412",
+        "bi:-74.0585:39.7410"
+      ],
+      "size": 2
+    },
     {
       "display_group_id": "resor:-73.4213:39.7789",
       "canonical_name": "Resor",
@@ -64,6 +76,18 @@
       "size": 3
     },
     {
+      "display_group_id": "rock-pile:-73.0047:40.1940",
+      "canonical_name": "Rock Pile",
+      "aliases": [
+        "Rock Piles"
+      ],
+      "related_ids": [
+        "rock-pile:-73.0047:40.1940",
+        "rock-piles:-72.9143:40.0954"
+      ],
+      "size": 2
+    },
+    {
       "display_group_id": "toms:-72.6950:39.1583",
       "canonical_name": "Toms",
       "aliases": [
@@ -92,7 +116,10 @@
     {
       "canonical_id": "2-buoy:-74.5658:39.0897",
       "canonical_name": "2 buoy",
-      "source_record_ids": []
+      "source_record_ids": [
+        "compiled:2",
+        "legacy-md:234"
+      ]
     },
     {
       "canonical_id": "3-sisters:-73.6007:40.3859",
@@ -113,17 +140,26 @@
     {
       "canonical_id": "5-buoy:-73.8482:40.4282",
       "canonical_name": "5 Buoy",
-      "source_record_ids": []
+      "source_record_ids": [
+        "compiled:5",
+        "legacy-md:5"
+      ]
     },
     {
       "canonical_id": "6-buoy:-73.8717:40.4233",
       "canonical_name": "6 Buoy",
-      "source_record_ids": []
+      "source_record_ids": [
+        "compiled:6",
+        "legacy-md:6"
+      ]
     },
     {
       "canonical_id": "a-buoy:-73.6667:40.0332",
       "canonical_name": "A Buoy",
-      "source_record_ids": []
+      "source_record_ids": [
+        "compiled:7",
+        "legacy-md:7"
+      ]
     },
     {
       "canonical_id": "acid-waters:-73.7103:40.3613",
@@ -273,7 +309,9 @@
       "canonical_name": "Barnegat Inlet Buoy",
       "source_record_ids": [
         "compiled:27",
-        "legacy-md:24"
+        "compiled:32",
+        "legacy-md:24",
+        "legacy-md:29"
       ]
     },
     {
@@ -306,14 +344,6 @@
       "source_record_ids": [
         "compiled:31",
         "legacy-md:28"
-      ]
-    },
-    {
-      "canonical_id": "bi:-74.0585:39.7410",
-      "canonical_name": "BI",
-      "source_record_ids": [
-        "compiled:32",
-        "legacy-md:29"
       ]
     },
     {
@@ -1013,7 +1043,10 @@
     {
       "canonical_id": "reef-lump:-73.9407:40.1120",
       "canonical_name": "Reef lump",
-      "source_record_ids": []
+      "source_record_ids": [
+        "compiled:128",
+        "legacy-md:117"
+      ]
     },
     {
       "canonical_id": "resor:-73.4213:39.7789",
@@ -1380,7 +1413,10 @@
     {
       "canonical_id": "1-buoy:-74.3950:39.3500",
       "canonical_name": "1 buoy",
-      "source_record_ids": []
+      "source_record_ids": [
+        "compiled:178",
+        "legacy-md:165"
+      ]
     },
     {
       "canonical_id": "11-fathom-lump:-73.7893:39.5879",
@@ -1467,15 +1503,19 @@
       "canonical_name": "Barnegat Ridge South",
       "source_record_ids": [
         "compiled:189",
-        "legacy-md:176"
+        "compiled:698",
+        "legacy-md:176",
+        "legacy-md:666"
       ]
     },
     {
       "canonical_id": "barnrgat-ridge-north:-73.7928:39.6972",
-      "canonical_name": "Barnrgat Ridge North",
+      "canonical_name": "Barnegat Ridge North",
       "source_record_ids": [
         "compiled:190",
-        "legacy-md:177"
+        "compiled:739",
+        "legacy-md:177",
+        "legacy-md:690"
       ]
     },
     {
@@ -1607,7 +1647,10 @@
     {
       "canonical_id": "j-lump:-73.7930:39.5372",
       "canonical_name": "J-Lump",
-      "source_record_ids": []
+      "source_record_ids": [
+        "compiled:209",
+        "legacy-md:196"
+      ]
     },
     {
       "canonical_id": "le:-74.2767:39.4625",
@@ -2132,7 +2175,10 @@
     {
       "canonical_id": "m-lump:-74.5459:39.0189",
       "canonical_name": "M. Lump",
-      "source_record_ids": []
+      "source_record_ids": [
+        "compiled:278",
+        "legacy-md:266"
+      ]
     },
     {
       "canonical_id": "mary-lou-slough:-74.7507:38.8129",
@@ -2941,7 +2987,10 @@
     {
       "canonical_id": "deep-hole:-74.6520:39.1764",
       "canonical_name": "Deep Hole",
-      "source_record_ids": []
+      "source_record_ids": [
+        "compiled:387",
+        "legacy-md:374"
+      ]
     },
     {
       "canonical_id": "delaware-bay-reef:-75.0677:39.0467",
@@ -3058,14 +3107,8 @@
       "canonical_name": "HA Bouy",
       "source_record_ids": [
         "compiled:402",
-        "legacy-md:387"
-      ]
-    },
-    {
-      "canonical_id": "ha-buoy:-73.3567:40.1267",
-      "canonical_name": "HA Buoy",
-      "source_record_ids": [
         "compiled:403",
+        "legacy-md:387",
         "legacy-md:388"
       ]
     },
@@ -3548,17 +3591,12 @@
       ]
     },
     {
-      "canonical_id": "rock-piles:-72.9143:40.0954",
-      "canonical_name": "Rock Piles",
-      "source_record_ids": [
-        "compiled:470",
-        "legacy-md:451"
-      ]
-    },
-    {
       "canonical_id": "rock-slough:-74.8247:38.8727",
       "canonical_name": "Rock Slough",
-      "source_record_ids": []
+      "source_record_ids": [
+        "compiled:471",
+        "legacy-md:452"
+      ]
     },
     {
       "canonical_id": "san-diego:-73.0420:40.5401",
@@ -4996,7 +5034,10 @@
     {
       "canonical_id": "shoal-slough:-75.3249:37.8544",
       "canonical_name": "Shoal Slough",
-      "source_record_ids": []
+      "source_record_ids": [
+        "compiled:662",
+        "legacy-md:630"
+      ]
     },
     {
       "canonical_id": "deadman-shoal:-75.0160:39.0937",
@@ -5231,14 +5272,6 @@
       ]
     },
     {
-      "canonical_id": "barnegat-south-end-ridge:-73.7814:39.6513",
-      "canonical_name": "Barnegat, South End Ridge",
-      "source_record_ids": [
-        "compiled:698",
-        "legacy-md:666"
-      ]
-    },
-    {
       "canonical_id": "stone-pile:-73.6467:40.5625",
       "canonical_name": "Stone Pile",
       "source_record_ids": [
@@ -5413,14 +5446,6 @@
       "canonical_name": "Clover Reef",
       "source_record_ids": [
         "compiled:737"
-      ]
-    },
-    {
-      "canonical_id": "barnegat-north-end-ridge:-73.7905:39.7011",
-      "canonical_name": "Barnegat, North End Ridge",
-      "source_record_ids": [
-        "compiled:739",
-        "legacy-md:690"
       ]
     },
     {
@@ -32405,7 +32430,7 @@
       "name_similarity": 1,
       "geometry_overlap": true,
       "decision": "merge",
-      "reason": "same normalized identity and coincident/overlapping geometry"
+      "reason": "same semantic core, compatible qualifiers/numbers, and within resolver distance"
     },
     {
       "a": "compiled:2",
@@ -32983,7 +33008,7 @@
       "name_similarity": 1,
       "geometry_overlap": true,
       "decision": "merge",
-      "reason": "same normalized identity and coincident/overlapping geometry"
+      "reason": "same semantic core, compatible qualifiers/numbers, and within resolver distance"
     },
     {
       "a": "compiled:5",
@@ -33204,7 +33229,7 @@
       "name_similarity": 1,
       "geometry_overlap": true,
       "decision": "merge",
-      "reason": "same normalized identity and coincident/overlapping geometry"
+      "reason": "same semantic core, compatible qualifiers/numbers, and within resolver distance"
     },
     {
       "a": "compiled:6",
@@ -33442,7 +33467,7 @@
       "name_similarity": 1,
       "geometry_overlap": true,
       "decision": "merge",
-      "reason": "same normalized identity and coincident/overlapping geometry"
+      "reason": "same semantic core, compatible qualifiers/numbers, and within resolver distance"
     },
     {
       "a": "compiled:7",
@@ -80821,7 +80846,7 @@
       "name_similarity": 0,
       "geometry_overlap": true,
       "decision": "merge",
-      "reason": "same normalized identity and coincident/overlapping geometry"
+      "reason": "same semantic core, compatible qualifiers/numbers, and within resolver distance"
     },
     {
       "a": "compiled:128",
@@ -99147,7 +99172,7 @@
       "name_similarity": 1,
       "geometry_overlap": true,
       "decision": "merge",
-      "reason": "same normalized identity and coincident/overlapping geometry"
+      "reason": "same semantic core, compatible qualifiers/numbers, and within resolver distance"
     },
     {
       "a": "compiled:178",
@@ -101798,8 +101823,8 @@
       "distance_nm": 0.09,
       "name_similarity": 0.813,
       "geometry_overlap": true,
-      "decision": "parent/subarea",
-      "reason": "same or near-same name with distinct footprint; retain both source records"
+      "decision": "merge",
+      "reason": "same semantic core, compatible qualifiers/numbers, and within resolver distance"
     },
     {
       "a": "compiled:189",
@@ -102053,8 +102078,8 @@
       "distance_nm": 0.09,
       "name_similarity": 0.813,
       "geometry_overlap": true,
-      "decision": "parent/subarea",
-      "reason": "same or near-same name with distinct footprint; retain both source records"
+      "decision": "merge",
+      "reason": "same semantic core, compatible qualifiers/numbers, and within resolver distance"
     },
     {
       "a": "compiled:189",
@@ -102189,8 +102214,8 @@
       "distance_nm": 0.26,
       "name_similarity": 0.75,
       "geometry_overlap": true,
-      "decision": "parent/subarea",
-      "reason": "same or near-same name with distinct footprint; retain both source records"
+      "decision": "merge",
+      "reason": "same semantic core, compatible qualifiers/numbers, and within resolver distance"
     },
     {
       "a": "compiled:190",
@@ -102478,8 +102503,8 @@
       "distance_nm": 0.26,
       "name_similarity": 0.75,
       "geometry_overlap": true,
-      "decision": "parent/subarea",
-      "reason": "same or near-same name with distinct footprint; retain both source records"
+      "decision": "merge",
+      "reason": "same semantic core, compatible qualifiers/numbers, and within resolver distance"
     },
     {
       "a": "compiled:190",
@@ -107630,7 +107655,7 @@
       "name_similarity": 1,
       "geometry_overlap": true,
       "decision": "merge",
-      "reason": "same normalized identity and coincident/overlapping geometry"
+      "reason": "same semantic core, compatible qualifiers/numbers, and within resolver distance"
     },
     {
       "a": "compiled:209",
@@ -126959,7 +126984,7 @@
       "name_similarity": 1,
       "geometry_overlap": true,
       "decision": "merge",
-      "reason": "same normalized identity and coincident/overlapping geometry"
+      "reason": "same semantic core, compatible qualifiers/numbers, and within resolver distance"
     },
     {
       "a": "compiled:278",
@@ -160942,7 +160967,7 @@
       "name_similarity": 1,
       "geometry_overlap": true,
       "decision": "merge",
-      "reason": "same normalized identity and coincident/overlapping geometry"
+      "reason": "same semantic core, compatible qualifiers/numbers, and within resolver distance"
     },
     {
       "a": "compiled:387",
@@ -162369,8 +162394,8 @@
       "distance_nm": 1.16,
       "name_similarity": 0.333,
       "geometry_overlap": true,
-      "decision": "unresolved",
-      "reason": "candidate requires source review; no automatic identity decision"
+      "decision": "merge",
+      "reason": "same semantic core, compatible qualifiers/numbers, and within resolver distance"
     },
     {
       "a": "compiled:402",
@@ -162454,8 +162479,8 @@
       "distance_nm": 1.16,
       "name_similarity": 0.333,
       "geometry_overlap": true,
-      "decision": "unresolved",
-      "reason": "candidate requires source review; no automatic identity decision"
+      "decision": "merge",
+      "reason": "same semantic core, compatible qualifiers/numbers, and within resolver distance"
     },
     {
       "a": "compiled:402",
@@ -162539,8 +162564,8 @@
       "distance_nm": 1.16,
       "name_similarity": 0.333,
       "geometry_overlap": true,
-      "decision": "unresolved",
-      "reason": "candidate requires source review; no automatic identity decision"
+      "decision": "merge",
+      "reason": "same semantic core, compatible qualifiers/numbers, and within resolver distance"
     },
     {
       "a": "compiled:403",
@@ -177024,7 +177049,7 @@
       "name_similarity": 0,
       "geometry_overlap": true,
       "decision": "merge",
-      "reason": "same normalized identity and coincident/overlapping geometry"
+      "reason": "same semantic core, compatible qualifiers/numbers, and within resolver distance"
     },
     {
       "a": "compiled:471",
@@ -208185,7 +208210,7 @@
       "name_similarity": 0,
       "geometry_overlap": true,
       "decision": "merge",
-      "reason": "same normalized identity and coincident/overlapping geometry"
+      "reason": "same semantic core, compatible qualifiers/numbers, and within resolver distance"
     },
     {
       "a": "compiled:662",
@@ -213998,8 +214023,8 @@
       "distance_nm": 0.09,
       "name_similarity": 0.813,
       "geometry_overlap": true,
-      "decision": "parent/subarea",
-      "reason": "same or near-same name with distinct footprint; retain both source records"
+      "decision": "merge",
+      "reason": "same semantic core, compatible qualifiers/numbers, and within resolver distance"
     },
     {
       "a": "compiled:698",
@@ -217738,8 +217763,8 @@
       "distance_nm": 0.26,
       "name_similarity": 0.75,
       "geometry_overlap": true,
-      "decision": "parent/subarea",
-      "reason": "same or near-same name with distinct footprint; retain both source records"
+      "decision": "merge",
+      "reason": "same semantic core, compatible qualifiers/numbers, and within resolver distance"
     },
     {
       "a": "compiled:739",
@@ -256192,8 +256217,8 @@
       "distance_nm": 0.09,
       "name_similarity": 0.813,
       "geometry_overlap": true,
-      "decision": "parent/subarea",
-      "reason": "same or near-same name with distinct footprint; retain both source records"
+      "decision": "merge",
+      "reason": "same semantic core, compatible qualifiers/numbers, and within resolver distance"
     },
     {
       "a": "legacy-md:176",
@@ -256345,8 +256370,8 @@
       "distance_nm": 0.26,
       "name_similarity": 0.75,
       "geometry_overlap": true,
-      "decision": "parent/subarea",
-      "reason": "same or near-same name with distinct footprint; retain both source records"
+      "decision": "merge",
+      "reason": "same semantic core, compatible qualifiers/numbers, and within resolver distance"
     },
     {
       "a": "legacy-md:177",
@@ -278190,8 +278215,8 @@
       "distance_nm": 1.16,
       "name_similarity": 0.333,
       "geometry_overlap": true,
-      "decision": "unresolved",
-      "reason": "candidate requires source review; no automatic identity decision"
+      "decision": "merge",
+      "reason": "same semantic core, compatible qualifiers/numbers, and within resolver distance"
     },
     {
       "a": "legacy-md:387",

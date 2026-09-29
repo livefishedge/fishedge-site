@@ -1,5 +1,5 @@
 import { writeFile, mkdir } from 'node:fs/promises';
-import { resolveFeatures } from './fishing-ground-identity.mjs';
+import { resolveDisplayGroups, resolveFeatures } from './fishing-ground-identity.mjs';
 
 // Mid-Atlantic/Delmarva coverage used by the current dashboard region. Keep
 // this bounded: the BOEM atlas is slow on oversized envelopes.
@@ -83,15 +83,23 @@ async function main() {
     arcgis(MD_REEF_URL, 'Artificial reef', 'Maryland DNR'),
     arcgis(ATLANTIC_URL, 'Fishing ground', 'BOEM Atlantic Fishing Atlas')
   ]);
-  const records = resolveFeatures([...njItems, ...mdFishing, ...mdReefs, ...atlantic]);
+  const sourceRecords = [...njItems, ...mdFishing, ...mdReefs, ...atlantic];
+  const identities = resolveFeatures(sourceRecords);
+  const records = resolveDisplayGroups(identities);
   const output = {
-    version: 1,
+    version: 7,
+    identity_policy: 'catalog-wide-component-resolver-v5-reviewed-display-groups',
+    source_feature_count: identities.length,
     generated_at: new Date().toISOString(),
     bbox,
     features: records
   };
   await mkdir('dashboard/data', { recursive: true });
+  await writeFile('dashboard/data/fishing-grounds-source.json', JSON.stringify({ ...output, features: sourceRecords }));
   await writeFile('dashboard/data/fishing-grounds.json', JSON.stringify(output));
+  await writeFile('dashboard/data/fishing-grounds-points.json', JSON.stringify({
+    ...output, features: records.map(({ geometry, ...item }) => item),
+  }));
   console.log(`wrote ${output.features.length} canonical fishing grounds`);
 }
 

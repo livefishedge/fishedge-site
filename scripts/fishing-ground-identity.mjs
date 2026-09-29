@@ -39,6 +39,7 @@ function soundex(value) {
 function coreTokens(value) {
   const raw = normalizedName(value)
     .replace(/^doc\s+/, '')
+    .replace(/\b(north|south|east|west|northeast|northwest|southeast|southwest)\s+end\b/g, '$1')
     .replace(/\bnorth\s+east\b/g, 'northeast')
     .replace(/\bnorth\s+west\b/g, 'northwest')
     .replace(/\bsouth\s+east\b/g, 'southeast')
@@ -69,7 +70,8 @@ function tokenIdentityMatch(a, b) {
   const aa = coreTokens(a), bb = coreTokens(b);
   if (!aa.length || !bb.length || aa.length !== bb.length) return false;
   const pa = phoneticTokens(a), pb = phoneticTokens(b);
-  return pa.every((code, index) => code && code === pb[index]);
+  return pa.every((code, index) => code && code === pb[index]) ||
+    pa.slice().sort().every((code, index) => code && code === pb.slice().sort()[index]);
 }
 
 function editSimilarity(a, b) {
@@ -159,7 +161,20 @@ function structureTokens(value) {
 // used only where two nearby records are the same captain-facing ground or a
 // parent polygon redundantly names a contained child. Protected operational
 // subareas never enter this relation.
+const REVIEWED_DISPLAY_GROUPS = [
+  {
+    ids: ['barnegat-inlet-buoy:-74.0642:39.7412', 'bi:-74.0585:39.7410'],
+    reason: 'Mike screenshot review 2026-09-28: BI is the local Barnegat Inlet buoy label',
+  },
+  {
+    ids: ['rock-pile:-73.0047:40.1940', 'rock-piles:-72.9143:40.0954'],
+    reason: 'Mike screenshot review 2026-09-28: one display group; retain both disjoint source footprints, not a coordinate reconciliation',
+  },
+];
+
 export function displayEquivalent(a, b) {
+  if (a?.point && b?.point && REVIEWED_DISPLAY_GROUPS.some(group =>
+    group.ids.includes(stableId(a)) && group.ids.includes(stableId(b)))) return true;
   if (!a?.point || !b?.point || DISPLAY_PROTECTED.test(a.name || '') || DISPLAY_PROTECTED.test(b.name || '')) return false;
   const dx = (a.point[0] - b.point[0]) * Math.cos((a.point[1] + b.point[1]) * Math.PI / 360);
   const dy = a.point[1] - b.point[1];
@@ -189,6 +204,8 @@ export function identityMatch(a, b) {
   return featureNames(a).some(nameA => nameVariants(nameA).some(left => featureNames(b).some(nameB => nameVariants(nameB).some(right => {
     const qa = qualifierTokens(left), qb = qualifierTokens(right);
     if (qa.length !== qb.length || qa.some((q, i) => q !== qb[i])) return false;
+    const buoySpelling = name => normalizedName(name).replace(/\bbouy\b/g, 'buoy');
+    if (buoySpelling(left) === buoySpelling(right)) return true;
     const aa = coreTokens(left).join('');
     const bb = coreTokens(right).join('');
     return aa.length >= 2 && (aa === bb || tokenIdentityMatch(left, right) || editSimilarity(left, right) >= 0.82);
@@ -219,7 +236,7 @@ export function resolveFeatures(features) {
   items.forEach((item, index) => { const root = find(index); const group = groups.get(root) || []; group.push(item); groups.set(root, group); });
   return [...groups.values()].map(group => {
     const [first, ...rest] = group;
-    const item = { ...first, aliases: [...(first.aliases || [])] };
+    const item = { ...first, aliases: [...(first.aliases || [])], source_record_ids: group.flatMap(member => member.source_record_ids || [member.id || stableId(member)]) };
     for (const other of rest) {
       if (other.name !== item.name && !item.aliases.includes(other.name)) item.aliases.push(other.name);
       for (const alias of other.aliases || []) if (alias !== item.name && !item.aliases.includes(alias)) item.aliases.push(alias);
@@ -244,12 +261,16 @@ export function resolveDisplayGroups(features) {
   items.forEach((item, index) => { const root = find(index); const group = groups.get(root) || []; group.push(item); groups.set(root, group); });
   return [...groups.values()].map(group => {
     const [first, ...rest] = group;
-    const item = { ...first, aliases: [...(first.aliases || [])], related_ids: group.map(member => member.id).filter(Boolean) };
+    const item = { ...first, aliases: [...(first.aliases || [])], related_ids: group.flatMap(member => member.source_record_ids || [member.id || stableId(member)]), source_record_ids: group.flatMap(member => member.source_record_ids || [member.id || stableId(member)]) };
     for (const other of rest) {
       if (other.name !== item.name && !item.aliases.includes(other.name)) item.aliases.push(other.name);
       for (const alias of other.aliases || []) if (alias !== item.name && !item.aliases.includes(alias)) item.aliases.push(alias);
       if (other.geometry) item.geometry = mergeGeometry(item.geometry, other.geometry);
       if (other.source && !item.sources?.includes(other.source)) item.sources = [...(item.sources || [item.source]), other.source];
+    }
+    if (item.name === 'Barnrgat Ridge North' && item.aliases.includes('Barnegat, North End Ridge')) {
+      item.aliases.push(item.name);
+      item.name = 'Barnegat Ridge North';
     }
     item.display_group_id = item.id || stableId(item);
     item.display_group_size = group.length;
