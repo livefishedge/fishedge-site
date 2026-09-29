@@ -3659,7 +3659,9 @@ async function rebuildCombinedThermalLayers() {
   if (composite.densityLayer) { m.addLayer(composite.densityLayer); window._combinedFrontDensityLayer = composite.densityLayer; }
   if (thermalScanTimeDiv) {
     const source = composite.scanTime || "No thermal-front scan";
-    thermalScanTimeDiv.textContent = thermalFrontState.stale ? `${source} · STALE SOURCE` : source;
+    const ageHours = thermalFrontState.latestSourceMs == null ? null : Math.max(0, (Date.now() - thermalFrontState.latestSourceMs) / 3600000);
+    const ageText = ageHours == null ? "NO SOURCE" : (ageHours < 24 ? `${ageHours.toFixed(1)}h old` : `${Math.floor(ageHours / 24)}d old`);
+    thermalScanTimeDiv.textContent = thermalFrontState.stale ? `${source} · ${ageText} · STALE SOURCE` : `${source} · ${ageText}`;
   }
 }
 
@@ -9826,7 +9828,10 @@ async function thermalLoadData() {
       .sort((a, b) => a.t - b.t);
     const latest = thermalFrontState.frames.at(-1)?.t;
     thermalFrontState.latestSourceMs = Number.isFinite(latest) ? latest : null;
-    thermalFrontState.stale = !Number.isFinite(latest) || (Date.now() - latest > 72 * 3600000);
+    // Thermal fronts are an operational product, not archival imagery. Keep
+    // historical frames selectable, but never present an older observation
+    // as current. Age is based on observation metadata, not index publication.
+    thermalFrontState.stale = !Number.isFinite(latest) || (Date.now() - latest > 6 * 3600000);
     thermalFrontState.frameSignature = sourceFrames.map(f => `${f.id || f.frame_id || f.json_path || f.path || ""}:${epochMsForFrame("thermal_fronts", f) ?? epochMsForFrame("sst_front", f) ?? ""}`).join("|");
     if (latest) thermalFrontState.frames = thermalFrontState.frames.filter(f => latest - f.t <= 21 * 864e5);
     thermalFrontState.frameData = await Promise.all(thermalFrontState.frames.map(async f => {
