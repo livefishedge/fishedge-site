@@ -479,8 +479,8 @@
           <label><input type="checkbox" data-layer="humidity"><span class="bv-dot dot-wind"></span>Humidity</label>
           <label><input type="checkbox" data-layer="cloud_cover"><span class="bv-dot dot-press"></span>Cloud Cover</label>
           <label><input type="checkbox" data-layer="visibility" checked><span class="bv-dot dot-press"></span>Visibility <button class="bv-unit-toggle" type="button" data-unit-key="visibility_mi">mi</button></label>
-          <label><input type="checkbox" data-layer="precipitation"><span class="bv-dot dot-tide"></span>Precipitation <button class="bv-unit-toggle" type="button" data-unit-key="precipitation_in">in</button></label>
-          <label><input type="checkbox" data-layer="precipitation_probability"><span class="bv-dot dot-tide"></span>Precip. Chance</label>
+          <label title="Total liquid-equivalent precipitation amount during each forecast interval"><input type="checkbox" data-layer="precipitation"><span class="bv-dot dot-tide"></span>Total Precipitation <button class="bv-unit-toggle" type="button" data-unit-key="precipitation_in">in</button></label>
+          <label title="Probability of measurable precipitation during each forecast interval"><input type="checkbox" data-layer="precipitation_probability"><span class="bv-dot dot-tide"></span>Precipitation Chance</label>
           <label><input type="checkbox" data-layer="uv_index"><span class="bv-dot dot-temp"></span>UV Index</label>
           <label><input type="checkbox" data-layer="pressure"><span class="bv-dot dot-press"></span>Pressure <button class="bv-unit-toggle" type="button" data-unit-key="pressure_hpa">hPa</button></label>
           <label><input type="checkbox" data-layer="cloud_low"><span class="bv-dot dot-press"></span>Low Cloud</label>
@@ -2421,7 +2421,7 @@
         detailGroups:{'Crew exposure':['temperature','apparent_temperature','humidity','uv_index'],'Fog & clouds':['dew_point','cloud_cover','cloud_low','cloud_mid','cloud_high'],'Weather detail':['pressure','precipitation','precipitation_probability','rain','showers','snowfall']},
         layers:['visibility','temperature','apparent_temperature','humidity','uv_index','dew_point','cloud_cover','cloud_low','cloud_mid','cloud_high','pressure','precipitation','precipitation_probability','rain','showers','snowfall'],
         mapFields:[['visibility_mi','Visibility'],['precipitation_probability_pct','Precipitation chance'],['temperature_f','Air temperature'],['apparent_temperature_f','Feels Like'],['relative_humidity_pct','Humidity'],['cloud_cover_pct','Cloud cover'],['pressure_hpa','Pressure']],
-        defaults:['precipitation_probability','wind'], heat:'precipitation_probability_pct'
+        defaults:['precipitation_probability','pressure','wind'], heat:'precipitation_probability_pct'
       },
       moon: {
         primary:[], detailGroups:{}, layers:[], mapFields:[], defaults:[], heat:null
