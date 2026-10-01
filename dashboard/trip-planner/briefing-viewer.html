@@ -3113,9 +3113,13 @@
       const scalarKey = heatKey;
       if (!currentFrame || !forecastData) return;
       // Tidal stage is rendered from native-mesh tiles generated from the
-      // same HTP nodes/elements as co-range. Fall back to the legacy grid only
-      // for older payloads without phase tiles.
-      if (scalarKey === 'astronomical_tide_ft' && drawNativeTidePhaseOverlay()) return;
+      // same HTP nodes/elements as co-range. Fall back to the validated
+      // regional grid when a native phase tile is unavailable.
+      if (scalarKey === 'astronomical_tide_ft' && forecastData?.native_mesh?.phase_tiles && drawNativeTidePhaseOverlay()) return;
+      if (scalarKey === 'astronomical_tide_ft' && forecastData?.native_mesh?.phase_tiles) {
+        const status = document.getElementById('bv-menu-status');
+        if (status) status.textContent = 'High-resolution tide tile unavailable; regional tidal stage shown';
+      }
       const grid = scalarKey && currentFrame[scalarKey];
       const lons = forecastData.lons, lats = forecastData.lats;
       if (!grid || !lons || !lats) return;

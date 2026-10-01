@@ -3457,21 +3457,16 @@
       const scalarKey = heatKey;
       if (!currentFrame || !forecastData) return;
       // Tidal stage is rendered from native-mesh tiles generated from the
-      // same HTP nodes/elements as co-range. Fall back to the legacy grid only
-      // for older payloads without phase tiles.
+      // same HTP nodes/elements as co-range. Fall back to the validated
+      // regional grid when a native phase tile is unavailable.
       if (scalarKey === 'astronomical_tide_ft') {
-        if (forecastData?.native_mesh?.phase_tiles) {
-          if (drawNativeTidePhaseOverlay()) return;
-          const status = document.getElementById('bv-menu-status');
-          if (status) status.textContent = 'Tidal stage unavailable for this time';
-        } else {
-          const status = document.getElementById('bv-menu-status');
-          if (status) status.textContent = 'Tidal stage unavailable for this time';
+        if (forecastData?.native_mesh?.phase_tiles && drawNativeTidePhaseOverlay()) return;
+        const status = document.getElementById('bv-menu-status');
+        if (status && forecastData?.native_mesh?.phase_tiles) {
+          status.textContent = 'High-resolution tide tile unavailable; regional tidal stage shown';
         }
-        // Native stage and the coarse forecast grid are different spatial
-        // products. Never silently paint the coarse field when native phase
-        // coverage is missing or the selected UTC frame has no tile.
-        return;
+        // Continue to the regional grid below; a partial native atlas must not
+        // blank later valid tidal-stage frames.
       }
       const grid = scalarKey && currentFrame[scalarKey];
       const lons = forecastData.lons, lats = forecastData.lats;

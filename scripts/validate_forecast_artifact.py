@@ -69,6 +69,16 @@ def main():
     ranges = [v for row in sample["tide_range_ft"] for v in row if isinstance(v, (int, float))]
     if not ranges or max(ranges) > 30.0:
         raise SystemExit(f"{region} tide range is physically implausible: max={max(ranges, default=float('nan'))}")
+    tide_coverage = []
+    for frame, timestamp in zip(frames, times):
+        if timestamp not in usable:
+            continue
+        grid = frame.get("astronomical_tide_ft")
+        finite = sum(1 for row in (grid or []) for value in (row or [])
+                     if isinstance(value, (int, float)))
+        if finite == 0:
+            raise SystemExit(f"{region} tidal stage has no usable cells at {timestamp.isoformat()}")
+        tide_coverage.append((timestamp, finite))
     mask = payload.get("tide_water_cells")
     if not isinstance(mask, list) or len(mask) != len(payload["lats"]) - 1 or len(mask[0]) != len(payload["lons"]) - 1:
         raise SystemExit(f"{region} tide_water_cells mask is not aligned to forecast grid")
@@ -96,14 +106,27 @@ def main():
         if not phase.get("asset_version"):
             raise SystemExit(f"{region} native phase assets lack an immutable version")
         phase_start, phase_end = parsed_phase_times[0], parsed_phase_times[-1]
-        required_end = now + dt.timedelta(hours=48)
+        # Compare native coverage with the actual advertised rolling forecast,
+        # not merely the next 48 hours; a partial atlas must be visible in
+        # health output even when the regional fallback keeps the layer valid.
+        required_end = max(usable)
         if phase_start > now or phase_end < required_end:
-            raise SystemExit(f"{region} native phase coverage {phase_start}..{phase_end} does not cover now through {required_end}")
+            # Native tiles are an optional high-resolution layer. The regional
+            # grid remains authoritative when it has finite cells, and the UI
+            # falls back to it for hours outside the native atlas horizon.
+            phase_status = "partial_with_regional_grid_fallback"
+        else:
+            phase_status = "complete"
     else:
         regional = payload.get("regional_tide_harmonics") or {}
         if not regional.get("fields") or not regional.get("reference_time"):
             raise SystemExit(f"{region} missing verified regional tide fallback")
+        phase_status = "regional_grid_only"
     print({"path": str(args.path), "frames": len(frames), "window_frames": len(usable),
+           "tidal_stage_coverage": {"first": tide_coverage[0][0].isoformat(),
+                                    "last": tide_coverage[-1][0].isoformat(),
+                                    "min_cells": min(v for _, v in tide_coverage)},
+           "native_phase_status": phase_status,
            "first": min(times).isoformat(), "last": max(times).isoformat(),
            "generated_at": payload["generated_at"]})
 
