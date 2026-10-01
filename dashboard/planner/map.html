@@ -1028,8 +1028,8 @@
       });
     }
 
-    function sampleGridAtPoint(grid, lat, lon, strict = false) {
-      const lons = forecastData?.lons, lats = forecastData?.lats;
+    function sampleGridAtPoint(grid, lat, lon, strict = false, axes = null) {
+      const lons = axes?.lons || forecastData?.lons, lats = axes?.lats || forecastData?.lats;
       if (!grid || !lons || !lats || lons.length < 2 || lats.length < 2) return null;
       if (lon < lons[0] || lon > lons[lons.length - 1] || lat < lats[0] || lat > lats[lats.length - 1]) return null;
       const xf = (lon - lons[0]) / ((lons[lons.length - 1] - lons[0]) / (lons.length - 1));
@@ -1524,21 +1524,19 @@
       const frameDate = new Date(currentFrame.time);
       const timeLabel = frameDate.toLocaleString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit', timeZone: 'America/New_York' });
       const rows = [];
-      const checked = key => !!layerVisibility[key];
       const onLand = waveMaskImage && waveMaskImage.complete && !isCoastWaterPoint(lon, lat);
-      const marineKeys = new Set(['wave_height','sst','wave_steepness','ride_harshness','surface_height','tide_level']);
+      const marineKeys = new Set(['wave_height','sst','wave_steepness','ride_harshness','surface_height','tide_level','tide_range','current']);
       for (const layer of Object.keys(SCALAR_LAYERS)) {
-        if (layer === 'tide_level' && activePlannerPreset !== 'tides') continue;
-        if (!checked(layer)) continue;
         const dataKey = SCALAR_LAYERS[layer];
-        const value = sampleGridAtPoint(currentFrame[dataKey], lat, lon, true);
+        const sourceGrid = layer === 'surface_height' ? slaProduct?.sla : currentFrame[dataKey];
+        const value = sampleGridAtPoint(sourceGrid, lat, lon, true,
+          layer === 'surface_height' ? slaProduct : null);
         const label = layer === 'wave_height' ? 'Significant Wave Height' : (LAYER_LABELS[layer] || PRODUCTS[dataKey]?.name || layer);
         const unavailable = marineKeys.has(layer) && onLand;
         rows.push(`<div><b>${label}</b> · ${unavailable ? 'outside marine coverage' : (Number.isFinite(value) ? `${convertDisplayValue(dataKey, value).toFixed(2)} ${displayUnit(dataKey, PRODUCTS[dataKey]?.unit || '')}` : 'missing source data')}</div>`);
       }
       for (const kind of ['swell', 'wind_wave']) {
         const motionKey = kind === 'swell' ? 'swell_motion' : 'wave_motion';
-        if (!checked(kind) && !checked(motionKey)) continue;
         const label = kind === 'swell' ? 'Swell' : 'Waves (Chop)';
         if (onLand) { rows.push(`<div><b>${label}</b> · outside marine coverage</div>`); continue; }
         if (kind === 'swell' && !swellSupportedAt(lon, lat)) {
@@ -1557,7 +1555,6 @@
         rows.push(`<div><b>${label}</b> · ${height.toFixed(2)} ${unit} · ${Number.isFinite(v.period) ? v.period.toFixed(1) + ' s' : 'period missing'} · travel ${Number.isFinite(dir) ? `${compass(dir)} (${Math.round(dir)}°)` : '—'}${unresolved ? ' · texture' : ''}</div>`);
       }
       for (const vectorLayer of ['wind', 'wind_gust', 'current']) {
-        if (!checked(vectorLayer)) continue;
         const vectorField = vectorLayer === 'current' ? 'current' : (vectorLayer === 'wind_gust' ? 'gust' : 'wind');
         const v = bilinearVec(currentFrame, lon, lat, vectorField);
         const label = vectorLayer === 'current' ? 'Currents' : (vectorLayer === 'wind_gust' ? 'Gust' : 'Wind');
@@ -1565,10 +1562,6 @@
         if (!v) { rows.push(`<div><b>${label}</b> · missing source data</div>`); continue; }
         const dir = v.speed > 1e-6 ? (Math.atan2(v.u, v.v) * 180 / Math.PI + 360) % 360 : null;
         rows.push(`<div><b>${label}</b> · ${convertDisplayValue(unitKey, v.speed).toFixed(1)} ${displayUnit(unitKey, 'kn')} · travel ${Number.isFinite(dir) ? `${compass(dir)} (${Math.round(dir)}°)` : '—'}</div>`);
-      }
-      if (activePlannerPreset === 'tides') {
-        const tide = sampleGridAtPoint(currentFrame.astronomical_tide_ft, lat, lon, true);
-        rows.push(`<div><b>Tidal level</b> · ${Number.isFinite(tide) ? `${tide.toFixed(2)} ft MLLW` : 'missing field data'}</div>`);
       }
       if (!rows.length) rows.push('<div>No data available at this location</div>');
       waveReadout.querySelector('[data-readout-title]').textContent = `${formatCoordinate(lon, 'E', 'W')}, ${formatCoordinate(lat, 'N', 'S')}`;
@@ -2185,8 +2178,8 @@
     const LAYER_LABELS = {
       temperature:'Air Temp', apparent_temperature:'Feels Like', dew_point:'Dew Point', humidity:'Humidity',
       cloud_cover:'Cloud Cover', cloud_low:'Low Cloud', cloud_mid:'Mid Cloud', cloud_high:'High Cloud',
-      visibility:'Visibility', precipitation:'Precipitation', rain:'Rain', showers:'Showers', snowfall:'Snowfall',
-      precipitation_probability:'Precip. Chance', uv_index:'UV Index', pressure:'Pressure', wind:'Wind + Gust', wind_gust:'Gust',
+      visibility:'Visibility', precipitation:'Total Precipitation', rain:'Rain', showers:'Showers', snowfall:'Snowfall',
+      precipitation_probability:'Precipitation Chance', uv_index:'UV Index', pressure:'Pressure', wind:'Wind + Gust', wind_gust:'Gust',
       tide_level:'Tidal Stage', tide_range:'Tidal Range', wind_wave:'Wave Height (Chop)', swell:'Swell Height', wave_height:'Significant Wave Height',
       current:'Currents',
       sst:'Sea-Surface Temp', wave_steepness:'Surface Steepness', ride_harshness:'Ride Harshness', surface_height:'Sea Level Anomaly'
@@ -2196,8 +2189,9 @@
       dew_point:'dew_point_f', humidity:'relative_humidity_pct', cloud_cover:'cloud_cover_pct',
       cloud_low:'cloud_cover_low_pct', cloud_mid:'cloud_cover_mid_pct', cloud_high:'cloud_cover_high_pct',
       visibility:'visibility_mi', precipitation:'precipitation_in', precipitation_probability:'precipitation_probability_pct',
-      rain:'rain_in', showers:'showers_in', snowfall:'snowfall_in', uv_index:'uv_index', sst:'sea_surface_temperature_f',
-      wave_steepness:'wave_steepness', ride_harshness:'ride_harshness_index', tide_level:'astronomical_tide_ft'
+      rain:'rain_in', showers:'showers_in', snowfall:'snowfall_in', uv_index:'uv_index', pressure:'pressure_hpa',
+      sst:'sea_surface_temperature_f', wave_steepness:'wave_steepness', ride_harshness:'ride_harshness_index',
+      tide_level:'astronomical_tide_ft', tide_range:'tide_range_ft', surface_height:'surface_height_m'
     };
     const viewSettings = {};
     function gridAvailable(key) {
