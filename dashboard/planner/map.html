@@ -1531,9 +1531,11 @@
       const frameDate = new Date(currentFrame.time);
       const timeLabel = frameDate.toLocaleString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit', timeZone: 'America/New_York' });
       const rows = [];
+      const modeLayers = new Set((PLANNER_PRESETS[activePlannerPreset]?.layers || []));
       const onLand = waveMaskImage && waveMaskImage.complete && !isCoastWaterPoint(lon, lat);
       const marineKeys = new Set(['wave_height','sst','wave_steepness','ride_harshness','surface_height','tide_level','tide_range','current']);
       for (const layer of Object.keys(SCALAR_LAYERS)) {
+        if (!modeLayers.has(layer)) continue;
         const dataKey = SCALAR_LAYERS[layer];
         const sourceGrid = layer === 'surface_height' ? slaProduct?.sla : currentFrame[dataKey];
         const value = sampleGridAtPoint(sourceGrid, lat, lon, true,
@@ -1543,6 +1545,7 @@
         rows.push(`<div><b>${label}</b> · ${unavailable ? 'outside marine coverage' : (Number.isFinite(value) ? `${convertDisplayValue(dataKey, value).toFixed(2)} ${displayUnit(dataKey, PRODUCTS[dataKey]?.unit || '')}` : 'missing source data')}</div>`);
       }
       for (const kind of ['swell', 'wind_wave']) {
+        if (!modeLayers.has(kind)) continue;
         const motionKey = kind === 'swell' ? 'swell_motion' : 'wave_motion';
         const label = kind === 'swell' ? 'Swell' : 'Waves (Chop)';
         if (onLand) { rows.push(`<div><b>${label}</b> · outside marine coverage</div>`); continue; }
@@ -1562,6 +1565,7 @@
         rows.push(`<div><b>${label}</b> · ${height.toFixed(2)} ${unit} · ${Number.isFinite(v.period) ? v.period.toFixed(1) + ' s' : 'period missing'} · travel ${Number.isFinite(dir) ? `${compass(dir)} (${Math.round(dir)}°)` : '—'}${unresolved ? ' · texture' : ''}</div>`);
       }
       for (const vectorLayer of ['wind', 'wind_gust', 'current']) {
+        if (!modeLayers.has(vectorLayer)) continue;
         const vectorField = vectorLayer === 'current' ? 'current' : (vectorLayer === 'wind_gust' ? 'gust' : 'wind');
         const v = bilinearVec(currentFrame, lon, lat, vectorField);
         const label = vectorLayer === 'current' ? 'Currents' : (vectorLayer === 'wind_gust' ? 'Gust' : 'Wind');
@@ -2420,7 +2424,7 @@
       weather: {
         primary:['visibility','precipitation_probability'],
         detailGroups:{'Crew exposure':['temperature','apparent_temperature','humidity','uv_index'],'Fog & clouds':['dew_point','cloud_cover','cloud_low','cloud_mid','cloud_high'],'Weather detail':['pressure','precipitation','precipitation_probability','rain','showers','snowfall']},
-        layers:['visibility','temperature','apparent_temperature','humidity','uv_index','dew_point','cloud_cover','cloud_low','cloud_mid','cloud_high','pressure','precipitation','precipitation_probability','rain','showers','snowfall'],
+        layers:['visibility','temperature','apparent_temperature','humidity','uv_index','dew_point','cloud_cover','cloud_low','cloud_mid','cloud_high','pressure','precipitation','precipitation_probability','rain','showers','snowfall','wind'],
         mapFields:[['visibility_mi','Visibility'],['precipitation_probability_pct','Precipitation chance'],['temperature_f','Air temperature'],['apparent_temperature_f','Feels Like'],['relative_humidity_pct','Humidity'],['cloud_cover_pct','Cloud cover'],['pressure_hpa','Pressure']],
         defaults:['precipitation_probability','pressure','wind'], heat:'precipitation_probability_pct'
       },
