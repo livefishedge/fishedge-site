@@ -811,8 +811,8 @@
     }
 
     // ---- tides (CO-OPS harmonic predictions, rendered when station id present) ----
-    // CO-OPS provides free hourly predictions out to ~2 days via the
-    // api/data/ txt endpoints. We precompute the request URL on the Python
+    // CO-OPS provides free hourly predictions through the planner horizon via
+    // the api/data/ txt endpoints. We precompute the request URL on the Python
     // side and ship station metadata + sample curves inline so the viewer
     // can render without a live fetch.
     const FALLBACK_TIDE_STATIONS = [
@@ -965,16 +965,20 @@
       // shipped with the regional payload. Use the gridded STOFS model only
       // as a fallback for stations without a CO-OPS curve.
       const stationCurve = forecastData?.tides?.curves?.[station.id];
-      if (Array.isArray(stationCurve) && stationCurve.length) return stationCurve
+      const stationPoints = Array.isArray(stationCurve) ? stationCurve
         .map(point => ({t: Number(point.t), v: Number(point.v)}))
-        .filter(point => Number.isFinite(point.t) && Number.isFinite(point.v));
-      return (forecastData?.frames || []).map(frame => {
+        .filter(point => Number.isFinite(point.t) && Number.isFinite(point.v))
+        : [];
+      const framePoints = (forecastData?.frames || []).map(frame => {
         // Use the original serialized prediction directly. Do not rebuild it
         // from harmonic phase/amplitude; that changes the phase convention.
         const v = sampleGridAtPoint(frame.astronomical_tide_ft, station.lat, station.lon);
         const t = parseForecastTime(frame.time);
         return Number.isFinite(v) && Number.isFinite(t) ? { t, v } : null;
       }).filter(Boolean);
+      const merged = new Map(framePoints.map(point => [point.t, point]));
+      for (const point of stationPoints) merged.set(point.t, point);
+      return [...merged.values()].sort((a, b) => a.t - b.t);
     }
 
     function modelTideCurveAtCoordinate(lon, lat) {
@@ -5368,7 +5372,8 @@
         // Keep the rolling operational window anchored to the current instant,
         // not device-local midnight, so the UI always has a complete +168h.
         const windowStart = Date.now() - 24 * 3600000;
-        const windowEnd = windowStart + 7 * 24 * 3600000;
+        // Keep a complete seven-day forward horizon from the current instant.
+        const windowEnd = Date.now() + 7 * 24 * 3600000;
         const framesInWindow = payload => payload.frames.filter(frame => {
           const t = parseForecastTime(frame.time);
           return Number.isFinite(t) && t >= windowStart && t <= windowEnd;
