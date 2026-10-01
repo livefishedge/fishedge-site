@@ -989,6 +989,33 @@
       }).filter(Boolean);
     }
 
+    function tideReadoutAtPoint(lon, lat) {
+      let curve = modelTideCurveAtCoordinate(lon, lat);
+      let source = 'regional tidal grid';
+      if (!curve.length) {
+        const nearest = TIDE_STATIONS.map(station => ({
+          station,
+          distance: Math.hypot((station.lon - lon) * Math.cos(lat * Math.PI / 180), station.lat - lat)
+        })).sort((a, b) => a.distance - b.distance)[0];
+        if (nearest && nearest.distance <= 0.75) {
+          curve = modelTideCurve(nearest.station);
+          source = `${nearest.station.name} station prediction`;
+        }
+      }
+      if (!curve.length) return { value: null, trend: null, source };
+      const target = parseForecastTime(currentFrame?.time);
+      let index = 0;
+      curve.forEach((point, i) => {
+        if (Number.isFinite(target) && Math.abs(point.t - target) < Math.abs(curve[index].t - target)) index = i;
+      });
+      const value = curve[index]?.v;
+      const before = curve[Math.max(0, index - 1)]?.v;
+      const after = curve[Math.min(curve.length - 1, index + 1)]?.v;
+      const slope = Number.isFinite(before) && Number.isFinite(after) ? after - before : 0;
+      const trend = slope > 0.015 ? 'rising' : slope < -0.015 ? 'dropping' : 'slack';
+      return { value: Number.isFinite(value) ? value : null, trend, source };
+    }
+
     function nextModelTideEvent(curve) {
       for (let i = 1; i < curve.length - 1; i++) {
         if(curve[i].t <= Date.now()) continue;
@@ -1446,10 +1473,14 @@
       for (const layer of Object.keys(SCALAR_LAYERS)) {
         if (!modeLayers.has(layer)) continue;
         const dataKey = SCALAR_LAYERS[layer];
-        const value = sampleGridAtPoint(currentFrame[dataKey], lat, lon, true);
+        const tide = layer === 'tide_level' ? tideReadoutAtPoint(lon, lat) : null;
+        let value = tide ? tide.value : sampleGridAtPoint(currentFrame[dataKey], lat, lon, true);
+        if (layer === 'tide_range' && !Number.isFinite(value)) value = nativeRangeAtPoint(lon, lat);
         const label = layer === 'wave_height' ? 'Significant Wave Height' : (LAYER_LABELS[layer] || PRODUCTS[dataKey]?.name || layer);
-        const unavailable = marineKeys.has(layer) && onLand;
-        rows.push(`<div><b>${label}</b> · ${unavailable ? 'outside marine coverage' : (Number.isFinite(value) ? `${convertDisplayValue(dataKey, value).toFixed(2)} ${displayUnit(dataKey, PRODUCTS[dataKey]?.unit || '')}` : 'missing source data')}</div>`);
+        const unavailable = marineKeys.has(layer) && onLand && !Number.isFinite(value);
+        const trend = tide?.trend ? ` · ${tide.trend}` : '';
+        const provenance = tide?.source && Number.isFinite(value) ? ` · ${tide.source}` : '';
+        rows.push(`<div><b>${label}</b> · ${unavailable ? 'outside marine coverage' : (Number.isFinite(value) ? `${convertDisplayValue(dataKey, value).toFixed(2)} ${displayUnit(dataKey, PRODUCTS[dataKey]?.unit || '')}${trend}${provenance}` : 'missing source data')}</div>`);
       }
       for (const kind of ['swell', 'wind_wave']) {
         const motionKey = kind === 'swell' ? 'swell_motion' : 'wave_motion';
