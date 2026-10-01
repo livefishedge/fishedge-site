@@ -1566,14 +1566,13 @@
         const dataKey = SCALAR_LAYERS[layer];
         const sourceGrid = layer === 'surface_height' ? slaProduct?.sla : currentFrame[dataKey];
         const tide = layer === 'tide_level' ? tideReadoutAtPoint(lon, lat) : null;
-        let value = tide ? tide.value : sampleGridAtPoint(sourceGrid, lat, lon, true,
+        let value = tide ? tide.value : sampleGridAtPoint(sourceGrid, lat, lon, layer === 'tide_range' ? false : true,
           layer === 'surface_height' ? slaProduct : null);
         if (layer === 'tide_range' && !Number.isFinite(value)) value = nativeRangeAtPoint(lon, lat);
         const label = layer === 'wave_height' ? 'Significant Wave Height' : (LAYER_LABELS[layer] || PRODUCTS[dataKey]?.name || layer);
         const unavailable = marineKeys.has(layer) && onLand && !Number.isFinite(value);
         const trend = tide?.trend ? ` · ${tide.trend}` : '';
-        const provenance = tide?.source && Number.isFinite(value) ? ` · ${tide.source}` : '';
-        rows.push(`<div><b>${label}</b> · ${unavailable ? 'outside marine coverage' : (Number.isFinite(value) ? `${convertDisplayValue(dataKey, value).toFixed(2)} ${displayUnit(dataKey, PRODUCTS[dataKey]?.unit || '')}${trend}${provenance}` : 'missing source data')}</div>`);
+        rows.push(`<div><b>${label}</b> · ${unavailable ? 'outside marine coverage' : (Number.isFinite(value) ? `${convertDisplayValue(dataKey, value).toFixed(2)} ${displayUnit(dataKey, PRODUCTS[dataKey]?.unit || '')}${trend}` : 'missing source data')}</div>`);
       }
       for (const kind of ['swell', 'wind_wave']) {
         if (!modeLayers.has(kind)) continue;
