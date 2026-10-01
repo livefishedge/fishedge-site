@@ -57,8 +57,8 @@ def main():
     tri = np.asarray(mesh['elements'], np.int32)
     if args.source and args.source_url:
         raise SystemExit('choose --source or --source-url, not both')
-    if not args.source and not args.source_url:
-        raise SystemExit('one of --source or --source-url is required')
+    if not args.source and not args.source_url and not args.checkpoint_dir:
+        raise SystemExit('one of --source, --source-url, or --checkpoint-dir is required')
     if args.checkpoint_dir:
         files = sorted(args.checkpoint_dir.glob('hour-*.npy'))
         if not files: raise SystemExit('native checkpoint has no hourly slices')
