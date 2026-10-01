@@ -1,6 +1,6 @@
 {
   "region": "usec_south",
-  "last_updated": "2026-10-01T20:36:30.427673Z",
+  "last_updated": "2026-10-01T21:06:21.486740Z",
   "vars": [
     "chl",
     "sst",
@@ -164,19 +164,20 @@
         "product_level": null,
         "stitched": false,
         "coarse_json_path": "https://data.fishedge.live/usec_south/chl/usec_south_20260930_2026273.1503_chl_S3A-S3B.coarse.json"
+      },
+      {
+        "var": "chl",
+        "id": "usec_south_20261001_2026274.1457_chl_S3A",
+        "label": "2026-10-01 14:57 UTC | S3A",
+        "time_iso": "2026-10-01T14:57:00Z",
+        "json_path": "https://data.fishedge.live/usec_south/chl/usec_south_20261001_2026274.1457_chl_S3A.json",
+        "grid_file": "frame_bbox",
+        "product_level": null,
+        "stitched": false,
+        "coarse_json_path": "https://data.fishedge.live/usec_south/chl/usec_south_20261001_2026274.1457_chl_S3A.coarse.json"
       }
     ],
     "sst": [
-      {
-        "var": "sst",
-        "id": "sst_usec_south_2026243_20260831_21_g19",
-        "label": "2026-08-31 21:00 UTC",
-        "time_iso": "2026-08-31T21:00:00Z",
-        "json_path": "https://data.fishedge.live/usec_south/sst/sst_usec_south_2026243_20260831_21_g19.json",
-        "grid_file": "goes_sst_1000_grid.json",
-        "product_level": null,
-        "stitched": false
-      },
       {
         "var": "sst",
         "id": "sst_usec_south_2026243_20260831_22_g19",
@@ -1073,6 +1074,16 @@
         "label": "2026-10-01 17:00 UTC",
         "time_iso": "2026-10-01T17:00:00Z",
         "json_path": "https://data.fishedge.live/usec_south/sst/sst_usec_south_2026274_20261001_17_g19.json",
+        "grid_file": "goes_sst_1000_grid.json",
+        "product_level": null,
+        "stitched": false
+      },
+      {
+        "var": "sst",
+        "id": "sst_usec_south_2026274_20261001_18_g19",
+        "label": "2026-10-01 18:00 UTC",
+        "time_iso": "2026-10-01T18:00:00Z",
+        "json_path": "https://data.fishedge.live/usec_south/sst/sst_usec_south_2026274_20261001_18_g19.json",
         "grid_file": "goes_sst_1000_grid.json",
         "product_level": null,
         "stitched": false
@@ -2012,19 +2023,19 @@
         "grid_file": "frame_bbox",
         "product_level": null,
         "stitched": false
-      }
-    ],
-    "sst_front": [
+      },
       {
-        "var": "sst_front",
-        "id": "sstfront_usec_south_2026243_20260831_21_g19",
-        "label": "2026-08-31 21:00 UTC",
-        "time_iso": "2026-08-31T21:00:00Z",
-        "json_path": "https://data.fishedge.live/usec_south/sst_front/sstfront_usec_south_2026243_20260831_21_g19.json",
+        "var": "chl_front",
+        "id": "chlfront_usec_south_2026274.1700_VNP",
+        "label": "2026-10-01 17:00 UTC | VNP",
+        "time_iso": "2026-10-01T17:00:00Z",
+        "json_path": "https://data.fishedge.live/usec_south/chl_front/chlfront_usec_south_2026274.1700_VNP.json",
         "grid_file": "frame_bbox",
         "product_level": null,
         "stitched": false
-      },
+      }
+    ],
+    "sst_front": [
       {
         "var": "sst_front",
         "id": "sstfront_usec_south_2026243_20260831_22_g19",
@@ -2924,6 +2935,16 @@
         "grid_file": "frame_bbox",
         "product_level": null,
         "stitched": false
+      },
+      {
+        "var": "sst_front",
+        "id": "sstfront_usec_south_2026274_20261001_18_g19",
+        "label": "2026-10-01 18:00 UTC",
+        "time_iso": "2026-10-01T18:00:00Z",
+        "json_path": "https://data.fishedge.live/usec_south/sst_front/sstfront_usec_south_2026274_20261001_18_g19.json",
+        "grid_file": "frame_bbox",
+        "product_level": null,
+        "stitched": false
       }
     ]
   },
@@ -2931,11 +2952,11 @@
     "online_retention_days": 45
   },
   "_dashboard_rewrite": {
-    "rewritten_at": "2026-10-01T20:38:02.191608+00:00",
+    "rewritten_at": "2026-10-01T21:08:08.538016+00:00",
     "r2_base": "https://data.fishedge.live",
     "retention_days": 45,
     "cutoff_doy": 229,
-    "frames_kept": 368,
+    "frames_kept": 366,
     "frames_dropped_outside_retention": 0
   }
 }
