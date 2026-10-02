@@ -3590,6 +3590,18 @@
       if (x < 0 || y < 0 || x >= waveMaskAlphaCanvas.width || y >= waveMaskAlphaCanvas.height) return false;
       return waveMaskData[(y * waveMaskAlphaCanvas.width + x) * 4 + 3] >= 128;
     }
+    function tidalWaterAt(lon, lat) {
+      const cell = sourceCellIndexAt(lon, lat);
+      if (!cell || !currentFrame?.astronomical_tide_ft) return false;
+      const [xi, yi] = cell;
+      if (forecastData?.tide_water_cells?.[yi]?.[xi] === true) return true;
+      // The tide product, not the wave shoreline mask, is authoritative for
+      // narrow bays and inlets. Retain a finite local stage cell even when a
+      // wave mask classifies the same coastal pixel as land.
+      const grid = currentFrame.astronomical_tide_ft;
+      return [grid[yi]?.[xi], grid[yi]?.[xi + 1], grid[yi + 1]?.[xi], grid[yi + 1]?.[xi + 1]]
+        .some(value => Number.isFinite(value));
+    }
     // A water connection is not enough to claim that incoming swell reaches a
     // location. Trace the source-side (up-wave) corridor through the actual
     // shoreline mask. If it intersects land, the location is an unresolved
@@ -3679,7 +3691,7 @@
               [cellLon0, cellLat0], [cellLon1, cellLat0],
               [cellLon1, cellLat1], [cellLon0, cellLat1],
               [(cellLon0 + cellLon1) / 2, (cellLat0 + cellLat1) / 2]
-            ].some(([lon, lat]) => cachedMaskWaterAt(lon, lat))) continue;
+            ].some(([lon, lat]) => tidalWaterAt(lon, lat))) continue;
             if (key === 'swell_height_ft') {
               const exposureVec = bilinearPartitionVec(currentFrame, 'swell', (cellLon0 + cellLon1) / 2, (cellLat0 + cellLat1) / 2);
               if (!swellQuadSupported(cellLon0, cellLat0, cellLon1, cellLat1) || !swellExposureAt((cellLon0 + cellLon1) / 2, (cellLat0 + cellLat1) / 2, exposureVec)) continue;

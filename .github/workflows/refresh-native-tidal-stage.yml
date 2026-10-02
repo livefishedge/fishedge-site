@@ -52,19 +52,24 @@ jobs:
             --cache /tmp/native_mesh/usec_south.npz --bbox -81 31 -73 36
       - name: Generate native stage tiles from the same mesh as co-range
         run: |
+          # The native source may contain only a partial operational horizon;
+          # the viewer forecast is the advertised contract. Ask the builder
+          # to continue the native signal to every published forecast frame.
           for region in usec_md usec_south; do
+            frames="$(python -c "import json; p=json.load(open('data/$region/briefing/forecast.json')); print((p.get('frames_manifest') or {}).get('frame_count') or len(p.get('frames') or []))")"
+            test "$frames" -gt 0
             python scripts/build_native_tide_phase_tiles.py --source-url '${{ steps.source.outputs.url }}' \
               --source-object '${{ steps.source.outputs.key }}' --asset-version '${{ steps.source.outputs.version }}' \
               --mesh-cache "/tmp/native_mesh/$region.npz" \
               --forecast "data/$region/briefing/forecast.json" \
               --out-dir "dashboard/trip-planner/data/$region/briefing/native_phase_tiles" \
-              --frames 126
+              --frames "$frames"
             python scripts/build_native_tide_phase_tiles.py --source-url '${{ steps.source.outputs.url }}' \
               --source-object '${{ steps.source.outputs.key }}' --asset-version '${{ steps.source.outputs.version }}' \
               --mesh-cache "/tmp/native_mesh/$region.npz" \
               --forecast "dashboard/trip-planner/data/$region/briefing/forecast.json" \
               --out-dir "dashboard/trip-planner/data/$region/briefing/native_phase_tiles" \
-              --frames 126
+              --frames "$frames"
           done
           python scripts/disable_stale_native_phase.py \
             data/usec_md/briefing/forecast.json \
