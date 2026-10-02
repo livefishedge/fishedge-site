@@ -69,6 +69,16 @@ def main():
     ranges = [v for row in sample["tide_range_ft"] for v in row if isinstance(v, (int, float))]
     if not ranges or max(ranges) > 30.0:
         raise SystemExit(f"{region} tide range is physically implausible: max={max(ranges, default=float('nan'))}")
+    # A weather refresh must not silently drop the range field from later
+    # frames. Validate every advertised frame, not only frame zero.
+    expected_shape = (len(payload.get("lats", [])), len(payload.get("lons", [])))
+    for frame in frames:
+        grid = frame.get("tide_range_ft")
+        if not isinstance(grid, list) or len(grid) != expected_shape[0] or any(
+                not isinstance(row, list) or len(row) != expected_shape[1] for row in grid):
+            raise SystemExit(f"{region} frame {frame.get('time')} missing aligned tide_range_ft")
+        if not any(isinstance(value, (int, float)) for row in grid for value in row):
+            raise SystemExit(f"{region} frame {frame.get('time')} tide_range_ft has no finite cells")
     tide_coverage = []
     for frame, timestamp in zip(frames, times):
         if timestamp not in usable:

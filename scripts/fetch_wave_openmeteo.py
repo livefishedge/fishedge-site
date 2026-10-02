@@ -332,6 +332,29 @@ def apply_regional_tide_harmonics(frames, contract):
         ref = datetime.fromisoformat(str(contract["reference_time"]).replace("Z", "+00:00"))
         fields = contract["fields"]
         periods = contract.get("periods_hours") or {"M2": 12.4206, "S2": 12.0, "K1": 23.9345, "O1": 25.8193}
+        # Compute the same full-horizon range field that the viewer exposes.
+        # Weather refreshes rebuild frames, so carrying only the harmonic
+        # metadata is insufficient: tide_range_ft must be regenerated too.
+        sample_hours = np.arange(0.0, 168.0, 0.25)
+        first_field = next((item for item in fields.values() if item.get('amplitude_ft')), None)
+        first_grid = (first_field or {}).get('amplitude_ft') or []
+        ranges = np.full((len(first_grid), len(first_grid[0]) if first_grid else 0), np.nan)
+        if ranges.size:
+            for yi in range(ranges.shape[0]):
+                for xi in range(ranges.shape[1]):
+                    values = []
+                    for hour in sample_hours:
+                        value = 0.0; covered = False
+                        for name, period in periods.items():
+                            item = fields.get(name) or {}
+                            amp_grid, phase_grid = item.get('amplitude_ft') or [], item.get('phase_deg') or []
+                            amp = amp_grid[yi][xi] if yi < len(amp_grid) and xi < len(amp_grid[yi]) else None
+                            phase = phase_grid[yi][xi] if yi < len(phase_grid) and xi < len(phase_grid[yi]) else None
+                            if amp is None or phase is None: continue
+                            value += float(amp) * np.cos(2.0 * np.pi * hour / float(period) - np.deg2rad(float(phase)))
+                            covered = True
+                        if covered: values.append(value)
+                    if values: ranges[yi, xi] = max(values) - min(values)
         for frame in frames:
             t = datetime.fromisoformat(str(frame["time"]).replace("Z", "+00:00"))
             hours = (t - ref).total_seconds() / 3600.0
@@ -350,6 +373,7 @@ def apply_regional_tide_harmonics(frames, contract):
                     row.append(float(value) if covered else None)
                 grid.append(row)
             frame["astronomical_tide_ft"] = grid
+            frame["tide_range_ft"] = [[None if not np.isfinite(v) else float(v) for v in row] for row in ranges]
         return True
     except (KeyError, IndexError, TypeError, ValueError, OverflowError):
         return False
