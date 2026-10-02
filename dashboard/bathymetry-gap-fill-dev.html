@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>USEC–MD Bathymetry Gap Fill · DEV</title>
+  <style>
+    :root{--bg:#07111f;--panel:#0e1d31;--line:#203b59;--text:#e8f1fb;--muted:#9cb2c9;--accent:#36d1dc;--warn:#ffbd69}
+    *{box-sizing:border-box}body{margin:0;background:linear-gradient(140deg,#06101d,#0a1d31 55%,#082532);color:var(--text);font:15px/1.5 Inter,system-ui,sans-serif}
+    main{max-width:1220px;margin:auto;padding:28px 20px 60px}.eyebrow{color:var(--accent);font-weight:700;letter-spacing:.12em;text-transform:uppercase;font-size:12px}h1{font-size:clamp(28px,4vw,48px);line-height:1.08;margin:8px 0 12px}h2{margin:0 0 12px;font-size:20px}.lede{max-width:850px;color:var(--muted);font-size:17px}.badge{display:inline-block;border:1px solid var(--warn);color:var(--warn);border-radius:999px;padding:4px 10px;font-size:12px;font-weight:700;margin:12px 0 22px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:20px 0}.card,.panel{background:rgba(14,29,49,.9);border:1px solid var(--line);border-radius:14px;padding:16px;box-shadow:0 12px 34px #0003}.metric{font-size:28px;font-weight:800;color:var(--accent)}.label{color:var(--muted);font-size:12px;margin-top:3px}.panel{margin-top:18px}.maps{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}.map{background:#050b13;border-radius:10px;overflow:hidden;border:1px solid var(--line)}.map img{width:100%;display:block;aspect-ratio:16/10;object-fit:contain;background:#050b13}.map div{padding:10px 12px}.map strong{display:block}.map small{color:var(--muted)}ul{margin:8px 0 0;padding-left:20px;color:var(--muted)}li{margin:5px 0}.ok{color:#75e6a0}.warning{color:var(--warn)}footer{margin-top:28px;color:var(--muted);font-size:12px}a{color:var(--accent)}
+  </style>
+</head>
+<body><main>
+  <div class="eyebrow">FishEdge · CTO bathymetry pipeline · DEV preview</div>
+  <h1>USEC–MD coverage-gap fill</h1>
+  <p class="lede">A provenance-preserving view of the measured survey work completed so far. It shows where qualified local survey derivatives now contribute bathymetry, which gaps remain, and why substrate is not being invented from depth.</p>
+  <span class="badge">QA candidate · production untouched</span>
+
+  <section class="grid">
+    <div class="card"><div class="metric">410,569</div><div class="label">regional measured cells</div></div>
+    <div class="card"><div class="metric">567,909</div><div class="label">northern shelf accepted cells</div></div>
+    <div class="card"><div class="metric">249,227</div><div class="label">southern shelf accepted cells</div></div>
+    <div class="card"><div class="metric">13,674</div><div class="label">immutable tiles hashed</div></div>
+    <div class="card"><div class="metric">342</div><div class="label">deduplicated register rows</div></div>
+    <div class="card"><div class="metric">0</div><div class="label">tile source-read errors</div></div>
+  </section>
+
+  <section class="panel"><h2>What the gap-fill work did</h2><ul>
+    <li><span class="ok">✓</span> Converted and retained qualified MLLW survey derivatives with masks, uncertainty and provenance.</li>
+    <li><span class="ok">✓</span> Built north and south open-shelf measured patches plus a regional measured-source candidate.</li>
+    <li><span class="ok">✓</span> Used immutable, hashed tile assembly; no production files were changed.</li>
+    <li><span class="warning">!</span> Remaining blank areas are unresolved data gaps, not silently interpolated measurements.</li>
+  </ul></section>
+
+  <section class="panel"><h2>Measured bathymetry renders</h2><div class="maps">
+    <div class="map"><img src="data/survey_bathy/dev_gap_fill/regional.png" alt="Regional measured bathymetry"/><div><strong>Regional measured candidate</strong><small>50 m display grid · 9-band source product</small></div></div>
+    <div class="map"><img src="data/survey_bathy/dev_gap_fill/north.png" alt="Northern shelf measured bathymetry"/><div><strong>Northern New Jersey/New York shelf</strong><small>H13474–H13480 measured sources</small></div></div>
+    <div class="map"><img src="data/survey_bathy/dev_gap_fill/south.png" alt="Southern shelf measured bathymetry"/><div><strong>Southern Delmarva/Virginia shelf</strong><small>H13094/H13095/H13326/H13327 measured sources</small></div></div>
+    <div class="map"><img src="data/survey_bathy/dev_gap_fill/chesapeake.png" alt="Chesapeake approach measured bathymetry"/><div><strong>Chesapeake approach patch</strong><small>Native-pixel averaging · MLLW</small></div></div>
+    <div class="map"><img src="data/survey_bathy/dev_gap_fill/canyon.png" alt="Offshore canyon priority render"/><div><strong>Canyon/shelf-break priority view</strong><small>Acquisition lead; not blended into MLLW base</small></div></div>
+  </div></section>
+
+  <section class="panel"><h2>Next coverage gaps</h2><ul>
+    <li>Acquire and process the highest-value Bigelow EM2040 shelf leads; current catalog links include access failures.</li>
+    <li>Qualify intersecting BlueTopo contributors as separately labeled NAVD88/mixed-source fallback.</li>
+    <li>Replace provisional bay exclusions with authoritative mouth/interior geometry before claiming outside-bays percentages.</li>
+    <li>Acquire calibrated backscatter or sediment observations. Until then, substrate is explicitly <strong>UNKNOWN</strong>.</li>
+  </ul><p><a href="data/survey_bathy/dev_gap_fill/status.json">Open machine-readable build status →</a></p></section>
+  <footer>Generated 2026-10-02 by the CTO bathymetry gap-fill pipeline. This is a Cloudflare Pages branch preview, not production.</footer>
+</main></body></html>
