@@ -1,0 +1,13 @@
+{
+  "status": "complete",
+  "source": "/home/gzheng/.openclaw/workspace-cto/bathy-research/qa/recovery/regional_v1/usec_md_measured_regional_base_50m_9band.cog.tif",
+  "output": "/home/gzheng/.openclaw/workspace-cto/bathy-research/qa/recovery/regional_v1/usec_md_measured_regional_base_50m_coverage_footprint.png",
+  "source_measured_cells": 410569,
+  "overview_occupied_blocks": 4552,
+  "downsampled_shape": [
+    1400,
+    1150
+  ],
+  "meaning": "Band 6 measured_flag > 0; cyan blocks indicate one or more measured source cells.",
+  "production_touched": false
+}
