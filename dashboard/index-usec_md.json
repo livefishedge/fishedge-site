@@ -1,6 +1,6 @@
 {
   "region": "usec_md",
-  "last_updated": "2026-10-02T23:38:13.012954Z",
+  "last_updated": "2026-10-02T23:52:57.206916Z",
   "vars": [
     "chl",
     "sst",
@@ -11,17 +11,6 @@
   ],
   "frames": {
     "chl": [
-      {
-        "var": "chl",
-        "id": "usec_md_20260918_2026261.1513_chl_S3A-S3B",
-        "label": "2026-09-18 15:13 UTC | S3A-S3B",
-        "time_iso": "2026-09-18T15:13:00Z",
-        "json_path": "https://data.fishedge.live/usec_md/chl/usec_md_20260918_2026261.1513_chl_S3A-S3B.json",
-        "grid_file": "frame_bbox",
-        "product_level": null,
-        "stitched": false,
-        "coarse_json_path": "https://data.fishedge.live/usec_md/chl/usec_md_20260918_2026261.1513_chl_S3A-S3B.coarse.json"
-      },
       {
         "var": "chl",
         "id": "usec_md_20260919_2026262.1447_chl_S3A-S3B",
@@ -882,16 +871,6 @@
     "uv": [
       {
         "var": "uv",
-        "id": "uv_usec_md_2026261_20260918_cmems-duacs",
-        "label": "2026-09-18",
-        "time_iso": "2026-09-18T00:00:00Z",
-        "json_path": "https://data.fishedge.live/usec_md/uv/uv_usec_md_2026261_20260918_cmems-duacs.json",
-        "grid_file": "uv_12500_grid.json",
-        "product_level": null,
-        "stitched": false
-      },
-      {
-        "var": "uv",
         "id": "uv_usec_md_2026262_20260919_cmems-duacs",
         "label": "2026-09-19",
         "time_iso": "2026-09-19T00:00:00Z",
@@ -1034,16 +1013,6 @@
     "sla": [
       {
         "var": "sla",
-        "id": "uv_usec_md_2026261_20260918_cmems-duacs",
-        "label": "2026-09-18",
-        "time_iso": "2026-09-18T00:00:00Z",
-        "json_path": "https://data.fishedge.live/usec_md/sla/uv_usec_md_2026261_20260918_cmems-duacs.json",
-        "grid_file": "uv_12500_grid.json",
-        "product_level": null,
-        "stitched": false
-      },
-      {
-        "var": "sla",
         "id": "uv_usec_md_2026262_20260919_cmems-duacs",
         "label": "2026-09-19",
         "time_iso": "2026-09-19T00:00:00Z",
@@ -1184,46 +1153,6 @@
       }
     ],
     "chl_front": [
-      {
-        "var": "chl_front",
-        "id": "chlfront_usec_md_2026261.1709_VJ2",
-        "label": "2026-09-18 17:09 UTC | VJ2",
-        "time_iso": "2026-09-18T17:09:00Z",
-        "json_path": "https://data.fishedge.live/usec_md/chl_front/chlfront_usec_md_2026261.1709_VJ2.json",
-        "grid_file": "frame_bbox",
-        "product_level": null,
-        "stitched": false
-      },
-      {
-        "var": "chl_front",
-        "id": "chlfront_usec_md_2026261.1745_VNP",
-        "label": "2026-09-18 17:45 UTC | VNP",
-        "time_iso": "2026-09-18T17:45:00Z",
-        "json_path": "https://data.fishedge.live/usec_md/chl_front/chlfront_usec_md_2026261.1745_VNP.json",
-        "grid_file": "frame_bbox",
-        "product_level": null,
-        "stitched": false
-      },
-      {
-        "var": "chl_front",
-        "id": "chlfront_usec_md_2026261.1806_VJ1",
-        "label": "2026-09-18 18:06 UTC | VJ1",
-        "time_iso": "2026-09-18T18:06:00Z",
-        "json_path": "https://data.fishedge.live/usec_md/chl_front/chlfront_usec_md_2026261.1806_VJ1.json",
-        "grid_file": "frame_bbox",
-        "product_level": null,
-        "stitched": false
-      },
-      {
-        "var": "chl_front",
-        "id": "chlfront_usec_md_2026261.1848_VJ2",
-        "label": "2026-09-18 18:48 UTC | VJ2",
-        "time_iso": "2026-09-18T18:48:00Z",
-        "json_path": "https://data.fishedge.live/usec_md/chl_front/chlfront_usec_md_2026261.1848_VJ2.json",
-        "grid_file": "frame_bbox",
-        "product_level": null,
-        "stitched": false
-      },
       {
         "var": "chl_front",
         "id": "chlfront_usec_md_2026262.1727_VNP",
@@ -2632,10 +2561,10 @@
     "online_retention_days": 45
   },
   "_dashboard_rewrite": {
-    "rewritten_at": "2026-10-02T23:38:21.831531+00:00",
+    "rewritten_at": "2026-10-03T00:08:02.543032+00:00",
     "r2_base": "https://data.fishedge.live",
     "retention_days": 45,
-    "cutoff_doy": 230,
+    "cutoff_doy": 231,
     "frames_kept": 341,
     "frames_dropped_outside_retention": 0
   }
