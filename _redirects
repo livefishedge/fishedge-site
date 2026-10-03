@@ -10,4 +10,6 @@
 /planner/map.html /dashboard/planner/map 200
 /planner/* /dashboard/planner/:splat 200
 /trip-planner/data/* /dashboard/trip-planner/data/:splat 200
+/data/usec_md/briefing/* /dashboard/trip-planner/data/usec_md/briefing/:splat 200
+/data/usec_south/briefing/* /dashboard/trip-planner/data/usec_south/briefing/:splat 200
 /subsurface-fronts/* /

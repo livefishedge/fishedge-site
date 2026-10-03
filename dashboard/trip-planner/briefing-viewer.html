@@ -828,6 +828,61 @@
     let TIDE_STATIONS = [];
     let activeTideStation = null;
 
+    const tideObservationRequests = new Map();
+    const tideObservationAttempts = new Map();
+    let tideReadoutStationId = null;
+    function tideObservationSummary(observed) {
+      const valid = (observed || []).filter(p => Number.isFinite(p?.t) && Number.isFinite(p?.v) && p.t <= Date.now());
+      const latest = valid.sort((a, b) => a.t - b.t).at(-1);
+      if (!latest) return 'Predicted · measured tide unavailable';
+      const age = Math.max(0, (Date.now() - latest.t) / 3600000);
+      const time = new Intl.DateTimeFormat('en-US', {timeZone: 'America/New_York', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'}).format(new Date(latest.t));
+      return `Predicted · measured ${latest.v.toFixed(2)} ft at ${time} ET · ${age.toFixed(1)}h old${age > 1 ? ' · STALE' : ''}${age > 12 ? ' · outside chart window' : ''}`;
+    }
+    function refreshTideObservations(station) {
+      const id = station?.id;
+      if (!id || !forecastData || tideObservationRequests.has(id) || Date.now() - (tideObservationAttempts.get(id) || 0) < 300000) return;
+      tideObservationAttempts.set(id, Date.now());
+      const request = (async () => {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000);
+        try {
+          const query = new URLSearchParams({product: 'water_level', application: 'FishEdge', station: id, date: 'recent', datum: 'MLLW', time_zone: 'gmt', units: 'english', format: 'json'});
+          const response = await fetch(`https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?${query}`, {signal: controller.signal, cache: 'no-store'});
+          if (!response.ok) throw new Error(`NOAA observations: ${response.status}`);
+          const payload = await response.json();
+          if (payload.error || !Array.isArray(payload.data)) throw new Error('NOAA observations unavailable');
+          const points = payload.data.filter(p => p.v !== '' && p.v != null).map(p => ({t: Date.parse(p.t.replace(' ', 'T') + 'Z'), v: Number(p.v)}))
+            .filter(p => Number.isFinite(p.t) && Number.isFinite(p.v) && p.t <= Date.now())
+            .sort((a, b) => a.t - b.t);
+          if (!points.length) throw new Error('NOAA observations empty');
+          forecastData.tides ||= {};
+          forecastData.tides.observed ||= {};
+          const old = forecastData.tides.observed[id] || [];
+          const newestOld = Math.max(-Infinity, ...old.map(p => p.t).filter(Number.isFinite));
+          if (points.at(-1).t >= newestOld) forecastData.tides.observed[id] = points;
+          if (activeTideStation?.id === id) renderActiveTide();
+          if (tideReadoutStationId === id) openTideStation(station);
+        } catch (error) {
+          // Preserve last known measurements with their real age. Never shift
+          // measurements or replace them with a prediction after a fetch error.
+          console.warn('[tide observations]', error.message);
+        } finally { clearTimeout(timeout); }
+      })();
+      tideObservationRequests.set(id, request);
+      request.finally(() => tideObservationRequests.delete(id));
+    }
+    setInterval(() => {
+      if (!document.hidden) {
+        refreshTideObservations(activeTideStation);
+        if (activeTideStation && forecastData) renderActiveTide();
+        if (tideReadoutStationId) {
+          const station = TIDE_STATIONS.find(s => s.id === tideReadoutStationId);
+          if (station) openTideStation(station);
+        }
+      }
+    }, 300000);
+
     function renderTideChart(curve, range, nextEvent, observed, targetId = 'bv-tide-svg') {
       const svg = document.getElementById(targetId);
       if (!svg) return;
@@ -894,9 +949,7 @@
         : (predictedValues.length ? Math.max(...predictedValues) - Math.min(...predictedValues) : 0);
       if (targetId !== 'bv-tide-svg') {
         const summary = document.querySelector('[data-tide-summary]');
-        if (summary) summary.textContent = measured.length
-          ? `Predicted + observation · latest ${latestMeasured.v.toFixed(2)} ft at ${new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' }).format(new Date(latestMeasured.t))} ET`
-          : 'Predicted · observations unavailable';
+        if (summary) summary.textContent = tideObservationSummary(observed);
         return;
       }
       set('bv-tide-range', `${predictedRange.toFixed(1)} ft`);
@@ -1031,6 +1084,7 @@
     }
 
     function renderActiveTide() {
+      refreshTideObservations(activeTideStation);
       const tides = (forecastData && forecastData.tides) || null;
       if (!tides) {
         renderTideChart(null, null, null);
@@ -1046,6 +1100,7 @@
     }
 
     function renderClickedTideChart(coordinate) {
+      tideReadoutStationId = null;
       if (!forecastData || !coordinate || !waveReadout) return;
       const [lon, lat] = ol.proj.toLonLat(coordinate, mapProjection);
       const curve = modelTideCurveAtCoordinate(lon, lat);
@@ -1518,6 +1573,8 @@
     }
     const stationMarkerOverlays = [];
     function openTideStation(station) {
+      tideReadoutStationId = station?.id || null;
+      refreshTideObservations(station);
       activeTideStation = station;
       const coordinate = ol.proj.fromLonLat([station.lon, station.lat], mapProjection);
       renderWaveReadout(coordinate);
@@ -1530,10 +1587,7 @@
       waveReadout.querySelector('[data-readout-title]').textContent = `${station.name} · ${Math.abs(station.lat).toFixed(2)}°${station.lat >= 0 ? 'N' : 'S'}, ${Math.abs(station.lon).toFixed(2)}°${station.lon >= 0 ? 'E' : 'W'}`;
       renderTideChart(curve, range, nextModelTideEvent(curve), observed, 'bv-tide-readout-svg');
       const summary = waveReadout.querySelector('[data-tide-summary]');
-      const latest = observed.filter(p => Number.isFinite(p?.t) && Number.isFinite(p?.v)).at(-1);
-      if (summary) summary.textContent = latest
-        ? `Predicted + observation · latest ${latest.v.toFixed(2)} ft at ${new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' }).format(new Date(latest.t))} ET`
-        : 'Predicted · observations unavailable';
+      if (summary) summary.textContent = tideObservationSummary(observed);
       waveReadout.style.display = 'block';
     }
     function drawTideStations() {
