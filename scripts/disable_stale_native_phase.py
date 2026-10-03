@@ -40,19 +40,21 @@ def main():
         phase_set = {value for value in phase_dt if value is not None}
         now = dt.datetime.now(dt.timezone.utc)
         phase_end = max((value for value in phase_dt if value is not None), default=None)
-        # Forecast refreshes slide in time. Preserve an atlas when its valid
-        # UTC interval still overlaps the refreshed forecast; array position
-        # and exact prefix are not identity. Rebuild can replace it later.
+        # Forecast refreshes slide in time. Native tides have an independent
+        # horizon from weather. Preserve every validated atlas that overlaps
+        # the refreshed forecast; a shorter native horizon must not erase the
+        # valid prefix and strand the renderer on the sparse regional grid.
+        # A later native build may replace this manifest atomically.
         valid = bool(phase_times and phase.get("frames") == len(phase_times)
                      and len(phase_dt) == len(phase_times)
                      and len(current_set.intersection(phase_set)) >= min(12, len(current_times))
-                     and phase_end is not None and phase_end >= max((parse(value) for value in current_times if parse(value) is not None), default=now)
+                     and phase_end is not None
                      and phase.get("asset_version"))
         removed = None if valid else native.pop("phase_tiles", None)
         quality = payload.setdefault("quality", {}).setdefault("native_mesh", {})
         quality["phase_tiles"] = {
             "status": "pass" if valid else "disabled",
-            "reason": ("native phase atlas timestamps match this forecast cycle"
+            "reason": ("native phase atlas overlaps this forecast cycle; native horizon is independent"
                        if valid else "native phase atlas has no current UTC overlap; rebuild before removal")
         }
         path.write_text(json.dumps(payload, allow_nan=False, separators=(",", ":")))
