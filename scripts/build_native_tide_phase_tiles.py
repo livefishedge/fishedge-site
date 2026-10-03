@@ -12,7 +12,6 @@ import hashlib
 from pathlib import Path
 import numpy as np
 import cv2
-from scipy.io import netcdf_file
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -21,6 +20,7 @@ import sys
 sys.path.insert(0, str(SCRIPTS))
 from build_stofs_native_mesh_artifact import LocalClassicNetCDF, read_zeta
 from fetch_stofs_global_harmonics import RemoteClassicNetCDF
+from tide_source_time import read_source_times
 
 R = 6378137.0
 def mercator(lon, lat):
@@ -60,22 +60,25 @@ def main():
     if not args.source and not args.source_url and not args.checkpoint_dir:
         raise SystemExit('one of --source, --source-url, or --checkpoint-dir is required')
     if args.checkpoint_dir:
-        files = sorted(args.checkpoint_dir.glob('hour-*.npy'))
-        if not files: raise SystemExit('native checkpoint has no hourly slices')
-        z = np.stack([np.load(path, allow_pickle=False) for path in files]).astype(np.float32)
-        source_count = z.shape[0]
-        depth = None
-    else:
-        ds = RemoteClassicNetCDF(args.source_url) if args.source_url else LocalClassicNetCDF(args.source)
-        try:
-            source_count = int(ds.ds.variables['zeta'].data.shape[0])
-            node_ids = np.asarray(mesh['node_ids'], np.int64)
-            z = (read_zeta(ds, node_ids, np.arange(source_count, dtype=int)) * 3.280839895).astype(np.float32)
-            depth_var = ds.ds.variables.get('depth')
-            if depth_var is None: raise SystemExit('native source lacks depth')
-            depth = (None if args.source_url else np.asarray(depth_var.data[node_ids], float))
-        finally:
-            ds.close()
+        raise SystemExit('unverified checkpoint reuse disabled: rebuild from timestamped source')
+    ds = RemoteClassicNetCDF(args.source_url) if args.source_url else LocalClassicNetCDF(args.source)
+    try:
+        frame_times = read_source_times(ds)
+        source_count = len(frame_times)
+        if args.frames and args.frames > source_count:
+            raise SystemExit(f'native source has {source_count} hours through {frame_times[-1]}; '
+                             'unvalidated harmonic extrapolation is not allowed')
+        units = ds.ds.variables['zeta'].units
+        if units not in (b'm', 'm'):
+            raise SystemExit(f'unsupported native height units: {units!r}')
+        node_ids = np.asarray(mesh['node_ids'], np.int64)
+        z = (read_zeta(ds, node_ids, np.arange(source_count, dtype=int)) * 3.280839895).astype(np.float32)
+        depth_var = ds.ds.variables.get('depth')
+        if depth_var is None: raise SystemExit('native source lacks depth')
+        depth = (None if args.source_url else np.asarray(depth_var.data[node_ids], float))
+        del depth_var
+    finally:
+        ds.close()
 
     # Co-range uses the same native wet-node rule as this source-derived
     # range: a node is drawable when it has any finite HTP value and positive
@@ -99,37 +102,8 @@ def main():
     hi[good] = np.nanmax(np.where(finite[:, good], z[:, good], np.nan), axis=0)
     half = (hi - lo) / 2
     valid = good
-    target_count = max(source_count, int(args.frames or source_count))
-    extension_hours = max(0, target_count - source_count)
-    synth = None
-    if extension_hours:
-        # The source HTP horizon is shorter than the seven-day display. Extend
-        # the native field by fitting the complete available tide signal to the
-        # eight known astronomical frequencies, then synthesizing only the
-        # missing tail. This preserves native spatial resolution and all
-        # constituents without silently falling back to the 17x21 raster.
-        periods = np.array([12.4206, 12.0, 12.6583, 11.9672,
-                            23.9345, 25.8193, 24.0659, 26.8684], dtype=np.float32)
-        t = np.arange(source_count, dtype=np.float32)
-        cols = [np.ones(source_count, dtype=np.float32)]
-        for period in periods:
-            w = 2 * np.pi / period
-            cols.extend((np.cos(w * t), np.sin(w * t)))
-        design = np.column_stack(cols).astype(np.float32)
-        pinv = np.linalg.pinv(design).astype(np.float32)
-        coeff = pinv @ np.nan_to_num(z, nan=0.0)
-        # Keep the source horizon in memory and synthesize only the requested
-        # frame. Materializing target_count x node_count here exhausted RAM on
-        # the complete native mesh.
-        def synth(hour):
-            row = [1.0]
-            for period in periods:
-                w = 2 * np.pi / period
-                row.extend((np.cos(w * hour), np.sin(w * hour)))
-            return np.asarray(row, dtype=np.float32) @ coeff
-        count = target_count
-    else:
-        count = source_count
+    count = source_count
+    extension_hours = 0
 
     # The phase map represents the combined HTP waveform, not M2. There is no
     # unique harmonic phase for a multi-constituent signal, and a Hilbert
@@ -141,16 +115,16 @@ def main():
     phase = np.full((count, z.shape[1]), np.nan, dtype=np.float32)
     omega_ref = 2 * np.pi / 12.42
     for k in range(count):
-        value = z[k] if k < source_count else synth(k)
+        value = z[k]
         if k == 0:
-            nxt = z[1] if source_count > 1 else synth(1)
+            nxt = z[1]
             derivative = nxt - value
         elif k == count - 1:
-            prv = z[k - 1] if k - 1 < source_count else synth(k - 1)
+            prv = z[k - 1]
             derivative = value - prv
         else:
-            prv = z[k - 1] if k - 1 < source_count else synth(k - 1)
-            nxt = z[k + 1] if k + 1 < source_count else synth(k + 1)
+            prv = z[k - 1]
+            nxt = z[k + 1]
             derivative = (nxt - prv) / 2.0
         centered = value - (hi + lo) / 2
         phase[k] = (np.arctan2(-derivative, centered * omega_ref) / (2*np.pi)) % 1.0
@@ -265,16 +239,6 @@ def main():
         if k % 4 == 3:
             gc.collect()
     payload = forecast_payload
-    frame_times = []
-    frame_manifest = payload.get('frames_manifest') or {}
-    chunks_dir = args.forecast.parent / str(frame_manifest.get('dir', 'frames/'))
-    for chunk in frame_manifest.get('chunks', []):
-        chunk_path = chunks_dir / chunk
-        if not chunk_path.is_file():
-            continue
-        chunk_payload = json.loads(chunk_path.read_text())
-        frame_times.extend(str(item.get('time')) for item in chunk_payload.get('frames', [])
-                           if item.get('time'))
     phase_manifest = {
         'pattern': f'native_phase_tiles/z{args.tile_zoom}/{{x}}/{{y}}/frame-{{frame:03d}}.png',
         'frames': count, 'tile_zoom': args.tile_zoom, 'tile_size': args.tile_size,

@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FishEdge.live — Signing you in…</title>
+  <link rel="icon" href="data:,">
+  <style>
+    :root { --bg: #050b10; --fg: #e0e6ee; --accent: #1a7f7a; --accent2: #2dd4bf; --panel: rgba(5,11,16,0.95); --border: #1b2836; --err: #ff6b6b; --success: #2dd4bf; }
+    body {
+      height: 100vh; background: var(--bg); color: var(--fg);
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0;
+    }
+    #status-card {
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: 12px; padding: 40px 36px; max-width: 400px; width: 90%;
+      text-align: center;
+      backdrop-filter: blur(8px);
+    }
+    .spinner {
+      width: 40px; height: 40px;
+      border: 3px solid rgba(45,212,191,0.20);
+      border-top-color: var(--accent2);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 18px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    h1 {
+      font-size: 20px; font-weight: 700;
+      color: var(--accent2);
+      margin: 0 0 8px;
+    }
+    p {
+      color: #7a8fa6;
+      font-size: 13px;
+      margin: 0;
+      line-height: 1.5;
+    }
+    .err { color: var(--err); }
+    a { color: var(--accent2); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div id="status-card">
+    <div class="spinner" id="spinner"></div>
+    <h1 id="title">Signing you in…</h1>
+    <p id="status">Just a moment while we hand you off to the dashboard.</p>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js?v=20260531"></script>
+  <script src="supabase-init.js?v=20260918-user-activity"></script>
+  <script>
+    (async function () {
+      'use strict';
+      var sb          = window.sb;
+      var titleEl     = document.getElementById('title');
+      var statusEl    = document.getElementById('status');
+      var spinnerEl   = document.getElementById('spinner');
+
+      function showError(msg) {
+        spinnerEl.style.display = 'none';
+        titleEl.textContent = 'Sign-in failed';
+        statusEl.className   = 'err';
+        statusEl.innerHTML   = (msg || 'Something went wrong. ') +
+          '<a href="login.html">Back to sign in</a>';
+      }
+
+      function done() {
+        window.location.replace('index.html');
+      }
+
+      // Bail out cleanly if the OAuth provider returned an error in the URL.
+      try {
+        var hashParams   = new URLSearchParams(window.location.hash.substring(1));
+        var queryParams  = new URLSearchParams(window.location.search);
+        var errDesc      = hashParams.get('error_description') || queryParams.get('error_description');
+        var errCode      = hashParams.get('error')             || queryParams.get('error');
+        if (errDesc || errCode) {
+          showError(errDesc || errCode);
+          return;
+        }
+      } catch (e) { /* ignore */ }
+
+      // Wait for the session to be detected from the URL fragment
+      // (detectSessionInUrl:true on the Supabase client does the parsing).
+      var session = null;
+      for (var i = 0; i < 20; i++) {
+        try {
+          var res  = await sb.auth.getSession();
+          session  = res && res.data && res.data.session;
+          if (session) break;
+        } catch (e) { /* keep polling */ }
+        await new Promise(function (r) { setTimeout(r, 250); });
+      }
+
+      if (!session) {
+        // Fall back to listening for SIGNED_IN in case the session lands late.
+        var signedIn = await new Promise(function (resolve) {
+          var resolved = false;
+          var sub = sb.auth.onAuthStateChange(function (event, sess) {
+            if (event === 'SIGNED_IN' && sess && !resolved) {
+              resolved = true;
+              try { sub.subscription.unsubscribe(); } catch (_) {}
+              resolve(true);
+            }
+          });
+          setTimeout(function () {
+            if (!resolved) {
+              resolved = true;
+              try { sub.subscription.unsubscribe(); } catch (_) {}
+              resolve(false);
+            }
+          }, 2500);
+        });
+        if (!signedIn) {
+          showError('Could not detect your session. Try signing in again.');
+          return;
+        }
+      }
+
+      // Mark the cross-subdomain login cookie (matches login.html / register.html).
+      try {
+        document.cookie = 'fishedge_logged_in=1; Path=/; Domain=.fishedge.live; Max-Age=' +
+          (7 * 24 * 60 * 60) + '; Secure; SameSite=Lax';
+      } catch (_) {}
+
+      done();
+    })();
+  </script>
+</body>
+</html>

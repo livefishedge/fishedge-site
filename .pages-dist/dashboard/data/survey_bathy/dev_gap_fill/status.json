@@ -1,0 +1,22 @@
+{
+  "title": "USEC-MD bathymetry gap-fill DEV candidate",
+  "generated": "2026-10-02",
+  "owner": "CTO bathymetry pipeline",
+  "production_touched": false,
+  "regional_measured_cells": 410569,
+  "north_shelf_accepted_cells": 567909,
+  "south_shelf_accepted_cells": 249227,
+  "regional_tiles_hashed": 13674,
+  "regional_tiles_errors": 0,
+  "catalog_register_rows": 342,
+  "local_processed_surveys": 85,
+  "cataloged_unprocessed_records": 254,
+  "access_failed_records": 3,
+  "ncei_track_features": {"products": 29, "processed": 56, "raw": 172},
+  "track_intersections_with_fishing_ground": {"products": 25, "processed": 32, "raw": 126},
+  "coverage_warning": "Track intersection is not occupied bathymetry; authoritative outside-bays geometry is still pending.",
+  "conflict_max_m": 13.245975,
+  "substrate_status": "unknown_without_calibrated_backscatter_or_sediment_evidence",
+  "vertical_reference": "MLLW measured layer; BlueTopo fallback not merged",
+  "next_gap_fill": ["authoritative bay-mouth geometry", "Bigelow EM2040 acquisition", "intersecting BlueTopo contributors", "calibrated backscatter/sediment evidence"]
+}

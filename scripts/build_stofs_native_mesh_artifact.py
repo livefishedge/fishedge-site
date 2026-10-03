@@ -10,7 +10,10 @@ for products that have not yet been migrated.
 import argparse, datetime as dt, json, sys
 from pathlib import Path
 import numpy as np
-from scipy.io import netcdf_file
+try:
+    from .classic_netcdf import netcdf_file
+except ImportError:  # direct script execution
+    from classic_netcdf import netcdf_file
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from fetch_stofs_global_harmonics import RemoteClassicNetCDF, read_zeta, S3

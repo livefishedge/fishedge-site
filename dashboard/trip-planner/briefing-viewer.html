@@ -3620,7 +3620,9 @@
         const asset = tiles.pattern
           .replace('{frame:03d}', frameName)
           .replace('{frame}', frameName);
-        image.src = new URL(`/trip-planner/data/${region}/briefing/${asset}`, location.origin).href;
+        const tileBase = String(tiles.asset_base_url || `${location.origin}/trip-planner/data/${region}/briefing/`).replace(/\/$/, '') + '/';
+        image.src = new URL(asset, tileBase).href;
+        image.src += `${image.src.includes('?') ? '&' : '?'}v=${encodeURIComponent(assetVersion)}`;
         cacheNativePhaseImage(key, image);
         return true;
       }

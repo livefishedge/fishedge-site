@@ -1,0 +1,212 @@
+/* =========================================================
+   Captain Tools — shared between Dashboard and Planner
+   Mirrors Dashboard index.html lines 744–822 exactly.
+   Do not add Reset/Fullscreen icons here; those are
+   Dashboard-only. This file covers the toolbar row, buttons,
+   waypoints panel, and distance panel only.
+   ========================================================= */
+
+/* Toolbar row */
+#captain-tools {
+  display: flex;
+  position: fixed;
+  top: calc(46px + env(safe-area-inset-top, 0px));
+  left: 8px;
+  z-index: 1150;
+  background: var(--panel, #0a1929);
+  border: 1px solid var(--border, #31546b);
+  border-radius: 10px;
+  padding: 5px 6px;
+  gap: 4px;
+  flex-direction: row;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  align-items: center;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+body.combined-mode #captain-tools { top: 8px; }
+
+/* Generic tool button */
+.captain-tool-btn {
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--fg, #edfaff);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: background 0.15s, border-color 0.15s;
+}
+.captain-tool-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+.captain-tool-btn.active {
+  background: rgba(29, 79, 145, 0.7);
+  border-color: #4d7dff;
+}
+
+/* Drag handle */
+.captain-drag-handle {
+  display: inline-block;
+  width: 14px;
+  height: 18px;
+  cursor: grab;
+  touch-action: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 18'%3E%3Crect x='1' y='1' width='4' height='4' rx='1.5' fill='%237a8fa8'/%3E%3Crect x='9' y='1' width='4' height='4' rx='1.5' fill='%237a8fa8'/%3E%3Crect x='1' y='7' width='4' height='4' rx='1.5' fill='%237a8fa8'/%3E%3Crect x='9' y='7' width='4' height='4' rx='1.5' fill='%237a8fa8'/%3E%3Crect x='1' y='13' width='4' height='4' rx='1.5' fill='%237a8fa8'/%3E%3Crect x='9' y='13' width='4' height='4' rx='1.5' fill='%237a8fa8'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+.captain-drag-handle:hover { opacity: 1; }
+
+/* Panels */
+#captain-pts-panel,
+#captain-dist-panel {
+  display: none;
+  position: fixed;
+  top: 80px;
+  left: 8px;
+  z-index: 1150;
+  background: var(--panel, #0a1929);
+  border: 1px solid var(--border, #31546b);
+  border-radius: 10px;
+  padding: 12px 14px;
+  width: 280px;
+  max-height: 320px;
+  overflow-y: auto;
+  font-size: 12px;
+  color: var(--fg, #edfaff);
+}
+#captain-dist-panel {
+  top: 96px;
+  min-width: 280px;
+}
+#captain-pts-panel.visible,
+#captain-dist-panel.visible {
+  display: block !important;
+}
+#captain-pts-panel.collapsed {
+  width: 280px;
+  max-height: none;
+  overflow: hidden;
+  padding-top: 7px;
+  padding-bottom: 7px;
+}
+#captain-pts-panel.collapsed > div:first-child { margin-bottom: 0 !important; }
+#captain-pts-panel.collapsed #captain-pts-list { display: none; }
+#captain-dist-panel.collapsed {
+  max-height: none;
+  overflow: hidden;
+  padding-top: 7px;
+  padding-bottom: 7px;
+}
+#captain-dist-panel.collapsed #captain-dist-list,
+#captain-dist-panel.collapsed #captain-dist-total { display: none; }
+
+/* Panel drag handles */
+#captain-pts-drag-handle,
+#captain-dist-drag-handle {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+#captain-dist-drag-handle {
+  justify-content: space-between;
+  gap: 16px;
+  font-weight: 700;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: #7a8fa8;
+}
+
+/* Panel section labels */
+#captain-pts-title {
+  font-weight: 700;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: #7a8fa8;
+}
+
+/* Waypoint rows */
+#captain-pts-list .cp-row,
+#captain-dist-list .cd-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border, #31546b);
+  gap: 8px;
+}
+#captain-pts-list .cp-row:last-child,
+#captain-dist-list .cd-row:last-child { border-bottom: 0; }
+#captain-pts-list button,
+#captain-dist-list button {
+  background: transparent;
+  border: 1px solid rgba(77, 125, 255, 0.4);
+  border-radius: 4px;
+  color: #4d7dff;
+  cursor: pointer;
+  font-size: 10px;
+  padding: 2px 6px;
+  white-space: nowrap;
+}
+#captain-pts-list button:hover,
+#captain-dist-list button:hover {
+  background: rgba(77, 125, 255, 0.15);
+}
+
+/* Save button in panel header */
+#captain-save-btn {
+  display: none;
+  background: #1d4f91;
+  border: 1px solid #4d7dff;
+  border-radius: 6px;
+  color: #fff;
+  padding: 2px 8px;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  white-space: nowrap;
+}
+#captain-save-btn:hover { background: #2a5fb0; }
+
+/* Distance total row */
+#captain-dist-total {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border, #31546b);
+  font-weight: 700;
+  color: var(--fg, #edfaff);
+}
+
+/* Save button in distance panel header */
+#captain-dist-exit {
+  border: 1px solid #4d7dff;
+  border-radius: 5px;
+  background: #1d4f91;
+  color: #fff;
+  padding: 3px 7px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+#captain-dist-exit:hover { background: #2a5fb0; }

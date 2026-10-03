@@ -1,0 +1,282 @@
+/* supabase-init.js — shared Supabase client + session keep-alive
+ *
+ * Goals:
+ *  1) One Supabase client, one storage key, one source of truth for the whole app.
+ *  2) persistSession + autoRefreshToken are EXPLICIT (Supabase defaults can drift).
+ *  3) Keep the session alive for 24 hours with two mechanisms:
+ *     a) Activity-based refresh: any user click/keypress/scroll/touch calls
+ *        sb.auth.refreshSession() (debounced, max once per 30 min). This keeps
+ *        the access token fresh and exercises the refresh token so it doesn't
+ *        appear idle.
+ *     b) Leader-tab coordination: when multiple tabs are open, only ONE tab
+ *        (the leader) hits Supabase for refresh; other tabs listen on a
+ *        BroadcastChannel and read the updated session from localStorage.
+ *  4) Soft warning UI: when the session is within 30 minutes of needing a
+ *     credential re-entry (refresh token near expiry), show a toast. For a
+ *     24-hour session this means users see the toast roughly 23.5 hours in.
+ *     If the user clicks Stay OR is active, we refresh. If they ignore it,
+ *     we redirect to login.html once the session is actually dead.
+ *  5) Server-side requirement: Supabase Dashboard → Authentication →
+ *     Sessions → "Refresh token expiry" must be set to 24 hours (or longer).
+ *     The client can only keep a valid session alive; if the server expires
+ *     refresh tokens in under 24h the user will be forced to re-login regardless.
+ *     On Supabase hosted (paid tier) the default is 28 days — well above 24h.
+ *     Free tier: verify the setting; it may default to 7 days or shorter.
+ *
+ * Usage: include BEFORE the page's auth script.
+ *   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+ *   <script src="supabase-init.js"></script>
+ *   <script> window.sb.auth.getSession().then(...) </script>
+ */
+(function () {
+  'use strict';
+
+  const SUPABASE_URL = 'https://wfdpfeptmyiqifgwqpzu.supabase.co';
+  const SUPABASE_ANON_KEY = 'sb_publishable_W6wnJkT70jb69JUZgM1dow_nabPZycR';
+  const APP_BASE_URL = 'https://app.fishedge.live/dashboard/signup-success.html';
+  const STORAGE_KEY = 'ocean-mvp-auth'; // stable, app-wide
+  const ACTIVITY_REFRESH_MIN_MS = 30 * 60 * 1000; // 30 min
+  const LAST_SEEN_TOUCH_MIN_MS = 5 * 60 * 1000; // server-side activity heartbeat
+  const EXPIRY_WARN_MS = 30 * 60 * 1000; // 30 min — toast appears at ~23.5h into a 24h session
+  const TAB_CHANNEL = 'ocean-mvp-auth-tab';
+
+  if (!window.supabase || !window.supabase.createClient) {
+    console.error('[supabase-init] supabase-js not loaded; aborting init');
+    return;
+  }
+
+  // ---------- One client, explicit options ----------
+  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+      storage: window.localStorage,
+      storageKey: STORAGE_KEY,
+      flowType: 'pkce',
+    },
+  });
+  window.sb = sb;
+  window.OMV_APP_BASE_URL = APP_BASE_URL;
+  window.omvAuthRedirectUrl = function (path) {
+    return new URL(path, APP_BASE_URL).href;
+  };
+
+  // ---------- Tab coordination ----------
+  // Only the leader tab does network refreshes; others piggyback on
+  // localStorage updates broadcast via the channel.
+  let isLeader = false;
+  let channel = null;
+  try {
+    channel = new BroadcastChannel(TAB_CHANNEL);
+  } catch (e) {
+    // Older browsers: fall back to storage events only.
+    channel = null;
+  }
+  try {
+    if (!sessionStorage.getItem(STORAGE_KEY + ':leader')) {
+      sessionStorage.setItem(STORAGE_KEY + ':leader', '1');
+      isLeader = true;
+    }
+  } catch (e) { /* sessionStorage may be unavailable; default to leader */ isLeader = true; }
+
+  if (channel) {
+    channel.addEventListener('message', (ev) => {
+      if (!ev || !ev.data) return;
+      if (ev.data.type === 'session-refreshed') {
+        // Another tab refreshed; our local copy will be updated by
+        // supabase-js's own storage listener. Nothing to do.
+      } else if (ev.data.type === 'request-refresh') {
+        if (isLeader) safeRefresh('tab-request');
+      }
+    });
+  }
+
+  // ---------- Activity-based keep-alive ----------
+  let lastActivityRefresh = 0;
+  let activityTimer = null;
+  let lastSeenTouch = 0;
+  let lastSeenTouchInFlight = false;
+
+  // Application activity is intentionally separate from auth.users.last_sign_in_at.
+  // The RPC derives auth.uid() and uses database now(); the browser never supplies
+  // a user id or timestamp. Missing RPCs are fail-soft so auth is never blocked.
+  async function touchLastSeen() {
+    if (document.hidden || lastSeenTouchInFlight ||
+        Date.now() - lastSeenTouch < LAST_SEEN_TOUCH_MIN_MS) return null;
+    lastSeenTouchInFlight = true;
+    try {
+      const { data: sessionData } = await sb.auth.getSession();
+      if (!sessionData || !sessionData.session) return null;
+      const { data, error } = await sb.rpc('touch_last_seen');
+      if (error) {
+        // The migration may be applied after this frontend is deployed.
+        // Do not turn an optional telemetry field into an auth outage.
+        console.debug('[supabase-init] last_seen unavailable:', error.message);
+        return null;
+      }
+      lastSeenTouch = Date.now();
+      return data || null;
+    } catch (e) {
+      console.debug('[supabase-init] last_seen touch failed:', e && e.message);
+      return null;
+    } finally {
+      lastSeenTouchInFlight = false;
+    }
+  }
+
+  function scheduleLastSeenTouch() {
+    if (document.hidden) return;
+    window.setTimeout(() => { touchLastSeen(); }, 0);
+  }
+
+  function scheduleActivityRefresh(reason) {
+    if (activityTimer) return; // debounced
+    activityTimer = setTimeout(() => {
+      activityTimer = null;
+      const now = Date.now();
+      if (now - lastActivityRefresh < ACTIVITY_REFRESH_MIN_MS) return;
+      // Only the leader actually hits the network.
+      if (!isLeader) {
+        if (channel) channel.postMessage({ type: 'request-refresh' });
+        lastActivityRefresh = now; // pretend, so we don't spam leader
+        return;
+      }
+      safeRefresh('activity:' + reason);
+    }, 500); // debounce burst of events
+  }
+
+  ['click', 'keydown', 'scroll', 'touchstart', 'mousemove'].forEach((evt) => {
+    window.addEventListener(evt, () => scheduleActivityRefresh(evt), { passive: true });
+  });
+
+  // Only foreground bootstrap and meaningful foreground interaction count as
+  // approximate app activity. Refresh timers, hidden-tab events, and token
+  // refreshes do not advance last_seen_at.
+  ['pointerdown', 'keydown'].forEach((evt) => {
+    window.addEventListener(evt, scheduleLastSeenTouch, { passive: true });
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) scheduleLastSeenTouch();
+  });
+
+  // ---------- Background tick (safety net) ----------
+  // Even without user activity, check token expiry every 2 minutes and refresh
+  // if it's within the EXPIRY_WARN_MS window. This protects users who are
+  // watching a Play-loop or static map for long periods.
+  setInterval(() => {
+    if (!isLeader) return;
+    sb.auth.getSession().then(({ data }) => {
+      const s = data && data.session;
+      if (!s) return;
+      const msToExp = (s.expires_at ? s.expires_at * 1000 : 0) - Date.now();
+      if (msToExp > 0 && msToExp < EXPIRY_WARN_MS) {
+        safeRefresh('tick-near-expiry');
+      }
+    }).catch(() => {});
+  }, 2 * 60 * 1000);
+
+  // ---------- Core safe refresh ----------
+  async function safeRefresh(reason) {
+    try {
+      const { data, error } = await sb.auth.refreshSession();
+      if (error) {
+        // Refresh failed → session is dead. Don't redirect here; let the
+        // page's auth init detect the missing session and bounce to login.
+        console.warn('[supabase-init] refresh failed:', reason, error.message);
+        return null;
+      }
+      lastActivityRefresh = Date.now();
+      if (channel) channel.postMessage({ type: 'session-refreshed', at: lastActivityRefresh });
+      return data && data.session;
+    } catch (e) {
+      console.warn('[supabase-init] refresh threw:', reason, e && e.message);
+      return null;
+    }
+  }
+
+  // ---------- Soft warning toast ----------
+  // Pages that want the warning can call window.OMV_auth.attachExpiryWarning().
+  // Default: enabled, auto-mounted into <body> if not already present.
+  function ensureToast() {
+    let toast = document.getElementById('omv-session-toast');
+    if (toast) return toast;
+    toast = document.createElement('div');
+    toast.id = 'omv-session-toast';
+    toast.style.cssText = [
+      'position:fixed', 'right:16px', 'bottom:16px', 'z-index:2000',
+      'max-width:320px', 'padding:12px 14px', 'border-radius:10px',
+      'background:rgba(20,30,45,0.96)', 'color:#e0e6ee',
+      'border:1px solid #f59e0b', 'box-shadow:0 8px 24px rgba(0,0,0,0.4)',
+      'font:13px/1.4 system-ui,-apple-system,Segoe UI,sans-serif',
+      'display:none', 'align-items:center', 'gap:10px',
+    ].join(';');
+    toast.innerHTML =
+      '<span style="flex:1">Session expiring soon. Stay signed in?</span>' +
+      '<button id="omv-session-stay" type="button" ' +
+      'style="all:unset;cursor:pointer;padding:6px 10px;border-radius:6px;' +
+      'background:#1a7f7a;color:#fff;font-weight:700;font-size:12px">Stay</button>' +
+      '<button id="omv-session-dismiss" type="button" ' +
+      'style="all:unset;cursor:pointer;padding:6px 8px;border-radius:6px;' +
+      'color:#7a8fa6;font-size:12px">×</button>';
+    document.body.appendChild(toast);
+    toast.querySelector('#omv-session-stay').addEventListener('click', () => {
+      safeRefresh('user-stay-clicked').then(() => hideToast());
+    });
+    toast.querySelector('#omv-session-dismiss').addEventListener('click', () => {
+      hideToast();
+    });
+    return toast;
+  }
+  function showToast() {
+    const t = ensureToast();
+    t.style.display = 'flex';
+  }
+  function hideToast() {
+    const t = document.getElementById('omv-session-toast');
+    if (t) t.style.display = 'none';
+  }
+  // Watch session expiry and toggle toast.
+  sb.auth.onAuthStateChange((_event, session) => {
+    if (!session) {
+      lastSeenTouch = 0;
+      hideToast();
+      // Clear the cross-subdomain login marker so fishedge.live falls back
+      // to the "Join the Pilot" landing CTAs.
+      try {
+        document.cookie = 'fishedge_logged_in=; Path=/; Domain=.fishedge.live; Max-Age=0; SameSite=Lax';
+      } catch (_) {}
+      return;
+    }
+    // Bootstrap/session restoration is app activity, not a claim of fresh
+    // login. Token refreshes are explicitly excluded.
+    if (_event === 'INITIAL_SESSION' || _event === 'SIGNED_IN') {
+      scheduleLastSeenTouch();
+    }
+    const msToExp = (session.expires_at ? session.expires_at * 1000 : 0) - Date.now();
+    if (msToExp > 0 && msToExp < EXPIRY_WARN_MS) showToast();
+    else hideToast();
+
+    // Cross-subdomain login marker.
+    // Localstorage is per-origin: app.fishedge.live tokens aren't visible on
+    // fishedge.live.  Set a cookie on the PARENT domain so the marketing
+    // landing (fishedge.live) can adapt its CTAs to the captain's signed-in
+    // state.  Cookie is HttpOnly=false (must be readable by JS on the landing
+    // page), SameSite=Lax (allows cross-subdomain nav), Secure (HTTPS only),
+    // 7-day Max-Age (matches supabase refresh-token default).
+    try {
+      var twentyFourHours = 24 * 60 * 60;
+      document.cookie = 'fishedge_logged_in=1; Path=/; Domain=.fishedge.live; Max-Age=' + twentyFourHours + '; Secure; SameSite=Lax';
+    } catch (_) {}
+  });
+
+  // ---------- Public helpers ----------
+  window.OMV_auth = {
+    sb,
+    isLeader: () => isLeader,
+    refresh: safeRefresh,
+    showExpiryWarning: showToast,
+    hideExpiryWarning: hideToast,
+    touchLastSeen,
+  };
+})();

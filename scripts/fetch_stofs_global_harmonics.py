@@ -24,7 +24,10 @@ from pathlib import Path
 
 import numpy as np
 import requests
-from scipy.io import netcdf_file
+try:
+    from .classic_netcdf import netcdf_file
+except ImportError:  # direct script execution
+    from classic_netcdf import netcdf_file
 from scipy.spatial import cKDTree
 
 S3 = "https://noaa-gestofs-pds.s3.amazonaws.com"

@@ -1,0 +1,294 @@
+/*!
+ * Inlet picker — top-of-planner control for selecting home inlet,
+ * default departure/return times, and a named offshore fishing ground.
+ *
+ * Source of truth for inlet metadata: coops-tides.js INLET_STATION_TABLE.
+ * If the bootstrap (or any caller) hasn't loaded that table yet, we fall
+ * back to a minimal inline copy so the picker still mounts.
+ */
+(function attachInletPicker(global) {
+  'use strict';
+  const Coops = global.CoopsTides;
+  const INLETS = (Coops && Coops.INLET_STATION_TABLE) || {
+    'ocean-city-md':         { station_id: '8570283', label: 'Ocean City Inlet, MD', lat: 38.3286, lon: -75.0919 },
+    'indian-river-inlet-de': { station_id: '8557863', label: 'Indian River Inlet, DE', lat: 38.6100, lon: -75.0589 },
+    'cape-may-nj':           { station_id: '8536110', label: 'Cape May, NJ',           lat: 38.9686, lon: -74.9594 },
+    'lewes-de':              { station_id: '8557689', label: 'Lewes, DE',              lat: 38.7817, lon: -75.1197 },
+    'chesapeake-bay-bt':     { station_id: '8573364', label: 'Chesapeake Bay Bridge Tunnel, VA', lat: 36.9667, lon: -76.1133 },
+    'solomons-island-md':    { station_id: '8577330', label: 'Solomons Island, MD',    lat: 38.3172, lon: -76.4511 },
+    'atlantic-city-nj':      { station_id: '8534720', label: 'Atlantic City, NJ', lat: 39.3554, lon: -74.4184 },
+    'sandy-hook-nj':         { station_id: '8531680', label: 'Sandy Hook, NJ', lat: 40.4669, lon: -74.0094 },
+    'montauk-ny':            { station_id: '8510560', label: 'Montauk, NY', lat: 41.0482, lon: -71.9597 },
+    'oregon-inlet-nc':       { station_id: '8652587', label: 'Oregon Inlet, NC', lat: 35.795696, lon: -75.548195 },
+    'hatteras-inlet-nc':     { station_id: '8654467', label: 'Hatteras, NC', lat: 35.2086, lon: -75.7042 },
+    'morehead-city-nc':      { station_id: '8656483', label: 'Morehead City / Beaufort, NC', lat: 34.719, lon: -76.67 },
+    'wrightsville-beach-nc': { station_id: '8658163', label: 'Wrightsville Beach, NC', lat: 34.213306, lon: -77.7867 },
+    'wilmington-nc':         { station_id: '8658120', label: 'Wilmington, NC', lat: 34.2267, lon: -77.9533 },
+    'myrtle-beach-sc':       { station_id: '8661070', label: 'Myrtle Beach, SC', lat: 33.655, lon: -78.9183 },
+    'charleston-sc':         { station_id: '8665530', label: 'Charleston, SC', lat: 32.780834, lon: -79.923615 },
+    'savannah-ga':           { station_id: '8670870', label: 'Savannah / Fort Pulaski, GA', lat: 32.034695, lon: -80.90303 },
+  };
+  const SOUTH_INLETS = ['oregon-inlet-nc','hatteras-inlet-nc','morehead-city-nc','wrightsville-beach-nc','wilmington-nc','myrtle-beach-sc','charleston-sc','savannah-ga'];
+
+  // Targets are operational areas, not single fishing points.  The line is
+  // what the captain sees; lookup_points are only sampling anchors for the
+  // weather/observation adapters and are deliberately not exposed as the
+  // target identity.
+  // Legacy export name retained for adapter compatibility; entries are
+  // extended from the authoritative regional fishing-grounds asset below.
+  const CANYON_TARGETS = {
+    baltimore_canyon_line: Object.freeze({
+      id: 'baltimore-canyon-line',
+      label: 'Baltimore Canyon',
+      kind: 'corridor',
+      geometry: Object.freeze({
+        type: 'LineString',
+        coordinates: Object.freeze([
+          Object.freeze([-74.78, 38.08]),
+          Object.freeze([-74.48, 38.18]),
+          Object.freeze([-74.17, 38.30]),
+        ]),
+      }),
+      lookup_points: Object.freeze([[-74.78, 38.08], [-74.17, 38.30]]),
+      description: 'A broad operating corridor along the Baltimore Canyon system.',
+    }),
+    hudson_canyon: Object.freeze({ id:'hudson-canyon', label:'Hudson Canyon', kind:'corridor', lookup_points:Object.freeze([[-73.2,39.7],[-72.6,39.4]]), description:'Hudson Canyon offshore fishing grounds.' }),
+    wilmington_canyon: Object.freeze({ id:'wilmington-canyon', label:'Wilmington Canyon', kind:'corridor', lookup_points:Object.freeze([[-73.8,38.4],[-73.2,38.1]]), description:'Wilmington Canyon offshore fishing grounds.' }),
+    norfolk_canyon: Object.freeze({ id:'norfolk-canyon', label:'Norfolk Canyon', kind:'corridor', lookup_points:Object.freeze([[-74.8,37.2],[-74.2,36.9]]), description:'Norfolk Canyon offshore fishing grounds.' }),
+    toms_canyon: Object.freeze({ id:'toms-canyon', label:'Toms Canyon', kind:'corridor', lookup_points:Object.freeze([[-73.8,39.4],[-73.2,39.2]]), description:'Toms Canyon offshore fishing grounds.' }),
+    carteret_canyon: Object.freeze({ id:'carteret-canyon', label:'Carteret Canyon', kind:'corridor', lookup_points:Object.freeze([[-73.4,38.9],[-72.9,38.7]]), description:'Carteret Canyon offshore fishing grounds.' }),
+    lindenkohl_canyon: Object.freeze({ id:'lindenkohl-canyon', label:'Lindenkohl Canyon', kind:'corridor', lookup_points:Object.freeze([[-73.0,38.5],[-72.6,38.3]]), description:'Lindenkohl Canyon offshore fishing grounds.' }),
+    spencer_canyon: Object.freeze({ id:'spencer-canyon', label:'Spencer Canyon', kind:'corridor', lookup_points:Object.freeze([[-72.8,38.1],[-72.4,37.9]]), description:'Spencer Canyon offshore fishing grounds.' }),
+    poor_mans_canyon: Object.freeze({ id:'poor-mans-canyon', label:"Poor Man's Canyon", kind:'corridor', lookup_points:Object.freeze([[-72.7,37.8],[-72.3,37.6]]), description:"Poor Man's Canyon offshore fishing grounds." }),
+    hudson_shelf_edge: Object.freeze({ id:'hudson-shelf-edge', label:'Hudson Shelf Edge', kind:'corridor', lookup_points:Object.freeze([[-73.5,39.9],[-72.5,39.7]]), description:'Offshore shelf-edge grounds east of New Jersey.' }),
+    delaware_offshore: Object.freeze({ id:'delaware-offshore', label:'Delaware Offshore Grounds', kind:'area', lookup_points:Object.freeze([[-74.7,38.0],[-74.0,37.7]]), description:'General offshore grounds east of Delaware.' }),
+    new_jersey_reef: Object.freeze({ id:'new-jersey-reef', label:'New Jersey Offshore Reef', kind:'area', lookup_points:Object.freeze([[-74.2,39.2],[-73.7,38.9]]), description:'New Jersey offshore reef complex.' }),
+    virginia_offshore: Object.freeze({ id:'virginia-offshore', label:'Virginia Offshore Grounds', kind:'area', lookup_points:Object.freeze([[-75.5,37.0],[-74.9,36.5]]), description:'General offshore grounds east of Virginia.' }),
+    baltimore_trough: Object.freeze({ id:'baltimore-trough', label:'Baltimore Trough', kind:'area', lookup_points:Object.freeze([[-74.5,37.7],[-73.8,37.5]]), description:'Baltimore Trough offshore grounds.' }),
+    sausages: Object.freeze({ id:'sausages', label:'Sausages', kind:'area', lookup_points:Object.freeze([[-74.0,37.4],[-73.4,37.2]]), description:'Sausages offshore fishing grounds.' }),
+  };
+
+  const GROUND_DATA_URL = '/dashboard/data/fishing-grounds.json';
+  const SOUTH_BOEM_URL = 'https://gis.boem.gov/arcgis/rest/services/AtlanticFishGuide/Atlantic_Coast_Fishing_Atlas/MapServer/2/query';
+  // Operational target list for usec_md. The source layer contains hundreds
+  // of survey labels (buoys, access zones, and duplicate polygons); these are
+  // the named offshore grounds exposed as trip targets. usec_south gets its
+  // own catalog when that region is enabled.
+  const CURATED_GROUND_NAMES = new Set([
+    '17 Fathoms', '17 Fathoms Bank', 'Axel Carlson Reef', 'Barnegat Light Reef',
+    'Manasquan Inlet Reef', 'Sandy Hook Ground', 'Sea Bright Ground',
+    'Shrewsbury Rock', 'Klondike (Shark River)', 'Mussel Bed', 'Mussel Bank',
+    'Oil Wreck', 'Romer Shoal', 'The Cigar', '21 Mile Hill', '3 Mile Hill',
+    '26 Mile (Big) Hill or Lump', 'Barnegat, South End Ridge', 'Barnegat, North End Ridge',
+    'Manasquan (Southeast) Ridge', 'Ambrose Ridge', 'Lightship Ridge',
+    'Scotland Ridge', 'Lindenkohl Canyon', 'Spencer Canyon', 'Toms Canyon',
+    'Carteret Canyon', 'Hudson Canyon', 'Baltimore Canyon', 'Wilmington Canyon',
+    'Norfolk Canyon', "Poor Man's Canyon", 'Sausages', 'Miah Maull Shoal',
+    'Chincoteague Shoal', 'Winter Quarter Shoal', 'Ocean City Shoal',
+    'Offshore Southeast', 'Cartwright Area', 'Acid Water or Stain', 'Mako',
+  ]);
+  const SOUTH_GROUND_BBOX = [-81, 31, -73, 36];
+  const SOUTH_GROUND_NAMES = new Set([
+    'Long Shoal','Platt Shoal','Gibbs Shoal','Gull Shoal','Wimble Shoal','Clam Shoal',
+    'Brant Island Shoal','Brant Island Slue','Maw Point Shoal','Gum Thicket Shoal',
+    'Upper Middle','Inner Middle','Lower Middle','Frying Pan Shoal','East Bank',
+    'Cape Romain Shoal','Bull Breakers','Big Bank','Little Bank','Middle Ground',
+    'Deveaux Bank','Combahee Bank','Pelican Bank','Southeast Channel','South Channel',
+    'Offshore Lump','King Fish Shoal','Marlin Ground','240 Rock','West Rock','10 Fathom',
+    'Northwest Place','Gaskin Bank','Cape Lookout Shoal',
+    'The Point','Atlantic 4','Hatteras','Keller','Pamlico',
+  ]);
+  const SOUTH_TARGETS = {
+    'south-long-shoal': { id:'south-long-shoal', label:'Long Shoal', kind:'ground', lookup_points:[[-75.7092656577,35.5496077655]], geometry:null },
+    'south-platt-shoal': { id:'south-platt-shoal', label:'Platt Shoal', kind:'ground', lookup_points:[[-75.4577212536,35.7755751439]], geometry:null },
+    'south-gibbs-shoal': { id:'south-gibbs-shoal', label:'Gibbs Shoal', kind:'ground', lookup_points:[[-75.9551908563,35.4602147409]], geometry:null },
+    'south-gull-shoal': { id:'south-gull-shoal', label:'Gull Shoal', kind:'ground', lookup_points:[[-75.973572253,35.3653221973]], geometry:null },
+    'south-wimble-shoal': { id:'south-wimble-shoal', label:'Wimble Shoal', kind:'ground', lookup_points:[[-75.4218024046,35.56482783]], geometry:null },
+    'south-clam-shoal': { id:'south-clam-shoal', label:'Clam Shoal', kind:'ground', lookup_points:[[-75.6508493669,35.2949058903]], geometry:null },
+    'south-brant-island-shoal': { id:'south-brant-island-shoal', label:'Brant Island Shoal', kind:'ground', lookup_points:[[-76.3570983283,35.1690880923]], geometry:null },
+    'south-brant-island-slue': { id:'south-brant-island-slue', label:'Brant Island Slue', kind:'ground', lookup_points:[[-76.3931929933,35.1713298749]], geometry:null },
+    'south-maw-point-shoal': { id:'south-maw-point-shoal', label:'Maw Point Shoal', kind:'ground', lookup_points:[[-76.5255344379,35.1356320935]], geometry:null },
+    'south-gum-thicket-shoal': { id:'south-gum-thicket-shoal', label:'Gum Thicket Shoal', kind:'ground', lookup_points:[[-76.5942449843,35.0602488012]], geometry:null },
+    'south-upper-middle': { id:'south-upper-middle', label:'Upper Middle', kind:'ground', lookup_points:[[-76.3387554538,35.2829533231]], geometry:null },
+    'south-inner-middle': { id:'south-inner-middle', label:'Inner Middle', kind:'ground', lookup_points:[[-76.2962401242,35.2484444866]], geometry:null },
+    'south-lower-middle': { id:'south-lower-middle', label:'Lower Middle', kind:'ground', lookup_points:[[-76.2415956823,35.2323500471]], geometry:null },
+    'south-the-point-canyon': { id:'south-the-point-canyon', label:'The Point Canyon', kind:'canyon', lookup_points:[[-74.5703692795,35.8776328788]], geometry:null },
+    'south-atlantic-4-canyon': { id:'south-atlantic-4-canyon', label:'Atlantic 4 Canyon', kind:'canyon', lookup_points:[[-73.6602293828,33.9334737529]], geometry:null },
+    'south-hatteras-canyon': { id:'south-hatteras-canyon', label:'Hatteras Canyon', kind:'canyon', lookup_points:[[-73.0592220839,33.0469840229]], geometry:null },
+    'south-keller-canyon': { id:'south-keller-canyon', label:'Keller Canyon', kind:'canyon', lookup_points:[[-73.2536907867,34.7202113278]], geometry:null },
+    'south-pamlico-canyon': { id:'south-pamlico-canyon', label:'Pamlico Canyon', kind:'canyon', lookup_points:[[-74.6305396042,34.4526188218]], geometry:null },
+  };
+  const SOUTH_OFFSHORE_TARGETS = {
+    'south-frying-pan-shoal':['Frying Pan Shoal',-77.917796,33.72386], 'south-east-bank':['East Bank',-79.145132,33.152159],
+    'south-cape-romain-shoal':['Cape Romain Shoal',-79.316756,32.978242], 'south-bull-breakers':['Bull Breakers',-79.556071,32.870263],
+    'south-big-bank':['Big Bank',-79.629241,32.725006], 'south-little-bank':['Little Bank',-79.666882,32.702276],
+    'south-middle-ground-sc':['Middle Ground',-80.135817,32.522623], 'south-deveaux-bank':['Deveaux Bank',-80.173391,32.53876],
+    'south-combahee-bank':['Combahee Bank',-80.439259,32.47346], 'south-pelican-bank':['Pelican Bank',-80.410581,32.444404],
+    'south-southeast-channel':['Southeast Channel',-80.553578,32.117867], 'south-south-channel':['South Channel',-80.622668,32.107974],
+    'south-offshore-lump':['Offshore Lump',-75.555564,34.871752], 'south-king-fish-shoal':['King Fish Shoal',-76.221115,34.998445],
+    'south-marlin-ground':['Marlin Ground',-76.115036,34.12414], 'south-240-rock':['240 Rock',-76.644076,34.254122],
+    'south-west-rock':['West Rock',-76.587005,34.302752], 'south-10-fathom':['10 Fathom',-76.569442,34.383338],
+    'south-northwest-place':['Northwest Place',-76.606618,34.426321], 'south-gaskin-bank':['Gaskin Bank',-80.705351,32.103082],
+    'south-cape-lookout-shoal':['Cape Lookout Shoal',-76.493878,34.513885], 'south-middle-ground-nc':['Middle Ground',-75.976491,35.949476],
+  };
+  const SOUTH_ALL_TARGETS = Object.assign({}, SOUTH_TARGETS, Object.fromEntries(Object.entries(SOUTH_OFFSHORE_TARGETS).map(([id, v]) => [id, { id, label:v[0], kind:'ground', lookup_points:[[v[1],v[2]]], geometry:null }])));
+  function groundId(name) {
+    const slug = String(name).toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    return `ground-${slug || 'unnamed'}`;
+  }
+  function html(value) {
+    return String(value == null ? '' : value).replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[ch]));
+  }
+  function mergeGroundCatalog(payload, targets, names, bbox) {
+    const seen = new Set(Object.values(targets).map(t => String(t.label || '').trim().toLowerCase()));
+    const usedIds = new Set(Object.keys(targets));
+    let added = 0;
+    for (const feature of (payload && payload.features) || []) {
+      const name = String(feature && feature.name || '').trim();
+      const point = feature && feature.point;
+      const lon = Number(point && point[0]); const lat = Number(point && point[1]);
+      if (!name || !Number.isFinite(lon) || !Number.isFinite(lat) || lon < bbox[0] || lon > bbox[2] || lat < bbox[1] || lat > bbox[3]) continue;
+      const key = name.toLowerCase();
+      if (seen.has(key)) {
+        const existing = Object.entries(targets).find(([, t]) => String(t.label || '').trim().toLowerCase() === key);
+        if (existing && !existing[1].geometry && feature.geometry) { targets[existing[0]] = Object.freeze(Object.assign({}, existing[1], { geometry: feature.geometry, source: feature.source || null })); added++; }
+        continue;
+      }
+      if (!names.has(name)) continue;
+      let id = groundId(name); let suffix = 2;
+      while (usedIds.has(id)) id = `${groundId(name)}-${suffix++}`;
+      targets[id] = Object.freeze({ id, label: name, kind: 'ground', lookup_points: Object.freeze([[lon, lat]]), geometry: feature.geometry || null, description: `${name} offshore fishing ground${feature.source ? ` (${feature.source})` : ''}.`, source: feature.source || null });
+      seen.add(key); usedIds.add(id); added++;
+    }
+    return added;
+  }
+  function loadGroundCatalog(targets, names, bbox, onLoaded) {
+    if (typeof fetch !== 'function') return;
+    const local = fetch(GROUND_DATA_URL, { cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null);
+    const remote = bbox === SOUTH_GROUND_BBOX ? fetch(SOUTH_BOEM_URL + '?' + new URLSearchParams({ where:'1=1', geometry:bbox.join(','), geometryType:'esriGeometryEnvelope', inSR:'4326', spatialRel:'esriSpatialRelIntersects', outFields:'OBJECTID,NAME,TYPE', returnGeometry:'true', outSR:'4326', geometryPrecision:'5', resultRecordCount:'100', f:'json' }))
+      .then(r => r.ok ? r.json() : null).then(j => ({ features:(j && j.features || []).map(f => { const rings = f.geometry && f.geometry.rings || []; const pts = rings.flat(); const point = pts.length ? [pts.reduce((a,p)=>a+p[0],0)/pts.length, pts.reduce((a,p)=>a+p[1],0)/pts.length] : null; return point ? { name:f.attributes?.NAME, point, geometry:{type:'Polygon',coordinates:rings}, source:'BOEM Atlantic Fishing Atlas' } : null; }).filter(Boolean) })).catch(() => null) : Promise.resolve(null);
+    Promise.all([local, remote]).then(([localPayload, remotePayload]) => {
+      const added = mergeGroundCatalog(localPayload, targets, names, bbox) + mergeGroundCatalog(remotePayload, targets, names, bbox);
+      if (added && onLoaded) onLoaded();
+    })
+      .catch(() => {});
+  }
+
+  function todayIso() {
+    const d = new Date();
+    d.setHours(4, 0, 0, 0);
+    return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  }
+  function plus10hIso() {
+    const d = new Date();
+    d.setHours(14, 0, 0, 0);
+    return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  }
+
+  function render(state, targets = CANYON_TARGETS, inlets = INLETS) {
+    const opts = Object.entries(inlets).map(([k, v]) =>
+      `<option value="${html(k)}"${k === state.inlet ? ' selected' : ''}>${html(v.label)}</option>`
+    ).join('');
+    return `
+      <div class="ip-row">
+        <section class="ip-card"><h3>Home inlet</h3><div class="ip-card-fields">
+        <div class="ip-field">
+          <label class="sr-only" for="ip-inlet">Home inlet</label>
+          <select id="ip-inlet">${opts}</select>
+        </div>
+        <div class="ip-field">
+          <label for="ip-departure">Departure (local)</label>
+          <input id="ip-departure" type="datetime-local" value="${state.departure}" />
+        </div>
+        <div class="ip-field">
+          <label for="ip-return">Return (local)</label>
+        <input id="ip-return" type="datetime-local" value="${state.return}" />
+        </div>
+        </div></section>
+        <section class="ip-card"><h3>Target fishing grounds</h3>
+        <div class="ip-field">
+          <label class="sr-only" for="ip-target">Offshore ground</label>
+          <select id="ip-target">${Object.entries(targets).map(([k, v]) =>
+            `<option value="${html(k)}"${k === state.target ? ' selected' : ''}>${html(v.label)}</option>`
+          ).join('')}</select>
+        </div>
+        </section>
+        <button class="ip-save" id="ip-save">Save trip</button>
+        <button class="ip-cta" id="ip-cta">Update</button>
+      </div>
+    `;
+  }
+
+  function mount(host, opts = {}) {
+    if (!host) throw new Error('inlet-picker mount: host is required');
+    const region = opts.region || global.__FISHEDGE_ACTIVE_REGION || 'usec_md';
+    const activeInletKeys = region === 'usec_south' ? SOUTH_INLETS : Object.keys(INLETS).filter(k => !SOUTH_INLETS.includes(k));
+    const activeInlets = Object.fromEntries(activeInletKeys.map(k => [k, INLETS[k]]).filter(([,v]) => v));
+    const activeTargets = region === 'usec_south' ? Object.assign({}, SOUTH_ALL_TARGETS) : CANYON_TARGETS;
+    const state = {
+      inlet: activeInletKeys.includes(opts.initialInlet) ? opts.initialInlet : activeInletKeys[0],
+      departure: opts.initialDeparture || todayIso(),
+      return: opts.initialReturn || plus10hIso(),
+      target: opts.initialTargetId && activeTargets[opts.initialTargetId] ? opts.initialTargetId : Object.keys(activeTargets)[0],
+    };
+    function bind() {
+      const inlet = host.querySelector('#ip-inlet');
+      const dep = host.querySelector('#ip-departure');
+      const ret = host.querySelector('#ip-return');
+      const target = host.querySelector('#ip-target');
+      const save = host.querySelector('#ip-save');
+      const cta = host.querySelector('#ip-cta');
+      inlet.addEventListener('change', () => { state.inlet = inlet.value; opts.onChange && opts.onChange(state.inlet, snapshot()); });
+      dep.addEventListener('change', () => { state.departure = dep.value; opts.onChange && opts.onChange(state.inlet, snapshot()); });
+      ret.addEventListener('change', () => { state.return = ret.value; opts.onChange && opts.onChange(state.inlet, snapshot()); });
+      target.addEventListener('change', () => { state.target = target.value; opts.onChange && opts.onChange(state.inlet, snapshot()); });
+      cta.addEventListener('click', () => opts.onChange && opts.onChange(state.inlet, snapshot()));
+      save.addEventListener('click', () => { const tripPlan = snapshot(); tripPlan.name = `${activeInlets[state.inlet].label} · ${state.departure.replace('T', ' ')}`; opts.onSave && opts.onSave(tripPlan); });
+    }
+    host.innerHTML = render(state, activeTargets, activeInlets); bind();
+
+    function snapshot() {
+      const dep = host.querySelector('#ip-departure');
+      const ret = host.querySelector('#ip-return');
+      const depIso = dep.value ? new Date(dep.value).toISOString() : null;
+      const retIso = ret.value ? new Date(ret.value).toISOString() : null;
+      return {
+        inlet_key: state.inlet,
+        target_id: state.target,
+        target_area: activeTargets[state.target],
+        departure_iso: depIso,
+        return_iso: retIso,
+        status: 'planned',
+        route_polyline: global.FishEdgeTripStorage?.encodePolyline([
+          [activeInlets[state.inlet].lon, activeInlets[state.inlet].lat],
+          ...((activeTargets[state.target] && activeTargets[state.target].lookup_points) || []),
+        ]),
+        route_distance_nm: global.FishEdgeTripStorage?.routeDistanceNm([
+          [activeInlets[state.inlet].lon, activeInlets[state.inlet].lat],
+          ...((activeTargets[state.target] && activeTargets[state.target].lookup_points) || []),
+        ]),
+        route_approximate: true,
+      };
+    }
+    loadGroundCatalog(activeTargets, region === 'usec_south' ? SOUTH_GROUND_NAMES : CURATED_GROUND_NAMES, region === 'usec_south' ? SOUTH_GROUND_BBOX : [-77,35,-71,41], () => {
+      const current = snapshot();
+      state.inlet = current.inlet_key; state.target = current.target_id;
+      host.innerHTML = render(state, activeTargets, activeInlets); bind();
+    });
+
+    return Object.freeze({
+      getInlet: () => state.inlet,
+      getSnapshot: snapshot,
+      getInlets: () => activeInlets,
+    });
+  }
+
+  function getTargets(region) { return region === 'usec_south' ? SOUTH_ALL_TARGETS : CANYON_TARGETS; }
+  function getInlets(region) {
+    const keys = region === 'usec_south' ? SOUTH_INLETS : Object.keys(INLETS).filter(k => !SOUTH_INLETS.includes(k));
+    return Object.fromEntries(keys.map(k => [k, INLETS[k]]).filter(([,v]) => v));
+  }
+  const api = Object.freeze({ mount, render, INLETS, CANYON_TARGETS, SOUTH_INLETS, SOUTH_TARGETS: SOUTH_ALL_TARGETS, getTargets, getInlets });
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  if (typeof global !== 'undefined') global.FishEdgeTripPlannerUI = Object.assign(global.FishEdgeTripPlannerUI || {}, { InletPicker: api });
+})(typeof globalThis !== 'undefined' ? globalThis : this);

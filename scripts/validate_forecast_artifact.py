@@ -120,9 +120,12 @@ def main():
         # not merely the next 48 hours; a partial atlas must be visible in
         # health output even when the regional fallback keeps the layer valid.
         required_end = max(usable)
-        if phase_start > now or phase_end < required_end:
-            raise SystemExit(f"{region} native phase atlas does not cover advertised forecast: {phase_start.isoformat()}..{phase_end.isoformat()} vs {required_end.isoformat()}")
-        phase_status = "complete"
+        if phase_start > now:
+            raise SystemExit(f"{region} native phase atlas starts in the future: {phase_start.isoformat()}")
+        # NOAA's native operational horizon can be shorter than the weather
+        # forecast. Keep the valid native prefix, but make the boundary
+        # explicit so the renderer uses the validated regional grid after it.
+        phase_status = "complete" if phase_end >= required_end else "partial_native_with_regional_fallback"
     else:
         regional = payload.get("regional_tide_harmonics") or {}
         if not regional.get("fields") or not regional.get("reference_time"):

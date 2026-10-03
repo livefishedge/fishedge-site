@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FishEdge — Signup Successful</title>
+  <link rel="icon" href="data:,">
+  <style>
+    :root { --bg:#050b10; --fg:#e0e6ee; --accent2:#2dd4bf; --border:#1b2836; --panel:rgba(5,11,16,.97); --err:#ff6b6b; }
+    * { box-sizing:border-box; }
+    body { min-height:100vh; margin:0; padding:20px; background:var(--bg); color:var(--fg); font-family:system-ui,-apple-system,"Segoe UI",sans-serif; display:flex; align-items:center; justify-content:center; }
+    #card { width:100%; max-width:440px; padding:36px 32px; text-align:center; background:var(--panel); border:1px solid var(--border); border-radius:12px; }
+    h1 { margin:0 0 14px; color:var(--accent2); font-size:1.5rem; }
+    p { line-height:1.55; opacity:.82; }
+    a { display:block; margin-top:24px; padding:13px; border-radius:8px; background:var(--accent2); color:#050b10; font-weight:700; text-decoration:none; }
+    .err { color:var(--err); }
+  </style>
+</head>
+<body>
+  <main id="card"><h1>Confirming your signup…</h1><p>Please wait while we finish setting up your FishEdge account.</p></main>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js?v=20260531"></script>
+  <script src="supabase-init.js?v=20260918-user-activity"></script>
+  <script>
+    (async function () {
+      var card = document.getElementById('card');
+      try {
+        var result = await window.sb.auth.getSession();
+        var session = result && result.data && result.data.session;
+        if (!session || !session.user || !session.user.email_confirmed_at) {
+          throw new Error('We could not confirm this session.');
+        }
+        card.innerHTML = '<h1>Signup successful!</h1>' +
+          '<p>Your email is verified and your FishEdge account is ready.</p>' +
+          '<a href="index.html">Open FishEdge Dashboard</a>';
+      } catch (err) {
+        card.innerHTML = '<h1 class="err">Confirmation issue</h1>' +
+          '<p>' + (err && err.message ? err.message : 'Please try the confirmation link again.') + '</p>' +
+          '<a href="login.html">Back to sign in</a>';
+      }
+    }());
+  </script>
+</body>
+</html>
