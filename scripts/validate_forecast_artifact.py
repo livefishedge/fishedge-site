@@ -121,12 +121,8 @@ def main():
         # health output even when the regional fallback keeps the layer valid.
         required_end = max(usable)
         if phase_start > now or phase_end < required_end:
-            # Native tiles are an optional high-resolution layer. The regional
-            # grid remains authoritative when it has finite cells, and the UI
-            # falls back to it for hours outside the native atlas horizon.
-            phase_status = "partial_with_regional_grid_fallback"
-        else:
-            phase_status = "complete"
+            raise SystemExit(f"{region} native phase atlas does not cover advertised forecast: {phase_start.isoformat()}..{phase_end.isoformat()} vs {required_end.isoformat()}")
+        phase_status = "complete"
     else:
         regional = payload.get("regional_tide_harmonics") or {}
         if not regional.get("fields") or not regional.get("reference_time"):

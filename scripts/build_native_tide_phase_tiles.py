@@ -207,7 +207,10 @@ def main():
     ty1 = min(tile_n - 1, int(np.floor((world / 2 - ymin) / tile_world)))
     tile_indices = [{'x': tx, 'y': ty} for tx in range(tx0, tx1 + 1)
                     for ty in range(ty0, ty1 + 1)]
-    tile_root = args.out_dir.parent / f'{args.out_dir.name}_tiles' / f'z{args.tile_zoom}'
+    # Write exactly beneath the manifest directory. The previous implicit
+    # "_tiles" suffix produced native_phase_tiles_tiles while the manifest
+    # and uploader referenced native_phase_tiles.
+    tile_root = args.out_dir / f'z{args.tile_zoom}'
     # Project vertices directly into the global XYZ tile pixel coordinate
     # system.  The previous implementation rasterized into a cropped bbox,
     # then resized/cropped that image into tiles; that made the valid-face

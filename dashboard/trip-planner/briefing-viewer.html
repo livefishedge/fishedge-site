@@ -3126,7 +3126,7 @@
         streamlineCtx.clearRect(0, 0, streamlineCanvas.width, streamlineCanvas.height);
       }
       if (waves) drawWavePackets();
-      if (marine || waves) clipCanvasToWaveMask();
+      if (((marine && heatKey !== 'astronomical_tide_ft') || waves)) clipCanvasToWaveMask();
       if (waves && heatKey && !marine) {
         streamlineCtx.save(); streamlineCtx.setTransform(1,0,0,1,0,0);
         streamlineCtx.globalCompositeOperation = 'destination-over';

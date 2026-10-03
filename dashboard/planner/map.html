@@ -3479,7 +3479,10 @@
         streamlineCtx.clearRect(0, 0, streamlineCanvas.width, streamlineCanvas.height);
       }
       if (waves) drawWavePackets();
-      if (marine || waves) clipCanvasToWaveMask();
+      // Tidal stage has its own tidal-water/finite-stage contract. The wave
+      // shoreline mask can erase valid bay cells, especially after a native
+      // tide atlas ends. Keep that mask for wave/SST products only.
+      if (((marine && heatKey !== 'astronomical_tide_ft') || waves)) clipCanvasToWaveMask();
       if (waves && heatKey && !marine) {
         streamlineCtx.save(); streamlineCtx.setTransform(1,0,0,1,0,0);
         streamlineCtx.globalCompositeOperation = 'destination-over';

@@ -46,7 +46,7 @@ def main():
         valid = bool(phase_times and phase.get("frames") == len(phase_times)
                      and len(phase_dt) == len(phase_times)
                      and len(current_set.intersection(phase_set)) >= min(12, len(current_times))
-                     and phase_end is not None and phase_end >= now - dt.timedelta(hours=1)
+                     and phase_end is not None and phase_end >= max((parse(value) for value in current_times if parse(value) is not None), default=now)
                      and phase.get("asset_version"))
         removed = None if valid else native.pop("phase_tiles", None)
         quality = payload.setdefault("quality", {}).setdefault("native_mesh", {})
