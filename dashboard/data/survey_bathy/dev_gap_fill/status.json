@@ -8,6 +8,7 @@
   "south_shelf_accepted_cells": 249227,
   "regional_tiles_hashed": 13674,
   "regional_tiles_errors": 0,
+  "bluetopo_fallback": {"valid_cells": 8290371, "vertical_reference": "NAVD88", "resolution_m": 50, "support_class": "fallback_navd88", "merged_into_mllw": false},
   "catalog_register_rows": 342,
   "local_processed_surveys": 85,
   "cataloged_unprocessed_records": 254,

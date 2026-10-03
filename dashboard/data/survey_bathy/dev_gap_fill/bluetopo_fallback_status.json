@@ -1,0 +1,23 @@
+{
+  "status": "complete",
+  "output": "/home/gzheng/.openclaw/workspace-cto/bathy-research/qa/recovery/regional_v1/usec_md_bluetopo_fallback_navd88_50m.tif",
+  "sha256": "a211b1c2db6bcf983301da5e1e0ae50213faeab53ab26ac0a5ceb6b23ccbcb3c",
+  "crs": "EPSG:5070",
+  "resolution_m": 50,
+  "shape": [
+    5799,
+    3404
+  ],
+  "bounds_epsg5070": [
+    1820850.0,
+    1786450.0,
+    1991050.0,
+    2076400.0
+  ],
+  "valid_fallback_cells": 8290371,
+  "source_mosaic": "/home/gzheng/.openclaw/workspace-cto/bathy-research/bluetopo_elevation_wm.tif",
+  "source_vertical_reference": "NAVD88",
+  "support_class": "fallback_navd88",
+  "measured_mllw_blending": "not_performed",
+  "production_touched": false
+}
