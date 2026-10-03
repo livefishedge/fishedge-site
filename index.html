@@ -9,6 +9,14 @@
   <meta property="og:description" content="Live marine intelligence for tournament captains. FishEdge keeps conditions current and extracts the edges that matter — temperature breaks, chlorophyll fronts, and current rips." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://fishedge.live" />
+  <script>
+    // Compatibility guard for the branch-preview bathymetry viewer. Pages can
+    // route unknown extensionless paths through this marketing shell before
+    // _redirects runs, so keep the legacy link functional at the app layer.
+    if (location.pathname === '/dashboard/bathymetry-gap-fill' || location.pathname === '/dashboard/bathymetry-gap-fill/') {
+      location.replace('/dashboard/bathymetry-gap-fill-dev');
+    }
+  </script>
   <link rel="icon" type="image/png" sizes="any" href="fishedge-logo-transparent.png?v=16" />
   <link rel="stylesheet" href="style.css?v=20260804-layout" />
 <script src="cta-personalization-config.js?v=20260802"></script>
