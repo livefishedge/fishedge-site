@@ -9,6 +9,7 @@ mesh to the client.
 import argparse, json
 import gc
 import hashlib
+import datetime as dt
 from pathlib import Path
 import numpy as np
 import cv2
@@ -27,6 +28,12 @@ def mercator(lon, lat):
     x = R * np.deg2rad(lon)
     y = R * np.log(np.tan(np.pi / 4 + np.deg2rad(np.clip(lat, -85, 85)) / 2))
     return x, y
+
+def parse_utc(value):
+    try:
+        return dt.datetime.fromisoformat(str(value).replace('Z', '+00:00')).astimezone(dt.timezone.utc)
+    except (TypeError, ValueError):
+        return None
 
 def main():
     ap = argparse.ArgumentParser()
@@ -279,6 +286,20 @@ def main():
                 digest.update(block)
         phase_manifest['asset_version'] = digest.hexdigest()[:20]
     native_payload = payload.setdefault('native_mesh', {})
+    # A refresh may discover an older NOAA cycle after a newer one was
+    # published. Never let that candidate move the accepted native horizon
+    # backward. The new tiles can remain on disk for a later atomic publish,
+    # but the existing manifest remains authoritative until a candidate with
+    # equal-or-later coverage passes validation.
+    existing_phase = native_payload.get('phase_tiles') or {}
+    existing_times = [parse_utc(v) for v in existing_phase.get('frame_times', [])]
+    candidate_end = parse_utc(frame_times[-1]) if frame_times else None
+    existing_end = max((v for v in existing_times if v is not None), default=None)
+    if existing_end is not None and candidate_end is not None and candidate_end < existing_end:
+        print(json.dumps({'frames': count, 'nodes': int(len(x)), 'triangles': int(tri_valid.sum()),
+                          'out_dir': str(args.out_dir), 'manifest_preserved': True,
+                          'reason': 'candidate native horizon is older than accepted manifest'}))
+        return
     if args.hotspot_bbox:
         # Keep the nationwide/base atlas untouched; selective patches are
         # loaded only after the map zooms into this bbox.

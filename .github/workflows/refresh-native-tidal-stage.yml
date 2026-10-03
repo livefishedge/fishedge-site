@@ -28,16 +28,28 @@ jobs:
         run: |
           source_key="$(python - <<'PY'
           import datetime as dt
-          from scripts.fetch_stofs_global_harmonics import find_htp
+          from scripts.fetch_stofs_global_harmonics import find_htp, RemoteClassicNetCDF
+          from scripts.tide_source_time import read_source_times
           today = dt.datetime.now(dt.timezone.utc).strftime('%Y%m%d')
-          for cycle in ('00', '06', '12', '18'):
+          candidates = []
+          # Availability is not completeness: the newest cycle can still be
+          # publishing and contain only a few records. Inspect source times
+          # and choose the candidate with the latest complete horizon.
+          for cycle in ('18', '12', '06', '00'):
               try:
-                  print(find_htp(today, cycle))
-                  break
+                  key = find_htp(today, cycle)
+                  ds = RemoteClassicNetCDF('https://noaa-gestofs-pds.s3.amazonaws.com/' + key)
+                  try:
+                      times = read_source_times(ds)
+                  finally:
+                      ds.close()
+                  if len(times) >= 24:
+                      candidates.append((times[-1], key))
               except Exception:
                   pass
-          else:
-              raise SystemExit('no current NOAA STOFS HTP source cycle')
+          if not candidates:
+              raise SystemExit('no complete NOAA STOFS HTP source cycle')
+          print(max(candidates)[1])
           PY
           )"
           echo "key=$source_key" >> "$GITHUB_OUTPUT"
