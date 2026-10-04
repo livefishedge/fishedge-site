@@ -4,10 +4,12 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>USEC–MD Bathymetry Gap Fill · DEV</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@10.2.1/ol.css">
   <style>
     :root{--bg:#07111f;--panel:#0e1d31;--line:#203b59;--text:#e8f1fb;--muted:#9cb2c9;--accent:#36d1dc;--warn:#ffbd69}
     *{box-sizing:border-box}body{margin:0;background:linear-gradient(140deg,#06101d,#0a1d31 55%,#082532);color:var(--text);font:15px/1.5 Inter,system-ui,sans-serif}
     main{max-width:1220px;margin:auto;padding:28px 20px 60px}.eyebrow{color:var(--accent);font-weight:700;letter-spacing:.12em;text-transform:uppercase;font-size:12px}h1{font-size:clamp(28px,4vw,48px);line-height:1.08;margin:8px 0 12px}h2{margin:0 0 12px;font-size:20px}.lede{max-width:850px;color:var(--muted);font-size:17px}.badge{display:inline-block;border:1px solid var(--warn);color:var(--warn);border-radius:999px;padding:4px 10px;font-size:12px;font-weight:700;margin:12px 0 22px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:20px 0}.card,.panel{background:rgba(14,29,49,.9);border:1px solid var(--line);border-radius:14px;padding:16px;box-shadow:0 12px 34px #0003}.metric{font-size:28px;font-weight:800;color:var(--accent)}.label{color:var(--muted);font-size:12px;margin-top:3px}.panel{margin-top:18px}.maps{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}.map{background:#050b13;border-radius:10px;overflow:hidden;border:1px solid var(--line)}.map img{width:100%;display:block;aspect-ratio:16/10;object-fit:contain;background:#050b13}.map div{padding:10px 12px}.map strong{display:block}.map small{color:var(--muted)}ul{margin:8px 0 0;padding-left:20px;color:var(--muted)}li{margin:5px 0}.ok{color:#75e6a0}.warning{color:var(--warn)}footer{margin-top:28px;color:var(--muted);font-size:12px}a{color:var(--accent)}
+    .context-map{height:560px;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#dbeaf0}.map-key{display:flex;gap:18px;flex-wrap:wrap;padding:10px 12px;color:var(--muted);font-size:13px}.swatch{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:5px;vertical-align:-1px}.ol-zoom{top:.6em;left:.6em}.ol-control button{background:rgba(7,17,31,.85);color:#fff}.ol-attribution{font-size:10px}
   </style>
 </head>
 <body><main>
@@ -32,6 +34,13 @@
     <li><span class="warning">!</span> Remaining blank areas are unresolved data gaps, not silently interpolated measurements.</li>
   </ul></section>
 
+  <section class="panel"><h2>Geographic context and occupied support</h2>
+    <p class="lede" style="font-size:14px">This is the primary inspection view. The basemap shows the data relative to shore; polygons are coarse occupied-mask previews, not survey bounding boxes. Toggle layers to distinguish measured MLLW, NAVD88 BlueTopo fallback, and the native F00920 enhancement.</p>
+    <div class="map-key"><span><i class="swatch" style="background:#14d7dc"></i>Measured MLLW</span><span><i class="swatch" style="background:#ffab45"></i>BlueTopo fallback NAVD88</span><span><i class="swatch" style="background:#e66cff"></i>F00920 native 10 m</span><span><i class="swatch" style="background:#ffda6a;border:1px dashed #222"></i>Working region</span></div>
+    <div id="coverage-context-map" class="context-map" aria-label="USEC-MD geographic coverage context map"></div>
+    <p class="label">Basemap © OpenStreetMap contributors. Coverage context GeoJSON: <a href="data/survey_bathy/dev_gap_fill/coverage_context.geojson">inspect source</a>. Bay closures and outside-bays accounting remain provisional.</p>
+  </section>
+
   <section class="panel"><h2>Where the candidate has measured coverage</h2><div class="maps">
     <div class="map"><img src="data/survey_bathy/dev_gap_fill/coverage_footprint.png" alt="Measured coverage footprint map"/><div><strong>Measured coverage footprint</strong><small>Cyan = one or more retained survey cells; dark = no measured support</small></div></div>
     <div class="map"><img src="data/survey_bathy/dev_gap_fill/measured_plus_bluetopo_coverage.png" alt="Measured and BlueTopo fallback coverage"/><div><strong>Gap-fill overlay</strong><small>Cyan = MLLW measured · amber = separately labeled NAVD88 BlueTopo fallback</small></div></div>
@@ -43,6 +52,7 @@
     <div class="map"><img src="data/survey_bathy/dev_gap_fill/south.png" alt="Southern shelf measured bathymetry"/><div><strong>Southern Delmarva/Virginia shelf</strong><small>H13094/H13095/H13326/H13327 measured sources</small></div></div>
     <div class="map"><img src="data/survey_bathy/dev_gap_fill/chesapeake.png" alt="Chesapeake approach measured bathymetry"/><div><strong>Chesapeake approach patch</strong><small>Native-pixel averaging · MLLW</small></div></div>
     <div class="map"><img src="data/survey_bathy/dev_gap_fill/canyon.png" alt="Offshore canyon priority render"/><div><strong>Canyon/shelf-break priority view</strong><small>Acquisition lead; not blended into MLLW base</small></div></div>
+    <div class="map"><img src="data/survey_bathy/dev_gap_fill/f00920_native_10m_enhancement_10m.png" alt="F00920 native 10 metre enhancement"/><div><strong>F00920 native enhancement</strong><small>0.5 m MLLW source aggregated to 10 m · 18,294 accepted cells</small></div></div>
   </div></section>
 
   <section class="panel"><h2>Next coverage gaps</h2><ul>
@@ -52,4 +62,24 @@
     <li>Acquire calibrated backscatter or sediment observations. Until then, substrate is explicitly <strong>UNKNOWN</strong>.</li>
   </ul><p><a href="data/survey_bathy/dev_gap_fill/status.json">Open machine-readable build status →</a></p></section>
   <footer>Generated 2026-10-02 by the CTO bathymetry gap-fill pipeline. This is a Cloudflare Pages branch preview, not production.</footer>
-</main></body></html>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/ol@10.2.1/dist/ol.js"></script>
+<script>
+(() => {
+  const target = document.getElementById('coverage-context-map');
+  if (!target || !window.ol) return;
+  const style = feature => {
+    const c = feature.get('class');
+    const colors = {measured_mllw:['#14d7dc','rgba(20,215,220,.55)'],fallback_navd88:['#ffab45','rgba(255,171,69,.42)'],native_enhancement:['#e66cff','rgba(230,108,255,.65)'],target_region:['#ffda6a','rgba(255,218,106,.03)']};
+    const x = colors[c] || ['#fff','#0000'];
+    return new ol.style.Style({fill:new ol.style.Fill({color:x[1]}),stroke:new ol.style.Stroke({color:x[0],width:c==='target_region'?2:1.4,dash:c==='target_region'?[8,6]:undefined})});
+  };
+  const source = new ol.source.Vector({url:'data/survey_bathy/dev_gap_fill/coverage_context.geojson',format:new ol.format.GeoJSON()});
+  const map = new ol.Map({target, layers:[
+    new ol.layer.Tile({source:new ol.source.OSM(),opacity:.82}),
+    new ol.layer.Vector({source,style})
+  ], view:new ol.View({center:ol.proj.fromLonLat([-74.4,38.4]),zoom:6.5}), controls:ol.control.defaults.defaults({attribution:true})});
+  source.once('change', () => { if (source.getState()==='ready' && source.getFeatures().length) map.getView().fit(source.getExtent(),{padding:[35,35,35,35],maxZoom:7.5,duration:0}); });
+})();
+</script>
+</body></html>

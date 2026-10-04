@@ -1,0 +1,28 @@
+{
+  "status": "complete",
+  "grid_crs": "EPSG:5070",
+  "grid_resolution_m": 50,
+  "grid_shape": [
+    5799,
+    3404
+  ],
+  "grid_bounds": [
+    1820850.0,
+    1786450.0,
+    1991050.0,
+    2076400.0
+  ],
+  "fallback_valid_cells": 8290371,
+  "measured_overlap_cells": 1845,
+  "fallback_net_cells_after_measured_overlap": 8288526,
+  "union_cells": 8300670,
+  "fallback_only_fraction_of_grid": 0.4198891417114949,
+  "union_fraction_of_grid": 0.4205043456376145,
+  "meaning": "Net fallback is BlueTopo support not already occupied by the regional measured_flag after nearest common-grid reprojection. This is not an outside-bays claim because bay geometry is pending.",
+  "vertical_references": {
+    "measured": "MLLW",
+    "fallback": "NAVD88"
+  },
+  "blending": "not performed",
+  "production_touched": false
+}
