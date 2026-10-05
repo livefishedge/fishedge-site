@@ -1,0 +1,9 @@
+{
+  "type": "FeatureCollection",
+  "name": "USGS Reson 7160 acoustic backscatter footprints",
+  "features": [
+    {"type":"Feature","properties":{"id":"usgs_reson7160_washington_accomac","source":"USGS ScienceBase 5e7d1497e4b01d5092751d97","evidence_type":"acoustic_backscatter","resolution_m":10,"valid_cells":1065161,"substrate_classification":"not_assigned_without_ground_truth"},"geometry":{"type":"Polygon","coordinates":[[[-74.3441404785,37.5041260114],[-74.0154088388,37.5041260114],[-74.0154088388,37.8560668272],[-74.3441404785,37.8560668272],[-74.3441404785,37.5041260114]]]}},
+    {"type":"Feature","properties":{"id":"usgs_reson7160_keller_canyon","source":"USGS ScienceBase 5e7d1497e4b01d5092751d97","evidence_type":"acoustic_backscatter","resolution_m":10,"valid_cells":672805,"substrate_classification":"not_assigned_without_ground_truth"},"geometry":{"type":"Polygon","coordinates":[[[-74.8620538573,35.5084896403],[-74.7639849680,35.5084896403],[-74.7639849680,35.7464047894],[-74.8620538573,35.7464047894],[-74.8620538573,35.5084896403]]]}},
+    {"type":"Feature","properties":{"id":"usgs_reson7160_norfolk_canyon","source":"USGS ScienceBase 5e7d1497e4b01d5092751d97","evidence_type":"acoustic_backscatter","resolution_m":10,"valid_cells":873117,"substrate_classification":"not_assigned_without_ground_truth"},"geometry":{"type":"Polygon","coordinates":[[[-74.7551637954,36.7526638860],[-74.5712087526,36.7526638860],[-74.5712087526,37.1153777701],[-74.7551637954,37.1153777701],[-74.7551637954,36.7526638860]]]}}
+  ]
+}
