@@ -14,6 +14,7 @@
   "geographic_context": {"basemap": "OpenStreetMap", "coverage_context_geojson": "coverage_context.geojson", "working_extent": [-76.5, 35.5, -71.5, 40.5], "bay_closures": "provisional_candidates_semantics_review_required", "bay_closures_geojson": "bay_closures_candidates.geojson", "outside_bays_claim": false, "bay_geometry_qa": "candidate_semantics_review_required"},
   "provisional_ocean_baseline": {"status": "geometry_qa_pending", "grid_crs": "EPSG:5070", "grid_resolution_m": 50, "provisional_ocean_cells": 198651802, "measured_mllw_cells": 403871, "measured_mllw_area_km2": 1009.6775, "measured_mllw_percent_of_provisional_ocean": 0.20330598, "bluetopo_fallback_only_cells": 19429253, "bluetopo_fallback_only_area_km2": 48573.1325, "bluetopo_fallback_only_percent_of_provisional_ocean": 9.7805571},
   "substrate_evidence": {"status": "qualified_acoustic_evidence_no_sediment_classes", "footprints_geojson": "usgs_backscatter_footprints.geojson", "products": 3, "valid_cells": 2611083, "resolution_m": 10, "classification": "not_assigned_without_ground_truth"},
+  "separate_bathymetry_evidence": {"status": "qualified_separate_instantaneous_sea_level", "footprints_geojson": "usgs_bathymetry_footprints.geojson", "products": 3, "valid_cells": 422415, "resolution_m": 25, "vertical_reference": "instantaneous sea level", "tide_correction_applied": false, "merged_into_mllw": false},
   "catalog_register_rows": 342,
   "local_processed_surveys": 85,
   "cataloged_unprocessed_records": 254,

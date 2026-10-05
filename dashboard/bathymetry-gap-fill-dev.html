@@ -36,8 +36,8 @@
 
   <section class="panel"><h2>Geographic context and occupied support</h2>
     <p class="lede" style="font-size:14px">This is the primary inspection view. The basemap shows the data relative to shore; polygons are coarse occupied-mask previews, not survey bounding boxes. Toggle layers to distinguish measured MLLW, NAVD88 BlueTopo fallback, and the native F00920 enhancement.</p>
-    <div class="map-key"><span><i class="swatch" style="background:#14d7dc"></i>Measured MLLW</span><span><i class="swatch" style="background:#ffab45"></i>BlueTopo fallback NAVD88</span><span><i class="swatch" style="background:#e66cff"></i>F00920 native 10 m</span><span><i class="swatch" style="background:#ffda6a;border:1px dashed #222"></i>Working region</span><span><i class="swatch" style="background:#e85b75"></i>Provisional bay closure</span><span><i class="swatch" style="background:#9d7cff"></i>USGS acoustic backscatter</span></div>
-    <div class="map-key" aria-label="Map layer controls"><label><input id="toggle-bays" type="checkbox" checked> Provisional bay closures</label><label><input id="toggle-backscatter" type="checkbox" checked> Acoustic backscatter footprints</label></div>
+    <div class="map-key"><span><i class="swatch" style="background:#14d7dc"></i>Measured MLLW</span><span><i class="swatch" style="background:#ffab45"></i>BlueTopo fallback NAVD88</span><span><i class="swatch" style="background:#e66cff"></i>F00920 native 10 m</span><span><i class="swatch" style="background:#ffda6a;border:1px dashed #222"></i>Working region</span><span><i class="swatch" style="background:#e85b75"></i>Provisional bay closure</span><span><i class="swatch" style="background:#9d7cff"></i>USGS acoustic backscatter</span><span><i class="swatch" style="background:#315bff"></i>USGS bathymetry · instantaneous sea level</span></div>
+    <div class="map-key" aria-label="Map layer controls"><label><input id="toggle-bays" type="checkbox" checked> Provisional bay closures</label><label><input id="toggle-backscatter" type="checkbox" checked> Acoustic backscatter footprints</label><label><input id="toggle-usgs-bathy" type="checkbox" checked> USGS bathymetry footprints</label></div>
     <div id="coverage-context-map" class="context-map" aria-label="USEC-MD geographic coverage context map"></div>
     <p class="label">Basemap © OpenStreetMap contributors. Coverage context GeoJSON: <a href="data/survey_bathy/dev_gap_fill/coverage_context.geojson">inspect source</a>. Bay polygons are provisional candidates pending mouth-semantics QA; backscatter is acoustic evidence only, not a sediment class.</p>
   </section>
@@ -78,16 +78,19 @@
   const source = new ol.source.Vector({url:'data/survey_bathy/dev_gap_fill/coverage_context.geojson',format:new ol.format.GeoJSON()});
   const baySource = new ol.source.Vector({url:'data/survey_bathy/dev_gap_fill/bay_closures_candidates.geojson',format:new ol.format.GeoJSON()});
   const backscatterSource = new ol.source.Vector({url:'data/survey_bathy/dev_gap_fill/usgs_backscatter_footprints.geojson',format:new ol.format.GeoJSON()});
+  const usgsBathySource = new ol.source.Vector({url:'data/survey_bathy/dev_gap_fill/usgs_bathymetry_footprints.geojson',format:new ol.format.GeoJSON()});
   const bayLayer = new ol.layer.Vector({source:baySource,style:new ol.style.Style({fill:new ol.style.Fill({color:'rgba(232,91,117,.08)'}),stroke:new ol.style.Stroke({color:'#e85b75',width:2,dash:[3,5]})})});
   const backscatterLayer = new ol.layer.Vector({source:backscatterSource,style:new ol.style.Style({fill:new ol.style.Fill({color:'rgba(157,124,255,.12)'}),stroke:new ol.style.Stroke({color:'#9d7cff',width:2,dash:[10,6]})})});
+  const usgsBathyLayer = new ol.layer.Vector({source:usgsBathySource,style:new ol.style.Style({fill:new ol.style.Fill({color:'rgba(49,91,255,.10)'}),stroke:new ol.style.Stroke({color:'#315bff',width:2,dash:[12,4]})})});
   const coverageLayer = new ol.layer.Vector({source,style});
   const map = new ol.Map({target, layers:[
     new ol.layer.Tile({source:new ol.source.OSM(),opacity:.82}),
-    coverageLayer, bayLayer, backscatterLayer
+    coverageLayer, bayLayer, backscatterLayer, usgsBathyLayer
   ], view:new ol.View({center:ol.proj.fromLonLat([-74.4,38.4]),zoom:6.5}), controls:ol.control.defaults.defaults({attribution:true})});
   source.once('change', () => { if (source.getState()==='ready' && source.getFeatures().length) map.getView().fit(source.getExtent(),{padding:[35,35,35,35],maxZoom:7.5,duration:0}); });
   document.getElementById('toggle-bays')?.addEventListener('change', e => bayLayer.setVisible(e.target.checked));
   document.getElementById('toggle-backscatter')?.addEventListener('change', e => backscatterLayer.setVisible(e.target.checked));
+  document.getElementById('toggle-usgs-bathy')?.addEventListener('change', e => usgsBathyLayer.setVisible(e.target.checked));
 })();
 </script>
 </body></html>

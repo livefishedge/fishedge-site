@@ -1,0 +1,9 @@
+{
+  "type":"FeatureCollection",
+  "name":"USGS Reson 7160 bathymetry footprints",
+  "features":[
+    {"type":"Feature","properties":{"id":"usgs_reson7160_keller_canyon_bathymetry","evidence_type":"bathymetry","resolution_m":25,"vertical_reference":"instantaneous sea level","tide_correction_applied":false,"valid_cells":107246},"geometry":{"type":"Polygon","coordinates":[[[-74.8733406748,35.4972302995],[-74.7603940429,35.4972302995],[-74.7603940429,35.7523413580],[-74.8733406748,35.7523413580],[-74.8733406748,35.4972302995]]]}},
+    {"type":"Feature","properties":{"id":"usgs_reson7160_washington_accomac_bathymetry","evidence_type":"bathymetry","resolution_m":25,"vertical_reference":"instantaneous sea level","tide_correction_applied":false,"valid_cells":173598},"geometry":{"type":"Polygon","coordinates":[[[-74.3464871220,37.5001332488],[-74.0094509366,37.5001332488],[-74.0094509366,37.8591206726],[-74.3464871220,37.8591206726],[-74.3464871220,37.5001332488]]]}},
+    {"type":"Feature","properties":{"id":"usgs_reson7160_norfolk_canyon_bathymetry","evidence_type":"bathymetry","resolution_m":25,"vertical_reference":"instantaneous sea level","tide_correction_applied":false,"valid_cells":141571},"geometry":{"type":"Polygon","coordinates":[[[-74.7609696114,36.7491996282],[-74.5667828237,36.7491996282],[-74.5667828237,37.1164034703],[-74.7609696114,37.1164034703],[-74.7609696114,36.7491996282]]]}}
+  ]
+}
