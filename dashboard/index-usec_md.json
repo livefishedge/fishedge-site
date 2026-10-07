@@ -1,6 +1,6 @@
 {
   "region": "usec_md",
-  "last_updated": "2026-10-07T08:22:49.997248Z",
+  "last_updated": "2026-10-07T08:53:23.646444Z",
   "vars": [
     "chl",
     "sst",
@@ -3041,7 +3041,7 @@
     "online_retention_days": 45
   },
   "_dashboard_rewrite": {
-    "rewritten_at": "2026-10-07T08:38:01.896391+00:00",
+    "rewritten_at": "2026-10-07T09:08:02.810498+00:00",
     "r2_base": "https://data.fishedge.live",
     "retention_days": 45,
     "cutoff_doy": 235,
