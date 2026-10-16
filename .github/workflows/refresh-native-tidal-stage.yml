@@ -109,9 +109,7 @@ jobs:
           endpoint='https://5fec32b363f766a68734c384d1890cb1.r2.cloudflarestorage.com'
           for region in usec_md usec_south; do
             aws s3 cp "data/$region/briefing/forecast.json" "s3://fishedge-data/$region/briefing/forecast.json" --endpoint-url "$endpoint" --cache-control 'no-cache, max-age=0'
-            for file in "dashboard/trip-planner/data/$region/briefing/native_phase_tiles"/z*/*/*/*.png; do
-              [ -f "$file" ] || continue
-              key="${file#dashboard/trip-planner/data/$region/briefing/}"
-              aws s3 cp "$file" "s3://fishedge-data/$region/briefing/$key" --endpoint-url "$endpoint" --cache-control 'public, max-age=3600'
-            done
+            tiles="dashboard/trip-planner/data/$region/briefing/native_phase_tiles"
+            aws s3 cp "$tiles/" "s3://fishedge-data/$region/briefing/native_phase_tiles/" \
+              --recursive --endpoint-url "$endpoint" --cache-control 'public, max-age=3600'
           done
