@@ -1,6 +1,6 @@
 {
   "region": "usec_south",
-  "last_updated": "2026-10-26T18:49:54.967579Z",
+  "last_updated": "2026-10-26T20:50:23.652505Z",
   "vars": [
     "chl",
     "sst",
@@ -96,6 +96,26 @@
         "label": "2026-10-24 17:08 UTC | PACE-OCI",
         "time_iso": "2026-10-24T17:08:00Z",
         "json_path": "data/usec_south/chl/usec_south_20261024_2026297.1708_chl_PACE-OCI.json",
+        "grid_file": "frame_bbox",
+        "product_level": null,
+        "stitched": false
+      },
+      {
+        "var": "chl",
+        "id": "usec_south_20261025_2026298.1743_chl_PACE-OCI",
+        "label": "2026-10-25 17:43 UTC | PACE-OCI",
+        "time_iso": "2026-10-25T17:43:00Z",
+        "json_path": "data/usec_south/chl/usec_south_20261025_2026298.1743_chl_PACE-OCI.json",
+        "grid_file": "frame_bbox",
+        "product_level": null,
+        "stitched": false
+      },
+      {
+        "var": "chl",
+        "id": "usec_south_20261026_2026299.1639_chl_PACE-OCI",
+        "label": "2026-10-26 16:39 UTC | PACE-OCI",
+        "time_iso": "2026-10-26T16:39:00Z",
+        "json_path": "data/usec_south/chl/usec_south_20261026_2026299.1639_chl_PACE-OCI.json",
         "grid_file": "frame_bbox",
         "product_level": null,
         "stitched": false
@@ -1388,6 +1408,16 @@
         "label": "2026-10-26 17:00 UTC",
         "time_iso": "2026-10-26T17:00:00Z",
         "json_path": "data/usec_south/sst/sst_usec_south_2026299_20261026_17_g19.json",
+        "grid_file": "goes_sst_1000_grid.json",
+        "product_level": null,
+        "stitched": false
+      },
+      {
+        "var": "sst",
+        "id": "sst_usec_south_2026299_20261026_18_g19",
+        "label": "2026-10-26 18:00 UTC",
+        "time_iso": "2026-10-26T18:00:00Z",
+        "json_path": "data/usec_south/sst/sst_usec_south_2026299_20261026_18_g19.json",
         "grid_file": "goes_sst_1000_grid.json",
         "product_level": null,
         "stitched": false
@@ -2944,6 +2974,16 @@
         "label": "2026-10-26 17:00 UTC",
         "time_iso": "2026-10-26T17:00:00Z",
         "json_path": "data/usec_south/sst_front/sstfront_usec_south_2026299_20261026_17_g19.json",
+        "grid_file": "frame_bbox",
+        "product_level": null,
+        "stitched": false
+      },
+      {
+        "var": "sst_front",
+        "id": "sstfront_usec_south_2026299_20261026_18_g19",
+        "label": "2026-10-26 18:00 UTC",
+        "time_iso": "2026-10-26T18:00:00Z",
+        "json_path": "data/usec_south/sst_front/sstfront_usec_south_2026299_20261026_18_g19.json",
         "grid_file": "frame_bbox",
         "product_level": null,
         "stitched": false
