@@ -3659,6 +3659,66 @@
         15262,
         1793138870341977054
       ]
+    },
+    "dev/usec_md/sst/images/json/sst_usec_md_2026300_20261027_23_g19.json": {
+      "sig": [
+        736294,
+        1793211406140241706
+      ]
+    },
+    "dev/usec_md/sst/images/json/sst_usec_md_2026301_20261028_16_g19.json": {
+      "sig": [
+        775442,
+        1793211407890169277
+      ]
+    },
+    "dev/usec_md/uv/images/json/uv_usec_md_2026301_20261028_cmems-duacs.json": {
+      "sig": [
+        68393,
+        1793211436965044469
+      ]
+    },
+    "dev/usec_md/sst_front/images/json/sstfront_usec_md_2026300_20261027_23_g19.json": {
+      "sig": [
+        20769,
+        1793211416686616648
+      ]
+    },
+    "dev/usec_md/sst_front/images/json/sstfront_usec_md_2026301_20261028_16_g19.json": {
+      "sig": [
+        30909,
+        1793211417589939609
+      ]
+    },
+    "dev/usec_south/sst/images/json/sst_usec_south_2026300_20261027_23_g19.json": {
+      "sig": [
+        784350,
+        1793211449673509793
+      ]
+    },
+    "dev/usec_south/sst/images/json/sst_usec_south_2026301_20261028_16_g19.json": {
+      "sig": [
+        689904,
+        1793211451391754649
+      ]
+    },
+    "dev/usec_south/uv/images/json/uv_usec_south_2026301_20261028_cmems-duacs.json": {
+      "sig": [
+        99459,
+        1793211475832090999
+      ]
+    },
+    "dev/usec_south/sst_front/images/json/sstfront_usec_south_2026300_20261027_23_g19.json": {
+      "sig": [
+        14590,
+        1793211457921925622
+      ]
+    },
+    "dev/usec_south/sst_front/images/json/sstfront_usec_south_2026301_20261028_16_g19.json": {
+      "sig": [
+        7324,
+        1793211458173336498
+      ]
     }
   }
 }
