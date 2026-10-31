@@ -3833,6 +3833,30 @@
         99763,
         1793419908019164419
       ]
+    },
+    "dev/usec_md/sst/images/json/sst_usec_md_2026304_20261031_09_g19.json": {
+      "sig": [
+        679351,
+        1793445649533681933
+      ]
+    },
+    "dev/usec_md/sst_front/images/json/sstfront_usec_md_2026304_20261031_09_g19.json": {
+      "sig": [
+        13937,
+        1793445653638721871
+      ]
+    },
+    "dev/usec_south/sst/images/json/sst_usec_south_2026304_20261031_09_g19.json": {
+      "sig": [
+        1012588,
+        1793445716755211279
+      ]
+    },
+    "dev/usec_south/sst_front/images/json/sstfront_usec_south_2026304_20261031_09_g19.json": {
+      "sig": [
+        13786,
+        1793445721751607160
+      ]
     }
   }
 }
