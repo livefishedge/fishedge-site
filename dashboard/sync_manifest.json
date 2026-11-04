@@ -5349,7 +5349,7 @@
     "dev/usec_south/chl/sgli/images/json/usec_south_20261103_2026307.1620_chl_SGLI.json": {
       "sig": [
         8096603,
-        1793808937849639939
+        1793811851505667689
       ]
     },
     "dev/usec_south/sst/images/json/sst_usec_south_2026308_20261104_14_g19.json": {
@@ -5362,6 +5362,12 @@
       "sig": [
         46332,
         1793808861310972301
+      ]
+    },
+    "dev/usec_md/chl/sgli/images/json/usec_md_20261103_2026307.1620_chl_SGLI.json": {
+      "sig": [
+        6630712,
+        1793811781569971704
       ]
     }
   }
