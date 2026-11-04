@@ -81,9 +81,6 @@ jobs:
           fi
           endpoint='https://5fec32b363f766a68734c384d1890cb1.r2.cloudflarestorage.com'
           for region in usec_md usec_south; do
-            aws s3 cp "data/$region/briefing/forecast.json" \
-              "s3://fishedge-data/$region/briefing/forecast.json" \
-              --endpoint-url "$endpoint" --cache-control 'no-cache, max-age=0'
             for file in "data/$region/briefing/frames/"forecast-frames-*.json; do
               aws s3 cp "$file" "s3://fishedge-data/$region/briefing/frames/$(basename "$file")" \
                 --endpoint-url "$endpoint" --cache-control 'no-cache, max-age=0'
@@ -96,5 +93,10 @@ jobs:
               exit 1
             fi
             aws s3 cp "$mask" "s3://fishedge-data/$region/briefing/native_wave_mask.png" \
+              --endpoint-url "$endpoint" --cache-control 'no-cache, max-age=0'
+            # Publish the pointer only after every referenced chunk and mask
+            # is present, so readers never observe a partially updated bundle.
+            aws s3 cp "data/$region/briefing/forecast.json" \
+              "s3://fishedge-data/$region/briefing/forecast.json" \
               --endpoint-url "$endpoint" --cache-control 'no-cache, max-age=0'
           done

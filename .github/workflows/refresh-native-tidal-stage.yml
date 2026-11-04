@@ -118,13 +118,15 @@ jobs:
           fi
           endpoint='https://5fec32b363f766a68734c384d1890cb1.r2.cloudflarestorage.com'
           for region in usec_md usec_south; do
-            aws s3 cp "data/$region/briefing/forecast.json" "s3://fishedge-data/$region/briefing/forecast.json" \
-              --endpoint-url "$endpoint" --cache-control 'no-cache, max-age=0' \
-              --cli-connect-timeout 10 --cli-read-timeout 60
             tile_root="dashboard/trip-planner/data/$region/briefing/native_phase_tiles"
             tile_count="$(find "$tile_root" -type f -name 'frame-*.png' | wc -l | tr -d ' ')"
             echo "Syncing $tile_count native tile files for $region with bounded parallel S3 transfer"
             aws s3 sync "$tile_root/" "s3://fishedge-data/$region/briefing/native_phase_tiles/" \
               --endpoint-url "$endpoint" --cache-control 'public, max-age=3600' \
               --cli-connect-timeout 10 --cli-read-timeout 60 --no-progress --only-show-errors
+            # Forecast metadata points to versioned native tiles. Publish the
+            # updated manifest only after all referenced assets are uploaded.
+            aws s3 cp "data/$region/briefing/forecast.json" "s3://fishedge-data/$region/briefing/forecast.json" \
+              --endpoint-url "$endpoint" --cache-control 'no-cache, max-age=0' \
+              --cli-connect-timeout 10 --cli-read-timeout 60
           done
