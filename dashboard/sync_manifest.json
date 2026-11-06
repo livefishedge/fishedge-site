@@ -5349,7 +5349,7 @@
     "dev/usec_south/chl/sgli/images/json/usec_south_20261103_2026307.1620_chl_SGLI.json": {
       "sig": [
         8096603,
-        1793911118949856972
+        1793928184926431287
       ]
     },
     "dev/usec_south/sst/images/json/sst_usec_south_2026308_20261104_14_g19.json": {
@@ -5367,7 +5367,7 @@
     "dev/usec_md/chl/sgli/images/json/usec_md_20261103_2026307.1620_chl_SGLI.json": {
       "sig": [
         6630712,
-        1793910949097565029
+        1793928059713354204
       ]
     },
     "dev/usec_md/sst/images/json/sst_usec_md_2026308_20261104_15_g19.json": {
@@ -5625,7 +5625,7 @@
     "dev/usec_md/chl/sgli/images/json/usec_md_20261104_2026308.1554_chl_SGLI.json": {
       "sig": [
         12801263,
-        1793910933542691251
+        1793928044573920897
       ]
     },
     "dev/usec_md/sst/images/json/sst_usec_md_2026309_20261105_02_g19.json": {
@@ -5643,7 +5643,7 @@
     "dev/usec_south/chl/sgli/images/json/usec_south_20261104_2026308.1554_chl_SGLI.json": {
       "sig": [
         12080513,
-        1793911103048382499
+        1793928169386066508
       ]
     },
     "dev/usec_south/sst/images/json/sst_usec_south_2026309_20261105_02_g19.json": {
@@ -5836,6 +5836,36 @@
       "sig": [
         31514,
         1793920798842128598
+      ]
+    },
+    "dev/usec_md/chl/images/composites/json/usec_md_20261105_2026309.1730_chl_PACE-OCI.json": {
+      "sig": [
+        4396871,
+        1793927996279100762
+      ]
+    },
+    "dev/usec_md/sst/images/json/sst_usec_md_2026309_20261105_23_g19.json": {
+      "sig": [
+        493845,
+        1793927972251707576
+      ]
+    },
+    "dev/usec_md/sst_front/images/json/sstfront_usec_md_2026309_20261105_23_g19.json": {
+      "sig": [
+        8780,
+        1793927977883565648
+      ]
+    },
+    "dev/usec_south/sst/images/json/sst_usec_south_2026309_20261105_23_g19.json": {
+      "sig": [
+        1150992,
+        1793928073821020187
+      ]
+    },
+    "dev/usec_south/sst_front/images/json/sstfront_usec_south_2026309_20261105_23_g19.json": {
+      "sig": [
+        35871,
+        1793928081725566755
       ]
     }
   }
