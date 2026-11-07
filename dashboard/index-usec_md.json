@@ -1,6 +1,6 @@
 {
   "region": "usec_md",
-  "last_updated": "2026-11-07T17:25:03.906647Z",
+  "last_updated": "2026-11-07T19:23:43.958902Z",
   "vars": [
     "chl",
     "sst",
@@ -266,6 +266,16 @@
         "label": "2026-11-06 14:58 UTC | S3A-S3B",
         "time_iso": "2026-11-06T14:58:00Z",
         "json_path": "data/usec_md/chl/usec_md_20261106_2026310.1458_chl_S3A-S3B.json",
+        "grid_file": "frame_bbox",
+        "product_level": null,
+        "stitched": false
+      },
+      {
+        "var": "chl",
+        "id": "usec_md_20261107_2026311.1503_chl_S3B",
+        "label": "2026-11-07 15:03 UTC | S3B",
+        "time_iso": "2026-11-07T15:03:00Z",
+        "json_path": "data/usec_md/chl/usec_md_20261107_2026311.1503_chl_S3B.json",
         "grid_file": "frame_bbox",
         "product_level": null,
         "stitched": false
@@ -2568,6 +2578,16 @@
         "label": "2026-11-07 15:00 UTC",
         "time_iso": "2026-11-07T15:00:00Z",
         "json_path": "data/usec_md/sst/sst_usec_md_2026311_20261107_15_g19.json",
+        "grid_file": "goes_sst_1000_grid.json",
+        "product_level": null,
+        "stitched": false
+      },
+      {
+        "var": "sst",
+        "id": "sst_usec_md_2026311_20261107_17_g19",
+        "label": "2026-11-07 17:00 UTC",
+        "time_iso": "2026-11-07T17:00:00Z",
+        "json_path": "data/usec_md/sst/sst_usec_md_2026311_20261107_17_g19.json",
         "grid_file": "goes_sst_1000_grid.json",
         "product_level": null,
         "stitched": false
@@ -5354,6 +5374,16 @@
         "label": "2026-11-07 15:00 UTC",
         "time_iso": "2026-11-07T15:00:00Z",
         "json_path": "data/usec_md/sst_front/sstfront_usec_md_2026311_20261107_15_g19.json",
+        "grid_file": "frame_bbox",
+        "product_level": null,
+        "stitched": false
+      },
+      {
+        "var": "sst_front",
+        "id": "sstfront_usec_md_2026311_20261107_17_g19",
+        "label": "2026-11-07 17:00 UTC",
+        "time_iso": "2026-11-07T17:00:00Z",
+        "json_path": "data/usec_md/sst_front/sstfront_usec_md_2026311_20261107_17_g19.json",
         "grid_file": "frame_bbox",
         "product_level": null,
         "stitched": false
