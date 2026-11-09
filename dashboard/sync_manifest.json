@@ -6663,7 +6663,7 @@
     "dev/usec_md/chl/sgli/images/json/usec_md_20261107_2026311.1614_chl_SGLI.json": {
       "sig": [
         9501878,
-        1794240286037800759
+        1794246366049382275
       ]
     },
     "dev/usec_md/sst/images/json/sst_usec_md_2026312_20261108_08_g19.json": {
@@ -6693,7 +6693,7 @@
     "dev/usec_south/chl/sgli/images/json/usec_south_20261107_2026311.1614_chl_SGLI.json": {
       "sig": [
         7758528,
-        1794240744263783050
+        1794246887952491809
       ]
     },
     "dev/usec_south/sst/images/json/sst_usec_south_2026312_20261108_08_g19.json": {
@@ -7029,7 +7029,7 @@
     "dev/usec_md/chl/sgli/images/json/usec_md_20261108_2026312.1548_chl_SGLI.json": {
       "sig": [
         9475969,
-        1794240220768962770
+        1794246312922171281
       ]
     },
     "dev/usec_md/sst/images/json/sst_usec_md_2026313_20261109_02_g19.json": {
@@ -7047,7 +7047,7 @@
     "dev/usec_south/chl/sgli/images/json/usec_south_20261108_2026312.1548_chl_SGLI.json": {
       "sig": [
         11896909,
-        1794240693690056850
+        1794246828723594511
       ]
     },
     "dev/usec_south/sst/images/json/sst_usec_south_2026313_20261109_03_g19.json": {
@@ -7192,6 +7192,42 @@
       "sig": [
         35438,
         1794240378345128683
+      ]
+    },
+    "dev/usec_md/chl/images/composites/json/usec_md_20261109_2026313.1450_chl_S3A.json": {
+      "sig": [
+        8306013,
+        1794246158474861478
+      ]
+    },
+    "dev/usec_md/sst/images/json/sst_usec_md_2026313_20261109_15_g19.json": {
+      "sig": [
+        818948,
+        1794245987828954310
+      ]
+    },
+    "dev/usec_md/sst_front/images/json/sstfront_usec_md_2026313_20261109_15_g19.json": {
+      "sig": [
+        24851,
+        1794246016495343640
+      ]
+    },
+    "dev/usec_south/chl/images/composites/json/usec_south_20261109_2026313.1450_chl_S3A.json": {
+      "sig": [
+        12724822,
+        1794246492091526406
+      ]
+    },
+    "dev/usec_south/sst/images/json/sst_usec_south_2026313_20261109_15_g19.json": {
+      "sig": [
+        1283678,
+        1794246391919389262
+      ]
+    },
+    "dev/usec_south/sst_front/images/json/sstfront_usec_south_2026313_20261109_15_g19.json": {
+      "sig": [
+        33299,
+        1794246418008415527
       ]
     }
   }
