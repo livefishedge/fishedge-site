@@ -1,6 +1,6 @@
 {
   "region": "usec_south",
-  "last_updated": "2026-11-09T06:26:11.573936Z",
+  "last_updated": "2026-11-09T08:56:31.334421Z",
   "vars": [
     "chl",
     "sst",
@@ -2581,6 +2581,16 @@
         "grid_file": "goes_sst_1000_grid.json",
         "product_level": null,
         "stitched": false
+      },
+      {
+        "var": "sst",
+        "id": "sst_usec_south_2026313_20261109_06_g19",
+        "label": "2026-11-09 06:00 UTC",
+        "time_iso": "2026-11-09T06:00:00Z",
+        "json_path": "data/usec_south/sst/sst_usec_south_2026313_20261109_06_g19.json",
+        "grid_file": "goes_sst_1000_grid.json",
+        "product_level": null,
+        "stitched": false
       }
     ],
     "uv": [
@@ -2800,6 +2810,16 @@
         "label": "2026-11-08",
         "time_iso": "2026-11-08T00:00:00Z",
         "json_path": "data/usec_south/uv/uv_usec_south_2026312_20261108_cmems-duacs.json",
+        "grid_file": "uv_12500_grid.json",
+        "product_level": null,
+        "stitched": false
+      },
+      {
+        "var": "uv",
+        "id": "uv_usec_south_2026313_20261109_cmems-duacs",
+        "label": "2026-11-09",
+        "time_iso": "2026-11-09T00:00:00Z",
+        "json_path": "data/usec_south/uv/uv_usec_south_2026313_20261109_cmems-duacs.json",
         "grid_file": "uv_12500_grid.json",
         "product_level": null,
         "stitched": false
@@ -5284,6 +5304,16 @@
         "label": "2026-11-09 04:00 UTC",
         "time_iso": "2026-11-09T04:00:00Z",
         "json_path": "data/usec_south/sst_front/sstfront_usec_south_2026313_20261109_04_g19.json",
+        "grid_file": "frame_bbox",
+        "product_level": null,
+        "stitched": false
+      },
+      {
+        "var": "sst_front",
+        "id": "sstfront_usec_south_2026313_20261109_06_g19",
+        "label": "2026-11-09 06:00 UTC",
+        "time_iso": "2026-11-09T06:00:00Z",
+        "json_path": "data/usec_south/sst_front/sstfront_usec_south_2026313_20261109_06_g19.json",
         "grid_file": "frame_bbox",
         "product_level": null,
         "stitched": false
