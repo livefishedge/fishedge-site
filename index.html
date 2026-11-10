@@ -15,6 +15,7 @@
 <script src="cta-personalization.js?v=20260802"></script>
 </head>
 <body>
+  <!-- auth-nav: 20261110-logout-state -->
   <a href="#main-content" class="skip-link">Skip to main content</a>
   <header class="topbar">
     <div class="brand">
@@ -146,12 +147,8 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js?v=14"></script>
   <script>
   /* ===== FishEdge marketing page logic =====
-     1) Auth-aware nav: if a Supabase session exists (telltale: localStorage
-        key 'ocean-mvp-auth' holds a JSON blob with access_token), swap
-        "Login" + "Join the Pilot" CTAs to "Dashboard" + "Log out".
-        Cross-origin caveat: dashboard sessions live in app.fishedge.live
-        localStorage, so visitors who only ever hit fishedge.live without an
-        app.fishedge.live auth won't trigger this — that's expected.
+     1) Auth-aware nav: use the shared login cookie for marketing CTAs.
+        Session tokens remain origin-local and are never an auth signal here.
      2) Hero image click-to-enlarge lightbox.
      3) Esc / click-outside to close.
      No telemetry; no cookies set. */
@@ -159,39 +156,31 @@
     'use strict';
 
     // ---- 1) Auth-aware nav ----
-    // Two signals to detect auth:
-    // (a) localStorage 'ocean-mvp-auth' — works when user loaded the marketing
-    //     landing while already in the app.fishedge.live auth context (rare)
-    // (b) cookie 'fishedge_logged_in' — written by supabase-init.js on sign-in
-    //     across the whole .fishedge.live parent domain.  This is the
-    //     cross-subdomain signal that makes the detection actually work
-    //     when the captain lands on fishedge.live *first*.
-    var isAuthed = false;
-    try {
-      var cookieOk = /(?:^|;\s*)fishedge_logged_in=1(?:;|$)/.test(document.cookie);
-      if (cookieOk) { isAuthed = true; }
-    } catch (_) {}
-    if (!isAuthed) {
+    // The shared cookie is the navigation hint, not an authorization check.
+    // Origin-local sessions can survive a logout on app.fishedge.live; do not
+    // let a stale marketing-origin token override the cleared shared marker.
+    function syncAuthNav() {
+      var isAuthed = false;
       try {
-        var raw = localStorage.getItem('ocean-mvp-auth');
-        if (raw) {
-          var blob = JSON.parse(raw);
-          if (blob && (blob.access_token || blob.session)) isAuthed = true;
-        }
+        isAuthed = /(?:^|;\s*)fishedge_logged_in=1(?:;|$)/.test(document.cookie);
       } catch (_) {}
-    }
-
-    if (isAuthed) {
-      document.body.classList.add('is-authenticated');
+      document.body.classList.toggle('is-authenticated', isAuthed);
       ['nav-login', 'nav-join'].forEach(function (id) {
         var el = document.getElementById(id);
-        if (el) el.style.display = 'none';
+        if (el) el.style.display = isAuthed ? 'none' : '';
       });
       ['nav-planner', 'nav-dashboard', 'nav-account', 'nav-go'].forEach(function (id) {
         var el = document.getElementById(id);
-        if (el) el.style.display = '';
+        if (el) el.style.display = isAuthed ? '' : 'none';
       });
     }
+    syncAuthNav();
+    // Reconcile restored/back-forward pages and tabs after cross-origin logout.
+    window.addEventListener('pageshow', syncAuthNav);
+    window.addEventListener('focus', syncAuthNav);
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden) syncAuthNav();
+    });
 
     // ---- 1.5) Resolve context-aware URLs (Planner + Dashboard links) ----
     // On *.pages.dev branch previews, the dashboard lives at /dashboard/.
