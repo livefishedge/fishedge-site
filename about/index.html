@@ -108,6 +108,15 @@
       try {
         isAuthed = /(?:^|;\s*)fishedge_logged_in=1(?:;|$)/.test(document.cookie);
       } catch (_) {}
+      // Preview login/logout share one origin; parent-domain cookies cannot
+      // be set there. Keep its local session hint confined to preview hosts.
+      if (!isAuthed && /\.pages\.dev$/.test(window.location.hostname)) {
+        try {
+          var previewSession = JSON.parse(localStorage.getItem('ocean-mvp-auth') || 'null');
+          isAuthed = !!(previewSession && previewSession.access_token &&
+            (!previewSession.expires_at || previewSession.expires_at * 1000 > Date.now()));
+        } catch (_) {}
+      }
       document.body.classList.toggle('is-authenticated', isAuthed);
       ['nav-login', 'nav-join'].forEach(function (id) {
         var el = document.getElementById(id);
