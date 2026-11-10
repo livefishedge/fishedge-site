@@ -16,7 +16,13 @@
     (async function () {
       try { if (window.sb) await window.sb.auth.signOut(); } catch (_) {}
       try { document.cookie = 'fishedge_logged_in=; Path=/; Domain=.fishedge.live; Max-Age=0; Secure; SameSite=Lax'; } catch (_) {}
-      window.location.replace('https://fishedge.live/');
+      // Also expire a host-only marker (including isolated branch previews).
+      try { document.cookie = 'fishedge_logged_in=; Path=/; Max-Age=0; Secure; SameSite=Lax'; } catch (_) {}
+      // Keep branch-preview logout on the preview, not the production site.
+      var home = /\.pages\.dev$/.test(window.location.hostname)
+        ? new URL('/', window.location.href).href
+        : 'https://fishedge.live/';
+      window.location.replace(home);
     })();
   </script>
 </body>
