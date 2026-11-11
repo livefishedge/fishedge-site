@@ -7865,6 +7865,42 @@
         6777,
         1794417853308291974
       ]
+    },
+    "dev/usec_md/chl/images/composites/json/usec_md_20261111_2026315.1519_chl_S3A-S3B.json": {
+      "sig": [
+        8701338,
+        1794424992811034805
+      ]
+    },
+    "dev/usec_md/sst/images/json/sst_usec_md_2026315_20261111_17_g19.json": {
+      "sig": [
+        911064,
+        1794424835941158379
+      ]
+    },
+    "dev/usec_md/sst_front/images/json/sstfront_usec_md_2026315_20261111_17_g19.json": {
+      "sig": [
+        22893,
+        1794424844657697514
+      ]
+    },
+    "dev/usec_south/chl/images/composites/json/usec_south_20261111_2026315.1519_chl_S3A-S3B.json": {
+      "sig": [
+        9771146,
+        1794425064120433383
+      ]
+    },
+    "dev/usec_south/sst/images/json/sst_usec_south_2026315_20261111_17_g19.json": {
+      "sig": [
+        588224,
+        1794425027401464281
+      ]
+    },
+    "dev/usec_south/sst_front/images/json/sstfront_usec_south_2026315_20261111_17_g19.json": {
+      "sig": [
+        4089,
+        1794425034223991772
+      ]
     }
   }
 }
