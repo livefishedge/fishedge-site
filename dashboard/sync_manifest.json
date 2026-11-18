@@ -8733,13 +8733,13 @@
     "dev/usec_md/chl/sgli/images/json/usec_md_20261115_2026319.1603_chl_SGLI.json": {
       "sig": [
         8091865,
-        1794985205623478000
+        1795006932623150711
       ]
     },
     "dev/usec_md/chl/sgli/images/json/usec_md_20261116_2026320.1536_chl_SGLI.json": {
       "sig": [
         7382615,
-        1794984173702798837
+        1795006487070045349
       ]
     },
     "dev/usec_md/sst/images/json/sst_usec_md_2026320_20261116_23_g19.json": {
@@ -8787,13 +8787,13 @@
     "dev/usec_south/chl/sgli/images/json/usec_south_20261115_2026319.1603_chl_SGLI.json": {
       "sig": [
         9708092,
-        1794987943235500770
+        1795009393680619742
       ]
     },
     "dev/usec_south/chl/sgli/images/json/usec_south_20261116_2026320.1536_chl_SGLI.json": {
       "sig": [
         7614461,
-        1794986722431609737
+        1795009355723785654
       ]
     },
     "dev/usec_south/sst/images/json/sst_usec_south_2026320_20261116_23_g19.json": {
@@ -9136,6 +9136,42 @@
       "sig": [
         8581,
         1794997133901251310
+      ]
+    },
+    "dev/usec_md/uv/images/json/uv_usec_md_2026322_20261118_cmems-duacs.json": {
+      "sig": [
+        68046,
+        1795006206633433571
+      ]
+    },
+    "dev/usec_south/sst/images/json/sst_usec_south_2026322_20261118_11_g19.json": {
+      "sig": [
+        761904,
+        1795006986272728991
+      ]
+    },
+    "dev/usec_south/uv/images/json/uv_usec_south_2026322_20261118_cmems-duacs.json": {
+      "sig": [
+        98842,
+        1795007037265887155
+      ]
+    },
+    "dev/usec_south/sst_front/images/json/sstfront_usec_south_2026322_20261118_11_g19.json": {
+      "sig": [
+        16913,
+        1795007001981629964
+      ]
+    },
+    "dev/usec_md/sst/images/json/sst_usec_md_2026322_20261118_11_g19.json": {
+      "sig": [
+        907534,
+        1795010027460133433
+      ]
+    },
+    "dev/usec_md/sst_front/images/json/sstfront_usec_md_2026322_20261118_11_g19.json": {
+      "sig": [
+        27458,
+        1795010033356827713
       ]
     }
   }
