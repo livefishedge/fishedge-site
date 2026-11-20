@@ -9527,6 +9527,42 @@
         1011,
         1795192811516271351
       ]
+    },
+    "dev/usec_md/chl/images/composites/json/usec_md_20261120_2026324.1446_chl_S3A-S3B.json": {
+      "sig": [
+        8444823,
+        1795200172420404261
+      ]
+    },
+    "dev/usec_md/sst/images/json/sst_usec_md_2026324_20261120_16_g19.json": {
+      "sig": [
+        859705,
+        1795200100927397274
+      ]
+    },
+    "dev/usec_md/sst_front/images/json/sstfront_usec_md_2026324_20261120_16_g19.json": {
+      "sig": [
+        36947,
+        1795200110497685899
+      ]
+    },
+    "dev/usec_south/chl/images/composites/json/usec_south_20261120_2026324.1446_chl_S3A-S3B.json": {
+      "sig": [
+        8124875,
+        1795200213375324036
+      ]
+    },
+    "dev/usec_south/sst/images/json/sst_usec_south_2026324_20261120_16_g19.json": {
+      "sig": [
+        585475,
+        1795200189851582357
+      ]
+    },
+    "dev/usec_south/sst_front/images/json/sstfront_usec_south_2026324_20261120_16_g19.json": {
+      "sig": [
+        5550,
+        1795200193134344561
+      ]
     }
   }
 }
