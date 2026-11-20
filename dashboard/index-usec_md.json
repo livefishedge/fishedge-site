@@ -1,6 +1,6 @@
 {
   "region": "usec_md",
-  "last_updated": "2026-11-20T00:35:35.914047Z",
+  "last_updated": "2026-11-20T02:35:00.078371Z",
   "vars": [
     "chl",
     "sst",
@@ -3141,6 +3141,26 @@
         "grid_file": "goes_sst_1000_grid.json",
         "product_level": null,
         "stitched": false
+      },
+      {
+        "var": "sst",
+        "id": "sst_usec_md_2026323_20261119_23_g19",
+        "label": "2026-11-19 23:00 UTC",
+        "time_iso": "2026-11-19T23:00:00Z",
+        "json_path": "data/usec_md/sst/sst_usec_md_2026323_20261119_23_g19.json",
+        "grid_file": "goes_sst_1000_grid.json",
+        "product_level": null,
+        "stitched": false
+      },
+      {
+        "var": "sst",
+        "id": "sst_usec_md_2026324_20261120_00_g19",
+        "label": "2026-11-20 00:00 UTC",
+        "time_iso": "2026-11-20T00:00:00Z",
+        "json_path": "data/usec_md/sst/sst_usec_md_2026324_20261120_00_g19.json",
+        "grid_file": "goes_sst_1000_grid.json",
+        "product_level": null,
+        "stitched": false
       }
     ],
     "uv": [
@@ -6254,6 +6274,26 @@
         "label": "2026-11-19 22:00 UTC",
         "time_iso": "2026-11-19T22:00:00Z",
         "json_path": "data/usec_md/sst_front/sstfront_usec_md_2026323_20261119_22_g19.json",
+        "grid_file": "frame_bbox",
+        "product_level": null,
+        "stitched": false
+      },
+      {
+        "var": "sst_front",
+        "id": "sstfront_usec_md_2026323_20261119_23_g19",
+        "label": "2026-11-19 23:00 UTC",
+        "time_iso": "2026-11-19T23:00:00Z",
+        "json_path": "data/usec_md/sst_front/sstfront_usec_md_2026323_20261119_23_g19.json",
+        "grid_file": "frame_bbox",
+        "product_level": null,
+        "stitched": false
+      },
+      {
+        "var": "sst_front",
+        "id": "sstfront_usec_md_2026324_20261120_00_g19",
+        "label": "2026-11-20 00:00 UTC",
+        "time_iso": "2026-11-20T00:00:00Z",
+        "json_path": "data/usec_md/sst_front/sstfront_usec_md_2026324_20261120_00_g19.json",
         "grid_file": "frame_bbox",
         "product_level": null,
         "stitched": false
